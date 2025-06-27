@@ -247,6 +247,119 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # ----------------- Profile Service -----------------
+  profile-db:
+    image: postgres:15-alpine
+    container_name: profile-db
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${PROFILE_DB_USER}
+      POSTGRES_PASSWORD: ${PROFILE_DB_PASSWORD}
+      POSTGRES_DB: ${PROFILE_DB_NAME}
+    ports:
+      - "5434:5432"
+    volumes:
+      - profile-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROFILE_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  profile-service:
+    build:
+      context: .
+      dockerfile: services/profile-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: profile-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      profile-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Database
+      DB_USER: ${PROFILE_DB_USER}
+      DB_PASSWORD: ${PROFILE_DB_PASSWORD}
+      DB_NAME: ${PROFILE_DB_NAME}
+      DB_HOST: profile-db
+      DB_PORT: 5432
+      # NATS
+      NATS_URL: nats://nats:4222
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Storage
+      S3_BUCKET: ${S3_BUCKET:-glamyouup-selfies}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      TEMP_STORAGE_DIR: /tmp/selfies
+      # Service
+      SERVICE_NAME: profile-service
+      EXTERNAL_PORT: 8007
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: ${APP_ENV:-prod}
+    ports:
+      - "8007:8000"
+    networks:
+      - glam-net
+    volumes:
+      - profile-temp-storage:/tmp/selfies
+
+  # ----------------- Profile AI Selfie Service -----------------
+  profile-ai-selfie:
+    build:
+      context: .
+      dockerfile: services/profile-ai-selfie/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: profile-ai-selfie
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # NATS
+      NATS_URL: nats://nats:4222
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # AI Model
+      MODEL_PATH: ${SELFIE_MODEL_PATH:-/app/models}
+      MODEL_NAME: antelopev2
+      GPU_ENABLED: ${GPU_ENABLED:-false}
+      # Storage access (for reading selfie files)
+      S3_BUCKET: ${S3_BUCKET:-glamyouup-selfies}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      TEMP_STORAGE_DIR: /tmp/selfies
+      # Service
+      SERVICE_NAME: profile-ai-selfie
+      APP_ENV: ${APP_ENV:-prod}
+    networks:
+      - glam-net
+    volumes:
+      - profile-ai-models:/app/models
+      - profile-temp-storage:/tmp/selfies:ro  # Read-only access to temp selfies
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 networks:
   glam-net:
     driver: bridge
@@ -258,3 +371,6 @@ volumes:
   catalog-job-processor-db-data:
   catalog-image-cache:
   ai-apparel-models:
+  profile-db-data:
+  profile-temp-storage:
+  profile-ai-models:

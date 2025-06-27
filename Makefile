@@ -4,13 +4,13 @@
 
 # Adjust if you rename folders
 SERVICE_DIRS = \
-	services/selfie \
-	services/cv_cloth \
-	services/vlm_service \
-	services/recommendation \
-	services/narrator_llm \
-	services/api_gateway
-
+	services/catalog-ai-apparel \
+	services/catalog-connector \
+	services/catalog-image-cache \
+	services/catalog-job-processor \
+	services/catalog-service \
+	services/profile-service \
+	services/profile-ai-selfie
 
 # Compose files
 LOCAL_COMPOSE = docker-compose.local.yml
@@ -53,41 +53,48 @@ dev-clean: ## Remove infra containers & volumes
 # ---------- Per-service helpers ----------
 install-service: ## SERVICE=<folder>  – Poetry install only that service
 	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make install-service SERVICE=selfie"; exit 1; fi
+	  echo "Usage: make install-service SERVICE=<folder>"; exit 1; fi
 	cd services/$(SERVICE) && poetry install
 
 download-models: ## fetch antelopev2 once
-	mkdir -p services/selfies/models
+	mkdir -p services/catalog-ai-apparel/models
 	curl -L https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip \
-	     -o services/selfies/models/antelopev2.zip
-	unzip -oq services/selfies/models/antelopev2.zip -d services/selfies/models
-	rm services/selfies/models/antelopev2.zip
-	
+	     -o services/catalog-ai-apparel/models/antelopev2.zip
+	unzip -oq services/catalog-ai-apparel/models/antelopev2.zip -d services/catalog-ai-apparel/models
+	rm services/catalog-ai-apparel/models/antelopev2.zip
+
 download-cloth-models:  ## fetch MP cloth-seg TFLite
-	@mkdir -p services/cloths/models
+	@mkdir -p services/catalog-connector/models
 	curl -L https://storage.googleapis.com/mediapipe-assets/selfie_multiclass_256x256.tflite \
-	     -o services/cloths/models/selfie_multiclass_256x256.tflite
+	     -o services/catalog-connector/models/selfie_multiclass_256x256.tflite
 
+download-selfie-models: ## fetch antelopev2 for profile-ai-selfie
+	mkdir -p services/profile-ai-selfie/models
+	curl -L https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip \
+	     -o services/profile-ai-selfie/models/antelopev2.zip
+	unzip -oq services/profile-ai-selfie/models/antelopev2.zip -d services/profile-ai-selfie/models
+	rm services/profile-ai-selfie/models/antelopev2.zip
 
-# Run one service with hot-reload: make run-service SERVICE=selfie
+download-all-models: download-models download-cloth-models download-selfie-models ## fetch all AI models
+
+# Run one FASTApiservice with hot-reload: make run-service SERVICE=catalog-service
 run-service: ## SERVICE=<folder>
 	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make run-service SERVICE=selfie"; exit 1; fi
+	  echo "Usage: make run-service SERVICE=catalog-service"; exit 1; fi
 	cd services/$(SERVICE) && \
 	pip install -e ../../shared && \
 	PYTHONPATH=../../shared poetry run uvicorn src.main:app \
 		--reload --host 0.0.0.0 --port 8000
+		
+# Run one non-FASTAPI service (e.g. catalog-job-processor) with hot-reload
+run-non-fastapi-service: ## SERVICE=<folder>
+	@if [ -z "$(SERVICE)" ]; then \
+	  echo "Usage: make run-non-fastapi-service SERVICE=catalog-job-processor"; exit 1; fi
+	cd services/$(SERVICE) && \
+	pip install -e ../../shared && \
+	PYTHONPATH=../../shared poetry run python src.main
 
 # Run ALL services locally with hot-reload (Ctrl-C to kill)
-run-all-services: ## Run every service locally
-	@trap 'kill 0' SIGINT EXIT; \
-	for d in $(SERVICE_DIRS); do \
-	  ( cd $$d && \
-	    pip install -e ../../shared && \
-	    PYTHONPATH=../../shared poetry run uvicorn src.main:app \
-	      --reload --host 0.0.0.0 --port 0 ) & \
-	done; \
-	wait
 
 # ---------- Production (everything in docker) ----------
 
@@ -108,6 +115,34 @@ prod-ps: ## ps
 
 prod-clean: ## Down + volumes
 	docker compose -f $(PROD_COMPOSE) down -v
+
+# ---------- Profile Service Specific Commands ----------
+
+run-profile-service: ## Run profile service locally
+	cd services/profile-service && \
+	pip install -e ../../shared && \
+	PYTHONPATH=../../shared poetry run uvicorn src.main:app \
+		--reload --host 0.0.0.0 --port 8007
+
+run-profile-ai: ## Run profile AI selfie worker locally
+	cd services/profile-ai-selfie && \
+	pip install -e ../../shared && \
+	PYTHONPATH=../../shared poetry run python src.main
+
+test-profile-upload: ## Test selfie upload endpoint
+	@echo "Testing profile service health..."
+	@curl -s http://localhost:8007/health | jq .
+	@echo "\nTesting selfie upload (requires running service)..."
+	@echo "Run: curl -X POST -F 'file=@test.jpg' -F 'persist=false' http://localhost:8007/api/v1/selfies/upload"
+
+# ---------- Database Helpers ----------
+
+db-migrate-profile: ## Run profile database migrations
+	cd services/profile-service && \
+	poetry run alembic upgrade head
+
+db-connect-profile: ## Connect to profile database
+	docker exec -it profile-db psql -U $(PROFILE_DB_USER) -d $(PROFILE_DB_NAME)
 
 # ---------- Docker housekeeping ----------
 
@@ -131,22 +166,24 @@ docker-health: ## show container health & ports
 docker-size: ## disk usage
 	docker system df
 
+# ---------- Development Shortcuts ----------
 
+dev-profile: ## Start only profile-related services
+	docker compose -f $(PROD_COMPOSE) up -d nats redis profile-db
+	@echo "Infrastructure ready. Run 'make run-profile-service' and 'make run-profile-ai'"
 
-# # Initialize Alembic (run once)
-# poetry run alembic init alembic
+prod-profile: ## Build and start profile services in Docker
+	docker compose -f $(PROD_COMPOSE) build profile-service profile-ai-selfie
+	docker compose -f $(PROD_COMPOSE) up -d profile-db profile-service profile-ai-selfie
 
-# # Create a new migration
-# poetry run alembic revision --autogenerate -m "Create selfie analysis tables"
+logs-profile: ## Show logs for profile services
+	docker compose -f $(PROD_COMPOSE) logs -f profile-service profile-ai-selfie
 
-# # Apply migrations
-# poetry run alembic upgrade head
+# ---------- Monitoring ----------
 
-# # Downgrade migrations  
-# poetry run alembic downgrade -1
-
-# # Seed database
-# poetry run seed-db
-
-# # Setup ML models
-# poetry run setup-ml
+check-services: ## Check all service health endpoints
+	@echo "Checking service health..."
+	@echo "Catalog Service: " && curl -s http://localhost:8001/health 2>/dev/null || echo "DOWN"
+	@echo "Profile Service: " && curl -s http://localhost:8007/health 2>/dev/null || echo "DOWN"
+	@echo "\nNATS: " && curl -s http://localhost:8222/varz 2>/dev/null | jq -r '.server_name' || echo "DOWN"
+	@echo "Redis: " && docker exec glam-redis redis-cli ping 2>/dev/null || echo "DOWN"
