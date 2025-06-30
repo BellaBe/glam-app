@@ -14,7 +14,7 @@ alembic = "^1.13.1"
 asyncpg = "^0.29.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 httpx = "^0.26.0"
-glam-shared = {path = "../../shared", develop = true}
+shared = {path = "../../shared", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"

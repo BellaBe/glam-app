@@ -23,6 +23,7 @@ croniter = "^2.0.1"  # For cron expression parsing
 pytz = "^2023.3"  # For timezone support
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}  # For JWT
 python-dotenv = "^1.0.0"  # For .env file support
+shared = { path = "../../shared", develop = true }
 # Email providers
 boto3 = "^1.34.0"  # For AWS SES
 sendgrid = "^6.11.0"  # For SendGrid

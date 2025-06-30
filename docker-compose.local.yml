@@ -38,23 +38,28 @@ services:
       start_period: 10s
 
   # ----------------- Catalog Database -----------------
+
   catalog-db:
     image: postgres:15-alpine
-    container_name: catalog-db-local
+    container_name: catalog-db
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: catalog_user
-      POSTGRES_PASSWORD: catalog_pass
-      POSTGRES_DB: catalog_db
+      POSTGRES_USER: ${CATALOG_DB_USER}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD}
+      POSTGRES_DB: ${CATALOG_DB_NAME}
     ports:
-      - "5432:5432"
+      - "${CATALOG_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - catalog-db-local-data:/var/lib/postgresql/data
+      - catalog-db-data:/var/lib/postgresql/data
     networks:
-      - glam-local-net
+      - glam-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalog_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
       interval: 10s
       retries: 5
+      timeout: 5s
       start_period: 10s
 
   # ----------------- Catalog Job Processor Database -----------------
@@ -148,6 +153,30 @@ services:
   #     - glam-local-net
   #   depends_on:
   #     - nats
+  # ----------------- Notification Service -----------------
+  notifications-db:
+    image: postgres:15-alpine
+    container_name: notifications-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${NOTIFICATIONS_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
+
+    ports:
+      - "${NOTIFICATIONS_DB_EXTERNAL_PORT}:5432"
+    volumes:
+      - notifications-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATIONS_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
 
 networks:
   glam-local-net:
@@ -160,3 +189,4 @@ volumes:
   catalog-job-processor-db-local-data:
   profile-db-local-data:
   minio-local-data:
+  notifications-db-data:

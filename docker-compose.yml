@@ -37,6 +37,7 @@ services:
   catalog-db:
     image: postgres:15-alpine
     container_name: catalog-db
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -44,7 +45,7 @@ services:
       POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD}
       POSTGRES_DB: ${CATALOG_DB_NAME}
     ports:
-      - "5432:5432"
+      - "${CATALOG_DB_PORT_EXTERNAL}:5432"
     volumes:
       - catalog-db-data:/var/lib/postgresql/data
     networks:
@@ -53,6 +54,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
       interval: 10s
       retries: 5
+      timeout: 5s
       start_period: 10s
 
   catalog-service:
@@ -96,6 +98,7 @@ services:
   catalog-job-processor-db:
     image: postgres:15-alpine
     container_name: catalog-job-processor-db
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -103,7 +106,7 @@ services:
       POSTGRES_PASSWORD: ${CATALOG_JOB_PROCESSOR_DB_PASSWORD}
       POSTGRES_DB: ${CATALOG_JOB_PROCESSOR_DB_NAME}
     ports:
-      - "5433:5432"
+      - "${CATALOG_JOB_PROCESSOR_DB_PORT_EXTERNAL}:5432"
     volumes:
       - catalog-job-processor-db-data:/var/lib/postgresql/data
     networks:
@@ -251,6 +254,7 @@ services:
   profile-db:
     image: postgres:15-alpine
     container_name: profile-db
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -258,7 +262,7 @@ services:
       POSTGRES_PASSWORD: ${PROFILE_DB_PASSWORD}
       POSTGRES_DB: ${PROFILE_DB_NAME}
     ports:
-      - "5434:5432"
+      - "${PROFILE_DB_PORT_EXTERNAL}:5432"
     volumes:
       - profile-db-data:/var/lib/postgresql/data
     networks:
@@ -360,6 +364,83 @@ services:
               count: 1
               capabilities: [gpu]
 
+# ----------------- Notifications Service -----------------
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: notification-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_USER: ${NOTIFICATION_DB_USER}
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      DB_NAME: ${NOTIFICATION_DB_NAME}
+      DB_HOST: notification-db
+      DB_PORT: 5432
+      NATS_URL: nats://nats:4222
+      REDIS_URL: redis://redis:6379
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}  # smtp, sendgrid, ses
+      SMTP_HOST: ${SMTP_HOST:-smtp.sendgrid.net}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+      EMAIL_RATE_LIMIT_PER_HOUR: ${EMAIL_RATE_LIMIT_PER_HOUR:-100}
+      EMAIL_RATE_LIMIT_PER_DAY: ${EMAIL_RATE_LIMIT_PER_DAY:-1000}
+      SERVICE_NAME: ${NOTIFICATIONS_SERVICE_NAME:-notifications-service}
+      EXTERNAL_PORT: ${NOTIFICATIONS_API_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: ${APP_ENV:-prod}
+      ENABLE_METRICS: ${ENABLE_METRICS}
+      ENABLE_TRACING: ${ENABLE_TRACING}
+    ports:
+      - "8002:8000"
+    networks:
+      - glam-net
+    command: >
+       sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${NOTIFICATIONS_SERVICE_WORKERS}
+        "
+   
+  notifications-db:
+    image: postgres:15-alpine
+    container_name: notifications-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${NOTIFICATIONS_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
+    ports:
+      - "${NOTIFICATIONS_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - notifications-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATIONS_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+  
+  
 networks:
   glam-net:
     driver: bridge
@@ -374,3 +455,4 @@ volumes:
   profile-db-data:
   profile-temp-storage:
   profile-ai-models:
+  notifications-db-data:

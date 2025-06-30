@@ -78,13 +78,14 @@ download-selfie-models: ## fetch antelopev2 for profile-ai-selfie
 download-all-models: download-models download-cloth-models download-selfie-models ## fetch all AI models
 
 # Run one FASTApiservice with hot-reload: make run-service SERVICE=catalog-service
-run-service: ## SERVICE=<folder>
+# Usage: make run SERVICE=catalog-service PORT=8000
+run-service:
 	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make run-service SERVICE=catalog-service"; exit 1; fi
+		echo "Usage: make run SERVICE=<folder>"; exit 1; fi
 	cd services/$(SERVICE) && \
-	pip install -e ../../shared && \
-	PYTHONPATH=../../shared poetry run uvicorn src.main:app \
-		--reload --host 0.0.0.0 --port 8000
+	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --sync && \
+	poetry run uvicorn src.main:app --reload --host 0.0.0.0 --port ${PORT-8000}
+
 		
 # Run one non-FASTAPI service (e.g. catalog-job-processor) with hot-reload
 run-non-fastapi-service: ## SERVICE=<folder>
