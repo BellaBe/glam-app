@@ -3,6 +3,7 @@ name = "notification-service"
 version = "1.0.0"
 description = "Email notification service for GlamYouUp platform"
 authors = ["GlamYouUp Team"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"

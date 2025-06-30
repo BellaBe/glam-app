@@ -81,10 +81,20 @@ download-all-models: download-models download-cloth-models download-selfie-model
 # Usage: make run SERVICE=catalog-service PORT=8000
 run-service:
 	@if [ -z "$(SERVICE)" ]; then \
-		echo "Usage: make run SERVICE=<folder>"; exit 1; fi
+	  echo "Usage: make run-service SERVICE=$$SERVICE"; \
+	  exit 1; \
+	fi
+	@echo "Running service: $(SERVICE)"
+	# Convert "notification-service" -> "NOTIFICATION" -> "NOTIFICATION_EXTERNAL_PORT"
+	@PORT=$$(grep $$(echo $(SERVICE) \
+	  | sed 's/-service//g' \
+	  | sed 's/-/_/g' \
+	  | tr a-z A-Z)_EXTERNAL_PORT .env \
+	  | cut -d '=' -f2) && \
+	echo "Using port: $$PORT" && \
 	cd services/$(SERVICE) && \
-	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --sync && \
-	poetry run uvicorn src.main:app --reload --host 0.0.0.0 --port ${PORT-8000}
+	pip install -e ../../shared && \
+	PYTHONPATH=../../common poetry run uvicorn src.main:app --reload --host 0.0.0.0 --port $$PORT
 
 		
 # Run one non-FASTAPI service (e.g. catalog-job-processor) with hot-reload

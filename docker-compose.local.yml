@@ -52,9 +52,9 @@ services:
     ports:
       - "${CATALOG_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - catalog-db-data:/var/lib/postgresql/data
+      - catalog-db-local-data:/var/lib/postgresql/data
     networks:
-      - glam-net
+      - glam-local-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
       interval: 10s
@@ -71,7 +71,7 @@ services:
       POSTGRES_PASSWORD: job_processor_pass
       POSTGRES_DB: job_processor_db
     ports:
-      - "5433:5432"
+      - "${CATALOG_JOB_PROCESSOR_DB_PORT_EXTERNAL}:5432"
     volumes:
       - catalog-job-processor-db-local-data:/var/lib/postgresql/data
     networks:
@@ -91,7 +91,7 @@ services:
       POSTGRES_PASSWORD: profile_pass
       POSTGRES_DB: profile_db
     ports:
-      - "5434:5432"
+      - "${PROFILE_DB_EXTERNAL_PORT}:5432"
     volumes:
       - profile-db-local-data:/var/lib/postgresql/data
     networks:
@@ -122,6 +122,30 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+      
+# ----------------- Notification Service -----------------
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+
+    ports:
+      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - notification-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
 
   # ----------------- MinIO Client (Setup buckets) -----------------
   minio-setup:
@@ -153,29 +177,7 @@ services:
   #     - glam-local-net
   #   depends_on:
   #     - nats
-  # ----------------- Notification Service -----------------
-  notifications-db:
-    image: postgres:15-alpine
-    container_name: notifications-db
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${NOTIFICATIONS_DB_USER}
-      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
-      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
 
-    ports:
-      - "${NOTIFICATIONS_DB_EXTERNAL_PORT}:5432"
-    volumes:
-      - notifications-db-data:/var/lib/postgresql/data
-    networks:
-      - glam-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATIONS_DB_USER}"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
 
 
 networks:
@@ -185,8 +187,8 @@ networks:
 volumes:
   nats-local-data:
   redis-local-data:
+  minio-local-data:
   catalog-db-local-data:
   catalog-job-processor-db-local-data:
   profile-db-local-data:
-  minio-local-data:
-  notifications-db-data:
+  notification-db-local-data:

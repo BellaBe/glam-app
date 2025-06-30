@@ -364,7 +364,7 @@ services:
               count: 1
               capabilities: [gpu]
 
-# ----------------- Notifications Service -----------------
+# ----------------- Notification Service -----------------
   notification-service:
     build:
       context: .
@@ -406,6 +406,7 @@ services:
       APP_ENV: ${APP_ENV:-prod}
       ENABLE_METRICS: ${ENABLE_METRICS}
       ENABLE_TRACING: ${ENABLE_TRACING}
+      
     ports:
       - "8002:8000"
     networks:
@@ -418,9 +419,9 @@ services:
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${NOTIFICATIONS_SERVICE_WORKERS}
         "
    
-  notifications-db:
+  notification-db:
     image: postgres:15-alpine
-    container_name: notifications-db
+    container_name: notification-db
     restart: unless-stopped
     env_file:
       - .env
@@ -429,13 +430,13 @@ services:
       POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
       POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
     ports:
-      - "${NOTIFICATIONS_DB_PORT_EXTERNAL}:5432"
+      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - notifications-db-data:/var/lib/postgresql/data
+      - notification-db-data:/var/lib/postgresql/data
     networks:
       - glam-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATIONS_DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION _DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -455,4 +456,4 @@ volumes:
   profile-db-data:
   profile-temp-storage:
   profile-ai-models:
-  notifications-db-data:
+  notification-db-data:
