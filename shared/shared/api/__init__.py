@@ -20,11 +20,6 @@ from .models import (
     
     # Generic types
     DataT,
-    
-    # Response builders
-    success_response,
-    error_response,
-    paginated_response,
 )
 
 from .dependencies import (
@@ -53,6 +48,8 @@ from .correlation import (
     CorrelationLoggerAdapter,
 )
 
+from .responses import success_response, error_response
+
 __all__ = [
     # Models
     "SuccessResponse",
@@ -63,10 +60,6 @@ __all__ = [
     "Links",
     "DataT",
     
-    # Builders
-    "success_response",
-    "error_response",
-    "paginated_response",
     
     # Dependencies
     "PaginationParams",
@@ -90,4 +83,8 @@ __all__ = [
     # Middleware
     "APIResponseMiddleware",
     "setup_api_middleware",
+    
+    # Response utilities
+    "success_response",
+    "error_response",
 ]

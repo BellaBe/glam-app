@@ -18,11 +18,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from shared.api.responses import exception_to_error_response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from .base import GlamBaseError, ValidationError
-from .handlers import exception_to_error_response
+
 
 logger = logging.getLogger(__name__)
 

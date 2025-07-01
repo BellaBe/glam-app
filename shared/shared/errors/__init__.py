@@ -78,11 +78,6 @@ from .infrastructure import (
     MessageBusError,
 )
 
-from .handlers import (
-    ErrorResponse,
-    create_error_response,
-    exception_to_error_response,
-)
 
 from .utils import (
     wrap_external_error,
@@ -103,7 +98,6 @@ __all__ = [
     "ForbiddenError",
     "RateLimitedError",
     "ServiceUnavailableError",
-    "RequestTimeoutError ",
     "InternalError",
     # Catalog errors
     "SyncInProgressError",
@@ -145,9 +139,6 @@ __all__ = [
     "CircuitOpenError",
     "MessageBusError",
     # Handlers and utilities
-    "ErrorResponse",
-    "create_error_response",
-    "exception_to_error_response",
     "wrap_external_error",
     "classify_http_error",
     "is_retryable_error",
