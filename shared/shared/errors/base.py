@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 class GlamBaseError(Exception):
     """
     Base class for all glam-app errors.
-    
+
     Attributes:
         code: Stable error code for clients (e.g., "VALIDATION_ERROR")
         status: HTTP status code (default 500)
@@ -26,10 +26,10 @@ class GlamBaseError(Exception):
         details: Additional error context
         __cause__: Original exception if wrapped
     """
-    
+
     code: str = "INTERNAL_ERROR"
     status: int = 500
-    
+
     def __init__(
         self,
         message: str,
@@ -40,43 +40,43 @@ class GlamBaseError(Exception):
         cause: Optional[Exception] = None
     ):
         super().__init__(message)
-        
+
         if code is not None:
             self.code = code
         if status is not None:
             self.status = status
-        
+
         self.message = message
         self.details = details or {}
-        
+
         # Preserve the original exception chain
         if cause is not None:
             self.__cause__ = cause
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for JSON serialization."""
         result: Dict[str, Any] = {
             "code": self.code,
             "message": self.message,
         }
-        
+
         if self.details:
             result["details"] = self.details
-            
+
         return result
 
 
 class InfrastructureError(GlamBaseError):
     """
     Infrastructure/external system errors.
-    
+
     These are failures in external dependencies like databases,
     APIs, message queues, etc. They may be retryable.
     """
-    
+
     code = "INFRASTRUCTURE_ERROR"
     status = 503  # Service Unavailable
-    
+
     def __init__(
         self,
         message: str,
@@ -86,10 +86,10 @@ class InfrastructureError(GlamBaseError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if service:
             self.details["service"] = service
-        
+
         self.details["retryable"] = retryable
         self.retryable = retryable
 
@@ -97,23 +97,24 @@ class InfrastructureError(GlamBaseError):
 class DomainError(GlamBaseError):
     """
     Domain/business logic errors.
-    
+
     These represent violations of business rules or invalid
     operations within the application domain.
     """
-    
+
     code = "DOMAIN_ERROR"
     status = 400  # Bad Request
 
 
 # Common domain errors used across services
 
+
 class ValidationError(DomainError):
     """Invalid request data or parameters."""
-    
+
     code = "VALIDATION_ERROR"
     status = 422  # Unprocessable Entity
-    
+
     def __init__(
         self,
         message: str,
@@ -123,7 +124,7 @@ class ValidationError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if field:
             self.details["field"] = field
         if value is not None:
@@ -132,10 +133,10 @@ class ValidationError(DomainError):
 
 class NotFoundError(DomainError):
     """Requested resource not found."""
-    
+
     code = "NOT_FOUND"
     status = 404
-    
+
     def __init__(
         self,
         message: str,
@@ -145,7 +146,7 @@ class NotFoundError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if resource:
             self.details["resource"] = resource
         if resource_id is not None:
@@ -154,10 +155,10 @@ class NotFoundError(DomainError):
 
 class ConflictError(DomainError):
     """Operation conflicts with current state."""
-    
+
     code = "CONFLICT"
     status = 409
-    
+
     def __init__(
         self,
         message: str,
@@ -167,7 +168,7 @@ class ConflictError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if conflicting_resource:
             self.details["conflicting_resource"] = conflicting_resource
         if current_state:
@@ -176,10 +177,10 @@ class ConflictError(DomainError):
 
 class UnauthorizedError(DomainError):
     """Authentication required or failed."""
-    
+
     code = "UNAUTHORIZED"
     status = 401
-    
+
     def __init__(
         self,
         message: str = "Authentication required",
@@ -188,17 +189,17 @@ class UnauthorizedError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if auth_type:
             self.details["auth_type"] = auth_type
 
 
 class ForbiddenError(DomainError):
     """Authenticated but insufficient permissions."""
-    
+
     code = "FORBIDDEN"
     status = 403
-    
+
     def __init__(
         self,
         message: str = "Insufficient permissions",
@@ -208,7 +209,7 @@ class ForbiddenError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if required_permission:
             self.details["required_permission"] = required_permission
         if resource:
@@ -217,10 +218,10 @@ class ForbiddenError(DomainError):
 
 class RateLimitedError(DomainError):
     """Too many requests."""
-    
+
     code = "RATE_LIMITED"
     status = 429
-    
+
     def __init__(
         self,
         message: str = "Rate limit exceeded",
@@ -231,7 +232,7 @@ class RateLimitedError(DomainError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if limit:
             self.details["limit"] = limit
         if window:
@@ -242,17 +243,17 @@ class RateLimitedError(DomainError):
 
 class ServiceUnavailableError(InfrastructureError):
     """Service temporarily unavailable."""
-    
+
     code = "SERVICE_UNAVAILABLE"
     status = 503
 
 
-class TimeoutError(InfrastructureError):
+class RequestTimeoutError(InfrastructureError):
     """Operation timed out."""
-    
+
     code = "TIMEOUT"
     status = 504
-    
+
     def __init__(
         self,
         message: str,
@@ -262,7 +263,7 @@ class TimeoutError(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if timeout_seconds:
             self.details["timeout_seconds"] = timeout_seconds
         if operation:
@@ -271,10 +272,10 @@ class TimeoutError(InfrastructureError):
 
 class InternalError(GlamBaseError):
     """Unexpected internal server error."""
-    
+
     code = "INTERNAL_ERROR"
     status = 500
-    
+
     def __init__(
         self,
         message: str = "An unexpected error occurred",
@@ -284,7 +285,6 @@ class InternalError(GlamBaseError):
     ):
         # Never expose internal details in production
         super().__init__(message, **kwargs)
-        
+
         if error_id:
             self.details["error_id"] = error_id
-

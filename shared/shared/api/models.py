@@ -115,7 +115,6 @@ class ErrorDetail(BaseModel):
         description="Additional error context"
     )
 
-
 class ErrorResponse(BaseModel):
     """
     Standard error response format.
@@ -125,7 +124,7 @@ class ErrorResponse(BaseModel):
     """
     
     error: ErrorDetail = Field(description="Error information")
-    meta: ResponseMeta = Field(description="Response metadata")
+    meta: Optional[ResponseMeta] = Field(None, description="Response metadata")
     
     model_config = ConfigDict(
         json_encoders={
@@ -134,178 +133,76 @@ class ErrorResponse(BaseModel):
     )
     
     @classmethod
-    def from_error(
+    def from_exception(
         cls,
-        error: Any,
-        request_id: str,
-        correlation_id: Optional[str] = None
-    ) -> "ErrorResponse":
-        """Create ErrorResponse from an exception or error dict."""
-        if hasattr(error, "to_dict"):
-            # It's a GlamBaseError
-            error_dict = error.to_dict()
-            error_detail = ErrorDetail(**error_dict)
-        elif isinstance(error, dict):
-            # Already a dict
-            error_detail = ErrorDetail(**error)
+        exc: Any,
+        *,
+        request_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        include_details: bool = True
+    ) -> tuple["ErrorResponse", int]:
+        """
+        Create an ErrorResponse from any exception.
+        
+        Args:
+            exc: The exception to convert
+            request_id: Request ID for tracing
+            correlation_id: Correlation ID for distributed tracing
+            include_details: Whether to include detailed error information
+            
+        Returns:
+            Tuple of (ErrorResponse, status_code)
+        """
+        from ..errors.base import GlamBaseError
+        
+        error_dict: Dict[str, Any] = {}
+        status = 500
+        
+        if isinstance(exc, GlamBaseError):
+            # Our custom errors - use their structure
+            error_dict = exc.to_dict()
+            status = exc.status
+        elif isinstance(exc, dict):
+            # Error dict provided
+            error_dict = exc
+            # Extract status if provided
+            status = error_dict.pop("status", 500)
         else:
-            # Generic error
-            error_detail = ErrorDetail(
-                code="INTERNAL_ERROR",
-                message=str(error),
-                details=None
+            # Unexpected error - sanitize for production
+            error_dict = {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred"
+            }
+            status = 500
+            
+            # Log the full traceback for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception(
+                "Unhandled exception",
+                extra={
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "request_id": request_id,
+                    "correlation_id": correlation_id
+                }
+            )
+        
+        # Remove details in production if requested
+        if not include_details and "details" in error_dict:
+            error_dict.pop("details", None)
+        
+        error_detail = ErrorDetail(**error_dict)
+        
+        # Create meta only if we have request_id or correlation_id
+        meta = None
+        if request_id or correlation_id:
+            meta = ResponseMeta(
+                request_id=request_id or f"req_{uuid.uuid4().hex[:12]}",
+                correlation_id=correlation_id
             )
         
         return cls(
             error=error_detail,
-            meta=ResponseMeta(
-                request_id=request_id,
-                correlation_id=correlation_id
-            )
-        )
-
-
-# Response builder functions
-
-def success_response(
-    data: DataT,
-    *,
-    request_id: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    links: Optional[Links] = None,
-    extra_meta: Optional[Dict[str, Any]] = None
-) -> SuccessResponse[DataT]:
-    """
-    Create a standard success response.
-    
-    Args:
-        data: The response data
-        request_id: Request ID for tracing
-        correlation_id: Correlation ID for distributed tracing
-        links: Optional HATEOAS links
-        extra_meta: Additional metadata to include
-        
-    Returns:
-        SuccessResponse instance
-    """
-    if request_id is None:
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
-    
-    meta = ResponseMeta(
-        request_id=request_id,
-        correlation_id=correlation_id
-    )
-    
-    # Add any extra metadata
-    if extra_meta:
-        meta_dict = meta.model_dump()
-        meta_dict.update(extra_meta)
-        meta = ResponseMeta(**meta_dict)
-    
-    return SuccessResponse(
-        data=data,
-        meta=meta,
-        pagination=None,  # Explicitly set to None
-        links=links
-    )
-
-
-def error_response(
-    code: str,
-    message: str,
-    *,
-    details: Optional[Dict[str, Any]] = None,
-    request_id: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    status_code: int = 500
-) -> tuple[ErrorResponse, int]:
-    """
-    Create a standard error response.
-    
-    Args:
-        code: Error code
-        message: Human-readable error message
-        details: Additional error context
-        request_id: Request ID for tracing
-        correlation_id: Correlation ID for distributed tracing
-        status_code: HTTP status code
-        
-    Returns:
-        Tuple of (ErrorResponse, status_code)
-    """
-    if request_id is None:
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
-    
-    error_detail = ErrorDetail(
-        code=code,
-        message=message,
-        details=details
-    )
-    
-    response = ErrorResponse(
-        error=error_detail,
-        meta=ResponseMeta(
-            request_id=request_id,
-            correlation_id=correlation_id
-        )
-    )
-    
-    return response, status_code
-
-
-def paginated_response(
-    data: List[DataT],
-    *,
-    page: int,
-    limit: int,
-    total: int,
-    request_id: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-    base_url: str,
-    **query_params
-) -> SuccessResponse[List[DataT]]:
-    """
-    Create a paginated success response.
-    
-    Args:
-        data: List of items for current page
-        page: Current page number
-        limit: Items per page
-        total: Total number of items
-        request_id: Request ID for tracing
-        correlation_id: Correlation ID for distributed tracing
-        base_url: Base URL for pagination links
-        **query_params: Additional query parameters to preserve
-        
-    Returns:
-        SuccessResponse with pagination
-    """
-    if request_id is None:
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
-    
-    # Create pagination metadata
-    pagination = PaginationMeta.from_params(page, limit, total)
-    
-    # Build pagination links
-    def build_url(page_num: int) -> str:
-        params = {**query_params, "page": page_num, "limit": limit}
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"{base_url}?{query}"
-    
-    links = Links(
-        self=build_url(page),
-        next=build_url(page + 1) if pagination.has_next else None,
-        previous=build_url(page - 1) if pagination.has_previous else None,
-        first=build_url(1) if pagination.pages > 0 else None,
-        last=build_url(pagination.pages) if pagination.pages > 0 else None
-    )
-    
-    return SuccessResponse(
-        data=data,
-        meta=ResponseMeta(
-            request_id=request_id,
-            correlation_id=correlation_id
-        ),
-        pagination=pagination,
-        links=links
-    )
+            meta=meta
+        ), status

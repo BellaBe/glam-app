@@ -4,7 +4,7 @@
 
 """Notification service specific errors."""
 
-from typing import Optional, Dict, Any
+from typing import Optional
 from .base import NotFoundError, ValidationError, InfrastructureError, ConflictError
 
 

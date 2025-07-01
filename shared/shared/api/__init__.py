@@ -33,6 +33,7 @@ from .dependencies import (
     get_request_id,
     RequestIdDep,
     PaginationDep,
+    RequestContextDep
 )
 
 from .middleware import (
@@ -73,6 +74,7 @@ __all__ = [
     "get_request_id",
     "RequestIdDep",
     "PaginationDep",
+    "RequestContextDep",
     
     # Correlation
     "get_correlation_id",

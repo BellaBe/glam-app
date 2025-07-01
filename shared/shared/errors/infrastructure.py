@@ -4,7 +4,7 @@
 
 """Infrastructure-specific error classes."""
 
-from typing import Optional, Dict, Any
+from typing import Optional
 from .base import InfrastructureError
 
 

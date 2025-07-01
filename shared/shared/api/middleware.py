@@ -13,7 +13,6 @@ import time
 import uuid
 import logging
 from typing import Callable
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -21,8 +20,8 @@ from fastapi.exceptions import RequestValidationError, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from ..errors import GlamBaseError, ValidationError
-from .models import ErrorResponse, SuccessResponse, ResponseMeta
+from ..errors import GlamBaseError
+from .models import ErrorResponse
 from .correlation import set_correlation_context, get_correlation_id
 
 logger = logging.getLogger(__name__)
@@ -120,10 +119,12 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         
         if isinstance(exc, GlamBaseError):
             # Our custom errors
-            error_response = ErrorResponse.from_error(
-                exc, request_id, correlation_id
+            return ErrorResponse.from_exception(
+                exc, 
+                request_id=request_id, 
+                correlation_id=correlation_id,
+                include_details=self.include_error_details
             )
-            return error_response, exc.status
         
         elif isinstance(exc, RequestValidationError):
             # Pydantic validation errors
@@ -136,28 +137,29 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "type": error["type"]
                 })
             
-            error_response = ErrorResponse.from_error(
+            return ErrorResponse.from_exception(
                 {
                     "code": "VALIDATION_ERROR",
                     "message": "Request validation failed",
                     "details": {"validation_errors": validation_errors}
                 },
-                request_id,
-                correlation_id
+                request_id=request_id,
+                correlation_id=correlation_id,
+                include_details=self.include_error_details
             )
-            return error_response, 422
         
         elif isinstance(exc, HTTPException):
             # FastAPI HTTP exceptions
-            error_response = ErrorResponse.from_error(
+            return ErrorResponse.from_exception(
                 {
                     "code": f"HTTP_{exc.status_code}",
-                    "message": exc.detail
+                    "message": exc.detail,
+                    "status": exc.status_code  # Include status in the dict
                 },
-                request_id,
-                correlation_id
+                request_id=request_id,
+                correlation_id=correlation_id,
+                include_details=self.include_error_details
             )
-            return error_response, exc.status_code
         
         else:
             # Unexpected errors
@@ -170,17 +172,16 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                 }
             )
             
-            error_response = ErrorResponse.from_error(
+            return ErrorResponse.from_exception(
                 {
                     "code": "INTERNAL_ERROR",
                     "message": "An unexpected error occurred",
                     "details": {"error_type": type(exc).__name__} if self.include_error_details else None
                 },
-                request_id,
-                correlation_id
-            )
-            return error_response, 500
-
+                request_id=request_id,
+                correlation_id=correlation_id,
+                include_details=self.include_error_details
+        )
 
 def setup_api_middleware(
     app: FastAPI,

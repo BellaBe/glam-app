@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/errors/__init__.py
 # -------------------------------
@@ -24,7 +23,7 @@ from .base import (
     ForbiddenError,
     RateLimitedError,
     ServiceUnavailableError,
-    TimeoutError,
+    RequestTimeoutError,
     InternalError,
 )
 
@@ -96,7 +95,6 @@ __all__ = [
     "GlamBaseError",
     "InfrastructureError",
     "DomainError",
-    
     # Common domain errors
     "ValidationError",
     "NotFoundError",
@@ -105,9 +103,8 @@ __all__ = [
     "ForbiddenError",
     "RateLimitedError",
     "ServiceUnavailableError",
-    "TimeoutError",
+    "RequestTimeoutError ",
     "InternalError",
-    
     # Catalog errors
     "SyncInProgressError",
     "SyncNotFoundError",
@@ -115,18 +112,15 @@ __all__ = [
     "SyncNotCancellableError",
     "ItemNotFoundError",
     "ParentSyncNotFoundError",
-    
     # Profile errors
     "ProfileNotFoundError",
     "ProfileAlreadyExistsError",
     "ProfileCreationFailedError",
-    
     # Analysis errors
     "AnalysisInProgressError",
     "AnalysisNotFoundError",
     "AnalysisNotCancellableError",
     "NoCurrentAnalysisError",
-    
     # Selfie errors
     "SelfieNotFoundError",
     "InvalidImageFormatError",
@@ -135,7 +129,6 @@ __all__ = [
     "NoFaceDetectedError",
     "MultipleFacesDetectedError",
     "PoorImageQualityError",
-    
     # Notification errors
     "NotificationNotFoundError",
     "TemplateNotFoundError",
@@ -144,7 +137,6 @@ __all__ = [
     "PreferencesNotFoundError",
     "EmailProviderError",
     "UnsubscribedError",
-    
     # Infrastructure errors
     "DatabaseError",
     "RedisError",
@@ -152,7 +144,6 @@ __all__ = [
     "UpstreamServiceError",
     "CircuitOpenError",
     "MessageBusError",
-    
     # Handlers and utilities
     "ErrorResponse",
     "create_error_response",
