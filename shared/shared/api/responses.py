@@ -1,5 +1,5 @@
 # -------------------------------
-# shared/errors/handlers.py
+# shared/errors/responses.py
 # -------------------------------
 
 """
@@ -9,12 +9,11 @@ This module provides functions for creating consistent error responses
 across all glam-app services.
 """
 
-from typing import Any, Dict, Optional, List
-from .models import SuccessResponse, ErrorResponse, Links, PaginationMeta, DataT
+from typing import Any, Dict, Optional, List, Tuple
+from .models import SuccessResponse, ErrorResponse, Links, PaginationMeta, DataT, ResponseMeta, ErrorDetail
 import logging
 import uuid
 
-from shared.api.models import ErrorDetail, ResponseMeta
 
 from shared.errors import GlamBaseError
 
@@ -72,7 +71,7 @@ def error_response(
     request_id: Optional[str] = None,
     correlation_id: Optional[str] = None,
     status_code: int = 500
-) -> tuple[ErrorResponse, int]:
+) -> Tuple[ErrorResponse, int]:
     """
     Create a standard error response.
     
@@ -172,7 +171,7 @@ def exception_to_error_response(
     correlation_id: Optional[str] = None,
     include_details: bool = True,
     log_traceback: bool = True
-) -> tuple[ErrorResponse, int]:
+) -> Tuple[ErrorResponse, int]:
     """
     Convert any exception to a standardized error response.
     

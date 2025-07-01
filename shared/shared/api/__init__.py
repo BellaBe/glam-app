@@ -48,7 +48,7 @@ from .correlation import (
     CorrelationLoggerAdapter,
 )
 
-from .responses import success_response, error_response
+from .responses import success_response, error_response, paginated_response
 
 __all__ = [
     # Models
@@ -87,4 +87,5 @@ __all__ = [
     # Response utilities
     "success_response",
     "error_response",
+    "paginated_response",
 ]

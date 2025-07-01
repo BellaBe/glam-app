@@ -86,7 +86,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 )
             
             return JSONResponse(
-                content=error_response.dict(),
+                content=error_response.model_dump(),
                 status_code=status_code
             )
         
@@ -137,7 +137,7 @@ def setup_exception_handlers(
         )
         
         return JSONResponse(
-            content=error_response.dict(),
+            content=error_response.model_dump(),
             status_code=status_code
         )
     
@@ -171,7 +171,7 @@ def setup_exception_handlers(
         )
         
         return JSONResponse(
-            content=error_response.dict(),
+            content=error_response.model_dump(),
             status_code=status_code
         )
     
@@ -207,7 +207,7 @@ def setup_exception_handlers(
         )
         
         return JSONResponse(
-            content=error_response.dict(),
+            content=error_response.model_dump(),
             status_code=status_code
         )
     
@@ -226,7 +226,7 @@ def setup_exception_handlers(
         )
         
         return JSONResponse(
-            content=error_response.dict(),
+            content=error_response.model_dump(),
             status_code=status_code
         )
 

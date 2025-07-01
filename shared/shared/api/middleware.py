@@ -12,7 +12,7 @@ all responses follow the standard format.
 import time
 import uuid
 import logging
-from typing import Callable
+from typing import Callable, Tuple
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -114,7 +114,7 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         exc: Exception,
         request_id: str,
         correlation_id: str
-    ) -> tuple[ErrorResponse, int]:
+    ) -> Tuple[ErrorResponse, int]:
         """Convert exception to standard error response."""
         
         if isinstance(exc, GlamBaseError):
