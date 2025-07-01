@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/api/dependencies.py
 # -------------------------------
@@ -101,7 +100,7 @@ class RequestContext(BaseModel):
     """Complete request context for logging/auditing."""
     
     request_id: str
-    trace_id: Optional[str] = None
+    correlation_id: Optional[str] = None
     client_ip: str
     user_agent: Optional[str] = None
     method: str
@@ -112,7 +111,7 @@ class RequestContext(BaseModel):
         """Create context from FastAPI request."""
         return cls(
             request_id=get_request_id(request),
-            trace_id=getattr(request.state, "trace_id", None),
+            correlation_id=getattr(request.state, "correlation_id", None),
             client_ip=get_client_ip(request),
             user_agent=get_user_agent(request),
             method=request.method,

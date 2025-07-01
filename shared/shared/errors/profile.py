@@ -75,4 +75,3 @@ class ProfileCreationFailedError(DomainError):
             self.details["user_id"] = user_id
         if reason:
             self.details["reason"] = reason
-

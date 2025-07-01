@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/api/models.py
 # -------------------------------
@@ -115,10 +114,6 @@ class ErrorDetail(BaseModel):
         None,
         description="Additional error context"
     )
-    trace_id: Optional[str] = Field(
-        None,
-        description="Trace ID for debugging"
-    )
 
 
 class ErrorResponse(BaseModel):
@@ -143,31 +138,30 @@ class ErrorResponse(BaseModel):
         cls,
         error: Any,
         request_id: str,
-        trace_id: Optional[str] = None
+        correlation_id: Optional[str] = None
     ) -> "ErrorResponse":
         """Create ErrorResponse from an exception or error dict."""
         if hasattr(error, "to_dict"):
             # It's a GlamBaseError
             error_dict = error.to_dict()
-            if trace_id:
-                error_dict["trace_id"] = trace_id
             error_detail = ErrorDetail(**error_dict)
         elif isinstance(error, dict):
             # Already a dict
-            if trace_id and "trace_id" not in error:
-                error["trace_id"] = trace_id
             error_detail = ErrorDetail(**error)
         else:
             # Generic error
             error_detail = ErrorDetail(
                 code="INTERNAL_ERROR",
                 message=str(error),
-                trace_id=trace_id
+                details=None
             )
         
         return cls(
             error=error_detail,
-            meta=ResponseMeta(request_id=request_id)
+            meta=ResponseMeta(
+                request_id=request_id,
+                correlation_id=correlation_id
+            )
         )
 
 
@@ -211,6 +205,7 @@ def success_response(
     return SuccessResponse(
         data=data,
         meta=meta,
+        pagination=None,  # Explicitly set to None
         links=links
     )
 
@@ -221,7 +216,7 @@ def error_response(
     *,
     details: Optional[Dict[str, Any]] = None,
     request_id: Optional[str] = None,
-    trace_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
     status_code: int = 500
 ) -> tuple[ErrorResponse, int]:
     """
@@ -232,7 +227,7 @@ def error_response(
         message: Human-readable error message
         details: Additional error context
         request_id: Request ID for tracing
-        trace_id: Trace ID for debugging
+        correlation_id: Correlation ID for distributed tracing
         status_code: HTTP status code
         
     Returns:
@@ -244,13 +239,15 @@ def error_response(
     error_detail = ErrorDetail(
         code=code,
         message=message,
-        details=details,
-        trace_id=trace_id
+        details=details
     )
     
     response = ErrorResponse(
         error=error_detail,
-        meta=ResponseMeta(request_id=request_id)
+        meta=ResponseMeta(
+            request_id=request_id,
+            correlation_id=correlation_id
+        )
     )
     
     return response, status_code

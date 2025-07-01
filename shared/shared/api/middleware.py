@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/api/middleware.py
 # -------------------------------
@@ -68,13 +67,6 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         # Set correlation context for async operations
         set_correlation_context(correlation_id)
         
-        # Also get/set trace ID from error middleware if present
-        if not hasattr(request.state, "trace_id"):
-            trace_id = request.headers.get("X-Trace-ID", str(uuid.uuid4()))
-            request.state.trace_id = trace_id
-        else:
-            trace_id = request.state.trace_id
-        
         # Track timing
         start_time = time.perf_counter()
         
@@ -82,7 +74,6 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         def add_headers(response: Response):
             response.headers["X-Request-ID"] = request_id
             response.headers["X-Correlation-ID"] = correlation_id
-            response.headers["X-Trace-ID"] = trace_id
             response.headers["X-Service-Name"] = self.service_name
         
         try:
@@ -93,7 +84,7 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         except Exception as exc:
             # Convert to standard error response
             error_response, status_code = self._handle_exception(
-                exc, request_id, trace_id, correlation_id
+                exc, request_id, correlation_id
             )
             
             # Log error
@@ -103,7 +94,6 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                 extra={
                     "request_id": request_id,
                     "correlation_id": correlation_id,
-                    "trace_id": trace_id,
                     "method": request.method,
                     "path": request.url.path,
                     "status": status_code,
@@ -124,7 +114,6 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         self,
         exc: Exception,
         request_id: str,
-        trace_id: str,
         correlation_id: str
     ) -> tuple[ErrorResponse, int]:
         """Convert exception to standard error response."""
@@ -132,10 +121,8 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
         if isinstance(exc, GlamBaseError):
             # Our custom errors
             error_response = ErrorResponse.from_error(
-                exc, request_id, trace_id
+                exc, request_id, correlation_id
             )
-            # Add correlation ID to meta
-            error_response.meta.correlation_id = correlation_id
             return error_response, exc.status
         
         elif isinstance(exc, RequestValidationError):
@@ -156,9 +143,8 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "details": {"validation_errors": validation_errors}
                 },
                 request_id,
-                trace_id
+                correlation_id
             )
-            error_response.meta.correlation_id = correlation_id
             return error_response, 422
         
         elif isinstance(exc, HTTPException):
@@ -169,9 +155,8 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "message": exc.detail
                 },
                 request_id,
-                trace_id
+                correlation_id
             )
-            error_response.meta.correlation_id = correlation_id
             return error_response, exc.status_code
         
         else:
@@ -181,7 +166,6 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                 extra={
                     "request_id": request_id,
                     "correlation_id": correlation_id,
-                    "trace_id": trace_id,
                     "error_type": type(exc).__name__
                 }
             )
@@ -193,9 +177,8 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "details": {"error_type": type(exc).__name__} if self.include_error_details else None
                 },
                 request_id,
-                trace_id
+                correlation_id
             )
-            error_response.meta.correlation_id = correlation_id
             return error_response, 500
 
 

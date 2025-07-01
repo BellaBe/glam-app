@@ -1,3 +1,8 @@
+
+# -------------------------------
+# shared/errors/__init__.py
+# -------------------------------
+
 """
 Shared error handling module for glam-app microservices.
 

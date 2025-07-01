@@ -55,7 +55,7 @@ class GlamBaseError(Exception):
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for JSON serialization."""
-        result = {
+        result: Dict[str, Any] = {
             "code": self.code,
             "message": self.message,
         }
@@ -287,3 +287,4 @@ class InternalError(GlamBaseError):
         
         if error_id:
             self.details["error_id"] = error_id
+

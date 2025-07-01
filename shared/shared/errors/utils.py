@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/errors/utils.py
 # -------------------------------
@@ -56,7 +55,7 @@ def classify_http_error(
     exc: httpx.HTTPError,
     *,
     service_name: str = "upstream"
-) -> InfrastructureError:
+) -> InfrastructureError | RateLimitedError:
     """
     Classify HTTP errors into appropriate infrastructure errors.
     
@@ -168,7 +167,10 @@ def with_error_mapping(
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             try:
-                return await func(*args, **kwargs)
+                result = func(*args, **kwargs)
+                if asyncio.iscoroutine(result):
+                    return await result
+                return result
             except Exception as exc:
                 # Check if we have a mapping for this exception
                 for exc_type, error_class in mappings.items():
@@ -211,9 +213,8 @@ def with_error_mapping(
         
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return async_wrapper #type: ignore
         else:
             return sync_wrapper
     
     return decorator
-

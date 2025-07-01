@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/api/__init__.py
 # -------------------------------
@@ -90,4 +89,3 @@ __all__ = [
     "APIResponseMiddleware",
     "setup_api_middleware",
 ]
-

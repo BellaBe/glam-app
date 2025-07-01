@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/errors/handlers.py
 # -------------------------------
@@ -14,6 +13,9 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel
 import traceback
 import logging
+import uuid
+
+from shared.api.models import ErrorDetail, ResponseMeta
 
 from .base import GlamBaseError, InfrastructureError, DomainError
 
@@ -28,29 +30,33 @@ class ErrorResponse(BaseModel):
     across all services for consistency.
     """
     
-    error: Dict[str, Any]
+    error: ErrorDetail
+    
+    meta: Optional[ResponseMeta] = None
     
     @classmethod
     def from_exception(
         cls,
         exc: Exception,
         *,
-        trace_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
         include_details: bool = True
-    ) -> "ErrorResponse":
+    ) -> tuple["ErrorResponse", int]:
         """
         Create an ErrorResponse from any exception.
         
         Args:
             exc: The exception to convert
-            trace_id: Optional trace ID for correlation
+            request_id: Request ID for tracing
+            correlation_id: Correlation ID for distributed tracing
             include_details: Whether to include detailed error information
             
         Returns:
-            ErrorResponse instance
+            Tuple of (ErrorResponse, status_code)
         """
-        error_dict = {}
-        
+        error_dict: Dict[str, Any] = {}
+
         if isinstance(exc, GlamBaseError):
             # Our custom errors - use their structure
             error_dict = exc.to_dict()
@@ -69,19 +75,24 @@ class ErrorResponse(BaseModel):
                 extra={
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
-                    "trace_id": trace_id
+                    "request_id": request_id,
+                    "correlation_id": correlation_id
                 }
             )
-        
-        # Add trace ID if provided
-        if trace_id:
-            error_dict["trace_id"] = trace_id
         
         # Remove details in production if requested
         if not include_details and "details" in error_dict:
             error_dict.pop("details", None)
         
-        return cls(error=error_dict), status
+        error_detail = ErrorDetail(**error_dict)
+        
+        return cls(
+            error=error_detail,
+            meta=ResponseMeta(
+                request_id=request_id or f"req_{uuid.uuid4().hex[:12]}",
+                correlation_id=correlation_id
+            )
+        ), status
 
 
 def create_error_response(
@@ -90,7 +101,7 @@ def create_error_response(
     *,
     status: int = 500,
     details: Optional[Dict[str, Any]] = None,
-    trace_id: Optional[str] = None
+    request_id: str
 ) -> tuple[ErrorResponse, int]:
     """
     Create a standardized error response.
@@ -100,29 +111,26 @@ def create_error_response(
         message: Human-readable error message
         status: HTTP status code
         details: Additional error context
-        trace_id: Request trace ID for correlation
+        request_id: Request ID for tracing
         
     Returns:
         Tuple of (ErrorResponse, status_code)
     """
-    error_dict = {
-        "code": code,
-        "message": message
-    }
-    
-    if details:
-        error_dict["details"] = details
-    
-    if trace_id:
-        error_dict["trace_id"] = trace_id
-    
-    return ErrorResponse(error=error_dict), status
+    error_dict: ErrorDetail = ErrorDetail(
+        code=code,
+        message=message,
+        details=details if details else None
+    )
+    meta = ResponseMeta(request_id=request_id, correlation_id=None)
+
+    return ErrorResponse(error=error_dict, meta=meta), status
 
 
 def exception_to_error_response(
     exc: Exception,
     *,
-    trace_id: Optional[str] = None,
+    request_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
     include_details: bool = True,
     log_traceback: bool = True
 ) -> tuple[ErrorResponse, int]:
@@ -133,7 +141,8 @@ def exception_to_error_response(
     
     Args:
         exc: The exception to convert
-        trace_id: Request trace ID
+        request_id: Request ID for tracing
+        correlation_id: Correlation ID for distributed tracing
         include_details: Whether to include error details
         log_traceback: Whether to log the full traceback
         
@@ -146,12 +155,14 @@ def exception_to_error_response(
             "Converting exception to error response",
             extra={
                 "error_type": type(exc).__name__,
-                "trace_id": trace_id
+                "request_id": request_id,
+                "correlation_id": correlation_id
             }
         )
     
     return ErrorResponse.from_exception(
         exc,
-        trace_id=trace_id,
+        request_id=request_id,
+        correlation_id=correlation_id,
         include_details=include_details
     )

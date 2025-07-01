@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/errors/infrastructure.py
 # -------------------------------
@@ -159,4 +158,3 @@ class MessageBusError(InfrastructureError):
             self.details["subject"] = subject
         if event_type:
             self.details["event_type"] = event_type
-

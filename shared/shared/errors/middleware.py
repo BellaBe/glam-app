@@ -1,4 +1,3 @@
-
 # -------------------------------
 # shared/errors/middleware.py
 # -------------------------------
@@ -33,7 +32,6 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     Middleware that ensures all errors are converted to standard format.
     
     This middleware:
-    - Adds trace IDs to all requests
     - Catches all exceptions and converts to standard error responses
     - Logs request metrics and errors
     """
@@ -50,26 +48,23 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
         self.log_errors = log_errors
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Generate trace ID for this request
-        trace_id = str(uuid.uuid4())
-        request.state.trace_id = trace_id
-        
         # Track request timing
         start_time = time.perf_counter()
         
         try:
             response = await call_next(request)
-            
-            # Add trace ID to response headers
-            response.headers["X-Trace-Id"] = trace_id
-            
             return response
             
         except Exception as exc:
+            # Get request_id and correlation_id from request state if available
+            request_id = getattr(request.state, "request_id", None)
+            correlation_id = getattr(request.state, "correlation_id", None)
+            
             # Convert exception to standard error response
             error_response, status_code = exception_to_error_response(
                 exc,
-                trace_id=trace_id,
+                request_id=request_id,
+                correlation_id=correlation_id,
                 include_details=self.include_details,
                 log_traceback=self.log_errors
             )
@@ -80,19 +75,18 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 logger.error(
                     "Request failed",
                     extra={
-                        "trace_id": trace_id,
+                        "request_id": request_id,
                         "method": request.method,
                         "path": request.url.path,
                         "status": status_code,
                         "duration_ms": round(duration_ms, 2),
-                        "error_code": error_response.error.get("code"),
+                        "error_code": error_response.error.code,
                     }
                 )
             
             return JSONResponse(
                 content=error_response.dict(),
-                status_code=status_code,
-                headers={"X-Trace-Id": trace_id}
+                status_code=status_code
             )
         
         finally:
@@ -101,7 +95,6 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             logger.info(
                 "Request completed",
                 extra={
-                    "trace_id": trace_id,
                     "method": request.method,
                     "path": request.url.path,
                     "duration_ms": round(duration_ms, 2),
@@ -131,25 +124,27 @@ def setup_exception_handlers(
     @app.exception_handler(GlamBaseError)
     async def glam_error_handler(request: Request, exc: GlamBaseError):
         """Handle our custom domain/infrastructure errors."""
-        trace_id = getattr(request.state, "trace_id", None)
+        request_id = getattr(request.state, "request_id", None)
+        correlation_id = getattr(request.state, "correlation_id", None)
         
         error_response, status_code = exception_to_error_response(
             exc,
-            trace_id=trace_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
             include_details=include_details,
             log_traceback=False  # Don't log expected errors
         )
         
         return JSONResponse(
             content=error_response.dict(),
-            status_code=status_code,
-            headers={"X-Trace-Id": trace_id} if trace_id else {}
+            status_code=status_code
         )
     
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
         """Handle Pydantic validation errors."""
-        trace_id = getattr(request.state, "trace_id", None)
+        request_id = getattr(request.state, "request_id", None)
+        correlation_id = getattr(request.state, "correlation_id", None)
         
         # Convert Pydantic errors to our format
         validation_errors = []
@@ -169,20 +164,21 @@ def setup_exception_handlers(
         
         error_response, status_code = exception_to_error_response(
             validation_exc,
-            trace_id=trace_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
             include_details=include_details
         )
         
         return JSONResponse(
             content=error_response.dict(),
-            status_code=status_code,
-            headers={"X-Trace-Id": trace_id} if trace_id else {}
+            status_code=status_code
         )
     
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         """Handle FastAPI HTTP exceptions."""
-        trace_id = getattr(request.state, "trace_id", None)
+        request_id = getattr(request.state, "request_id", None)
+        correlation_id = getattr(request.state, "correlation_id", None)
         
         # Map common HTTP exceptions to our error types
         if exc.status_code == 401:
@@ -204,47 +200,48 @@ def setup_exception_handlers(
         
         error_response, status_code = exception_to_error_response(
             domain_exc,
-            trace_id=trace_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
             include_details=include_details
         )
         
         return JSONResponse(
             content=error_response.dict(),
-            status_code=status_code,
-            headers={"X-Trace-Id": trace_id} if trace_id else {}
+            status_code=status_code
         )
     
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
         """Handle unexpected errors."""
-        trace_id = getattr(request.state, "trace_id", None)
+        request_id = getattr(request.state, "request_id", None)
+        correlation_id = getattr(request.state, "correlation_id", None)
         
         error_response, status_code = exception_to_error_response(
             exc,
-            trace_id=trace_id,
+            request_id=request_id,
+            correlation_id=correlation_id,
             include_details=include_details,
             log_traceback=True
         )
         
         return JSONResponse(
             content=error_response.dict(),
-            status_code=status_code,
-            headers={"X-Trace-Id": trace_id} if trace_id else {}
+            status_code=status_code
         )
 
 
 @asynccontextmanager
-async def get_request_trace_id(request: Request):
+async def get_request_id(request: Request):
     """
-    Context manager to access the current request's trace ID.
+    Context manager to access the current request's ID.
     
     Usage:
-        async with get_request_trace_id(request) as trace_id:
-            # Use trace_id in your code
+        async with get_request_id(request) as request_id:
+            # Use request_id in your code
     """
-    trace_id = getattr(request.state, "trace_id", None)
-    if not trace_id:
-        trace_id = str(uuid.uuid4())
-        request.state.trace_id = trace_id
+    request_id = getattr(request.state, "request_id", None)
+    if not request_id:
+        request_id = f"req_{uuid.uuid4().hex[:12]}"
+        request.state.request_id = request_id
     
-    yield trace_id
+    yield request_id
