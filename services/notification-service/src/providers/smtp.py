@@ -11,11 +11,11 @@ class SMTPProvider(EmailProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.host = config.get('host', 'localhost')
-        self.port = config.get('port', 587)
-        self.username = config.get('username')
-        self.password = config.get('password')
+        self.port = config.get('port', 1025)
+        self.username = config.get('username', '')
+        self.password = config.get('password', '')
         self.use_tls = config.get('use_tls', True)
-        self.timeout = config.get('timeout_seconds', 30)
+        self.timeout = config.get('timeout', 30)
     
     async def send_email(self, message: EmailMessage) -> EmailResult:
         """Send email via SMTP"""
@@ -47,7 +47,7 @@ class SMTPProvider(EmailProvider):
                 response = await smtp.send_message(msg)
                 
                 # Check if email was sent successfully
-                failed_recipients = response.get(message.to_email)
+                failed_recipients = response[0].get(message.to_email)
                 if failed_recipients:
                     return EmailResult(
                         success=False,
@@ -126,7 +126,7 @@ class SMTPProvider(EmailProvider):
                     # Send
                     try:
                         response = await smtp.send_message(msg)
-                        failed = response.get(message.to_email)
+                        failed = response[0].get(message.to_email)
                         
                         if failed:
                             results.append(EmailResult(
@@ -158,19 +158,24 @@ class SMTPProvider(EmailProvider):
         return results
     
     async def health_check(self) -> bool:
-        """Check SMTP server health"""
+        """Check SMTP server availability"""
         try:
-            async with aiosmtplib.SMTP(
-                hostname=self.host,
-                port=self.port,
-                timeout=5,
-                use_tls=self.use_tls
-            ) as smtp:
-                if self.username and self.password:
-                    await smtp.login(self.username, self.password)
-                
-                # Just check we can connect
-                await smtp.noop()
-                return True
-        except:
+            # For MailHog or other dev SMTP servers without auth
+            if not self.username and not self.password:
+                # Just try to connect without auth
+                import smtplib
+                with smtplib.SMTP(self.host, self.port, timeout=5) as server:
+                    # MailHog doesn't need STARTTLS or auth
+                    return True
+            else:
+                # Production SMTP with auth
+                import smtplib
+                with smtplib.SMTP(self.host, self.port, timeout=5) as server:
+                    if self.use_tls and self.port != 25:
+                        server.starttls()
+                    if self.username and self.password:
+                        server.login(self.username, self.password)
+                    return True
+        except Exception as e:
+            print(f"SMTP health check failed: {e}")
             return False

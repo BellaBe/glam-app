@@ -1,3 +1,4 @@
+# File: services/notification-service/src/exceptions.py
 """
 Notification service exceptions using shared error classes.
 

@@ -1,4 +1,4 @@
-# src/lifecycle.py
+# FIle: services/notification-service/src/lifecycle.py
 
 import asyncio
 from typing import Optional, List
@@ -28,6 +28,8 @@ class ServiceLifecycle:
     async def _ensure_notification_stream(self):
         """Ensure the NOTIFICATION stream exists"""
         try:
+            if not self.messaging_wrapper:
+                raise RuntimeError("Messaging wrapper is not initialized")
             js = self.messaging_wrapper.js
             
             # Stream configuration

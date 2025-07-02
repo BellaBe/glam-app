@@ -1,3 +1,10 @@
+# File: services/notification-service/src/dependencies.py
+"""
+Notification service dependencies for FastAPI application.
+This module provides FastAPI dependencies for the notification service,
+including lifecycle management, messaging, email, notification, template,
+and preference services.
+"""
 from typing import Annotated
 from fastapi import Depends, Request
 from shared.api.dependencies import RequestIdDep, RequestContextDep, PaginationDep
