@@ -100,7 +100,7 @@ class JetStreamEventSubscriber(ABC):
                 messages = await self._subscription.fetch(batch=10, timeout=1)
                 for msg in messages:
                     await self._process_message(msg)
-            except asyncio.RequestTimeoutError:
+            except asyncio.TimeoutError:
                 continue
             except Exception as e:
                 self.logger.error(f"Error fetching messages: {e}")

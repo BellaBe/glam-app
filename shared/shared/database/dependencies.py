@@ -31,6 +31,20 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     manager = get_database_manager()
     async with manager.session() as session:
         yield session
+        
+async def get_database_health() -> bool:
+    """Check if the database is healthy"""
+    manager = get_database_manager()
+    try:
+        async with manager.session() as session:
+            # Perform a simple query to check connectivity
+            from sqlalchemy.sql import text
+            await session.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        # Log the error or handle it as needed
+        print(f"Database health check failed: {e}")
+        return False
 
 
 # Type alias for dependency injection

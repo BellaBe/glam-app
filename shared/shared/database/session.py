@@ -40,7 +40,7 @@ class DatabaseSessionManager:
             "pool_recycle": pool_recycle,
         }
     
-    def init(self):
+    async def init(self):
         """Initialize the database engine and session factory"""
         if self._engine is not None:
             raise RuntimeError("Database session manager already initialized")

@@ -17,7 +17,7 @@ class Streams(str, Enum):
     PROFILE = "PROFILE"               # User profiles
     
     # Platform Services
-    NOTIFICATIONS = "NOTIFICATIONS"   # Notification delivery
+    NOTIFICATION = "NOTIFICATION"   # Notification delivery
     ANALYTICS = "ANALYTICS"           # Analytics and reporting
     WEBHOOKS = "WEBHOOKS"            # Webhook delivery
     SCHEDULER = "SCHEDULER"           # Scheduled jobs
@@ -85,6 +85,7 @@ class Commands:
     NOTIFICATION_SEND_SMS = "cmd.notification.send_sms"
     NOTIFICATION_SEND_PUSH = "cmd.notification.send_push"
     NOTIFICATION_SEND_WEBHOOK = "cmd.notification.send_webhook"
+    NOTIFICATION_BULK_SEND = "cmd.notification.bulk_send"
     
     # Analytics Commands
     ANALYTICS_TRACK_EVENT = "cmd.analytics.track_event"
@@ -284,6 +285,97 @@ EVENT_REGISTRY = {
         }
     ),
     
+     Commands.NOTIFICATION_SEND_EMAIL: EventDefinition(
+        stream=Streams.NOTIFICATION,
+        subjects=["cmd.notification.*"],
+        description="Send single email notification",
+        payload_example={
+            "shop_id": "uuid",
+            "shop_domain": "example.myshopify.com",
+            "recipient_email": "user@example.com",
+            "notification_type": "order_confirmation",
+            "template_id": "uuid",
+            "dynamic_content": {
+                "order_number": "1234",
+                "customer_name": "John Doe"
+            },
+            "metadata": {}
+        },
+        response_events=[
+            Events.NOTIFICATION_EMAIL_SENT,
+            Events.NOTIFICATION_DELIVERY_FAILED
+        ]
+    ),
+    
+    Commands.NOTIFICATION_BULK_SEND: EventDefinition(
+        stream=Streams.NOTIFICATION,
+        subjects=["cmd.notification.*"],
+        description="Send bulk email notifications",
+        payload_example={
+            "template_id": "uuid",
+            "notification_type": "marketing_campaign",
+            "recipients": [
+                {
+                    "email": "user1@example.com",
+                    "dynamic_content": {"name": "User 1"}
+                },
+                {
+                    "email": "user2@example.com", 
+                    "dynamic_content": {"name": "User 2"}
+                }
+            ]
+        },
+        response_events=[
+            Events.NOTIFICATION_EMAIL_SENT,
+            Events.NOTIFICATION_DELIVERY_FAILED
+        ]
+    ),
+    
+    Commands.NOTIFICATION_SEND_SMS: EventDefinition(
+        stream=Streams.NOTIFICATION,
+        subjects=["cmd.notification.*"],
+        description="Send SMS notification",
+        payload_example={
+            "shop_id": "uuid",
+            "recipient_phone": "+1234567890",
+            "message": "Your order has been shipped!",
+            "notification_type": "order_update"
+        },
+        response_events=[
+            Events.NOTIFICATION_SMS_SENT,
+            Events.NOTIFICATION_DELIVERY_FAILED
+        ]
+    ),
+    
+    # Notification Events
+    Events.NOTIFICATION_EMAIL_SENT: EventDefinition(
+        stream=Streams.NOTIFICATION,
+        subjects=["evt.notification.*"],
+        description="Email successfully sent",
+        payload_example={
+            "notification_id": "uuid",
+            "shop_id": "uuid",
+            "notification_type": "order_confirmation",
+            "provider_message_id": "sendgrid-123",
+            "sent_at": "2024-01-01T00:00:00Z"
+        }
+    ),
+    
+    Events.NOTIFICATION_DELIVERY_FAILED: EventDefinition(
+        stream=Streams.NOTIFICATION,
+        subjects=["evt.notification.*"],
+        description="Notification delivery failed",
+        payload_example={
+            "notification_id": "uuid",
+            "shop_id": "uuid",
+            "notification_type": "order_confirmation",
+            "error": "Invalid email address",
+            "error_code": "INVALID_EMAIL",
+            "retry_count": 2,
+            "will_retry": True,
+            "failed_at": "2024-01-01T00:00:00Z"
+        }
+    ),
     # Add more as needed...
 }
 
@@ -349,7 +441,7 @@ SERVICE_STREAM_MAP = {
     "catalog-service": Streams.CATALOG,
     "credit-service": Streams.CREDIT,
     "merchant-service": Streams.MERCHANT,
-    "notification-service": Streams.NOTIFICATIONS,
+    "notification-service": Streams.NOTIFICATION,
     "profile-ai-selfie": Streams.AI_PROCESSING,
     "profile-service": Streams.PROFILE,
     "rate-limit-service": Streams.RATE_LIMIT,

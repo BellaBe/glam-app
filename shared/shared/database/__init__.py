@@ -18,9 +18,10 @@ from .dependencies import (
     DBSessionDep,
     get_db_session,
     set_database_manager,
-    get_database_manager
+    get_database_manager,
+    get_database_health,
 )
-from .config import DatabaseConfig, TestDatabaseConfig
+from .config import DatabaseConfig, TestDatabaseConfig, create_database_config
 from .migrations import MigrationManager, create_alembic_env_template
 
 __all__ = [
@@ -41,10 +42,12 @@ __all__ = [
     "get_db_session",
     "set_database_manager",
     "get_database_manager",
+    "get_database_health",
     
     # Configuration
     "DatabaseConfig",
     "TestDatabaseConfig",
+    "create_database_config",
     
     # Migrations
     "MigrationManager",

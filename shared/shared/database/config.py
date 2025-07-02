@@ -78,7 +78,7 @@ class DatabaseConfig(BaseSettings):
         """Get kwargs for create_async_engine"""
         return {
             "echo": self.DB_ECHO,
-            "echo_pool": self.DB_ECHO_POOL,
+            "echo": self.DB_ECHO_POOL,
             "pool_size": self.DB_POOL_SIZE,
             "max_overflow": self.DB_MAX_OVERFLOW,
             "pool_pre_ping": self.DB_POOL_PRE_PING,
@@ -86,6 +86,25 @@ class DatabaseConfig(BaseSettings):
         }
         
 
+def create_database_config(prefix: str = "") -> DatabaseConfig:
+    """
+    Factory function to create DatabaseConfig with custom prefix.
+    
+    Args:
+        prefix: Environment variable prefix (e.g., "NOTIFICATION_")
+    
+    Returns:
+        DatabaseConfig instance with prefixed env vars
+    """
+    class PrefixedDatabaseConfig(DatabaseConfig):
+        model_config = SettingsConfigDict(
+            env_file=".env",
+            env_file_encoding="utf-8",
+            case_sensitive=True,
+            env_prefix=prefix,
+        )
+    
+    return PrefixedDatabaseConfig() # type: ignore[call-arg]
 
 class TestDatabaseConfig(DatabaseConfig):
     """Test database configuration"""

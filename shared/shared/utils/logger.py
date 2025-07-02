@@ -27,6 +27,7 @@ class ServiceLogger:
         """Configure logging for this service"""
         env = os.getenv("APP_ENV", "dev").lower()
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+        print(f"Setting up logger for {self.service_name} in {env} environment with level {log_level}")
         
         # Create logs directory
         Path("logs").mkdir(exist_ok=True)

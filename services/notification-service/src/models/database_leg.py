@@ -51,7 +51,7 @@ class Notification(Base, TimestampedMixin):
     status = Column(Enum(NotificationStatus), nullable=False, default=NotificationStatus.PENDING, index=True)
     provider_message_id = Column(String(255))
     sent_at = Column(DateTime)
-    metadata = Column(JSON, default={})
+    extra_metadata = Column(JSON, default={})
     
     __table_args__ = (
         Index("idx_shop_type_created", "shop_id", "type", "created_at"),
