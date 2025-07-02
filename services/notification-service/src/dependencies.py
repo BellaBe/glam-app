@@ -1,4 +1,3 @@
-# File: services/notification-service/src/dependencies.py
 """
 Notification service dependencies for FastAPI application.
 This module provides FastAPI dependencies for the notification service,
@@ -6,7 +5,7 @@ including lifecycle management, messaging, email, notification, template,
 and preference services.
 """
 from typing import Annotated
-from fastapi import Depends, Request
+from fastapi import Depends, Request, HTTPException
 from shared.api.dependencies import RequestIdDep, RequestContextDep, PaginationDep
 from shared.api.correlation import CorrelationIdDep, get_correlation_context
 from shared.messaging.jetstream_wrapper import JetStreamWrapper
@@ -53,7 +52,13 @@ def get_publisher(
     wrapper: Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]
 ) -> NotificationPublisher:
     """Get notification publisher"""
-    return wrapper.publishers[NotificationPublisher.__name__]
+    publisher = wrapper.get_publisher(NotificationPublisher)
+    if not publisher:
+        raise HTTPException(
+            status_code=500,
+            detail="NotificationPublisher not initialized"
+        )
+    return publisher
 
 def get_template_engine() -> TemplateEngine:
     """Get template engine instance"""
@@ -62,7 +67,7 @@ def get_template_engine() -> TemplateEngine:
 def get_rate_limiter(request: Request) -> RateLimiter:
     """Get rate limiter instance"""
     config = request.app.state.config
-    return RateLimiter(config.rate_limit_config.dict())
+    return RateLimiter(config.rate_limit_config.model_dump())
 
 def get_email_service(request: Request) -> EmailService:
     """Get email service instance"""
@@ -72,9 +77,9 @@ def get_email_service(request: Request) -> EmailService:
     email_config = {
         'primary_provider': config.PRIMARY_PROVIDER,
         'fallback_provider': config.FALLBACK_PROVIDER,
-        'sendgrid_config': config.sendgrid_config.dict(),
-        'ses_config': config.ses_config.dict(),
-        'smtp_config': config.smtp_config.dict()
+        'sendgrid_config': config.sendgrid_config.model_dump(),
+        'ses_config': config.ses_config.model_dump(),
+        'smtp_config': config.smtp_config.model_dump()
     }
     
     return EmailService(email_config, logger)

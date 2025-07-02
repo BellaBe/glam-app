@@ -26,3 +26,36 @@ Later you can swap versions the same way:
 pyenv install 3.13.0rc1       # if you want a release-candidate
 pyenv local 3.13.0rc1
 poetry env use $(pyenv which python)
+
+
+# Server info
+curl http://localhost:8222/varz
+
+# JetStream info
+curl http://localhost:8222/jsz
+
+# Connections info
+curl http://localhost:8222/connz
+
+# Subscriptions info
+curl http://localhost:8222/subsz
+
+# Routes info
+curl http://localhost:8222/routez
+
+# Install NATS CLI if you haven't
+curl -L https://github.com/nats-io/natscli/releases/latest/download/nats-linux-amd64.zip -o nats.zip
+unzip nats.zip && sudo mv nats /usr/local/bin/
+
+# Monitor events in real-time
+nats sub ">" # Subscribe to everything
+nats sub "evt.notification.*" # Just notification events
+nats sub "cmd.notification.*" # Just notification commands
+
+# Check stream status
+nats stream ls
+nats stream info NOTIFICATION
+nats consumer info NOTIFICATION notification-send-email
+
+# Monitor JetStream
+nats server report jetstream

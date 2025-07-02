@@ -1,12 +1,14 @@
-from typing import List, Optional, Dict, Type, Any
+from typing import List, Optional, Dict, Type, Any, TypeVar, cast
 import os
 
 import nats
 from nats.aio.client import Client
 from nats.js import JetStreamContext
 
-from .publisher import JetStreamEventPublisher
-from .subscriber import JetStreamEventSubscriber
+from shared.messaging.publisher import JetStreamEventPublisher
+from shared.messaging.subscriber import JetStreamEventSubscriber
+
+T = TypeVar('T', bound=JetStreamEventPublisher)
 
 class JetStreamWrapper:
     """
@@ -33,6 +35,11 @@ class JetStreamWrapper:
         if not self._js:
             raise Exception("JetStream not initialized")
         return self._js
+    
+    @property
+    def publishers(self) -> Dict[str, JetStreamEventPublisher]:
+        """Get all registered publishers"""
+        return self._publishers
     
     async def connect(self, servers: List[str]):
         """
@@ -81,7 +88,7 @@ class JetStreamWrapper:
             if self.logger:
                 self.logger.info("NATS connection closed")
     
-    def create_publisher(self, publisher_class: Type[JetStreamEventPublisher]) -> JetStreamEventPublisher:
+    def create_publisher(self, publisher_class: Type[T]) -> T:
         """
         Create and cache a publisher instance.
         
@@ -101,7 +108,20 @@ class JetStreamWrapper:
             if self.logger:
                 self.logger.info(f"Created publisher: {class_name}")
         
-        return self._publishers[class_name]
+        return cast(T, self._publishers[class_name])
+    
+    def get_publisher(self, publisher_class: Type[T]) -> Optional[T]:
+        """
+        Get a publisher by class type.
+        
+        Args:
+            publisher_class: The publisher class to retrieve
+            
+        Returns:
+            Publisher instance if exists, None otherwise
+        """
+        publisher = self._publishers.get(publisher_class.__name__)
+        return cast(T, publisher) if publisher else None
     
     def create_subscriber(self, subscriber_class: Type[JetStreamEventSubscriber]) -> JetStreamEventSubscriber:
         """

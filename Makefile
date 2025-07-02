@@ -35,21 +35,77 @@ install: ## Poetry install every service locally
 
 # ---------- Local dev (infra in docker) ----------
 
-dev: ## Up infra containers only
+dev: ## Start all infrastructure including monitoring
+	@echo "🚀 Starting development infrastructure..."
 	docker compose -f $(LOCAL_COMPOSE) up -d
+	@echo "⏳ Waiting for services to initialize..."
+	@sleep 5
+	@echo "✅ Infrastructure started!"
+	@echo ""
+	@echo "📊 Services available at:"
+	@echo "   • NATS:       http://localhost:4222 (clients), http://localhost:8222 (monitoring)"
+	@echo "   • Redis:      localhost:6379"
+	@echo "   • MailHog:    http://localhost:8025 (UI), localhost:1025 (SMTP)"
+	@echo "   • MinIO:      http://localhost:9001 (console), localhost:9000 (API)"
+	@echo "   • Databases:  See .env for ports"
+	@echo ""
+	@echo "📈 Monitoring available at:"
+	@echo "   • Grafana:    http://localhost:3000 (admin/admin)"
+	@echo "   • Prometheus: http://localhost:9090"
+	@echo "   • Metrics:    http://localhost:7777/metrics (NATS)"
+	@echo "                 http://localhost:9121/metrics (Redis)"
 
-dev-down: ## Stop infra containers
+dev-core: ## Start only core services (no monitoring)
+	@echo "Starting core infrastructure only..."
+	docker compose -f $(LOCAL_COMPOSE) up -d nats redis mailhog minio minio-setup catalog-db notification-db profile-db catalog-job-processor-db
+
+dev-monitoring: ## Start only monitoring stack
+	@echo "Starting monitoring stack..."
+	docker compose -f $(LOCAL_COMPOSE) up -d prometheus grafana nats-exporter redis-exporter
+	@echo "Monitoring services starting at:"
+	@echo "   • Grafana:    http://localhost:3000"
+	@echo "   • Prometheus: http://localhost:9090"
+
+dev-down: ## Stop all infrastructure
 	docker compose -f $(LOCAL_COMPOSE) down
 
-dev-logs: ## Follow logs
+dev-logs: ## Follow logs (all services)
 	docker compose -f $(LOCAL_COMPOSE) logs -f
+
+dev-logs-app: ## Follow logs (app services only)
+	docker compose -f $(LOCAL_COMPOSE) logs -f nats redis mailhog
+
+dev-logs-monitoring: ## Follow logs (monitoring only)
+	docker compose -f $(LOCAL_COMPOSE) logs -f prometheus grafana nats-exporter redis-exporter
 
 dev-ps: ## List containers
 	docker compose -f $(LOCAL_COMPOSE) ps
 
-dev-clean: ## Remove infra containers & volumes
+dev-health: ## Check health of all services
+	@echo "🏥 Checking service health..."
+	@docker compose -f $(LOCAL_COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+dev-clean: ## Remove all containers & volumes (WARNING: deletes data)
+	@echo "⚠️  This will delete all local data. Continue? [y/N] " && read ans && [ $${ans:-N} = y ]
 	docker compose -f $(LOCAL_COMPOSE) down -v
-	
+	@echo "🧹 Cleanup complete"
+
+dev-restart: ## Restart all services
+	@make dev-down
+	@make dev
+
+dev-reset-monitoring: ## Reset monitoring data only
+	docker compose -f $(LOCAL_COMPOSE) stop prometheus grafana
+	docker volume rm -f $(shell docker volume ls -q | grep -E "(prometheus|grafana)-data")
+	docker compose -f $(LOCAL_COMPOSE) up -d prometheus grafana
+	@echo "Monitoring data reset"
+
+# ---------- Shortcuts ----------
+up: dev ## Alias for 'make dev'
+down: dev-down ## Alias for 'make dev-down'
+logs: dev-logs ## Alias for 'make dev-logs'
+ps: dev-ps ## Alias for 'make dev-ps'
+
 # ---------- Per-service helpers ----------
 install-service: ## SERVICE=<folder>  – Poetry install only that service
 	@if [ -z "$(SERVICE)" ]; then \

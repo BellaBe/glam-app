@@ -31,7 +31,7 @@ async def list_notifications(
     total = await service.count_notifications(session, shop_id, status, type)
     
     # Build response data
-    data = [NotificationResponse.from_orm(n) for n in notifications]
+    data = [NotificationResponse.model_validate(n) for n in notifications]
     
     # Build query params for links
     query_params = {}
@@ -68,7 +68,7 @@ async def get_notification(
         raise NotificationNotFound(f"Notification {notification_id} not found")
     
     return success_response(
-        data=NotificationDetailResponse.from_orm(notification),
+        data=NotificationDetailResponse.model_validate(notification),
         request_id=request_id,
         correlation_id=correlation_id,
     )
@@ -86,7 +86,7 @@ async def send_notification(
     notification = await service.send_notification(data, session)
     
     return success_response(
-        data=NotificationResponse.from_orm(notification),
+        data=NotificationResponse.model_validate(notification),
         request_id=request_id,
         correlation_id=correlation_id,
     )
@@ -104,7 +104,7 @@ async def send_bulk_notifications(
     notifications = await service.send_bulk_notifications(data, session)
     
     return success_response(
-        data=[NotificationResponse.from_orm(n) for n in notifications],
+        data=[NotificationResponse.model_validate(n) for n in notifications],
         request_id=request_id,
         correlation_id=correlation_id
     )

@@ -1,6 +1,4 @@
-# -------------------------------
-# shared/api/middleware.py
-# -------------------------------
+# File: shared/api/middleware.py
 
 """
 API middleware for standardized request/response handling.

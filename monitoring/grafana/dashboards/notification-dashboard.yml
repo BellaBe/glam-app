@@ -1,0 +1,70 @@
+{
+  "dashboard": {
+    "title": "Notification Service Dashboard",
+    "uid": "notification-service",
+    "version": 1,
+    "timezone": "browser",
+    "panels": [
+      {
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "id": 1,
+        "title": "Notification Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(rate(notifications_sent_total{status=\"success\"}[5m]) / rate(notifications_sent_total[5m])) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ]
+      },
+      {
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "id": 2,
+        "title": "Notifications Per Minute",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(notifications_sent_total{status=\"success\"}[1m])) by (type) * 60",
+            "legendFormat": "{{type}}"
+          }
+        ]
+      },
+      {
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "id": 3,
+        "title": "Email Queue Size",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "email_queue_size",
+            "legendFormat": "Queue Size"
+          }
+        ]
+      },
+      {
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "id": 4,
+        "title": "Processing Time (95th percentile)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(notifications_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      },
+      {
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "id": 5,
+        "title": "Error Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum by (status) (rate(notifications_sent_total{status!=\"success\"}[5m]))",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      }
+    ]
+  }
+}

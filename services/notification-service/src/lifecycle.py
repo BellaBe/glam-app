@@ -1,7 +1,5 @@
-# FIle: services/notification-service/src/lifecycle.py
-
 import asyncio
-from typing import Optional, List
+from typing import Optional, List, cast
 from shared.utils.logger import create_logger
 from shared.messaging.jetstream_wrapper import JetStreamWrapper
 from shared.database import DatabaseSessionManager, set_database_manager
@@ -84,22 +82,30 @@ class ServiceLifecycle:
                 set_database_manager(self.db_manager)
                 self.logger.info(f"{self.config.SERVICE_NAME} connected to database")
             
-            # Initialize services
+            # Initialize services - MUST be done before using them
             self._init_services()
             
             # Import here to avoid circular imports
             from .events.subscribers import get_subscribers, set_notification_service
-            from .events.publishers import get_publishers
+            from .events.publishers import get_publishers, NotificationPublisher
             
             # Register publishers
-            notification_publisher = None
+            notification_publisher: Optional[NotificationPublisher] = None
             for publisher_class in get_publishers():
-                publisher = self.messaging_wrapper.create_publisher(publisher_class)
-                if publisher_class.__name__ == "NotificationPublisher":
-                    notification_publisher = publisher
+                if publisher_class is NotificationPublisher:
+                    notification_publisher = cast(NotificationPublisher, 
+                                                self.messaging_wrapper.create_publisher(publisher_class))
             
             if not notification_publisher:
                 raise RuntimeError("NotificationPublisher not created")
+            
+            # Verify services are initialized
+            if not self.email_service:
+                raise RuntimeError("EmailService is not initialized")
+            if not self.template_engine:
+                raise RuntimeError("TemplateEngine is not initialized")
+            if not self.rate_limiter:
+                raise RuntimeError("RateLimiter is not initialized")
             
             # Create notification service
             from .services.notification_service import NotificationService

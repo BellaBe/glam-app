@@ -1,0 +1,117 @@
+# monitoring/prometheus/alerts.yml
+# Prometheus alerting rules for GlamYouUp platform
+
+groups:
+  - name: notification_service_alerts
+    interval: 30s
+    rules:
+      - alert: NotificationHighErrorRate
+        expr: |
+          (rate(notifications_sent_total{status!="success"}[5m]) / 
+           rate(notifications_sent_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: notification-service
+        annotations:
+          summary: "High notification error rate"
+          description: "Notification error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+      
+      - alert: NotificationProviderDown
+        expr: |
+          increase(notifications_sent_total{status="success"}[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: notification-service
+        annotations:
+          summary: "No successful notifications sent"
+          description: "No notifications have been sent successfully in the last 5 minutes"
+      
+      - alert: EmailQueueBacklog
+        expr: email_queue_size > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: notification-service
+        annotations:
+          summary: "Large email queue backlog"
+          description: "Email queue size is {{ $value }} (threshold: 1000)"
+      
+      - alert: NotificationHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(notifications_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: notification-service
+        annotations:
+          summary: "High notification processing latency"
+          description: "95th percentile latency is {{ $value }}s (threshold: 5s)"
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute"
+      
+      - alert: NATSNoConnections
+        expr: nats_varz_connections == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: nats
+        annotations:
+          summary: "NATS has no active connections"
+          description: "NATS server has no active connections"
+      
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes > 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis is using {{ $value | humanize1024 }}B of memory"
+      
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis is evicting keys at a high rate"
+          description: "Redis eviction rate is {{ $value }} keys/sec"
+
+  - name: api_alerts
+    interval: 30s
+    rules:
+      - alert: APIHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (service) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate for {{ $labels.service }}"
+          description: "5xx error rate is {{ $value | humanizePercentage }}"
+      
+      - alert: APIHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency for {{ $labels.service }}"
+          description: "95th percentile latency is {{ $value }}s"

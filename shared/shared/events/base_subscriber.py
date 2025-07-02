@@ -1,3 +1,4 @@
+# # File: shared/shared/events/base_subscriber.py
 from shared.messaging.subscriber import JetStreamEventSubscriber
 from .types import EVENT_REGISTRY
 

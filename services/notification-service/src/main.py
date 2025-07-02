@@ -39,7 +39,7 @@ def create_application() -> FastAPI:
     # Store config for middleware/dependencies
     app.state.config = config
     
-    # Add middleware (uses shared components)
+    # Add all middleware (including metrics)
     add_middleware(app, config)
     
     # Include routers

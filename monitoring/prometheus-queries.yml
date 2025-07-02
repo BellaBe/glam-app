@@ -1,0 +1,291 @@
+# monitoring/prometheus-queries.yml
+# Useful Prometheus queries for the GlamYouUp platform
+
+# ============================================
+# NOTIFICATION SERVICE QUERIES
+# ============================================
+
+notification_service:
+  # Success Metrics
+  - name: "Notification Success Rate (5m)"
+    query: |
+      (rate(notifications_sent_total{status="success"}[5m]) / 
+       rate(notifications_sent_total[5m])) * 100
+    
+  - name: "Notifications Sent Per Minute"
+    query: |
+      sum(rate(notifications_sent_total{status="success"}[1m])) * 60
+  
+  - name: "Notifications by Type"
+    query: |
+      sum by (type) (rate(notifications_sent_total[5m]))
+  
+  - name: "Notifications by Provider"
+    query: |
+      sum by (provider) (rate(notifications_sent_total{status="success"}[5m]))
+  
+  # Error Metrics
+  - name: "Error Rate by Type"
+    query: |
+      sum by (status) (rate(notifications_sent_total{status!="success"}[5m]))
+  
+  - name: "Failed Notifications by Provider"
+    query: |
+      sum by (provider, status) (rate(notifications_sent_total{status=~"failed_.*"}[5m]))
+  
+  - name: "Unsubscribe Rate"
+    query: |
+      rate(notifications_sent_total{status="unsubscribed"}[5m])
+  
+  - name: "Rate Limit Hit Rate"
+    query: |
+      rate(notifications_sent_total{status="rate_limited"}[5m])
+  
+  # Performance Metrics
+  - name: "Notification Processing Time (95th percentile)"
+    query: |
+      histogram_quantile(0.95, 
+        rate(notifications_duration_seconds_bucket[5m])
+      )
+  
+  - name: "Email Send Time by Provider (95th percentile)"
+    query: |
+      histogram_quantile(0.95, 
+        sum by (provider, le) (
+          rate(notifications_duration_seconds_bucket{type=~".*_email_send"}[5m])
+        )
+      )
+  
+  - name: "Average Processing Time by Type"
+    query: |
+      rate(notifications_duration_seconds_sum[5m]) / 
+      rate(notifications_duration_seconds_count[5m])
+  
+  # Queue Metrics
+  - name: "Current Email Queue Size"
+    query: |
+      email_queue_size
+  
+  - name: "Queue Processing Rate"
+    query: |
+      deriv(email_queue_size[5m])
+  
+  - name: "Max Queue Size (1h)"
+    query: |
+      max_over_time(email_queue_size[1h])
+
+# ============================================
+# HTTP/API METRICS
+# ============================================
+
+http_metrics:
+  # Request Rate
+  - name: "HTTP Request Rate"
+    query: |
+      sum(rate(http_requests_total[5m])) by (service)
+  
+  - name: "Request Rate by Endpoint"
+    query: |
+      sum(rate(http_requests_total[5m])) by (endpoint, method)
+  
+  - name: "Request Rate by Status"
+    query: |
+      sum(rate(http_requests_total[5m])) by (status)
+  
+  # Error Rate
+  - name: "HTTP Error Rate (4xx + 5xx)"
+    query: |
+      sum(rate(http_requests_total{status=~"4..|5.."}[5m])) by (service)
+  
+  - name: "Error Rate by Endpoint"
+    query: |
+      sum(rate(http_requests_total{status=~"4..|5.."}[5m])) by (endpoint, status)
+  
+  # Latency
+  - name: "HTTP Request Duration (95th percentile)"
+    query: |
+      histogram_quantile(0.95,
+        sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+      )
+  
+  - name: "Slowest Endpoints (95th percentile)"
+    query: |
+      topk(10, 
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket[5m])) by (endpoint, le)
+        )
+      )
+  
+  - name: "Average Request Duration"
+    query: |
+      rate(http_request_duration_seconds_sum[5m]) / 
+      rate(http_request_duration_seconds_count[5m])
+  
+  # Concurrent Requests
+  - name: "Current In-Flight Requests"
+    query: |
+      http_requests_in_progress
+  
+  - name: "Max Concurrent Requests (1h)"
+    query: |
+      max_over_time(http_requests_in_progress[1h])
+
+# ============================================
+# NATS MESSAGING METRICS
+# ============================================
+
+nats_metrics:
+  # Connection Metrics
+  - name: "NATS Active Connections"
+    query: |
+      nats_varz_connections
+  
+  - name: "NATS Connection Rate"
+    query: |
+      rate(nats_varz_total_connections[5m])
+  
+  # Message Flow
+  - name: "Messages In/Out per Second"
+    query: |
+      rate(nats_varz_in_msgs_total[1m])
+  
+  - name: "Bytes In/Out per Second"
+    query: |
+      rate(nats_varz_in_bytes_total[1m])
+  
+  - name: "Slow Consumers"
+    query: |
+      nats_varz_slow_consumers
+  
+  # JetStream Metrics
+  - name: "JetStream Total Messages"
+    query: |
+      nats_jetstream_messages_total
+  
+  - name: "JetStream Messages by Stream"
+    query: |
+      nats_jetstream_messages_total by (stream_name)
+  
+  - name: "JetStream Storage Used"
+    query: |
+      nats_jetstream_bytes_total
+  
+  - name: "JetStream Consumer Lag"
+    query: |
+      nats_jetstream_messages_total - 
+      nats_jetstream_delivered_messages_total
+
+# ============================================
+# REDIS METRICS
+# ============================================
+
+redis_metrics:
+  # Connection Metrics
+  - name: "Redis Connected Clients"
+    query: |
+      redis_connected_clients
+  
+  - name: "Redis Connection Rate"
+    query: |
+      rate(redis_connections_received_total[5m])
+  
+  # Performance Metrics
+  - name: "Redis Commands per Second"
+    query: |
+      rate(redis_commands_processed_total[1m])
+  
+  - name: "Redis Hit Rate"
+    query: |
+      rate(redis_keyspace_hits_total[5m]) / 
+      (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) * 100
+  
+  - name: "Redis Average Command Duration"
+    query: |
+      rate(redis_commands_duration_seconds_total[5m]) / 
+      rate(redis_commands_processed_total[5m])
+  
+  # Memory Metrics
+  - name: "Redis Memory Usage"
+    query: |
+      redis_memory_used_bytes
+  
+  - name: "Redis Memory Fragmentation Ratio"
+    query: |
+      redis_memory_fragmentation_ratio
+  
+  - name: "Redis Evicted Keys Rate"
+    query: |
+      rate(redis_evicted_keys_total[5m])
+
+# ============================================
+# SYSTEM/INFRASTRUCTURE METRICS
+# ============================================
+
+system_metrics:
+  # Container Metrics (if using cAdvisor)
+  - name: "Container CPU Usage"
+    query: |
+      rate(container_cpu_usage_seconds_total[5m]) * 100
+  
+  - name: "Container Memory Usage"
+    query: |
+      container_memory_usage_bytes
+  
+  - name: "Container Network I/O"
+    query: |
+      rate(container_network_receive_bytes_total[5m])
+
+# ============================================
+# BUSINESS METRICS
+# ============================================
+
+business_metrics:
+  - name: "Notifications Sent Today"
+    query: |
+      increase(notifications_sent_total{status="success"}[1d])
+  
+  - name: "Most Active Notification Types (24h)"
+    query: |
+      topk(5, 
+        sum by (type) (increase(notifications_sent_total{status="success"}[24h]))
+      )
+  
+  - name: "Provider Usage Distribution (24h)"
+    query: |
+      sum by (provider) (increase(notifications_sent_total{status="success"}[24h]))
+  
+  - name: "Failed Notifications Requiring Attention"
+    query: |
+      increase(notifications_sent_total{status=~"failed_.*"}[1h]) > 10
+
+# ============================================
+# ALERTING QUERIES
+# ============================================
+
+alerts:
+  - name: "High Error Rate Alert"
+    query: |
+      (rate(notifications_sent_total{status!="success"}[5m]) / 
+       rate(notifications_sent_total[5m])) > 0.1
+    description: "Triggers when error rate exceeds 10%"
+  
+  - name: "Email Provider Down"
+    query: |
+      up{job="notification-service"} == 0 or
+      increase(notifications_sent_total{provider="smtp", status="success"}[5m]) == 0
+    description: "Triggers when email provider is not sending"
+  
+  - name: "High Queue Size"
+    query: |
+      email_queue_size > 1000
+    description: "Triggers when email queue exceeds 1000"
+  
+  - name: "NATS Disconnected"
+    query: |
+      nats_varz_connections == 0
+    description: "Triggers when NATS has no connections"
+  
+  - name: "High Memory Usage"
+    query: |
+      redis_memory_used_bytes > 1073741824
+    description: "Triggers when Redis memory exceeds 1GB"

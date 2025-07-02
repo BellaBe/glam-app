@@ -47,6 +47,11 @@ class JetStreamEventSubscriber(ABC):
         self.js = js
         self._subscription = None
         self.logger = logger or self._get_default_logger()
+        
+        # Debug initialization
+        self.logger.debug(f"Initialized {self.__class__.__name__}")
+        self.logger.debug(f"JetStream context: {self.js is not None}")
+        self.logger.debug(f"NATS client connected: {self.client.is_connected if self.client else False}")
 
     def _get_default_logger(self):
         """Get a default logger if none provided"""
@@ -86,25 +91,57 @@ class JetStreamEventSubscriber(ABC):
         except:
             await self.js.add_consumer(self.stream_name, config=consumer_config)
             self.logger.info(f"Created new consumer: {self.durable_name}")
-
+        
         # Subscribe
-        self._subscription = await self.js.pull_subscribe(
-            self.subject, durable=self.durable_name, stream=self.stream_name
-        )
-
-        self.logger.info(f"Listening on {self.stream_name}/{self.subject}")
-
-        # Process messages
-        while True:
-            try:
-                messages = await self._subscription.fetch(batch=10, timeout=1)
-                for msg in messages:
-                    await self._process_message(msg)
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                self.logger.error(f"Error fetching messages: {e}")
-                await asyncio.sleep(1)
+        try:
+            self._subscription = await self.js.pull_subscribe(
+                self.subject, 
+                durable=self.durable_name, 
+                stream=self.stream_name
+            )
+            
+            if self._subscription is None:
+                raise Exception("Failed to create subscription")
+                
+            self.logger.info(f"Listening on {self.stream_name}/{self.subject}")
+            
+            error_count = 0
+            max_errors = 10
+            
+            # Process messages
+            while True:
+                try:
+                    # Check subscription is still valid
+                    if self._subscription is None:
+                        self.logger.error("Subscription is None, reconnecting...")
+                        await asyncio.sleep(5)
+                        # Try to resubscribe
+                        self._subscription = await self.js.pull_subscribe(
+                            self.subject, 
+                            durable=self.durable_name, 
+                            stream=self.stream_name
+                        )
+                        continue
+                    
+                    messages = await self._subscription.fetch(batch=10, timeout=1)
+                    error_count = 0  # Reset error count on success
+                    for msg in messages:
+                        await self._process_message(msg)
+                    
+                    
+                        
+                except asyncio.TimeoutError:
+                    # This is normal - no messages available
+                    continue
+                except Exception as e:
+                    error_count += 1
+                    if error_count > max_errors:
+                        self.logger.error("Too many errors, stopping subscriber")
+                        break
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to create subscription: {e}")
+            raise
 
     async def _process_message(self, msg) -> None:
         """Process a single message with error handling."""

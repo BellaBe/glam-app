@@ -37,8 +37,24 @@ services:
       retries: 5
       start_period: 10s
 
-  # ----------------- Catalog Database -----------------
+  # ----------------- Email Testing (MailHog) -----------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: glam-mailhog-local
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - glam-local-net
+    logging:
+      driver: 'none'  # Disable excessive logging
+    healthcheck:
+      test: ["CMD", "echo", "mailhog is running"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
 
+  # ----------------- Catalog Database -----------------
   catalog-db:
     image: postgres:15-alpine
     container_name: catalog-db
@@ -102,6 +118,29 @@ services:
       retries: 5
       start_period: 10s
 
+  # ----------------- Notification Database -----------------
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+    ports:
+      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - notification-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
   # ----------------- S3-compatible Storage (MinIO) -----------------
   minio:
     image: minio/minio:latest
@@ -122,30 +161,6 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-      
-# ----------------- Notification Service -----------------
-  notification-db:
-    image: postgres:15-alpine
-    container_name: notification-db
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${NOTIFICATION_DB_USER}
-      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
-
-    ports:
-      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
-    volumes:
-      - notification-db-local-data:/var/lib/postgresql/data
-    networks:
-      - glam-local-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
 
   # ----------------- MinIO Client (Setup buckets) -----------------
   minio-setup:
@@ -165,20 +180,62 @@ services:
     networks:
       - glam-local-net
 
-  # ----------------- Monitoring (Optional) -----------------
-  # Uncomment if you want local monitoring
-  # nats-exporter:
-  #   image: natsio/prometheus-nats-exporter:latest
-  #   container_name: glam-nats-exporter-local
-  #   command: ["-varz", "http://nats:8222"]
-  #   ports:
-  #     - "7777:7777"
-  #   networks:
-  #     - glam-local-net
-  #   depends_on:
-  #     - nats
+# ----------------- Monitoring Stack -----------------
+  # NATS Prometheus Exporter
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:latest
+    container_name: glam-nats-exporter-local
+    command: ["-varz", "http://nats:8222"]
+    ports:
+      - "7777:7777"  # Prometheus metrics
+    networks:
+      - glam-local-net
+    depends_on:
+      - nats
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7777/metrics"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
 
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: glam-prometheus-local
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - glam-local-net
+    depends_on:
+      - nats-exporter
 
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: glam-grafana-local
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - glam-local-net
+    depends_on:
+      - prometheus
 
 networks:
   glam-local-net:
@@ -192,3 +249,5 @@ volumes:
   catalog-job-processor-db-local-data:
   profile-db-local-data:
   notification-db-local-data:
+  prometheus-data:
+  grafana-data:

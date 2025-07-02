@@ -5,7 +5,7 @@ from shared.events.types import Streams, Events
 from shared.api.correlation import add_correlation_to_event
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from shared.events.base_publisher import DomainEventPublisher
 from shared.events.types import Streams, Events
@@ -61,7 +61,7 @@ class NotificationPublisher(DomainEventPublisher):
                 "error_code": error_code,
                 "retry_count": retry_count,
                 "will_retry": will_retry,
-                "failed_at": datetime.utcnow().isoformat()
+                "failed_at": datetime.now(timezone.utc).isoformat()
             },
             correlation_id=correlation_id
         )
