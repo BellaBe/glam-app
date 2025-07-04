@@ -1,7 +1,7 @@
 # services/notification-service/src/config.py
 from functools import lru_cache
 from typing import List, Optional
-from pydantic import ValidationError, Field, field_validator
+from pydantic import ValidationError, Field, field_validator, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 import os
@@ -9,6 +9,10 @@ import json
 
 # Import after loading env vars
 from shared.database import DatabaseConfig, create_database_config
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # Goes up to glam-app/
+ENV_FILE = BASE_DIR / ".env"
 
 
 class EmailProviderConfig(BaseSettings):
@@ -23,7 +27,6 @@ class EmailProviderConfig(BaseSettings):
     username: Optional[str] = None # For SMTP
     password: Optional[str] = None # For SMTP
 
-
 class RateLimitConfig(BaseSettings):
     """Rate limiting configuration"""
     rate_limit: str = "10/min"
@@ -31,11 +34,15 @@ class RateLimitConfig(BaseSettings):
     daily_limit: int = 1000
     batch_size: int = 100
     concurrent_batches: int = 5
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # Goes up to glam-app/
-ENV_FILE = BASE_DIR / ".env"
-
+    
+class BulkEmailConfig(BaseModel):
+    """Configuration for bulk email processing"""
+    default_batch_size: int = 100
+    max_batch_size: int = 1000
+    min_batch_size: int = 1
+    batch_delay_seconds: float = 1.0
+    max_delay_seconds: float = 60.0
+    concurrent_batches: int = 10  # Semaphore limit
 
 class ServiceConfig(BaseSettings):
     """Notification service configuration"""

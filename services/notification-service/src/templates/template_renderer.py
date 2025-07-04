@@ -134,10 +134,10 @@ class TemplateRenderer:
             "welcome": {
                 "shop_name": "Example Fashion Store"
             },
-            "registration_finish": {
+            "catalog_sync_initial": {
                 "product_count": 150
             },
-            "registration_sync": {
+            "catalog_sync_update": {
                 "added_count": 25,
                 "updated_count": 10,
                 "removed_count": 5

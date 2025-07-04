@@ -31,6 +31,7 @@ sendgrid = "^6.11.0"  # For SendGrid
 aiosmtplib = "^3.0.1"  # For SMTP
 # Shared package is installed from local path in Dockerfile
 html2text = "^2025.4.15"
+cachetools = "^6.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

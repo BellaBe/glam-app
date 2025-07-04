@@ -1,133 +1,166 @@
-## File: services/notification-service/src/events/subscribers.py
-
+# services/notification-service/src/events/subscribers.py
 from typing import Optional, Dict
+from pydantic import ValidationError
 from shared.events.base_subscriber import DomainEventSubscriber
-from shared.events.types import Commands
-from shared.api.correlation import CorrelationContext, extract_correlation_from_event
-from shared.database import get_database_manager
+from shared.events.notification.types import (
+    NotificationCommands,
+    SendEmailCommandPayload,
+    SendEmailBulkCommandPayload
+)
+from shared.api.correlation import CorrelationContext
 from contextlib import nullcontext
 from ..services.notification_service import NotificationService
-from ..schemas.requests import NotificationCreate, BulkNotificationCreate
 
-# Module-level storage for dependencies
-_notification_service: Optional[NotificationService] = None
-
-def set_notification_service(service: NotificationService):
-    """Set the notification service for subscribers"""
-    global _notification_service
-    _notification_service = service
 
 class SendEmailSubscriber(DomainEventSubscriber):
     """Handle single email send commands"""
+    
     @property
     def event_type(self):
-        return Commands.NOTIFICATION_SEND_EMAIL
+        return NotificationCommands.NOTIFICATION_SEND_EMAIL
     
     @property
     def subject(self):
-        return Commands.NOTIFICATION_SEND_EMAIL
+        return NotificationCommands.NOTIFICATION_SEND_EMAIL
     
     @property
     def durable_name(self):
-        """Durable name for this subscriber"""
         return "notification-send-email"
     
+    def __init__(self, client, js, notification_service: NotificationService, logger=None):
+        super().__init__(client, js, logger)
+        self.notification_service = notification_service
+    
     async def on_event(self, event: dict, headers: Optional[Dict[str, str]] = None):
-        """Process send email command with correlation context"""
-        if not _notification_service:
-            raise RuntimeError("Notification service not initialized")
+        """Process send email command"""
+        correlation_id = event.get('correlation_id')
+        try:
+            # Extract from event envelope
+            payload_data = event.get('payload', {})
             
-        payload = event.get('payload', {})
-        
-        # Extract correlation ID from event
-        correlation_id = extract_correlation_from_event(event)
-        
-        async with CorrelationContext(correlation_id) if correlation_id else nullcontext():
-            try:
-                # Get database manager from shared
-                db_manager = get_database_manager()
-                if not db_manager:
-                    raise RuntimeError("Database manager not initialized")
-                
-                # Get a database session for this request
-                async with db_manager.session() as session:
-                    # Create notification request
-                    notification_data = NotificationCreate(
-                        shop_id=payload['shop_id'],
-                        shop_domain=payload['shop_domain'],
-                        recipient_email=payload['recipient_email'],
-                        notification_type=payload['notification_type'],
-                        template_id=payload.get('template_id'),
-                        dynamic_content=payload.get('dynamic_content', {}),
-                        metadata=payload.get('metadata', {})
-                    )
-                    
-                    # Send notification
-                    await _notification_service.send_notification(
-                        notification_data,
-                        session
-                    )
-                
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to process send email command: {e}",
-                    extra={"correlation_id": correlation_id} if correlation_id else {}
+            event_metadata = event.get('metadata', {})
+            
+            # Validate payload
+            payload = SendEmailCommandPayload(**payload_data)
+            
+            self.logger.info(
+                f"Processing email command",
+                extra={
+                    "correlation_id": correlation_id,
+                    "notification_type": payload.notification_type,
+                    "recipient": payload.recipient.email,
+                    "source_service": event_metadata.get('source_service'),
+                    "idempotency_key": event.get('idempotency_key')
+                }
+            )
+            
+            # Set correlation context
+            async with CorrelationContext(correlation_id) if correlation_id else nullcontext():
+                # Send notification - service handles its own database session
+                await self.notification_service.send_notification(
+                    shop_id=payload.recipient.shop_id,
+                    shop_domain=payload.recipient.shop_domain,
+                    recipient_email=payload.recipient.email,
+                    notification_type=payload.notification_type,
+                    dynamic_content=payload.recipient.dynamic_content,
+                    correlation_id=correlation_id
                 )
-                raise
+                    
+        except ValidationError as e:
+            self.logger.error(
+                f"Invalid payload structure: {e}",
+                extra={"event_id": event.get('event_id')}
+            )
+            return True  # Ack to prevent poison message
+            
+        except Exception as e:
+            self.logger.error(
+                f"Failed to process email command: {e}",
+                extra={
+                    "event_id": event.get('event_id'),
+                    "correlation_id": correlation_id
+                }
+            )
+            raise
+
 
 class SendBulkEmailSubscriber(DomainEventSubscriber):
     """Handle bulk email send commands"""
+    
     @property
     def event_type(self):
-        return Commands.NOTIFICATION_BULK_SEND
+        return NotificationCommands.NOTIFICATION_SEND_BULK
     
     @property
     def subject(self):
-        return Commands.NOTIFICATION_BULK_SEND
+        return NotificationCommands.NOTIFICATION_SEND_BULK
     
     @property
     def durable_name(self):
         return "notification-send-bulk"
     
+    def __init__(self, client, js, notification_service: NotificationService, logger=None):
+        super().__init__(client, js, logger)
+        self.notification_service = notification_service
+    
     async def on_event(self, event: dict, headers: Optional[Dict[str, str]] = None):
-        """Process bulk email command with correlation context"""
-        if not _notification_service:
-            raise RuntimeError("Notification service not initialized")
+        """Process bulk email command"""
+        correlation_id = event.get('correlation_id')
+        try:
+            # Extract from event envelope
+            payload_data = event.get('payload', {})
             
-        payload = event.get('payload', {})
-        
-        # Extract correlation ID from event
-        correlation_id = extract_correlation_from_event(event)
-        
-        async with CorrelationContext(correlation_id) if correlation_id else nullcontext():
-            try:
-                # Get database manager from shared
-                db_manager = get_database_manager()
-                if not db_manager:
-                    raise RuntimeError("Database manager not initialized")
-                    
-                # Get a database session for this request
-                async with db_manager.session() as session:
-                    # Create bulk notification request
-                    bulk_data = BulkNotificationCreate(
-                        template_id=payload['template_id'],
-                        notification_type=payload['notification_type'],
-                        recipients=payload['recipients']
-                    )
-                    
-                    # Send notifications
-                    await _notification_service.send_bulk_notifications(
-                        bulk_data,
-                        session
-                    )
+            event_metadata = event.get('metadata', {})
+            
+            # Validate payload
+            payload = SendEmailBulkCommandPayload(**payload_data)
+            
+            self.logger.info(
+                f"Processing bulk email command",
+                extra={
+                    "correlation_id": correlation_id,
+                    "notification_type": payload.notification_type,
+                    "recipient_count": len(payload.recipients),
+                    "source_service": event_metadata.get('source_service')
+                }
+            )
+            
+            async with CorrelationContext(correlation_id) if correlation_id else nullcontext():
+                # Convert to format expected by service
+                recipients = [
+                    {
+                        "shop_id": r.shop_id,
+                        "shop_domain": r.shop_domain,
+                        "email": r.email,
+                        "dynamic_content": r.dynamic_content
+                    }
+                    for r in payload.recipients
+                ]
                 
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to process bulk email command: {e}",
-                    extra={"correlation_id": correlation_id} if correlation_id else {}
+                # Send bulk notifications - service handles database
+                result = await self.notification_service.send_bulk_notifications(
+                    notification_type=payload.notification_type,
+                    recipients=recipients,
+                    correlation_id=correlation_id
                 )
-                raise
-
-def get_subscribers():
-    """Get all subscribers for this service"""
-    return [SendEmailSubscriber, SendBulkEmailSubscriber]
+                
+                self.logger.info(
+                    f"Bulk send completed",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "bulk_job_id": str(result["bulk_job_id"]),
+                        "total_sent": result["total_sent"],
+                        "total_failed": result["total_failed"]
+                    }
+                )
+                    
+        except ValidationError as e:
+            self.logger.error(f"Invalid bulk payload structure: {e}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(
+                f"Failed to process bulk email command: {e}",
+                extra={"correlation_id": correlation_id}
+            )
+            raise

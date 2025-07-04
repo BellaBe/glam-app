@@ -2,6 +2,7 @@ from jinja2 import Environment, BaseLoader, TemplateSyntaxError, UndefinedError
 from typing import Dict, Any, Tuple, List
 import html2text
 import re
+from datetime import datetime
 
 class SafeTemplateLoader(BaseLoader):
     """Safe template loader that prevents file access"""

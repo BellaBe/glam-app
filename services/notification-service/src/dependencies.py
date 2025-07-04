@@ -1,111 +1,104 @@
+# File: services/notification-service/src/dependencies.py
 """
-Notification service dependencies for FastAPI application.
-This module provides FastAPI dependencies for the notification service,
-including lifecycle management, messaging, email, notification, template,
-and preference services.
+FastAPI dependency providers.
+Each function merely returns a singleton already created
+by ServiceLifecycle – *never* create new heavy objects here.
 """
 from typing import Annotated
 from fastapi import Depends, Request, HTTPException
-from shared.api.dependencies import RequestIdDep, RequestContextDep, PaginationDep
-from shared.api.correlation import CorrelationIdDep, get_correlation_context
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
-from .services.notification_service import NotificationService
-from .services.template_service import TemplateService
-from .services.email_service import EmailService
-from .services.preference_service import PreferenceService
-from .events.publishers import NotificationPublisher
-from .utils.template_engine import TemplateEngine
-from .utils.rate_limiter import RateLimiter
-from .lifecycle import ServiceLifecycle
-from shared.utils.logger import create_logger
 
-# Re-export shared dependencies for convenience
+from shared.api.dependencies import RequestIdDep, RequestContextDep, PaginationDep
+from shared.api.correlation  import CorrelationIdDep
+
+from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from .lifecycle        import ServiceLifecycle
+from .services.notification_service import NotificationService
+from .services.template_service     import TemplateService
+from .services.email_service        import EmailService
+from .services.preference_service   import PreferenceService
+from .services.rate_limit_service   import InMemoryRateLimitService
+from .events.publishers             import NotificationEventPublisher
+from .utils.template_engine         import TemplateEngine
+
+# ---------------------------------------------------------------- shared --- #
 __all__ = [
-    'RequestIdDep',
-    'RequestContextDep', 
-    'PaginationDep',
-    'CorrelationIdDep',
-    'get_lifecycle',
-    'get_messaging_wrapper',
-    'get_publisher',
-    'get_template_engine',
-    'get_rate_limiter',
-    'get_email_service',
-    'get_notification_service',
-    'get_template_service',
-    'get_preference_service'
+    "RequestIdDep", "RequestContextDep", "PaginationDep", "CorrelationIdDep",
+    "get_lifecycle", "get_config", "get_messaging_wrapper",
+    "get_publisher", "get_rate_limit_service", "get_email_service",
+    "get_template_engine", "get_template_service",
+    "get_preference_service", "get_notification_service",
 ]
 
+# --------------------------- core singletons via lifecycle ----------------- #
 def get_lifecycle(request: Request) -> ServiceLifecycle:
-    """Get service lifecycle from app state"""
-    return request.app.state.lifecycle
+    return request.app.state.lifecycle                 
 
+def get_config(request: Request):
+    return request.app.state.config                   
+
+# ------------------------------- messaging --------------------------------- #
 def get_messaging_wrapper(
-    lifecycle: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 ) -> JetStreamWrapper:
-    """Get messaging wrapper from lifecycle"""
-    if not lifecycle.messaging_wrapper:
-        raise RuntimeError("Messaging not initialized")
-    return lifecycle.messaging_wrapper
+    if not lc.messaging_wrapper:
+        raise HTTPException(500, "Messaging not initialised")
+    return lc.messaging_wrapper
 
 def get_publisher(
     wrapper: Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]
-) -> NotificationPublisher:
-    """Get notification publisher"""
-    publisher = wrapper.get_publisher(NotificationPublisher)
-    if not publisher:
-        raise HTTPException(
-            status_code=500,
-            detail="NotificationPublisher not initialized"
-        )
-    return publisher
+) -> NotificationEventPublisher:
+    pub = wrapper.get_publisher(NotificationEventPublisher)
+    if not pub:
+        raise HTTPException(500, "NotificationEventPublisher not initialised")
+    return pub
 
-def get_template_engine() -> TemplateEngine:
-    """Get template engine instance"""
-    return TemplateEngine()
+# --------------------------------- utils ----------------------------------- #
 
-def get_rate_limiter(request: Request) -> RateLimiter:
-    """Get rate limiter instance"""
-    config = request.app.state.config
-    return RateLimiter(config.rate_limit_config.model_dump())
+def get_template_engine(
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+) -> TemplateEngine:
+    if not lc.template_engine:
+        raise HTTPException(500, "TemplateEngine not initialised")
+    return lc.template_engine
 
-def get_email_service(request: Request) -> EmailService:
+def get_email_service(
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+) -> EmailService:
     """Get email service instance"""
-    config = request.app.state.config
-    logger = create_logger("email-service")
-    
-    email_config = {
-        'primary_provider': config.PRIMARY_PROVIDER,
-        'fallback_provider': config.FALLBACK_PROVIDER,
-        'sendgrid_config': config.sendgrid_config.model_dump(),
-        'ses_config': config.ses_config.model_dump(),
-        'smtp_config': config.smtp_config.model_dump()
-    }
-    
-    return EmailService(email_config, logger)
+    if not lc.email_service:
+        raise HTTPException(500, "EmailService not initialised")
+    return lc.email_service
+
+def get_rate_limit_service(
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+) -> InMemoryRateLimitService:
+    """Get rate limit service instance"""
+    if not lc.rate_limit_service:
+        raise HTTPException(500, "RateLimitService not initialised")
+    return lc.rate_limit_service
+
+
+# --------------------------- domain services ------------------------------- #
+def get_template_service(
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+) -> TemplateService:
+    """Get template service instance"""
+    if not lc.template_service:
+        raise HTTPException(500, "TemplateService not initialised")
+    return lc.template_service
+
+def get_preference_service(
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+) -> PreferenceService:
+    """Get preference service instance"""
+    if not lc.preference_service:
+        raise HTTPException(500, "PreferenceService not initialised")
+    return lc.preference_service
 
 def get_notification_service(
-    publisher: Annotated[NotificationPublisher, Depends(get_publisher)],
-    email_service: Annotated[EmailService, Depends(get_email_service)],
-    template_engine: Annotated[TemplateEngine, Depends(get_template_engine)],
-    rate_limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
-    request: Request
+    lc: Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 ) -> NotificationService:
-    """Get notification service with dependencies"""
-    logger = create_logger("notification-service")
-    return NotificationService(
-        publisher, email_service, template_engine, rate_limiter, logger
-    )
-
-def get_template_service(
-    template_engine: Annotated[TemplateEngine, Depends(get_template_engine)],
-    request: Request
-) -> TemplateService:
-    """Get template service"""
-    logger = create_logger("template-service")
-    return TemplateService(template_engine, logger)
-
-def get_preference_service(request: Request) -> PreferenceService:
-    """Get preference service"""
-    logger = create_logger("preference-service")
-    return PreferenceService(logger)
+    """Get notification service instance"""
+    if not lc.notification_service:
+        raise HTTPException(500, "NotificationService not initialised")
+    return lc.notification_service

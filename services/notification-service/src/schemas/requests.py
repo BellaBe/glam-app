@@ -67,7 +67,9 @@ class TemplatePreview(BaseModel):
 class TemplateClone(BaseModel):
     """Clone template request"""
     name: str = Field(..., min_length=1, max_length=100)
+    type: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
+    
 
 class PreferenceUpdate(BaseModel):
     """Update notification preferences"""
@@ -76,3 +78,18 @@ class PreferenceUpdate(BaseModel):
     email_enabled: bool = True
     notification_types: Dict[str, bool] = Field(default_factory=dict)
     
+class PreferenceCreate(BaseModel):
+    """Create new notification preferences"""
+    shop_id: UUID
+    shop_domain: str
+    email_enabled: bool = True
+    notification_types: Optional[Dict[str, bool]] = Field(
+        default_factory=lambda: {
+            "order_confirmation": True,
+            "order_shipped": True,
+            "order_delivered": True,
+            "customer_welcome": True,
+            "abandoned_cart": True,
+            "marketing": False
+        }
+    )

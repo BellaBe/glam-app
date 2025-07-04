@@ -1,4 +1,5 @@
 # File: services/notification-service/src/middlewares.py
+import uuid
 from fastapi import FastAPI, Request, Response
 from shared.api.middleware import setup_api_middleware
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST

@@ -18,7 +18,8 @@ from shared.errors.notification import (
 from shared.errors.base import (
     RateLimitedError,
     ValidationError,
-    ConflictError
+    ConflictError,
+    DomainError
 )
 
 # Re-export all notification errors for convenience
@@ -36,22 +37,8 @@ __all__ = [
     'RateLimitedError',
     'ValidationError',
     'ConflictError',
-    
-    # Aliases for backward compatibility (if needed)
-    'NotificationNotFound',
-    'TemplateNotFound',
-    'PreferenceNotFound',
-    'RateLimitExceeded',
-    'TemplateError',
-    'DuplicateTemplateName'
 ]
 
-# Aliases for easier migration
-NotificationNotFound = NotificationNotFoundError
-TemplateNotFound = TemplateNotFoundError
-PreferenceNotFound = PreferencesNotFoundError
-RateLimitExceeded = RateLimitedError
-TemplateError = TemplateRenderError
 
 # Custom error for duplicate template name
 class DuplicateTemplateName(ConflictError):
@@ -62,4 +49,34 @@ class DuplicateTemplateName(ConflictError):
             message,
             conflicting_resource="template",
             current_state=f"Template with name '{template_name}' already exists"
+        )
+        
+class PreferenceAlreadyExists(DomainError):
+    """Raised when trying to create preferences that already exist"""
+    def __init__(self, message: str, shop_id: str):
+        super().__init__(
+            message=message,
+            code="PREFERENCE_ALREADY_EXISTS",
+            status=409,  # Conflict
+            details={"shop_id": shop_id}
+        )
+                
+class TemplateAlreadyExistsError(DomainError):
+    """Raised when trying to create templat that already exist"""
+    def __init__(self, message: str, template_id: str):
+        super().__init__(
+            message=message,
+            code="TEMPLATE_ALREADY_EXISTS",
+            status=409, 
+            details={"template_id": template_id}
+        )
+        
+class RateLimitExceededError(RateLimitedError):
+    """Rate limit exceeded for notification service"""
+    
+    def __init__(self, message: str, recipient_email: str, notification_type: str):
+        super().__init__(
+            message=message,
+            recipient_email=recipient_email,
+            notification_type=notification_type
         )

@@ -56,6 +56,20 @@ class EmailService:
             
             if result.success:
                 return result
+            else:
+                self.logger.warning(
+                    f"Primary provider {self.current_provider} failed with error: {result.error_message}",
+                    extra={"provider": self.current_provider}
+                )
+                result = EmailResult(
+                    success=False,
+                    provider=self.current_provider,
+                    provider_message_id=result.provider_message_id,
+                    error_message=result.error_message,
+                    error_code=result.error_code or "PROVIDER_ERROR"
+                )
+                
+                return result
         except Exception as e:
             self.logger.warning(
                 f"Primary provider {self.current_provider} failed: {e}",
@@ -63,9 +77,12 @@ class EmailService:
             )
             result = EmailResult(
                 success=False,
+                provider=self.current_provider,
+                provider_message_id=None,
                 error_message=str(e),
                 error_code="PROVIDER_ERROR"
             )
+    
         
         # Try fallback provider if primary fails
         fallback_name = self.config.get('fallback_provider')

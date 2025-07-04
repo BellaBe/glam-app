@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from shared.database import Base, TimestampedMixin
 from typing import Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Notification(Base, TimestampedMixin):
     """Notification model"""
@@ -55,7 +55,7 @@ class NotificationTemplateHistory(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     changed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     change_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
 class NotificationPreference(Base, TimestampedMixin):
     """Shop notification preferences"""
@@ -77,4 +77,19 @@ class NotificationRateLimit(Base):
     send_count: Mapped[int] = mapped_column(Integer, default=0)
     window_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     window_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    
+class BatchJob(Base):
+    """Model for tracking batch notification jobs"""
+    __tablename__ = "batch_jobs"
+    
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    notification_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    template_id: Mapped[Optional[UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    recipient_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    success_count: Mapped[int] = mapped_column(Integer, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # pending, processing, completed, failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

@@ -4,29 +4,45 @@ from uuid import UUID
 from datetime import datetime
 
 class NotificationResponse(BaseModel):
-    """Notification response"""
-    model_config = ConfigDict(from_attributes=True)
+    """Response schema for notification"""
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None,
+            UUID: lambda v: str(v) if v else None
+        }
+    )
     
     id: UUID
     shop_id: UUID
     shop_domain: str
     recipient_email: str
     type: str
-    template_id: Optional[UUID]
+    template_id: Optional[UUID] = None
     subject: str
     status: str
-    provider: Optional[str]
-    provider_message_id: Optional[str]
-    sent_at: Optional[datetime]
+    provider: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    sent_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    retry_count: int = 0
     created_at: datetime
-    metadata: Dict[str, Any]
-
-class NotificationDetailResponse(NotificationResponse):
-    """Detailed notification response"""
-    content: str
-    error_message: Optional[str]
-    retry_count: int
     updated_at: datetime
+
+class NotificationListResponse(BaseModel):
+    """Response for notification list"""
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None,
+            UUID: lambda v: str(v) if v else None
+        }
+    )
+    
+    notifications: list[NotificationResponse]
+    total: int
+    page: int
+    page_size: int
 
 class TemplateResponse(BaseModel):
     """Template response"""

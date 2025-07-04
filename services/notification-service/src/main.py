@@ -8,10 +8,12 @@ from .lifecycle import ServiceLifecycle
 from .middlewares import add_middleware
 from .routers import health, notifications, templates, preferences
 
-# Load configuration
+
+# --------------------------------------------------------------------------- #
+#  Global singletons (one per process)                                        #
+# --------------------------------------------------------------------------- #
 config = get_service_config()
 
-# Create lifecycle manager
 lifecycle = ServiceLifecycle(config)
 
 @asynccontextmanager
@@ -19,6 +21,7 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan adapter"""
     # Store lifecycle in app state for access in dependencies
     app.state.lifecycle = lifecycle
+    app.state.config = config
     
     await lifecycle.startup()
     try:
@@ -36,9 +39,6 @@ def create_application() -> FastAPI:
         exception_handlers={}
     )
     
-    # Store config for middleware/dependencies
-    app.state.config = config
-    
     # Add all middleware (including metrics)
     add_middleware(app, config)
     
@@ -55,7 +55,7 @@ app = create_application()
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app.main:app",
+        "services.notification_service.src.main:app",
         host="0.0.0.0",
         port=config.API_PORT,
         reload=config.DEBUG

@@ -7,16 +7,15 @@ class EmailMessage:
     """Email message structure"""
     to_email: str
     subject: str
-    html_content: str
-    text_content: Optional[str] = None
-    from_email: Optional[str] = None
-    from_name: Optional[str] = None
+    html_body: str
+    text_body: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
 @dataclass
 class EmailResult:
     """Email send result"""
     success: bool
+    provider: str
     provider_message_id: Optional[str] = None
     error_message: Optional[str] = None
     error_code: Optional[str] = None
