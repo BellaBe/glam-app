@@ -13,7 +13,7 @@ This package provides:
 
 from .base import Base, TimestampedMixin, SoftDeleteMixin
 from .session import DatabaseSessionManager
-from .repository import Repository, SoftDeleteRepository
+from .repository import Repository
 from .dependencies import (
     DBSessionDep,
     get_db_session,
@@ -35,7 +35,6 @@ __all__ = [
     
     # Repository pattern
     "Repository",
-    "SoftDeleteRepository",
     
     # FastAPI dependencies
     "DBSessionDep",

@@ -53,6 +53,20 @@ def get_correlation_id(request: Request) -> str:
     logger.info(f"Generated new correlation ID: {correlation_id}")
     return correlation_id
 
+def add_correlation_to_request(request: Request, correlation_id: str) -> None:
+    """
+    Add correlation ID to request state and headers.
+    
+    This is typically called by middleware to ensure all requests
+    have a correlation ID available in the request context.
+    """
+    # Set in request state for easy access
+    request.state.correlation_id = correlation_id
+    
+    # Also set in headers for outgoing requests
+    # Headers are immutable; use middleware or response modification to set headers
+    logger.warning("Cannot modify request.headers directly. Ensure headers are set in the response or middleware.")
+
 
 # Type alias for dependency injection
 CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]

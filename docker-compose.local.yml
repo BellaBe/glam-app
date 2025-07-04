@@ -57,7 +57,7 @@ services:
   # ----------------- Catalog Database -----------------
   catalog-db:
     image: postgres:15-alpine
-    container_name: catalog-db
+    container_name: catalog-db-local
     restart: unless-stopped
     env_file:
       - .env
@@ -82,10 +82,13 @@ services:
   catalog-job-processor-db:
     image: postgres:15-alpine
     container_name: catalog-job-processor-db-local
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: job_processor_user
-      POSTGRES_PASSWORD: job_processor_pass
-      POSTGRES_DB: job_processor_db
+      POSTGRES_USER: ${CATALOG_JOB_PROCESSOR_DB_USER}
+      POSTGRES_PASSWORD: ${CATALOG_JOB_PROCESSOR_DB_PASSWORD}
+      POSTGRES_DB: ${CATALOG_JOB_PROCESSOR_DB_NAME}
     ports:
       - "${CATALOG_JOB_PROCESSOR_DB_PORT_EXTERNAL}:5432"
     volumes:
@@ -93,7 +96,7 @@ services:
     networks:
       - glam-local-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U job_processor_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_JOB_PROCESSOR_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -102,10 +105,13 @@ services:
   profile-db:
     image: postgres:15-alpine
     container_name: profile-db-local
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: profile_user
-      POSTGRES_PASSWORD: profile_pass
-      POSTGRES_DB: profile_db
+      POSTGRES_USER: ${PROFILE_DB_USER}
+      POSTGRES_PASSWORD: ${PROFILE_DB_PASSWORD}
+      POSTGRES_DB: ${PROFILE_DB_NAME}
     ports:
       - "${PROFILE_DB_EXTERNAL_PORT}:5432"
     volumes:
@@ -113,7 +119,7 @@ services:
     networks:
       - glam-local-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U profile_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${PROFILE_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -121,7 +127,7 @@ services:
   # ----------------- Notification Database -----------------
   notification-db:
     image: postgres:15-alpine
-    container_name: notification-db
+    container_name: notification-db-local
     restart: unless-stopped
     env_file:
       - .env

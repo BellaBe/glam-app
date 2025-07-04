@@ -2,24 +2,23 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional, Dict, Any
+import os
 
 
 class DatabaseConfig(BaseSettings):
     """
     Base database configuration for microservices.
-    Environment variables are set by Docker Compose from the root .env file.
+    Automatically handles Docker port mapping.
     
-    Docker Compose will set these per service:
-    - DB_HOST: Database host (e.g., user-db, order-db)
-    - DB_PORT: Database port (always 5432 inside Docker network)
-    - DB_NAME: Database name
-    - DB_USER: Database user
-    - DB_PASSWORD: Database password
+    When running locally against Docker:
+    - DB_PORT_EXTERNAL is used if DB_HOST is localhost
+    - DB_PORT is used when running inside Docker
     """
     
-    # Connection parameters - set by Docker Compose
+    # Connection parameters
     DB_HOST: str = Field(..., description="Database host")
-    DB_PORT: int = Field(default=5432, description="Database port")
+    DB_PORT: Optional[int] = Field(default=None, description="Database port")
+    DB_PORT_EXTERNAL: Optional[int] = Field(default=None, description="External port for Docker")
     DB_NAME: str = Field(..., description="Database name")
     DB_USER: str = Field(..., description="Database user")
     DB_PASSWORD: str = Field(..., description="Database password")
@@ -35,17 +34,26 @@ class DatabaseConfig(BaseSettings):
     
     # SQLAlchemy settings
     DB_ECHO: bool = Field(default=False, description="Echo SQL statements")
-    DB_ECHO_POOL: bool = Field(default=False, description="Echo pool events")
     
     # Async driver
     DB_ASYNC_DRIVER: str = Field(default="asyncpg", description="Async database driver")
     
-    
     model_config = SettingsConfigDict(
-        env_file=".env",  # Default environment file
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
     )
+    
+    def model_post_init(self, __context):
+        """Post-initialization to set the correct port"""
+        # If DB_PORT is not explicitly set, determine it intelligently
+        if self.DB_PORT is None:
+            if self.DB_HOST in ['localhost', '127.0.0.1', 'host.docker.internal']:
+                # Connecting from host to Docker container
+                self.DB_PORT = self.DB_PORT_EXTERNAL or 5432
+            else:
+                # Connecting within Docker network or to remote host
+                self.DB_PORT = 5432
     
     @property
     def database_url(self) -> str:
@@ -78,13 +86,12 @@ class DatabaseConfig(BaseSettings):
         """Get kwargs for create_async_engine"""
         return {
             "echo": self.DB_ECHO,
-            "echo": self.DB_ECHO_POOL,
             "pool_size": self.DB_POOL_SIZE,
             "max_overflow": self.DB_MAX_OVERFLOW,
             "pool_pre_ping": self.DB_POOL_PRE_PING,
             "pool_recycle": self.DB_POOL_RECYCLE,
         }
-        
+
 
 def create_database_config(prefix: str = "") -> DatabaseConfig:
     """
@@ -104,13 +111,13 @@ def create_database_config(prefix: str = "") -> DatabaseConfig:
             env_prefix=prefix,
         )
     
-    return PrefixedDatabaseConfig() # type: ignore[call-arg]
+    return PrefixedDatabaseConfig() # type: ignore
+
 
 class TestDatabaseConfig(DatabaseConfig):
     """Test database configuration"""
     
     DB_ECHO: bool = True
     
-    
-    class Config: # type: ignore
-        env_file = ".env.test" 
+    class Config:
+        env_file = ".env.test"

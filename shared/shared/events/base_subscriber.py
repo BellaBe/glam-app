@@ -1,6 +1,6 @@
 # # File: shared/shared/events/base_subscriber.py
+from .mappers import EVENT_REGISTRY
 from shared.messaging.subscriber import JetStreamEventSubscriber
-from .types import EVENT_REGISTRY
 
 
 class DomainEventSubscriber(JetStreamEventSubscriber):

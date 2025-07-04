@@ -1,5 +1,4 @@
 # shared/events/subscriber.py
-
 import json
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
@@ -106,7 +105,7 @@ class JetStreamEventSubscriber(ABC):
             self.logger.info(f"Listening on {self.stream_name}/{self.subject}")
             
             error_count = 0
-            max_errors = 10
+            max_errors = 2
             
             # Process messages
             while True:

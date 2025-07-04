@@ -75,15 +75,15 @@ services:
       - .env
     environment:
       # Database
-      DB_USER: ${CATALOG_DB_USER}
-      DB_PASSWORD: ${CATALOG_DB_PASSWORD}
-      DB_NAME: ${CATALOG_DB_NAME}
-      DB_HOST: catalog-db
-      DB_PORT: 5432
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME}
+      CATALOG_DB_HOST: catalog-db
+      CATALOG_DB_PORT: 5432
       # NATS
-      NATS_URL: nats://nats:4222
+      CATALOG_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      CATALOG_REDIS_URL: redis://redis:6379
       # Service
       SERVICE_NAME: catalog-service
       EXTERNAL_PORT: 8001
@@ -135,15 +135,15 @@ services:
       - .env
     environment:
       # Database
-      DB_USER: ${CATALOG_JOB_PROCESSOR_DB_USER}
-      DB_PASSWORD: ${CATALOG_JOB_PROCESSOR_DB_PASSWORD}
-      DB_NAME: ${CATALOG_JOB_PROCESSOR_DB_NAME}
-      DB_HOST: catalog-job-processor-db
-      DB_PORT: 5432
+      CATALOG_JOB_PROCESSOR_DB_USER: ${CATALOG_JOB_PROCESSOR_DB_USER}
+      CATALOG_JOB_PROCESSOR_DB_PASSWORD: ${CATALOG_JOB_PROCESSOR_DB_PASSWORD}
+      CATALOG_JOB_PROCESSOR_DB_NAME: ${CATALOG_JOB_PROCESSOR_DB_NAME}
+      CATALOG_JOB_PROCESSOR_DB_HOST: catalog-job-processor-db
+      CATALOG_JOB_PROCESSOR_DB_PORT: 5432
       # NATS
-      NATS_URL: nats://nats:4222
+      CATALOG_JOB_PROCESSOR_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      CATALOG_JOB_PROCESSOR_REDIS_URL: redis://redis:6379
       # Service
       SERVICE_NAME: catalog-job-processor
       APP_ENV: ${APP_ENV:-prod}
@@ -167,9 +167,9 @@ services:
       - .env
     environment:
       # NATS
-      NATS_URL: nats://nats:4222
+      CATALOG_CONNECTOR_NATS_URL: nats://nats:4222
       # Redis (for rate limiting)
-      REDIS_URL: redis://redis:6379
+      CATALOG_CONNECTOR_REDIS_URL: redis://redis:6379
       # Shopify
       SHOPIFY_API_VERSION: ${SHOPIFY_API_VERSION}
       # Service
@@ -195,9 +195,9 @@ services:
       - .env
     environment:
       # NATS
-      NATS_URL: nats://nats:4222
+      CATALOG_IMAGE_CACHE_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      CATALOG_IMAGE_CACHE_REDIS_URL: redis://redis:6379
       # Local Storage
       CACHE_DIR: /app/image-cache
       CACHE_MAX_SIZE_GB: ${CACHE_MAX_SIZE_GB:-100}
@@ -228,9 +228,9 @@ services:
       - .env
     environment:
       # NATS
-      NATS_URL: nats://nats:4222
+      CATALOG_AI_APPAREL_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      CATALOG_AI_APPAREL_REDIS_URL: redis://redis:6379
       # AI Model
       MODEL_PATH: ${MODEL_PATH:-/app/models}
       MODEL_VERSION: ${MODEL_VERSION:-resnet50_v3}
@@ -262,7 +262,7 @@ services:
       POSTGRES_PASSWORD: ${PROFILE_DB_PASSWORD}
       POSTGRES_DB: ${PROFILE_DB_NAME}
     ports:
-      - "${PROFILE_DB_PORT_EXTERNAL}:5432"
+      - "${PROFILE_DB_EXTERNAL_PORT}:5432"
     volumes:
       - profile-db-data:/var/lib/postgresql/data
     networks:
@@ -291,15 +291,15 @@ services:
       - .env
     environment:
       # Database
-      DB_USER: ${PROFILE_DB_USER}
-      DB_PASSWORD: ${PROFILE_DB_PASSWORD}
-      DB_NAME: ${PROFILE_DB_NAME}
-      DB_HOST: profile-db
-      DB_PORT: 5432
+      PROFILE_DB_USER: ${PROFILE_DB_USER}
+      PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD}
+      PROFILE_DB_NAME: ${PROFILE_DB_NAME}
+      PROFILE_DB_HOST: profile-db
+      PROFILE_DB_PORT: 5432
       # NATS
-      NATS_URL: nats://nats:4222
+      PROFILE_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      PROFILE_REDIS_URL: redis://redis:6379
       # Storage
       S3_BUCKET: ${S3_BUCKET:-glamyouup-selfies}
       AWS_REGION: ${AWS_REGION:-us-east-1}
@@ -335,9 +335,9 @@ services:
       - .env
     environment:
       # NATS
-      NATS_URL: nats://nats:4222
+      PROFILE_AI_SELFIE_NATS_URL: nats://nats:4222
       # Redis
-      REDIS_URL: redis://redis:6379
+      PROFILE_AI_SELFIE_REDIS_URL: redis://redis:6379
       # AI Model
       MODEL_PATH: ${SELFIE_MODEL_PATH:-/app/models}
       MODEL_NAME: antelopev2
@@ -365,6 +365,28 @@ services:
               capabilities: [gpu]
 
 # ----------------- Notification Service -----------------
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+    ports:
+      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
   notification-service:
     build:
       context: .
@@ -382,65 +404,38 @@ services:
     env_file:
       - .env
     environment:
-      DB_USER: ${NOTIFICATION_DB_USER}
-      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-      DB_NAME: ${NOTIFICATION_DB_NAME}
-      DB_HOST: notification-db
-      DB_PORT: 5432
-      NATS_URL: nats://nats:4222
-      REDIS_URL: redis://redis:6379
-      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}  # smtp, sendgrid, ses
-      SMTP_HOST: ${SMTP_HOST:-smtp.sendgrid.net}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
-      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
-      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
-      EMAIL_RATE_LIMIT_PER_HOUR: ${EMAIL_RATE_LIMIT_PER_HOUR:-100}
-      EMAIL_RATE_LIMIT_PER_DAY: ${EMAIL_RATE_LIMIT_PER_DAY:-1000}
-      SERVICE_NAME: ${NOTIFICATIONS_SERVICE_NAME:-notifications-service}
-      EXTERNAL_PORT: ${NOTIFICATIONS_API_PORT}
+      # Database - prefixed for consistency
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME}
+      NOTIFICATION_DB_HOST: notification-db
+      NOTIFICATION_DB_PORT: 5432
+      # NATS
+      NOTIFICATION_NATS_URL: nats://nats:4222
+      # Redis
+      NOTIFICATION_REDIS_URL: redis://redis:6379
+      # Email Configuration
+      NOTIFICATION_EMAIL_PROVIDER: ${NOTIFICATION_EMAIL_PROVIDER:-smtp}
+      NOTIFICATION_SMTP_HOST: ${NOTIFICATION_SMTP_HOST:-smtp.sendgrid.net}
+      NOTIFICATION_SMTP_PORT: ${NOTIFICATION_SMTP_PORT:-587}
+      NOTIFICATION_SMTP_USERNAME: ${NOTIFICATION_SMTP_USERNAME}
+      NOTIFICATION_SMTP_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD}
+      NOTIFICATION_SENDGRID_API_KEY: ${NOTIFICATION_SENDGRID_API_KEY}
+      NOTIFICATION_EMAIL_FROM_ADDRESS: ${NOTIFICATION_EMAIL_FROM_ADDRESS}
+      NOTIFICATION_EMAIL_FROM_NAME: ${NOTIFICATION_EMAIL_FROM_NAME}
+      NOTIFICATION_EMAIL_RATE_LIMIT_PER_HOUR: ${NOTIFICATION_EMAIL_RATE_LIMIT_PER_HOUR:-100}
+      NOTIFICATION_EMAIL_RATE_LIMIT_PER_DAY: ${NOTIFICATION_EMAIL_RATE_LIMIT_PER_DAY:-1000}
+      # Service Configuration
+      NOTIFICATION_SERVICE_NAME: notification-service
+      NOTIFICATION_EXTERNAL_PORT: 8002
       JWT_SECRET: ${JWT_SECRET}
       APP_ENV: ${APP_ENV:-prod}
       ENABLE_METRICS: ${ENABLE_METRICS}
       ENABLE_TRACING: ${ENABLE_TRACING}
-      
     ports:
       - "8002:8000"
     networks:
       - glam-net
-    command: >
-       sh -c "
-        echo 'Waiting for database...' &&
-        sleep 5 &&
-        alembic upgrade head &&
-        uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${NOTIFICATIONS_SERVICE_WORKERS}
-        "
-   
-  notification-db:
-    image: postgres:15-alpine
-    container_name: notification-db
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${NOTIFICATIONS_DB_USER}
-      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
-      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
-    ports:
-      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
-    volumes:
-      - notification-db-data:/var/lib/postgresql/data
-    networks:
-      - glam-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION _DB_USER}"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-  
   
 networks:
   glam-net:
