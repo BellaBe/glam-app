@@ -2,6 +2,8 @@
 # shared/errors/notification.py
 # -------------------------------
 
+from uuid import UUID
+
 """Notification service specific errors."""
 
 from typing import Optional
@@ -17,8 +19,8 @@ class NotificationNotFoundError(NotFoundError):
         self,
         message: str,
         *,
-        notification_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        notification_id: Optional[UUID] = None,
+        shop_id: Optional[UUID] = None,
         **kwargs
     ):
         super().__init__(
@@ -28,8 +30,8 @@ class NotificationNotFoundError(NotFoundError):
             **kwargs
         )
         
-        if user_id:
-            self.details["user_id"] = user_id
+        if shop_id:
+            self.details["shop_id"] = shop_id
 
 
 class TemplateNotFoundError(NotFoundError):

@@ -3,89 +3,94 @@
 # -------------------------------
 
 """
-Shared API response models and utilities for glam-app microservices.
+Unified API response models and utilities for glam-app microservices.
 
-This module provides standardized request/response models and utilities
-for consistent API responses across all services.
+This module provides a single, consistent approach to API responses
+across all services.
 """
 
 from .models import (
-    # Response models
-    SuccessResponse,
-    ErrorResponse,
-    PaginationMeta,
-    ResponseMeta,
-    ErrorDetail,
+    # Core models
+    ApiResponse,
+    Meta,
+    Pagination,
     Links,
-    
-    # Generic types
-    DataT,
+    ErrorDetail,
+    T,  # Generic type
+)
+
+from .responses import (
+    # Response helpers
+    create_response,
+    success_response,
+    error_response,
+    paginated_response,
 )
 
 from .dependencies import (
+    # FastAPI dependencies
     PaginationParams,
     get_pagination_params,
     get_request_id,
+    get_request_context,
     RequestIdDep,
     PaginationDep,
-    RequestContextDep
+    RequestContext,
+    RequestContextDep,
+    CorrelationIdDep,  # Re-exported from correlation
 )
 
 from .middleware import (
-    APIResponseMiddleware,
-    setup_api_middleware,
+    # Middleware
+    APIMiddleware,
+    setup_middleware,
 )
 
 from .correlation import (
+    # Correlation utilities
     get_correlation_id,
-    CorrelationIdDep,
     set_correlation_context,
     get_correlation_context,
-    CorrelationContext,
     add_correlation_header,
     add_correlation_to_event,
     extract_correlation_from_event,
-    CorrelationLoggerAdapter,
 )
-
-from .responses import success_response, error_response, paginated_response
 
 __all__ = [
     # Models
-    "SuccessResponse",
-    "ErrorResponse",
-    "PaginationMeta",
-    "ResponseMeta",
-    "ErrorDetail",
+    "ApiResponse",
+    "Meta",
+    "Pagination",
     "Links",
-    "DataT",
+    "ErrorDetail",
+    "T",
     
+    # Response helpers
+    "create_response",
+    "success_response",
+    "error_response",
+    "paginated_response",
     
     # Dependencies
     "PaginationParams",
     "get_pagination_params",
     "get_request_id",
+    "get_request_context",
     "RequestIdDep",
     "PaginationDep",
+    "RequestContext",
     "RequestContextDep",
+    "CorrelationIdDep",
     
     # Correlation
     "get_correlation_id",
-    "CorrelationIdDep",
     "set_correlation_context",
     "get_correlation_context",
-    "CorrelationContext",
     "add_correlation_header",
     "add_correlation_to_event",
     "extract_correlation_from_event",
-    "CorrelationLoggerAdapter",
     
     # Middleware
-    "APIResponseMiddleware",
-    "setup_api_middleware",
-    
-    # Response utilities
-    "success_response",
-    "error_response",
-    "paginated_response",
+    "APIMiddleware",
+    "setup_middleware",
 ]

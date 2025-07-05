@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from shared.database import Repository
-from ..models.entities import Notification
+from ..models.notification import Notification, NotificationStatus, NotificationProvider
 
 class NotificationRepository(Repository[Notification]):
     """Async Notification repo that opens a fresh session per call."""
@@ -36,10 +36,7 @@ class NotificationRepository(Repository[Notification]):
         limit: int = 100,
     ) -> List[Notification]:
         stmt = (
-            select(self.model)
-            .where(self.model.shop_id == shop_id)
-            .order_by(self.model.created_at.desc())
-            .limit(limit)
+            select(self.model).where(self.model.shop_id == shop_id).order_by(self.model.created_at.desc()).limit(limit)
         )
         async for session in self._session():
             result = await session.execute(stmt)
@@ -48,7 +45,7 @@ class NotificationRepository(Repository[Notification]):
 
     async def get_by_status(
         self,
-        status: str,
+        status: NotificationStatus,
         limit: int = 100,
     ) -> List[Notification]:
         stmt = (
@@ -147,12 +144,57 @@ class NotificationRepository(Repository[Notification]):
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
+    async def list(
+        self,
+        shop_id: Optional[UUID] = None,
+        status: Optional[str] = None,
+        notification_type: Optional[str] = None,
+        offset: int = 1,
+        limit: int = 50,
+    ) -> tuple[list[Notification], int]:
+        """List notifications with optional filters.
+        Args:
+            shop_id (Optional[UUID]): Filter by shop ID.
+            status (Optional[str]): Filter by notification status.
+            notification_type (Optional[str]): Filter by notification type.
+            offset (int): Pagination offset.
+            limit (int): Number of records to return.
+            
+        Returns:
+            total (int): Total number of notifications.
+            notifications (List[Notification]): List of notifications matching the filters.
+        
+        """
+        stmt = select(self.model)
+        
+        if shop_id:
+            stmt = stmt.where(self.model.shop_id == shop_id)
+        if status:
+            stmt = stmt.where(self.model.status == status)
+        if notification_type:
+            stmt = stmt.where(self.model.type == notification_type)
+
+        stmt = stmt.order_by(self.model.created_at.desc())
+        stmt = stmt.offset((offset - 1) * limit).limit(limit)
+        total_stmt = select(func.count(self.model.id)).select_from(self.model)
+
+        async for session in self._session():
+            result = await session.execute(stmt)
+            notifications = result.scalars().all()
+
+            total_result = await session.execute(total_stmt)
+            total = total_result.scalar_one_or_none() or 0
+
+            return list(notifications), total
+
+        return [], 0
+    
     # ---------------------------------------------------------------- updates
     async def mark_as_sent(
         self,
         notification_id: UUID,
         provider_message_id: str,
-        provider: str,
+        provider: NotificationProvider,
     ) -> Notification: # type: ignore[return]
         
         async for session in self._session():
@@ -163,7 +205,7 @@ class NotificationRepository(Repository[Notification]):
             if not notification:
                 raise ValueError(f"Notification {notification_id} not found")
 
-            notification.status = "sent"
+            notification.status = NotificationStatus.SENT
             notification.provider_message_id = provider_message_id
             notification.provider = provider
             notification.sent_at = datetime.now(timezone.utc)
@@ -187,7 +229,7 @@ class NotificationRepository(Repository[Notification]):
             if not notification:
                 raise ValueError(f"Notification {notification_id} not found")
 
-            notification.status = "failed"
+            notification.status = NotificationStatus.FAILED
             notification.error_message = error_message
             notification.retry_count += retry_count
             notification.sent_at = datetime.now(timezone.utc)

@@ -25,23 +25,21 @@ from .config import ServiceConfig
 from .utils.template_engine import TemplateEngine
 from .services.email_service import EmailService
 from .services.notification_service import NotificationService
-from .services.rate_limit_service import InMemoryRateLimitService
 from .services.template_service   import TemplateService
-from .services.preference_service import PreferenceService
 
 # repositories --------------------------------------------------------------
 from .repositories.notification_repository import NotificationRepository
-from .repositories.template_repository     import TemplateRepository
-from .repositories.preference_repository   import PreferenceRepository
-from .models.entities import (
-    Notification,
-    NotificationTemplate,
-    NotificationPreference,
-)
+
+
+# models ----------------------------------------------------------------
+from .models.notification import Notification
 
 # events / subs -------------------------------------------------------------
 from .events.publishers import NotificationEventPublisher
 from .events.subscribers   import SendEmailSubscriber, SendBulkEmailSubscriber
+
+# domain mappers --------------------------------------------------------
+from .mappers.notification_mapper import NotificationMapper
 
 
 class ServiceLifecycle:
@@ -57,16 +55,13 @@ class ServiceLifecycle:
 
         # repositories
         self.notification_repo: Optional[NotificationRepository] = None
-        self.template_repo:     Optional[TemplateRepository]     = None
-        self.preference_repo:   Optional[PreferenceRepository]   = None
 
         # utils / domain services
         self.template_engine:     Optional[TemplateEngine]            = None
-        self.rate_limit_service:  Optional[InMemoryRateLimitService]  = None
         self.email_service:       Optional[EmailService]              = None
         self.template_service:    Optional[TemplateService]           = None
-        self.preference_service:  Optional[PreferenceService]         = None
         self.notification_service:Optional[NotificationService]     = None
+        self.notification_mapper: Optional[NotificationMapper] = None
 
         # bookkeeping
         self._tasks: List[asyncio.Task] = []
@@ -148,12 +143,9 @@ class ServiceLifecycle:
 
         sf = self.db_manager.session_factory
         self.notification_repo = NotificationRepository(Notification, sf)
-        self.template_repo     = TemplateRepository(NotificationTemplate, sf)
-        self.preference_repo   = PreferenceRepository(NotificationPreference, sf)
 
     def _init_local_services(self) -> None:
         self.template_engine    = TemplateEngine()
-        self.rate_limit_service = InMemoryRateLimitService(self.logger)
 
         self.email_service = EmailService(
             {
@@ -166,22 +158,14 @@ class ServiceLifecycle:
             self.logger,
         )
         
-        if not self.template_repo:
-            raise RuntimeError("Template repository is not initialized")
+        if not self.template_engine:
+            raise RuntimeError("Template engine is not initialized")
 
         self.template_service = TemplateService(
             template_engine      = self.template_engine,
-            template_repository  = self.template_repo,
             logger               = self.logger,
         )
-        
-        if not self.preference_repo:
-            raise RuntimeError("Preference repository is not initialized")
-        
-        self.preference_service = PreferenceService(
-            preference_repository = self.preference_repo,
-            logger                = self.logger,
-        )
+    
 
         if not self.messaging_wrapper:
             raise RuntimeError("Messaging wrapper is not initialized")
@@ -199,9 +183,8 @@ class ServiceLifecycle:
             publisher               = publisher,
             email_service           = self.email_service,
             template_service        = self.template_service,
-            preference_service      = self.preference_service,
-            rate_limit_service      = self.rate_limit_service,
             notification_repository = self.notification_repo,
+            notification_mapper     = NotificationMapper(),
             logger                  = self.logger,
         )
 

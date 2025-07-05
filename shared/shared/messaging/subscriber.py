@@ -61,7 +61,7 @@ class JetStreamEventSubscriber(ABC):
     @abstractmethod
     async def on_event(
         self, event: Dict[str, Any], headers: Optional[Dict[str, str]] = None
-    ) -> None:
+    )   -> None:
         """Process the validated event."""
         pass
 

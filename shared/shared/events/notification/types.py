@@ -19,9 +19,10 @@ class NotificationEvents:
     NOTIFICATION_BULK_SEND_COMPLETED = "evt.notification.bulk_send.completed"
 
 class Recipient(BaseModel):
-    shop_id: UUID
-    shop_domain: str
+    id: UUID
+    domain: str
     email: str
+    unsubscribe_token: str
     dynamic_content: Dict[str, Any] = Field(default_factory=dict)
 
 class SendEmailCommandPayload(BaseModel):

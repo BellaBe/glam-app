@@ -1,88 +1,77 @@
-# File: shared/api/middleware.py
+# -------------------------------
+# shared/api/middleware.py
+# -------------------------------
 
-"""
-API middleware for standardized request/response handling.
-
-This middleware integrates with the error handling layer to ensure
-all responses follow the standard format.
-"""
+"""Simplified API middleware."""
 
 import time
 import uuid
 import logging
-from typing import Callable, Tuple
+from typing import Callable
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Request, Response
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from fastapi.exceptions import RequestValidationError, HTTPException
 
 from ..errors import GlamBaseError
-from .models import ErrorResponse
-from .correlation import set_correlation_context, get_correlation_id
+from ..metrics import PrometheusMiddleware, metrics_endpoint
+
+from .models import ErrorDetail
+from .responses import error_response
+from .correlation import get_correlation_id, set_correlation_context
 
 logger = logging.getLogger(__name__)
 
 
-class APIResponseMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware that ensures all responses follow standard format.
+class APIMiddleware(BaseHTTPMiddleware):
+    """Unified middleware for request/response handling."""
     
-    This middleware:
-    - Adds request IDs to all requests
-    - Adds correlation IDs for distributed tracing
-    - Converts errors to standard ErrorResponse format
-    - Adds standard headers to responses
-    - Logs request metrics
-    """
-    
-    def __init__(
-        self,
-        app: ASGIApp,
-        *,
-        service_name: str = "glam-service",
-        include_error_details: bool = True
-    ):
+    def __init__(self, app, *, service_name: str = "glam-service"):
         super().__init__(app)
         self.service_name = service_name
-        self.include_error_details = include_error_details
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Generate or extract request ID
-        request_id = request.headers.get("X-Request-ID")
-        if not request_id:
-            request_id = f"req_{uuid.uuid4().hex[:12]}"
+        # Generate IDs
+        request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:12]}")
         
-        # Get or generate correlation ID
+        # Get correlation ID (this will check headers and generate if needed)
         correlation_id = get_correlation_id(request)
         
-        # Store in request state
+        # Store in request state for easy access in the request
         request.state.request_id = request_id
         request.state.correlation_id = correlation_id
         
-        # Set correlation context for async operations
+        # IMPORTANT: Set correlation context for async operations
+        # This makes correlation_id available throughout the request lifecycle
         set_correlation_context(correlation_id)
         
         # Track timing
         start_time = time.perf_counter()
         
-        # Add standard headers to all responses
-        def add_headers(response: Response):
+        try:
+            response = await call_next(request)
+            
+            # Add standard headers
             response.headers["X-Request-ID"] = request_id
             response.headers["X-Correlation-ID"] = correlation_id
             response.headers["X-Service-Name"] = self.service_name
-        
-        try:
-            response = await call_next(request)
-            add_headers(response)
+            
             return response
             
         except Exception as exc:
             # Convert to standard error response
-            error_response, status_code = self._handle_exception(
-                exc, request_id, correlation_id
-            )
+            error_resp = self._handle_exception(exc, request_id, correlation_id)
+            
+            # Determine status code
+            status_code = 500
+            if isinstance(exc, GlamBaseError):
+                status_code = exc.status
+            elif isinstance(exc, HTTPException):
+                status_code = exc.status_code
+            elif isinstance(exc, RequestValidationError):
+                status_code = 422
             
             # Log error
             duration_ms = (time.perf_counter() - start_time) * 1000
@@ -95,37 +84,36 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "path": request.url.path,
                     "status": status_code,
                     "duration_ms": round(duration_ms, 2),
-                    "error_code": error_response.error.code,
+                    "error_code": error_resp.error.code if error_resp.error else "UNKNOWN",
                     "service": self.service_name
                 }
             )
             
             response = JSONResponse(
-                content=error_response.model_dump(mode="json"),
+                content=error_resp.model_dump(mode="json", exclude_none=True),
                 status_code=status_code
             )
-            add_headers(response)
+            
+            # Add standard headers
+            response.headers["X-Request-ID"] = request_id
+            response.headers["X-Correlation-ID"] = correlation_id
+            response.headers["X-Service-Name"] = self.service_name
+            
             return response
     
-    def _handle_exception(
-        self,
-        exc: Exception,
-        request_id: str,
-        correlation_id: str
-    ) -> Tuple[ErrorResponse, int]:
-        """Convert exception to standard error response."""
+    def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str):
+        """Convert exception to error response."""
         
         if isinstance(exc, GlamBaseError):
-            # Our custom errors
-            return ErrorResponse.from_exception(
-                exc, 
-                request_id=request_id, 
-                correlation_id=correlation_id,
-                include_details=self.include_error_details
+            return error_response(
+                code=exc.code,
+                message=exc.message,
+                details=exc.details,
+                request_id=request_id,
+                correlation_id=correlation_id
             )
         
         elif isinstance(exc, RequestValidationError):
-            # Pydantic validation errors
             validation_errors = []
             for error in exc.errors():
                 field_path = ".".join(str(loc) for loc in error["loc"])
@@ -135,32 +123,23 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                     "type": error["type"]
                 })
             
-            return ErrorResponse.from_exception(
-                {
-                    "code": "VALIDATION_ERROR",
-                    "message": "Request validation failed",
-                    "details": {"validation_errors": validation_errors}
-                },
+            return error_response(
+                code="VALIDATION_ERROR",
+                message="Request validation failed",
+                details={"validation_errors": validation_errors},
                 request_id=request_id,
-                correlation_id=correlation_id,
-                include_details=self.include_error_details
+                correlation_id=correlation_id
             )
         
         elif isinstance(exc, HTTPException):
-            # FastAPI HTTP exceptions
-            return ErrorResponse.from_exception(
-                {
-                    "code": f"HTTP_{exc.status_code}",
-                    "message": exc.detail,
-                    "status": exc.status_code  # Include status in the dict
-                },
+            return error_response(
+                code=f"HTTP_{exc.status_code}",
+                message=exc.detail,
                 request_id=request_id,
-                correlation_id=correlation_id,
-                include_details=self.include_error_details
+                correlation_id=correlation_id
             )
         
         else:
-            # Unexpected errors
             logger.exception(
                 "Unhandled exception",
                 extra={
@@ -170,43 +149,47 @@ class APIResponseMiddleware(BaseHTTPMiddleware):
                 }
             )
             
-            return ErrorResponse.from_exception(
-                {
-                    "code": "INTERNAL_ERROR",
-                    "message": "An unexpected error occurred",
-                    "details": {"error_type": type(exc).__name__} if self.include_error_details else None
-                },
+            return error_response(
+                code="INTERNAL_ERROR",
+                message="An unexpected error occurred",
                 request_id=request_id,
-                correlation_id=correlation_id,
-                include_details=self.include_error_details
-        )
+                correlation_id=correlation_id
+            )
 
-def setup_api_middleware(
+
+def setup_middleware(
     app: FastAPI,
     *,
     service_name: str,
-    include_error_details: bool = True
+    enable_metrics: bool = True,
+    metrics_path: str = "/metrics",
 ):
     """
-    Set up all API middleware for a service.
+    Set up all standard middleware for a service.
     
-    This combines:
-    - API response standardization
-    - Error handling from the errors module
-    - Correlation ID support
+    This sets up middleware in the correct order:
+    1. Prometheus metrics (if enabled) - captures all requests
+    2. API middleware - handles responses and errors
     
     Args:
         app: FastAPI application
         service_name: Name of the service
-        include_error_details: Whether to include error details
+        enable_metrics: Whether to enable Prometheus metrics
+        metrics_path: Path for metrics endpoint
+        debug: Whether to include error details in responses
     """
-    # Add our API response middleware
-    app.add_middleware(
-        APIResponseMiddleware,
-        service_name=service_name,
-        include_error_details=include_error_details
-    )
+    # Add Prometheus middleware FIRST (captures all requests)
+    if enable_metrics:
+        app.add_middleware(PrometheusMiddleware, service_name=service_name)
+        
+        # Add metrics endpoint
+        app.add_api_route(
+            metrics_path,
+            metrics_endpoint,
+            methods=["GET"],
+            include_in_schema=False,
+            tags=["monitoring"]
+        )
     
-    # Also set up error handlers from the errors module
-    from ..errors.middleware import setup_exception_handlers
-    setup_exception_handlers(app, include_details=include_error_details)
+    # Add API middleware for standardized responses
+    app.add_middleware(APIMiddleware, service_name=service_name)

@@ -105,6 +105,7 @@ class EmailService:
                     )
                     result = EmailResult(
                         success=False,
+                        provider=fallback_name,
                         error_message=str(e),
                         error_code="PROVIDER_ERROR"
                     )

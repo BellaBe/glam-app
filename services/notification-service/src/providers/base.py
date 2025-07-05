@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
+from src.models import NotificationProvider
 
 @dataclass
 class EmailMessage:
@@ -9,13 +10,12 @@ class EmailMessage:
     subject: str
     html_body: str
     text_body: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
 
 @dataclass
 class EmailResult:
     """Email send result"""
     success: bool
-    provider: str
+    provider: NotificationProvider
     provider_message_id: Optional[str] = None
     error_message: Optional[str] = None
     error_code: Optional[str] = None
