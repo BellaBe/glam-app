@@ -1,11 +1,14 @@
 from typing import List, Dict, Any, Optional
 from shared.utils.logger import ServiceLogger
 from shared.errors.utils import wrap_external_error
+from shared.api.correlation import add_correlation_header
+
 from ..providers.base import EmailProvider, EmailMessage, EmailResult
 from ..providers.sendgrid import SendGridProvider
 from ..providers.ses import SESProvider
 from ..providers.smtp import SMTPProvider
 from ..exceptions import EmailProviderError
+
 
 class EmailService:
     """Email service with fallback support"""
@@ -14,7 +17,7 @@ class EmailService:
         self.config = config
         self.logger = logger
         self.providers: Dict[str, EmailProvider] = {}
-        self.current_provider = config.get('primary_provider', 'sendgrid')
+        self.current_provider = config.get('primary_provider')
         self._init_providers()
     
     def _init_providers(self):
@@ -41,6 +44,12 @@ class EmailService:
     
     async def send_email(self, message: EmailMessage) -> EmailResult:
         """Send email with automatic fallback"""
+        if not isinstance(self.current_provider, str):
+            raise EmailProviderError(
+                "Current provider is not a valid string",
+                provider=self.current_provider,
+                provider_error_code="INVALID_PROVIDER"
+            )
         primary_provider = self.providers.get(self.current_provider)
         
         if not primary_provider:
@@ -52,6 +61,9 @@ class EmailService:
         
         # Try primary provider
         try:
+            self.logger.info(f"Sending email via primary provider: {self.current_provider}")
+            add_correlation_header({})
+            
             result = await primary_provider.send_email(message)
             
             if result.success:

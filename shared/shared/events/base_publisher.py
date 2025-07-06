@@ -2,7 +2,7 @@
 from typing import Dict, Any, Optional
 
 from .base import Streams
-from .mappers import EVENT_REGISTRY, get_stream_subjects
+from .mappers import get_stream_from_event_type, get_stream_subjects
 from shared.messaging.publisher import JetStreamEventPublisher
 
 
@@ -42,17 +42,18 @@ class DomainEventPublisher(JetStreamEventPublisher):
         Ensures you can't accidentally publish a billing event 
         from the catalog service
         """
-        if event_type in EVENT_REGISTRY:
-            event_def = EVENT_REGISTRY[event_type]
-            if event_def.stream != self.domain_stream:
+        try:
+            # Try to infer stream from event type
+            inferred_stream = get_stream_from_event_type(event_type)
+            if inferred_stream != self.domain_stream:
                 raise ValueError(
-                    f"Event {event_type} belongs to {event_def.stream}, "
+                    f"Event {event_type} belongs to {inferred_stream}, "
                     f"not {self.domain_stream}"
                 )
-        else:
-            # For events not in registry, check prefix matches subjects
+        except ValueError:
+            # For events not following standard pattern, check prefix matches subjects
             if not any(event_type.startswith(subj.replace('*', '')) 
-                      for subj in self.subjects):
+                    for subj in self.subjects):
                 raise ValueError(
                     f"Event {event_type} doesn't match any subject pattern "
                     f"for stream {self.domain_stream}"

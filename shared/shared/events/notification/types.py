@@ -1,52 +1,47 @@
+# shared/events/notification/types.py
 from pydantic import BaseModel, Field
-from typing import Dict, Optional, List, Any
+from typing import Dict, List, Any
 from datetime import datetime
 from uuid import UUID
 
+from ..base import EventWrapper  # Now generic
+from ..context import EventContext  # Keep this!
 
-from ..base import EventWrapper
 
 class NotificationCommands:
     """Notification command types"""
     NOTIFICATION_SEND_EMAIL = "cmd.notification.send_email"
     NOTIFICATION_SEND_BULK = "cmd.notification.bulk_send"
-    
-    
+
+
 class NotificationEvents:
     """Notification event types"""
     NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent"
     NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed"
     NOTIFICATION_BULK_SEND_COMPLETED = "evt.notification.bulk_send.completed"
 
+
 class Recipient(BaseModel):
-    id: UUID
-    domain: str
+    shop_id: UUID
+    shop_domain: str
     email: str
     unsubscribe_token: str
     dynamic_content: Dict[str, Any] = Field(default_factory=dict)
+
 
 class SendEmailCommandPayload(BaseModel):
     """Payload for sending a single email"""
     notification_type: str
     recipient: Recipient
 
+
 class SendEmailBulkCommandPayload(BaseModel):
     """Payload for sending bulk emails by notification type"""
     notification_type: str
     recipients: List[Recipient]
-    
-class SendEmailCommand(EventWrapper):
-    """Command to send a single email"""
-    subject: str = NotificationCommands.NOTIFICATION_SEND_EMAIL
-    data: SendEmailCommandPayload
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    
-class SendEmailBulkCommand(EventWrapper):
-    """Command to send bulk emails with same notification type"""
-    subject: str = NotificationCommands.NOTIFICATION_SEND_BULK
-    data: SendEmailBulkCommandPayload
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    
+
+
+# Event payloads remain the same
 class EmailSentEventPayload(BaseModel):
     """Payload for NOTIFICATION_EMAIL_SENT event"""
     notification_id: UUID
@@ -62,6 +57,7 @@ class EmailSentEventPayload(BaseModel):
             UUID: str,
             datetime: lambda v: v.isoformat()
         }
+
 
 class EmailFailedEventPayload(BaseModel):
     """Payload for NOTIFICATION_EMAIL_FAILED event"""
@@ -85,23 +81,124 @@ class BulkCompletedEventPayload(BaseModel):
     total_skipped: int
     duration_seconds: float
     completed_at: datetime
+
+
+# Enhanced command wrappers that integrate with EventContext
+# The only change is adding the Generic type parameter [PayloadType]
+class SendEmailCommand(EventWrapper[SendEmailCommandPayload]):
+    """Command to send a single email"""
+    subject: str = NotificationCommands.NOTIFICATION_SEND_EMAIL
     
-class EmailSentEvent(EventWrapper):
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,  # Still using context!
+        notification_type: str,
+        recipient: Recipient
+    ) -> "SendEmailCommand":
+        """Create command with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=SendEmailCommandPayload(
+                notification_type=notification_type,
+                recipient=recipient
+            )
+        )
+
+
+class SendEmailBulkCommand(EventWrapper[SendEmailBulkCommandPayload]):
+    """Command to send bulk emails with same notification type"""
+    subject: str = NotificationCommands.NOTIFICATION_SEND_BULK
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,  # Still using context!
+        notification_type: str,
+        recipients: List[Recipient]
+    ) -> "SendEmailBulkCommand":
+        """Create bulk command with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=SendEmailBulkCommandPayload(
+                notification_type=notification_type,
+                recipients=recipients
+            )
+        )
+
+
+# Enhanced event wrappers
+class EmailSentEvent(EventWrapper[EmailSentEventPayload]):
     """Event emitted when an email is successfully sent"""
     subject: str = NotificationEvents.NOTIFICATION_EMAIL_SENT
-    data: EmailSentEventPayload
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     
-class EmailDeliveryFailedEvent(EventWrapper):
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,  # Still using context!
+        payload: EmailSentEventPayload
+    ) -> "EmailSentEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )
+
+
+class EmailDeliveryFailedEvent(EventWrapper[EmailFailedEventPayload]):
     """Event emitted when email delivery fails"""
     subject: str = NotificationEvents.NOTIFICATION_EMAIL_FAILED
-    data: EmailFailedEventPayload
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     
-class BulkSendCompletedEvent(EventWrapper):
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,  # Still using context!
+        payload: EmailFailedEventPayload
+    ) -> "EmailDeliveryFailedEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )
+
+
+class BulkSendCompletedEvent(EventWrapper[BulkCompletedEventPayload]):
     """Event emitted when a bulk email send operation completes"""
     subject: str = NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED
-    data: BulkCompletedEventPayload
-    metadata:  Optional[Dict[str, Any]] = Field(default_factory=dict)
-
-
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,  # Still using context!
+        payload: BulkCompletedEventPayload
+    ) -> "BulkSendCompletedEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )

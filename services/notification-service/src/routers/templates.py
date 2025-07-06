@@ -7,13 +7,10 @@ from typing import Optional
 from shared.api import (
     ApiResponse,
     success_response,
-    Links
+    Links,
+    RequestContextDep
 )
-from src.dependencies import (
-    TemplateServiceDep,
-    RequestIdDep,
-    CorrelationIdDep
-)
+from src.dependencies import TemplateServiceDep
 
 from src.schemas.template import (
     TemplateResponse,
@@ -24,9 +21,7 @@ from src.schemas.template import (
     TemplateValidationResponse
 )
 
-
 router = APIRouter(tags=["templates"])
-
 
 @router.get(
     "",
@@ -35,8 +30,7 @@ router = APIRouter(tags=["templates"])
 )
 async def list_templates(
     svc: TemplateServiceDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
     category: Optional[str] = Query(None, description="Filter by category (system, marketing, transactional)"),
 ):
     """
@@ -78,11 +72,10 @@ async def list_templates(
             'templates': templates,
             'total': len(templates)
         },
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         links=Links(self="/api/v1/templates")
     )
-
 
 @router.get(
     "/{template_type}",
@@ -92,8 +85,7 @@ async def list_templates(
 async def get_template(
     template_type: str,
     svc: TemplateServiceDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
     preview: bool = Query(False, description="Include preview with sample data")
 ):
     """
@@ -131,14 +123,13 @@ async def get_template(
     
     return success_response(
         data=response_data,
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         links=Links(
             self=f"/api/v1/templates/{template_type}",
             next=f"/api/v1/templates/{template_type}/preview"
         )
     )
-
 
 @router.post(
     "/{template_type}/preview",
@@ -149,8 +140,7 @@ async def preview_template(
     template_type: str,
     request: TemplatePreviewRequest,
     svc: TemplateServiceDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
 ):
     """
     Preview a template with custom sample data.
@@ -180,14 +170,13 @@ async def preview_template(
     
     return success_response(
         data=preview_result,
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         links=Links(
             self=f"/api/v1/templates/{template_type}/preview",
             previous=f"/api/v1/templates/{template_type}"
         )
     )
-
 
 @router.post(
     "/validate",
@@ -197,8 +186,7 @@ async def preview_template(
 async def validate_template(
     request: TemplateValidationRequest,
     svc: TemplateServiceDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
 ):
     """
     Validate Jinja2 template syntax.
@@ -212,11 +200,10 @@ async def validate_template(
     
     return success_response(
         data=validation_result,
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         links=Links(self="/api/v1/templates/validate")
     )
-
 
 def _get_template_category(template_type: str) -> str:
     """Determine template category based on type"""

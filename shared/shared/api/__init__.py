@@ -29,13 +29,7 @@ from .responses import (
 
 from .dependencies import (
     # FastAPI dependencies
-    PaginationParams,
-    get_pagination_params,
-    get_request_id,
-    get_request_context,
-    RequestIdDep,
     PaginationDep,
-    RequestContext,
     RequestContextDep,
     CorrelationIdDep,  # Re-exported from correlation
 )
@@ -72,13 +66,7 @@ __all__ = [
     "paginated_response",
     
     # Dependencies
-    "PaginationParams",
-    "get_pagination_params",
-    "get_request_id",
-    "get_request_context",
-    "RequestIdDep",
     "PaginationDep",
-    "RequestContext",
     "RequestContextDep",
     "CorrelationIdDep",
     

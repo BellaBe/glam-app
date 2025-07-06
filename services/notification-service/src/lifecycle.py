@@ -22,7 +22,6 @@ from shared.database import DatabaseSessionManager, set_database_manager
 from shared.messaging.jetstream_wrapper import JetStreamWrapper
 
 from .config import ServiceConfig
-from .utils.template_engine import TemplateEngine
 from .services.email_service import EmailService
 from .services.notification_service import NotificationService
 from .services.template_service   import TemplateService
@@ -57,7 +56,6 @@ class ServiceLifecycle:
         self.notification_repo: Optional[NotificationRepository] = None
 
         # utils / domain services
-        self.template_engine:     Optional[TemplateEngine]            = None
         self.email_service:       Optional[EmailService]              = None
         self.template_service:    Optional[TemplateService]           = None
         self.notification_service:Optional[NotificationService]     = None
@@ -145,7 +143,6 @@ class ServiceLifecycle:
         self.notification_repo = NotificationRepository(Notification, sf)
 
     def _init_local_services(self) -> None:
-        self.template_engine    = TemplateEngine()
 
         self.email_service = EmailService(
             {
@@ -158,12 +155,9 @@ class ServiceLifecycle:
             self.logger,
         )
         
-        if not self.template_engine:
-            raise RuntimeError("Template engine is not initialized")
-
         self.template_service = TemplateService(
-            template_engine      = self.template_engine,
-            logger               = self.logger,
+            config=self.config,
+            logger= self.logger,
         )
     
 

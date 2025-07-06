@@ -22,6 +22,7 @@ from ..exceptions import (
     TemplateRenderError,
     ValidationError,
 )
+from ..config import ServiceConfig
 
 
 class TemplateService:
@@ -30,7 +31,7 @@ class TemplateService:
     All templates are defined in EmailTemplates class.
     """
     
-    def __init__(self, config: Dict[str, Any], logger: ServiceLogger):
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         """
         Initialize template service
         
@@ -166,12 +167,12 @@ class TemplateService:
         global_vars = {
             'platform_name': 'GlamYouUp',
             'current_year': datetime.now().year,
-            'support_url': self.config.get('support_url', 'https://support.glamyouup.com'),
+            'support_url': 'https://support.glamyouup.com', # TODO: Use config value
         }
         
         # Add unsubscribe URL only if token is provided (marketing emails)
         if unsubscribe_token:
-            app_url = self.config.get('app_url', 'https://app.glamyouup.com')
+            app_url = 'https://app.glamyouup.com' # TODO: Use config value
             global_vars['unsubscribe_url'] = f"{app_url}/unsubscribe/{unsubscribe_token}"
         else:
             # For non-marketing emails, provide empty string to avoid template errors

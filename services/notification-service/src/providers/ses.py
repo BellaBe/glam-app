@@ -2,6 +2,8 @@ import boto3
 from botocore.exceptions import ClientError
 from typing import List, Dict, Any
 from .base import EmailProvider, EmailMessage, EmailResult
+from src.models import NotificationProvider
+from shared.api.correlation import get_correlation_context
 import asyncio
 
 class SESProvider(EmailProvider):
@@ -10,12 +12,25 @@ class SESProvider(EmailProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.region = config.get('region', 'us-east-1')
-        self.client = boto3.client(
-            'ses',
-            region_name=self.region,
-            aws_access_key_id=config.get('aws_access_key_id'),
-            aws_secret_access_key=config.get('aws_secret_access_key')
-        )
+        
+        # Get correlation ID for AWS request context
+        correlation_id = get_correlation_context()
+        
+        # Create client with custom config including correlation ID in user agent
+        client_config = {
+            'region_name': self.region
+        }
+        
+        if config.get('aws_access_key_id'):
+            client_config['aws_access_key_id'] = config.get('aws_access_key_id')
+        if config.get('aws_secret_access_key'):
+            client_config['aws_secret_access_key'] = config.get('aws_secret_access_key')
+            
+        self.client = boto3.client('ses', **client_config)
+        
+        # If we have correlation ID, add it to the client metadata
+        if correlation_id:
+            self.client._client_config.user_agent_extra = f'correlation_id/{correlation_id}'
     
     async def send_email(self, message: EmailMessage) -> EmailResult:
         """Send email via AWS SES"""
@@ -30,6 +45,7 @@ class SESProvider(EmailProvider):
             
             return EmailResult(
                 success=True,
+                provider=NotificationProvider.AWS_SES,
                 provider_message_id=response['MessageId']
             )
             
@@ -41,24 +57,28 @@ class SESProvider(EmailProvider):
             if error_code == 'MessageRejected':
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.AWS_SES,
                     error_message=error_message,
                     error_code="INVALID_RECIPIENT"
                 )
             elif error_code == 'Throttling':
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.AWS_SES,
                     error_message=error_message,
                     error_code="PROVIDER_RATE_LIMITED"
                 )
             elif error_code == 'MailFromDomainNotVerified':
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.AWS_SES,
                     error_message=error_message,
                     error_code="CONFIGURATION_ERROR"
                 )
             else:
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.AWS_SES,
                     error_message=error_message,
                     error_code="PROVIDER_ERROR"
                 )
@@ -66,34 +86,49 @@ class SESProvider(EmailProvider):
         except Exception as e:
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.AWS_SES,
                 error_message=str(e),
                 error_code="NETWORK_ERROR"
             )
     
     def _send_email_sync(self, message: EmailMessage) -> dict:
         """Synchronous email send for thread pool"""
-        return self.client.send_email(
-            Source=f"{message.from_name or self.from_name} <{message.from_email or self.from_email}>",
-            Destination={
+        # Add correlation ID as a message tag if available
+        correlation_id = get_correlation_context()
+        
+        email_params = {
+            'Source': f"{self.from_name} <{self.from_email}>",
+            'Destination': {
                 'ToAddresses': [message.to_email]
             },
-            Message={
+            'Message': {
                 'Subject': {
                     'Data': message.subject,
                     'Charset': 'UTF-8'
                 },
                 'Body': {
                     'Html': {
-                        'Data': message.html_content,
+                        'Data': message.html_body,
                         'Charset': 'UTF-8'
                     },
                     'Text': {
-                        'Data': message.text_content or '',
+                        'Data': message.text_body or '',
                         'Charset': 'UTF-8'
                     }
                 }
             }
-        )
+        }
+        
+        # Add correlation ID as a tag if available
+        if correlation_id:
+            email_params['Tags'] = [
+                {
+                    'Name': 'correlation_id',
+                    'Value': correlation_id
+                }
+            ]
+        
+        return self.client.send_email(**email_params)
     
     async def send_bulk_emails(self, messages: List[EmailMessage]) -> List[EmailResult]:
         """Send bulk emails via SES"""

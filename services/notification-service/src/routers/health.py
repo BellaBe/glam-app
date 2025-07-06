@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Annotated
 from datetime import datetime
-from shared.api import success_response, CorrelationIdDep, RequestIdDep
+from shared.api import success_response, RequestContextDep
 from shared.errors import GlamBaseError
 from ..dependencies import get_email_service
 from ..services.email_service import EmailService
@@ -11,8 +11,7 @@ router = APIRouter()
 
 @router.get("/health")
 async def health_check(
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep
+    ctx: RequestContextDep
 ):
     """Basic health check"""
     return success_response(
@@ -21,14 +20,13 @@ async def health_check(
             "service": "notification-service",
             "timestamp": datetime.utcnow().isoformat()
         },
-        request_id=request_id,
-        correlation_id=correlation_id
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id
     )
 
 @router.get("/health/detailed")
 async def detailed_health_check(
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
     email_service: Annotated[EmailService, Depends(get_email_service)]
 ):
     """Detailed health check including dependencies"""
@@ -79,30 +77,28 @@ async def detailed_health_check(
     
     return success_response(
         data=health_data,
-        request_id=request_id,
-        correlation_id=correlation_id
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id
     )
 
 @router.get("/ready")
 async def readiness_check(
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep
+    ctx: RequestContextDep
 ):
     """Kubernetes readiness probe"""
     return success_response(
         data={"ready": True},
-        request_id=request_id,
-        correlation_id=correlation_id
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id
     )
 
 @router.get("/live")
 async def liveness_check(
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep
+    ctx: RequestContextDep
 ):
     """Kubernetes liveness probe"""
     return success_response(
         data={"alive": True},
-        request_id=request_id,
-        correlation_id=correlation_id
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id
     )

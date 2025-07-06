@@ -2,23 +2,24 @@
 
 """Event subscribers for notification service with improved context handling."""
 
+import time
 from typing import Optional, Dict, Any
 from pydantic import ValidationError
 
-from shared.events.base_subscriber import DomainEventSubscriber
+from shared.events import DomainEventSubscriber
 from shared.events.notification.types import (
     NotificationCommands,
     SendEmailCommandPayload,
     SendEmailBulkCommandPayload
 )
-from shared.api.correlation import set_correlation_context, extract_correlation_from_event
 
+from shared.events import EventContextManager, EventContext, EventPayload
 from ..schemas import NotificationCreate
 from ..services.notification_service import NotificationService
 
 
 class NotificationEventSubscriber(DomainEventSubscriber):
-    """Base class for notification event subscribers with context handling."""
+    """Base class for notification event subscribers with standardized context handling."""
     
     def __init__(
         self, 
@@ -29,66 +30,71 @@ class NotificationEventSubscriber(DomainEventSubscriber):
     ):
         super().__init__(client, js, logger)
         self.notification_service = notification_service
+        self.context_manager = EventContextManager(logger)
     
-    async def process_event(self, event: dict, headers: Optional[Dict[str, str]] = None):
-        """Process event with proper context setup."""
-        # Extract correlation ID from event
-        correlation_id = extract_correlation_from_event(event)
-        
-        # Set correlation context for the entire request lifecycle
-        if correlation_id:
-            set_correlation_context(correlation_id)
-        
-        # Extract common metadata
-        event_metadata = event.get('metadata', {})
-        
-        self.logger.info(
-            f"Processing {self.event_type} event",
-            extra={
-                "event_id": event.get('event_id'),
-                "event_type": self.event_type,
-                "correlation_id": correlation_id,
-                "source_service": event_metadata.get('source_service'),
-                "idempotency_key": event.get('idempotency_key')
-            }
-        )
+    async def on_event(self, event: Dict[str, Any], headers: Optional[Dict[str, str]] = None):
+        """Entry point for event processing with standardized context."""
+        start_time = time.time()
+        context = None
         
         try:
-            # Delegate to specific handler
-            await self.handle_event(event, correlation_id)
+            # Extract and validate context
+            context = self.context_manager.extract_context(event)
+            
+            # Parse payload
+            payload_data = event.get('payload', {})
+            
+            # Process event with context
+            await self.process_with_context(
+                EventPayload(context=context, data=payload_data)
+            )
+            
+            # Log success
+            duration_ms = (time.time() - start_time) * 1000
+            self.context_manager.log_event_completion(
+                context, 
+                success=True, 
+                duration_ms=duration_ms
+            )
             
         except ValidationError as e:
-            self.logger.error(
-                f"Invalid payload structure: {e}",
-                extra={
-                    "event_id": event.get('event_id'),
-                    "correlation_id": correlation_id,
-                    "validation_errors": e.errors()
-                }
-            )
+            # Log validation error
+            if context:
+                self.context_manager.log_event_completion(
+                    context,
+                    success=False,
+                    duration_ms=(time.time() - start_time) * 1000,
+                    error=e
+                )
+            else:
+                self.logger.error(
+                    f"Validation error processing event: {e}",
+                    extra={'event_id': event.get('event_id'), 'errors': e.errors()}
+                )
             # Return True to ACK and prevent poison message
             return True
             
         except Exception as e:
-            self.logger.error(
-                f"Failed to process {self.event_type}: {str(e)}",
-                extra={
-                    "event_id": event.get('event_id'),
-                    "correlation_id": correlation_id,
-                    "error_type": type(e).__name__
-                },
-                exc_info=True
-            )
+            # Log processing error
+            if context:
+                self.context_manager.log_event_completion(
+                    context,
+                    success=False,
+                    duration_ms=(time.time() - start_time) * 1000,
+                    error=e
+                )
+            else:
+                self.logger.error(
+                    f"Failed to process event: {e}",
+                    extra={'event_id': event.get('event_id')},
+                    exc_info=True
+                )
             # Re-raise to trigger retry logic
             raise
     
-    async def handle_event(self, event: dict, correlation_id: Optional[str]):
-        """Override in subclasses to handle specific event logic."""
+    async def process_with_context(self, payload: EventPayload[Dict[str, Any]]):
+        """Override in subclasses to handle specific event logic with context."""
         raise NotImplementedError
-    
-    async def on_event(self, event: Dict[str, Any], headers: Optional[Dict[str, str]] = None): # type: ignore
-        """Entry point for event processing."""
-        return await self.process_event(event, headers)
 
 
 class SendEmailSubscriber(NotificationEventSubscriber):
@@ -106,22 +112,22 @@ class SendEmailSubscriber(NotificationEventSubscriber):
     def durable_name(self):
         return "notification-send-email"
     
-    async def handle_event(self, event: dict, correlation_id: Optional[str]):
-        """Process send email command."""
-        # Extract and validate payload
-        payload_data = event.get('payload', {})
-        payload = SendEmailCommandPayload(**payload_data)
+    async def process_with_context(self, payload: EventPayload[Dict[str, Any]]):
+        """Process send email command with context."""
+        # Validate payload
+        payload = SendEmailCommandPayload(**payload.data)
         
         self.logger.info(
             "Sending single notification",
             extra={
+                **payload.context.to_dict(),
                 "notification_type": payload.notification_type,
                 "recipient": payload.recipient.email,
                 "shop_id": str(payload.recipient.id),
-                "correlation_id": correlation_id
             }
         )
         
+        # Build notification create with event context
         notification_create = NotificationCreate(
             notification_type=payload.notification_type,
             shop_id=payload.recipient.id,
@@ -130,21 +136,23 @@ class SendEmailSubscriber(NotificationEventSubscriber):
             unsubscribe_token=payload.recipient.unsubscribe_token,
             dynamic_content=payload.recipient.dynamic_content or {},
             extra_metadata={
-                    "source_event": self.event_type,
-                    "event_id": event.get('event_id'),
-                    "correlation_id": correlation_id
-                }
+                "event_context": payload.context.to_dict(),
+                "source_event": payload.context.event_type,
+                "event_id": payload.context.event_id,
+                "correlation_id": payload.context.correlation_id
+            }
         )
         
-        # Create notification through service
-        # The service will use the correlation context that we set
-        notification = await self.notification_service.create_and_send_notification(notification_create)
-
+        # Create and send notification
+        notification = await self.notification_service.create_and_send_notification(
+            notification_create
+        )
+        
         self.logger.info(
             "Notification sent successfully",
             extra={
+                **payload.context.to_dict(),
                 "notification_id": str(notification),
-                "correlation_id": correlation_id
             }
         )
 
@@ -164,46 +172,58 @@ class SendBulkEmailSubscriber(NotificationEventSubscriber):
     def durable_name(self):
         return "notification-send-bulk"
     
-    async def handle_event(self, event: dict, correlation_id: Optional[str]):
-        """Process bulk email command."""
-        # Extract and validate payload
-        payload_data = event.get('payload', {})
-        payload = SendEmailBulkCommandPayload(**payload_data)
+    async def process_with_context(self, payload: EventPayload[Dict[str, Any]]):
+        """Process bulk email command with context."""
+        # Validate payload
+        payload = SendEmailBulkCommandPayload(**payload.data)
         
         self.logger.info(
             "Processing bulk email send",
             extra={
+                **payload.context.to_dict(),
                 "notification_type": payload.notification_type,
                 "recipient_count": len(payload.recipients),
-                "correlation_id": correlation_id
             }
         )
         
-        # Process in batches to avoid overwhelming the system
-        batch_size = 50  # Configure based on your needs
+        # Process in batches
+        batch_size = 50
         total_sent = 0
         total_failed = 0
         
         for i in range(0, len(payload.recipients), batch_size):
             batch = payload.recipients[i:i + batch_size]
+            batch_number = i // batch_size + 1
             
-            # Create notifications for this batch
+            self.logger.info(
+                f"Processing batch {batch_number}",
+                extra={
+                    **payload.context.to_dict(),
+                    "batch_number": batch_number,
+                    "batch_size": len(batch)
+                }
+            )
+            
+            # Process batch
             for recipient in batch:
                 try:
                     notification_create = NotificationCreate(
-                        shop_id=recipient.id,
-                        shop_domain=recipient.domain,
+                        shop_id=recipient.shop_id,
+                        shop_domain=recipient.shop_domain,
                         shop_email=recipient.email,
                         unsubscribe_token=recipient.unsubscribe_token,
                         notification_type=payload.notification_type,
                         dynamic_content=recipient.dynamic_content or {},
                         extra_metadata={
-                            "source_event": self.event_type,
-                            "event_id": event.get('event_id'),
-                            "correlation_id": correlation_id,
-                            "bulk_batch": i // batch_size + 1
+                            "event_context": payload.context.to_dict(),
+                            "source_event": payload.context.event_type,
+                            "event_id": payload.context.event_id,
+                            "correlation_id": payload.context.correlation_id,
+                            "bulk_batch": batch_number,
+                            "bulk_job_id": payload.context.idempotency_key
                         }
-            )
+                    )
+                    
                     await self.notification_service.create_and_send_notification(
                         notification_create
                     )
@@ -211,10 +231,11 @@ class SendBulkEmailSubscriber(NotificationEventSubscriber):
                     
                 except Exception as e:
                     self.logger.error(
-                        f"Failed to send to recipient: {str(e)}",
+                        f"Failed to send to recipient: {e}",
                         extra={
+                            **payload.context.to_dict(),
                             "recipient_email": recipient.email,
-                            "correlation_id": correlation_id
+                            "batch_number": batch_number
                         }
                     )
                     total_failed += 1
@@ -222,9 +243,10 @@ class SendBulkEmailSubscriber(NotificationEventSubscriber):
         self.logger.info(
             "Bulk send completed",
             extra={
-                "correlation_id": correlation_id,
+                **payload.context.to_dict(),
                 "total_sent": total_sent,
                 "total_failed": total_failed,
-                "total_recipients": len(payload.recipients)
+                "total_recipients": len(payload.recipients),
+                "success_rate": total_sent / len(payload.recipients) if payload.recipients else 0
             }
         )

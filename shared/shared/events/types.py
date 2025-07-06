@@ -1,130 +1,202 @@
-# Remove this once full per domain split is implemented
+# shared/events/notification/types.py
+from pydantic import BaseModel, Field
+from typing import Dict, List, Any
+from datetime import datetime
+from uuid import UUID
 
-class Commands:
-    """All commands in the system (cmd.*)"""
-    
-    # Merchant Commands
-    MERCHANT_ONBOARD = "cmd.merchant.onboard"
-    MERCHANT_UPDATE_PROFILE = "cmd.merchant.update_profile"
-    MERCHANT_VERIFY = "cmd.merchant.verify"
-    MERCHANT_SUSPEND = "cmd.merchant.suspend"
-    MERCHANT_ACTIVATE = "cmd.merchant.activate"
-    
-    # Billing Commands
-    BILLING_CREATE_INVOICE = "cmd.billing.create_invoice"
-    BILLING_PROCESS_PAYMENT = "cmd.billing.process_payment"
-    BILLING_ISSUE_REFUND = "cmd.billing.issue_refund"
-    BILLING_CALCULATE_COMMISSION = "cmd.billing.calculate_commission"
-    
-    # Credit Commands
-    CREDIT_CHECK_ELIGIBILITY = "cmd.credit.check_eligibility"
-    CREDIT_APPROVE_LIMIT = "cmd.credit.approve_limit"
-    CREDIT_PROCESS_APPLICATION = "cmd.credit.process_application"
-    CREDIT_UPDATE_SCORE = "cmd.credit.update_score"
-    
-    # Auth Commands
-    AUTH_CREATE_USER = "cmd.auth.create_user"
-    AUTH_VERIFY_EMAIL = "cmd.auth.verify_email"
-    AUTH_RESET_PASSWORD = "cmd.auth.reset_password"
-    AUTH_REVOKE_TOKENS = "cmd.auth.revoke_tokens"
-    
-    # Profile Commands
-    PROFILE_CREATE = "cmd.profile.create"
-    PROFILE_UPDATE = "cmd.profile.update"
-    PROFILE_VERIFY_SELFIE = "cmd.profile.verify_selfie"
-    PROFILE_ANALYZE_BEHAVIOR = "cmd.profile.analyze_behavior"
-    
-    # Analytics Commands
-    ANALYTICS_TRACK_EVENT = "cmd.analytics.track_event"
-    ANALYTICS_GENERATE_REPORT = "cmd.analytics.generate_report"
-    ANALYTICS_EXPORT_DATA = "cmd.analytics.export_data"
-    
-    # Scheduler Commands
-    SCHEDULER_CREATE_JOB = "cmd.scheduler.create_job"
-    SCHEDULER_CANCEL_JOB = "cmd.scheduler.cancel_job"
-    SCHEDULER_UPDATE_JOB = "cmd.scheduler.update_job"
-    
-    # Webhook Commands
-    WEBHOOK_REGISTER = "cmd.webhook.register"
-    WEBHOOK_DELIVER = "cmd.webhook.deliver"
-    WEBHOOK_RETRY = "cmd.webhook.retry"
+from shared.events.base import EventWrapper
+from shared.events.context import EventContext
 
 
-class Events:
-    """All events in the system (evt.*)"""
-    
-    # Job Events (from catalog-job-processor)
-    JOB_CREATED = "evt.job.created"
-    JOB_STARTED = "evt.job.started"
-    JOB_PROGRESS_UPDATED = "evt.job.progress.updated"
-    JOB_COMPLETED = "evt.job.completed"
-    JOB_FAILED = "evt.job.failed"
-    JOB_RETRY_SCHEDULED = "evt.job.retry.scheduled"
-    
-    # Merchant Events
-    MERCHANT_ONBOARDED = "evt.merchant.onboarded"
-    MERCHANT_VERIFIED = "evt.merchant.verified"
-    MERCHANT_PROFILE_UPDATED = "evt.merchant.profile.updated"
-    MERCHANT_SUSPENDED = "evt.merchant.suspended"
-    MERCHANT_ACTIVATED = "evt.merchant.activated"
-    MERCHANT_TIER_CHANGED = "evt.merchant.tier.changed"
-    
-    # Billing Events
-    BILLING_INVOICE_CREATED = "evt.billing.invoice.created"
-    BILLING_PAYMENT_PROCESSED = "evt.billing.payment.processed"
-    BILLING_PAYMENT_FAILED = "evt.billing.payment.failed"
-    BILLING_REFUND_ISSUED = "evt.billing.refund.issued"
-    BILLING_COMMISSION_CALCULATED = "evt.billing.commission.calculated"
-    BILLING_SUBSCRIPTION_UPDATED = "evt.billing.subscription.updated"
-    
-    # Credit Events
-    CREDIT_ELIGIBILITY_CHECKED = "evt.credit.eligibility.checked"
-    CREDIT_LIMIT_APPROVED = "evt.credit.limit.approved"
-    CREDIT_LIMIT_REJECTED = "evt.credit.limit.rejected"
-    CREDIT_APPLICATION_PROCESSED = "evt.credit.application.processed"
-    CREDIT_SCORE_UPDATED = "evt.credit.score.updated"
-    CREDIT_LIMIT_UTILIZED = "evt.credit.limit.utilized"
-    
-    # Auth Events
-    AUTH_USER_CREATED = "evt.auth.user.created"
-    AUTH_USER_VERIFIED = "evt.auth.user.verified"
-    AUTH_PASSWORD_RESET = "evt.auth.password.reset"
-    AUTH_LOGIN_SUCCESSFUL = "evt.auth.login.successful"
-    AUTH_LOGIN_FAILED = "evt.auth.login.failed"
-    AUTH_TOKENS_REVOKED = "evt.auth.tokens.revoked"
-    
-    # Profile Events
-    PROFILE_CREATED = "evt.profile.created"
-    PROFILE_UPDATED = "evt.profile.updated"
-    PROFILE_SELFIE_VERIFIED = "evt.profile.selfie.verified"
-    PROFILE_SELFIE_REJECTED = "evt.profile.selfie.rejected"
-    PROFILE_BEHAVIOR_ANALYZED = "evt.profile.behavior.analyzed"
-    PROFILE_RISK_SCORE_UPDATED = "evt.profile.risk_score.updated"
-    
-    # Notification Events
+class NotificationCommands:
+    """Notification command types"""
+    NOTIFICATION_SEND_EMAIL = "cmd.notification.send_email"
+    NOTIFICATION_SEND_BULK = "cmd.notification.bulk_send"
+
+
+class NotificationEvents:
+    """Notification event types"""
     NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent"
-    NOTIFICATION_DELIVERY_FAILED = "evt.notification.delivery.failed"
-    
-    # Analytics Events
-    ANALYTICS_EVENT_TRACKED = "evt.analytics.event.tracked"
-    ANALYTICS_REPORT_GENERATED = "evt.analytics.report.generated"
-    ANALYTICS_EXPORT_COMPLETED = "evt.analytics.export.completed"
-    ANALYTICS_ANOMALY_DETECTED = "evt.analytics.anomaly.detected"
-    
-    # Rate Limit Events
-    RATE_LIMIT_EXCEEDED = "evt.rate_limit.exceeded"
-    RATE_LIMIT_WARNING = "evt.rate_limit.warning"
-    RATE_LIMIT_RESET = "evt.rate_limit.reset"
-    
-    # Webhook Events
-    WEBHOOK_REGISTERED = "evt.webhook.registered"
-    WEBHOOK_DELIVERED = "evt.webhook.delivered"
-    WEBHOOK_DELIVERY_FAILED = "evt.webhook.delivery.failed"
-    WEBHOOK_RETRY_SCHEDULED = "evt.webhook.retry.scheduled"
-    
-    # Scheduler Events
-    SCHEDULER_JOB_CREATED = "evt.scheduler.job.created"
-    SCHEDULER_JOB_EXECUTED = "evt.scheduler.job.executed"
-    SCHEDULER_JOB_FAILED = "evt.scheduler.job.failed"
-    SCHEDULER_JOB_CANCELLED = "evt.scheduler.job.cancelled"
+    NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed"
+    NOTIFICATION_BULK_SEND_COMPLETED = "evt.notification.bulk_send.completed"
 
+
+class Recipient(BaseModel):
+    shop_id: UUID
+    shop_domain: str
+    email: str
+    unsubscribe_token: str
+    dynamic_content: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SendEmailCommandPayload(BaseModel):
+    """Payload for sending a single email"""
+    notification_type: str
+    recipient: Recipient
+
+
+class SendEmailBulkCommandPayload(BaseModel):
+    """Payload for sending bulk emails by notification type"""
+    notification_type: str
+    recipients: List[Recipient]
+
+
+# Event payloads
+class EmailSentEventPayload(BaseModel):
+    """Payload for NOTIFICATION_EMAIL_SENT event"""
+    notification_id: UUID
+    shop_id: UUID
+    notification_type: str
+    provider: str
+    provider_message_id: str
+    sent_at: datetime
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    class Config:
+        json_encoders = {
+            UUID: str,
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class EmailFailedEventPayload(BaseModel):
+    """Payload for NOTIFICATION_EMAIL_FAILED event"""
+    notification_id: UUID
+    shop_id: UUID
+    notification_type: str
+    error: str
+    error_code: str
+    retry_count: int
+    will_retry: bool
+    failed_at: datetime
+
+
+class BulkCompletedEventPayload(BaseModel):
+    """Payload for bulk send completion"""
+    bulk_job_id: UUID
+    notification_type: str
+    total_recipients: int
+    total_sent: int
+    total_failed: int
+    total_skipped: int
+    duration_seconds: float
+    completed_at: datetime
+
+
+# Now use the generic EventWrapper with specific payload types
+class SendEmailCommand(EventWrapper[SendEmailCommandPayload]):
+    """Command to send a single email"""
+    subject: str = NotificationCommands.NOTIFICATION_SEND_EMAIL
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,
+        notification_type: str,
+        recipient: Recipient
+    ) -> "SendEmailCommand":
+        """Create command with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=SendEmailCommandPayload(
+                notification_type=notification_type,
+                recipient=recipient
+            )
+        )
+
+
+class SendEmailBulkCommand(EventWrapper[SendEmailBulkCommandPayload]):
+    """Command to send bulk emails with same notification type"""
+    subject: str = NotificationCommands.NOTIFICATION_SEND_BULK
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,
+        notification_type: str,
+        recipients: List[Recipient]
+    ) -> "SendEmailBulkCommand":
+        """Create bulk command with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=SendEmailBulkCommandPayload(
+                notification_type=notification_type,
+                recipients=recipients
+            )
+        )
+
+
+class EmailSentEvent(EventWrapper[EmailSentEventPayload]):
+    """Event emitted when an email is successfully sent"""
+    subject: str = NotificationEvents.NOTIFICATION_EMAIL_SENT
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,
+        payload: EmailSentEventPayload
+    ) -> "EmailSentEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )
+
+
+class EmailDeliveryFailedEvent(EventWrapper[EmailFailedEventPayload]):
+    """Event emitted when email delivery fails"""
+    subject: str = NotificationEvents.NOTIFICATION_EMAIL_FAILED
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,
+        payload: EmailFailedEventPayload
+    ) -> "EmailDeliveryFailedEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )
+
+
+class BulkSendCompletedEvent(EventWrapper[BulkCompletedEventPayload]):
+    """Event emitted when a bulk email send operation completes"""
+    subject: str = NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED
+    
+    @classmethod
+    def create_from_context(
+        cls,
+        context: EventContext,
+        payload: BulkCompletedEventPayload
+    ) -> "BulkSendCompletedEvent":
+        """Create event with context"""
+        return cls(
+            subject=cls.subject,
+            idempotency_key=context.idempotency_key,
+            event_id=context.event_id,
+            correlation_id=context.correlation_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            data=payload
+        )

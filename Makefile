@@ -163,6 +163,9 @@ run-non-fastapi-service: ## SERVICE=<folder>
 
 # Run ALL services locally with hot-reload (Ctrl-C to kill)
 
+clean_env: ## Remove all .env files in services
+	unset $(env | grep ^NOTIFICATION_ | cut -d= -f1) ## Unset all notification service env vars
+
 # ---------- Production (everything in docker) ----------
 
 prod: ## docker-compose up -d

@@ -14,7 +14,6 @@ from .services.notification_service import NotificationService
 from .services.template_service import TemplateService
 from .services.email_service import EmailService
 from .events.publishers import NotificationEventPublisher
-from .utils.template_engine import TemplateEngine
 
 # ---------------------------------------------------------------- shared --- #
 # Re-export shared dependencies for convenience
@@ -37,7 +36,6 @@ __all__ = [
     "NotificationServiceDep",
     "TemplateServiceDep",
     "EmailServiceDep",
-    "TemplateEngineDep",
 ]
 
 # --------------------------- core singletons via lifecycle ----------------- #
@@ -68,10 +66,6 @@ MessagingDep = Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]
 PublisherDep = Annotated[NotificationEventPublisher, Depends(get_publisher)]
 
 # --------------------------------- utils ----------------------------------- #
-def get_template_engine(lifecycle: LifecycleDep) -> TemplateEngine:
-    if not lifecycle.template_engine:
-        raise HTTPException(500, "TemplateEngine not initialized")
-    return lifecycle.template_engine
 
 def get_email_service(lifecycle: LifecycleDep) -> EmailService:
     if not lifecycle.email_service:
@@ -80,7 +74,6 @@ def get_email_service(lifecycle: LifecycleDep) -> EmailService:
 
 
 # Type aliases for utils
-TemplateEngineDep = Annotated[TemplateEngine, Depends(get_template_engine)]
 EmailServiceDep = Annotated[EmailService, Depends(get_email_service)]
 
 # --------------------------- domain services ------------------------------- #

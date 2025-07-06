@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from shared.utils.logger import ServiceLogger
+from shared.errors.utils import is_retryable_error
 
 from .email_service import EmailService
 from .template_service import TemplateService
@@ -263,7 +264,7 @@ class NotificationService:
                 error=str(e),
                 error_code=getattr(e, 'code', 'UNKNOWN_ERROR'),
                 retry_count=1,
-                will_retry=self._should_retry(e),
+                will_retry=is_retryable_error(e),
                 correlation_id=(notification.extra_metadata or {}).get("correlation_id", None)
             )
             
@@ -300,20 +301,6 @@ class NotificationService:
         return await self.send_notification(
             notification=notification
         )
-    
-    def _should_retry(self, error: Exception) -> bool:
-        """Determine if error is retryable"""
-        
-        # List of retryable error types
-        retryable_errors = {
-            "PROVIDER_TIMEOUT",
-            "PROVIDER_RATE_LIMITED",
-            "NETWORK_ERROR",
-            "TEMPORARY_FAILURE"
-        }
-        
-        error_code = getattr(error, 'code', None)
-        return error_code in retryable_errors
     
     async def list_notifications(self, offset, limit, shop_id: Optional[UUID] = None, status: Optional[str] = None, notification_type: Optional[str] = None) -> tuple[list[Notification], int]:
         """

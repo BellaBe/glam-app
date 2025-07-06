@@ -6,14 +6,11 @@ from shared.api import (
     ApiResponse,
     success_response,
     paginated_response,
-    Links
-)
-from src.dependencies import (
-    NotificationServiceDep,
-    RequestIdDep,
-    CorrelationIdDep,
+    Links,
+    RequestContextDep,
     PaginationDep
 )
+from src.dependencies import NotificationServiceDep
 
 from src.schemas import (
     NotificationResponse,
@@ -21,9 +18,7 @@ from src.schemas import (
     NotificationDetailResponse
 )
 
-
 router = APIRouter(tags=["notifications"])
-
 
 @router.get(
     "",
@@ -33,8 +28,7 @@ router = APIRouter(tags=["notifications"])
 async def list_notifications(
     svc: NotificationServiceDep,
     pagination: PaginationDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
     shop_id: Optional[UUID] = Query(None),
     status: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
@@ -55,13 +49,12 @@ async def list_notifications(
         limit=pagination.limit,
         total=total,
         base_url="/api/v1/notifications",
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         shop_id=shop_id,
         status=status,
         type=type
     )
-
 
 @router.get(
     "/{notification_id}",
@@ -71,8 +64,7 @@ async def list_notifications(
 async def get_notification(
     notification_id: UUID,
     svc: NotificationServiceDep,
-    request_id: RequestIdDep,
-    correlation_id: CorrelationIdDep,
+    ctx: RequestContextDep,
 ):
     """Get detailed notification information."""
     notification = await svc.get_notification(notification_id)
@@ -83,7 +75,7 @@ async def get_notification(
     
     return success_response(
         data=notification,
-        request_id=request_id,
-        correlation_id=correlation_id,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
         links=Links(self=f"/api/v1/notifications/{notification_id}")
     )

@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from shared.errors.utils import classify_http_error
 from shared.api.correlation import add_correlation_header
 from .base import EmailProvider, EmailMessage, EmailResult
+from src.models import NotificationProvider
 import asyncio
 
 class SendGridProvider(EmailProvider):
@@ -34,13 +35,13 @@ class SendGridProvider(EmailProvider):
                             "to": [{"email": message.to_email}]
                         }],
                         "from": {
-                            "email": message.from_email or self.from_email,
-                            "name": message.from_name or self.from_name
+                            "email": self.from_email,
+                            "name": self.from_name
                         },
                         "subject": message.subject,
                         "content": [
-                            {"type": "text/html", "value": message.html_content},
-                            {"type": "text/plain", "value": message.text_content or ""}
+                            {"type": "text/html", "value": message.html_body},
+                            {"type": "text/plain", "value": message.text_body or ""}
                         ]
                     },
                     timeout=self.timeout
@@ -49,6 +50,7 @@ class SendGridProvider(EmailProvider):
                 if response.status_code in (200, 202):
                     return EmailResult(
                         success=True,
+                        provider=NotificationProvider.SENDGRID,
                         provider_message_id=response.headers.get('X-Message-Id')
                     )
                 else:
@@ -59,6 +61,7 @@ class SendGridProvider(EmailProvider):
                     
                     return EmailResult(
                         success=False,
+                        provider=NotificationProvider.SENDGRID,
                         error_message=error_message,
                         error_code=f"SENDGRID_{response.status_code}"
                     )
@@ -69,12 +72,14 @@ class SendGridProvider(EmailProvider):
             
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.SENDGRID,
                 error_message=str(infra_error),
                 error_code=infra_error.code
             )
         except Exception as e:
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.SENDGRID,
                 error_message=str(e),
                 error_code="NETWORK_ERROR"
             )
@@ -89,10 +94,15 @@ class SendGridProvider(EmailProvider):
     async def health_check(self) -> bool:
         """Check SendGrid API health"""
         try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            headers = add_correlation_header(headers)
+            
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.base_url}/scopes",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    headers=headers,
                     timeout=5
                 )
                 return response.status_code == 200

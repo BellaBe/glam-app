@@ -62,10 +62,3 @@ DEFAULT_TEMPLATES = {
         "optional_vars": []
     }
 }
-
-# Rate limits per notification type
-TYPE_RATE_LIMITS = {
-    NotificationType.BILLING_LOW_CREDITS: {"total_limit": 5},
-    NotificationType.BILLING_ZERO_BALANCE: {"total_limit": 2},
-    NotificationType.BILLING_DEACTIVATED: {"total_limit": 7}
-}

@@ -3,7 +3,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Dict, Any
 from .base import EmailProvider, EmailMessage, EmailResult
+from src.models import NotificationProvider
+from shared.api.correlation import get_correlation_context
 import asyncio
+import uuid
 
 class SMTPProvider(EmailProvider):
     """SMTP email provider"""
@@ -14,7 +17,7 @@ class SMTPProvider(EmailProvider):
         self.port = config.get('port', 1025)
         self.username = config.get('username', '')
         self.password = config.get('password', '')
-        self.use_tls = config.get('use_tls', True)
+        self.use_tls = config.get('use_tls', False)  # MailHog doesn't need TLS
         self.timeout = config.get('timeout', 30)
     
     async def send_email(self, message: EmailMessage) -> EmailResult:
@@ -23,15 +26,24 @@ class SMTPProvider(EmailProvider):
             # Create message
             msg = MIMEMultipart('alternative')
             msg['Subject'] = message.subject
-            msg['From'] = f"{message.from_name or self.from_name} <{message.from_email or self.from_email}>"
+            msg['From'] = f"{self.from_name} <{self.from_email}>"
             msg['To'] = message.to_email
             
+            # Add correlation ID as a custom header
+            correlation_id = get_correlation_context()
+            if correlation_id:
+                msg['X-Correlation-ID'] = correlation_id
+            
+            # Generate message ID if not already set
+            if 'Message-ID' not in msg:
+                msg['Message-ID'] = f"<{uuid.uuid4()}@{self.from_email.split('@')[1]}>"
+            
             # Add text and HTML parts
-            if message.text_content:
-                text_part = MIMEText(message.text_content, 'plain', 'utf-8')
+            if message.text_body:
+                text_part = MIMEText(message.text_body, 'plain', 'utf-8')
                 msg.attach(text_part)
             
-            html_part = MIMEText(message.html_content, 'html', 'utf-8')
+            html_part = MIMEText(message.html_body, 'html', 'utf-8')
             msg.attach(html_part)
             
             # Send email
@@ -51,24 +63,28 @@ class SMTPProvider(EmailProvider):
                 if failed_recipients:
                     return EmailResult(
                         success=False,
+                        provider=NotificationProvider.SMTP,
                         error_message=f"Failed to send to {message.to_email}",
                         error_code="SMTP_SEND_FAILED"
                     )
                 
                 return EmailResult(
                     success=True,
+                    provider=NotificationProvider.SMTP,
                     provider_message_id=msg['Message-ID']
                 )
                 
         except aiosmtplib.SMTPAuthenticationError as e:
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.SMTP,
                 error_message=str(e),
                 error_code="AUTHENTICATION_ERROR"
             )
         except aiosmtplib.SMTPTimeoutError as e:
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.SMTP,
                 error_message=str(e),
                 error_code="PROVIDER_TIMEOUT"
             )
@@ -77,18 +93,21 @@ class SMTPProvider(EmailProvider):
             if e.code == 550:  # Recipient rejected
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.SMTP,
                     error_message=str(e),
                     error_code="INVALID_RECIPIENT"
                 )
             else:
                 return EmailResult(
                     success=False,
+                    provider=NotificationProvider.SMTP,
                     error_message=str(e),
                     error_code="SMTP_ERROR"
                 )
         except Exception as e:
             return EmailResult(
                 success=False,
+                provider=NotificationProvider.SMTP,
                 error_message=str(e),
                 error_code="NETWORK_ERROR"
             )
@@ -112,15 +131,24 @@ class SMTPProvider(EmailProvider):
                     # Create message
                     msg = MIMEMultipart('alternative')
                     msg['Subject'] = message.subject
-                    msg['From'] = f"{message.from_name or self.from_name} <{message.from_email or self.from_email}>"
+                    msg['From'] = f"{self.from_name} <{self.from_email}>"
                     msg['To'] = message.to_email
                     
+                    # Add correlation ID
+                    correlation_id = get_correlation_context()
+                    if correlation_id:
+                        msg['X-Correlation-ID'] = correlation_id
+                    
+                    # Generate message ID
+                    if 'Message-ID' not in msg:
+                        msg['Message-ID'] = f"<{uuid.uuid4()}@{self.from_email.split('@')[1]}>"
+                    
                     # Add parts
-                    if message.text_content:
-                        text_part = MIMEText(message.text_content, 'plain', 'utf-8')
+                    if message.text_body:
+                        text_part = MIMEText(message.text_body, 'plain', 'utf-8')
                         msg.attach(text_part)
                     
-                    html_part = MIMEText(message.html_content, 'html', 'utf-8')
+                    html_part = MIMEText(message.html_body, 'html', 'utf-8')
                     msg.attach(html_part)
                     
                     # Send
@@ -131,17 +159,20 @@ class SMTPProvider(EmailProvider):
                         if failed:
                             results.append(EmailResult(
                                 success=False,
+                                provider=NotificationProvider.SMTP,
                                 error_message=f"Failed to send to {message.to_email}",
                                 error_code="SMTP_SEND_FAILED"
                             ))
                         else:
                             results.append(EmailResult(
                                 success=True,
+                                provider=NotificationProvider.SMTP,
                                 provider_message_id=msg['Message-ID']
                             ))
                     except Exception as e:
                         results.append(EmailResult(
                             success=False,
+                            provider=NotificationProvider.SMTP,
                             error_message=str(e),
                             error_code="SMTP_ERROR"
                         ))
@@ -150,6 +181,7 @@ class SMTPProvider(EmailProvider):
             return [
                 EmailResult(
                     success=False,
+                    provider=NotificationProvider.SMTP,
                     error_message=str(e),
                     error_code="NETWORK_ERROR"
                 ) for _ in messages
