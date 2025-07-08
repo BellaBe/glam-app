@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  webhook-service:
+    build:
+      context: ../..
+      dockerfile: services/webhook-service/Dockerfile
+    container_name: webhook-service
+    ports:
+      - "8012:8012"
+    environment:
+      - SERVICE_NAME=webhook-service
+      - SERVICE_PORT=8012
+      - DATABASE_URL=postgresql+asyncpg://webhook:webhook@postgres:5432/webhook_db
+      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
+      - SHOPIFY_WEBHOOK_SECRET=${SHOPIFY_WEBHOOK_SECRET}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+      - nats
+    networks:
+      - glam-network
+    restart: unless-stopped
+
+networks:
+  glam-network:
+    external: true

@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter, Depends
 from typing import Annotated
-from datetime import datetime
+from datetime import datetime, timezone
 from shared.api import success_response, RequestContextDep
 from shared.database import get_database_health
 from ..dependencies import get_scheduler_manager, get_schedule_repository
@@ -22,7 +22,7 @@ async def health_check(
         data={
             "status": "healthy",
             "service": "scheduler-service",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         },
         request_id=ctx.request_id,
         correlation_id=ctx.correlation_id
