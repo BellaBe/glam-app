@@ -1,11 +1,16 @@
 # services/notification-service/src/events/publishers.py
-from shared.events import Streams, DomainEventPublisher, EventContextManager, EventContext
+from shared.events import (
+    Streams,
+    DomainEventPublisher,
+    EventContextManager,
+    EventContext,
+)
 from shared.events.base_publisher import DomainEventPublisher
 from shared.events.notification.types import (
     NotificationEvents,
     EmailSentEventPayload,
     EmailFailedEventPayload,
-    BulkCompletedEventPayload
+    BulkCompletedEventPayload,
 )
 from typing import Optional, Dict, Any
 from uuid import UUID
@@ -14,23 +19,24 @@ from datetime import datetime, timezone
 
 class NotificationEventPublisher(DomainEventPublisher):
     """Publisher for notification service events with standardized context"""
+
     domain_stream = Streams.NOTIFICATION
     service_name_override = "notification-service"
-    
+
     def __init__(self, client, js, logger=None):
         super().__init__(client, js, logger)
         self.context_manager = EventContextManager(logger or self.logger)
-    
+
     async def publish_email_sent(
         self,
         notification_id: UUID,
-        shop_id: UUID,
+        merchant_id: UUID,
         notification_type: str,
         provider: str,
         provider_message_id: str,
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        original_event_id: Optional[str] = None
+        original_event_id: Optional[str] = None,
     ) -> str:
         """Publish email sent event with typed payload and context"""
         # Create event context
@@ -43,38 +49,35 @@ class NotificationEventPublisher(DomainEventPublisher):
             metadata={
                 **(metadata or {}),
                 "notification_id": str(notification_id),
-                "triggered_by": original_event_id
-            }
+                "triggered_by": original_event_id,
+            },
         )
-        
+
         # Create typed payload
         payload = EmailSentEventPayload(
             notification_id=notification_id,
-            shop_id=shop_id,
+            merchant_id=merchant_id,
             notification_type=notification_type,
             provider=provider,
             provider_message_id=provider_message_id,
             sent_at=datetime.now(timezone.utc),
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
-        
+
         # Log event publication
-        self.logger.info(
-            f"Publishing {context.event_type}",
-            extra=context.to_dict()
-        )
-        
+        self.logger.info(f"Publishing {context.event_type}", extra=context.to_dict())
+
         return await self.publish_event_response(
             NotificationEvents.NOTIFICATION_EMAIL_SENT,
             payload.model_dump(),
             correlation_id=correlation_id,
-            metadata=context.metadata
+            metadata=context.metadata,
         )
-    
+
     async def publish_email_failed(
         self,
         notification_id: UUID,
-        shop_id: UUID,
+        merchant_id: UUID,
         notification_type: str,
         error: str,
         error_code: str,
@@ -82,7 +85,7 @@ class NotificationEventPublisher(DomainEventPublisher):
         will_retry: bool,
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        original_event_id: Optional[str] = None
+        original_event_id: Optional[str] = None,
     ) -> str:
         """Publish email failed event with typed payload and context"""
         # Create event context
@@ -96,39 +99,35 @@ class NotificationEventPublisher(DomainEventPublisher):
                 **(metadata or {}),
                 "notification_id": str(notification_id),
                 "triggered_by": original_event_id,
-                "will_retry": will_retry
-            }
+                "will_retry": will_retry,
+            },
         )
-        
+
         # Create typed payload
         payload = EmailFailedEventPayload(
             notification_id=notification_id,
-            shop_id=shop_id,
+            merchant_id=merchant_id,
             notification_type=notification_type,
             error=error,
             error_code=error_code,
             retry_count=retry_count,
             will_retry=will_retry,
-            failed_at=datetime.now(timezone.utc)
+            failed_at=datetime.now(timezone.utc),
         )
-        
+
         # Log event publication
         self.logger.warning(
             f"Publishing {context.event_type}",
-            extra={
-                **context.to_dict(),
-                "error": error,
-                "error_code": error_code
-            }
+            extra={**context.to_dict(), "error": error, "error_code": error_code},
         )
-        
+
         return await self.publish_event_response(
             NotificationEvents.NOTIFICATION_EMAIL_FAILED,
             payload.model_dump(),
             correlation_id=correlation_id,
-            metadata=context.metadata
+            metadata=context.metadata,
         )
-    
+
     async def publish_bulk_completed(
         self,
         bulk_job_id: UUID,
@@ -140,7 +139,7 @@ class NotificationEventPublisher(DomainEventPublisher):
         duration_seconds: float,
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        original_event_id: Optional[str] = None
+        original_event_id: Optional[str] = None,
     ) -> str:
         """Publish bulk send completed event with context"""
         # Create event context
@@ -155,10 +154,12 @@ class NotificationEventPublisher(DomainEventPublisher):
                 **(metadata or {}),
                 "bulk_job_id": str(bulk_job_id),
                 "triggered_by": original_event_id,
-                "success_rate": total_sent / total_recipients if total_recipients else 0
-            }
+                "success_rate": (
+                    total_sent / total_recipients if total_recipients else 0
+                ),
+            },
         )
-        
+
         # Create typed payload
         payload = BulkCompletedEventPayload(
             bulk_job_id=bulk_job_id,
@@ -168,9 +169,9 @@ class NotificationEventPublisher(DomainEventPublisher):
             total_failed=total_failed,
             total_skipped=total_skipped,
             duration_seconds=duration_seconds,
-            completed_at=datetime.now(timezone.utc)
+            completed_at=datetime.now(timezone.utc),
         )
-        
+
         # Log event publication
         self.logger.info(
             f"Publishing {context.event_type}",
@@ -178,15 +179,15 @@ class NotificationEventPublisher(DomainEventPublisher):
                 **context.to_dict(),
                 "total_sent": total_sent,
                 "total_failed": total_failed,
-                "duration_seconds": duration_seconds
-            }
+                "duration_seconds": duration_seconds,
+            },
         )
-        
+
         return await self.publish_event_response(
             NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED,
             payload.model_dump(),
             correlation_id=correlation_id,
-            metadata=context.metadata
+            metadata=context.metadata,
         )
 
 

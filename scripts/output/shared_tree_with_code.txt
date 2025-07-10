@@ -2397,7 +2397,7 @@ shared/
 │   │           message: str,
 │   │           *,
 │   │           notification_id: Optional[UUID] = None,
-│   │           shop_id: Optional[UUID] = None,
+│   │           merchant_id: Optional[UUID] = None,
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(
@@ -2407,8 +2407,8 @@ shared/
 │   │               **kwargs
 │   │           )
 │   │           
-│   │           if shop_id:
-│   │               self.details["shop_id"] = shop_id
+│   │           if merchant_id:
+│   │               self.details["merchant_id"] = merchant_id
 │   │   
 │   │   
 │   │   class TemplateNotFoundError(NotFoundError):
@@ -3132,7 +3132,7 @@ shared/
 │   │   │   
 │   │   │   
 │   │   │   def create_send_email_command(
-│   │   │       shop_id: UUID,
+│   │   │       merchant_id: UUID,
 │   │   │       shop_domain: str,
 │   │   │       recipient_email: str,
 │   │   │       notification_type: str,
@@ -3146,13 +3146,13 @@ shared/
 │   │   │       Create a send email command with idempotency support and context.
 │   │   │       
 │   │   │       If no idempotency_key provided, generates one based on:
-│   │   │       - shop_id + notification_type + recipient_email + timestamp (hourly bucket)
+│   │   │       - merchant_id + notification_type + recipient_email + timestamp (hourly bucket)
 │   │   │       This prevents duplicate emails within the same hour.
 │   │   │       """
 │   │   │       if not idempotency_key:
 │   │   │           # Create deterministic key with hourly bucket to prevent duplicates
 │   │   │           hour_bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
-│   │   │           key_data = f"{shop_id}:{notification_type}:{recipient_email}:{hour_bucket}"
+│   │   │           key_data = f"{merchant_id}:{notification_type}:{recipient_email}:{hour_bucket}"
 │   │   │           idempotency_key = f"send_{hashlib.sha256(key_data.encode()).hexdigest()[:16]}"
 │   │   │       
 │   │   │       # Create event context
@@ -3165,7 +3165,7 @@ shared/
 │   │   │       )
 │   │   │       
 │   │   │       recipient = Recipient(
-│   │   │           shop_id=shop_id,
+│   │   │           merchant_id=merchant_id,
 │   │   │           shop_domain=shop_domain,
 │   │   │           email=recipient_email,
 │   │   │           unsubscribe_token=unsubscribe_token,
@@ -3212,7 +3212,7 @@ shared/
 │   │   │       # Convert recipient dicts to typed objects
 │   │   │       typed_recipients = [
 │   │   │           Recipient(
-│   │   │               shop_id=r["shop_id"],
+│   │   │               merchant_id=r["merchant_id"],
 │   │   │               shop_domain=r["shop_domain"],
 │   │   │               email=r["email"],
 │   │   │               unsubscribe_token=r["unsubscribe_token"],
@@ -3257,7 +3257,7 @@ shared/
 │   │       
 │   │       
 │   │       class Recipient(BaseModel):
-│   │           shop_id: UUID
+│   │           merchant_id: UUID
 │   │           shop_domain: str
 │   │           email: str
 │   │           unsubscribe_token: str
@@ -3280,7 +3280,7 @@ shared/
 │   │       class EmailSentEventPayload(BaseModel):
 │   │           """Payload for NOTIFICATION_EMAIL_SENT event"""
 │   │           notification_id: UUID
-│   │           shop_id: UUID
+│   │           merchant_id: UUID
 │   │           notification_type: str
 │   │           provider: str
 │   │           provider_message_id: str
@@ -3297,7 +3297,7 @@ shared/
 │   │       class EmailFailedEventPayload(BaseModel):
 │   │           """Payload for NOTIFICATION_EMAIL_FAILED event"""
 │   │           notification_id: UUID
-│   │           shop_id: UUID
+│   │           merchant_id: UUID
 │   │           notification_type: str
 │   │           error: str
 │   │           error_code: str
@@ -4051,7 +4051,7 @@ shared/
 │       
 │       
 │       class Recipient(BaseModel):
-│           shop_id: UUID
+│           merchant_id: UUID
 │           shop_domain: str
 │           email: str
 │           unsubscribe_token: str
@@ -4074,7 +4074,7 @@ shared/
 │       class EmailSentEventPayload(BaseModel):
 │           """Payload for NOTIFICATION_EMAIL_SENT event"""
 │           notification_id: UUID
-│           shop_id: UUID
+│           merchant_id: UUID
 │           notification_type: str
 │           provider: str
 │           provider_message_id: str
@@ -4091,7 +4091,7 @@ shared/
 │       class EmailFailedEventPayload(BaseModel):
 │           """Payload for NOTIFICATION_EMAIL_FAILED event"""
 │           notification_id: UUID
-│           shop_id: UUID
+│           merchant_id: UUID
 │           notification_type: str
 │           error: str
 │           error_code: str

@@ -12,33 +12,30 @@ from .base import NotFoundError, ValidationError, InfrastructureError, ConflictE
 
 class NotificationNotFoundError(NotFoundError):
     """Notification not found."""
-    
+
     code = "NOTIFICATION_NOT_FOUND"
-    
+
     def __init__(
         self,
         message: str,
         *,
         notification_id: Optional[UUID] = None,
-        shop_id: Optional[UUID] = None,
+        merchant_id: Optional[UUID] = None,
         **kwargs
     ):
         super().__init__(
-            message,
-            resource="notification",
-            resource_id=notification_id,
-            **kwargs
+            message, resource="notification", resource_id=notification_id, **kwargs
         )
-        
-        if shop_id:
-            self.details["shop_id"] = shop_id
+
+        if merchant_id:
+            self.details["merchant_id"] = merchant_id
 
 
 class TemplateNotFoundError(NotFoundError):
     """Email template not found."""
-    
+
     code = "TEMPLATE_NOT_FOUND"
-    
+
     def __init__(
         self,
         message: str,
@@ -48,21 +45,18 @@ class TemplateNotFoundError(NotFoundError):
         **kwargs
     ):
         super().__init__(
-            message,
-            resource="template",
-            resource_id=template_name,
-            **kwargs
+            message, resource="template", resource_id=template_name, **kwargs
         )
-        
+
         if template_type:
             self.details["template_type"] = template_type
 
 
 class TemplateRenderError(ValidationError):
     """Failed to render email template."""
-    
+
     code = "TEMPLATE_RENDER_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -73,7 +67,7 @@ class TemplateRenderError(ValidationError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if template_name:
             self.details["template_name"] = template_name
         if missing_variables:
@@ -84,9 +78,9 @@ class TemplateRenderError(ValidationError):
 
 class InvalidRecipientError(ValidationError):
     """Invalid recipient email address."""
-    
+
     code = "INVALID_RECIPIENT"
-    
+
     def __init__(
         self,
         message: str,
@@ -96,36 +90,27 @@ class InvalidRecipientError(ValidationError):
         **kwargs
     ):
         super().__init__(message, field="recipient", value=recipient, **kwargs)
-        
+
         if reason:
             self.details["reason"] = reason
 
 
 class PreferencesNotFoundError(NotFoundError):
     """Notification preferences not found."""
-    
+
     code = "PREFERENCES_NOT_FOUND"
-    
-    def __init__(
-        self,
-        message: str,
-        *,
-        user_id: Optional[str] = None,
-        **kwargs
-    ):
+
+    def __init__(self, message: str, *, user_id: Optional[str] = None, **kwargs):
         super().__init__(
-            message,
-            resource="notification_preferences",
-            resource_id=user_id,
-            **kwargs
+            message, resource="notification_preferences", resource_id=user_id, **kwargs
         )
 
 
 class EmailProviderError(InfrastructureError):
     """Email provider API error."""
-    
+
     code = "EMAIL_PROVIDER_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -136,7 +121,7 @@ class EmailProviderError(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, service=provider, **kwargs)
-        
+
         if provider_error_code:
             self.details["provider_error_code"] = provider_error_code
         if provider_message:
@@ -145,9 +130,9 @@ class EmailProviderError(InfrastructureError):
 
 class UnsubscribedError(ConflictError):
     """Recipient has unsubscribed."""
-    
+
     code = "UNSUBSCRIBED"
-    
+
     def __init__(
         self,
         message: str = "Recipient has unsubscribed from notifications",
@@ -158,7 +143,7 @@ class UnsubscribedError(ConflictError):
         **kwargs
     ):
         super().__init__(message, **kwargs)
-        
+
         if user_id:
             self.details["user_id"] = user_id
         if notification_type:

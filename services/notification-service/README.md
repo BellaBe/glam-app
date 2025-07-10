@@ -59,7 +59,7 @@ Email notification service for the GlamYouUp platform.
 
 ### Preferences
 - `POST /api/v1/notifications/preferences` - Update preferences
-- `GET /api/v1/notifications/preferences/{shop_id}` - Get preferences
+- `GET /api/v1/notifications/preferences/{merchant_id}` - Get preferences
 
 ## Environment Variables
 

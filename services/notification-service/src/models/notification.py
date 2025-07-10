@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy import String, Text, Integer, DateTime, Enum, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from .base import Base, TimestampedMixin, ShopMixin
+from shared.database.base import MerchantMixin, Base, TimestampedMixin
 
 
 class NotificationStatus(str, enum.Enum):
@@ -30,7 +30,7 @@ class NotificationProvider(str, enum.Enum):
     SMTP = "smtp"
 
 
-class Notification(Base, TimestampedMixin, ShopMixin):
+class Notification(Base, TimestampedMixin, MerchantMixin):
     """
     Primary table for tracking all email notifications.
     
@@ -51,7 +51,7 @@ class Notification(Base, TimestampedMixin, ShopMixin):
     type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     
     # Template reference (optional)
-    template_id: Mapped[Optional[UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    template_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     
     # Email content
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -85,7 +85,7 @@ class Notification(Base, TimestampedMixin, ShopMixin):
     # Indexes
     __table_args__ = (
         Index('idx_notifications_created_at', 'created_at'),
-        Index('idx_notifications_shop_status', 'shop_id', 'status'),
+        Index('idx_notifications_merchant_status', 'merchant_id', 'status'),
         Index('idx_notifications_email_type', 'recipient_email', 'type'),
     )
     

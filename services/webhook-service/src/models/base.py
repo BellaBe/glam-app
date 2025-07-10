@@ -10,6 +10,6 @@ from shared.database.base import Base, TimestampedMixin
 
 class ShopMixin:
     """Mixin for shop-related fields."""
-    
-    shop_id: Mapped[str] = mapped_column(String(36), nullable=True, index=True)
+
+    merchant_id: Mapped[str] = mapped_column(String(36), nullable=True, index=True)
     shop_domain: Mapped[str] = mapped_column(String(255), nullable=True)

@@ -13,35 +13,48 @@ from .common import ShopInfo, DateRangeFilter, SortOrder
 
 # Request Schemas
 
+
 class NotificationCreate(ShopInfo):
     """Create a new notification request."""
+
     notification_type: str = Field(..., min_length=1, max_length=50)
     extra_metadata: Dict[str, Any] = Field(default_factory=dict)
-    
-    @field_validator("shop_id", "shop_domain", "shop_email", "unsubscribe_token")
+
+    @field_validator("merchant_id", "shop_domain", "shop_email", "unsubscribe_token")
     def validate_content_source(cls, v):
         """Ensure required fields are provided."""
         if not v:
             raise ValueError("This field is required")
         return v
 
+
 class BulkNotificationCreate(BaseModel):
     """Create multiple notifications at once."""
+
     notification_type: str = Field(..., min_length=1, max_length=50)
     recipients: List[ShopInfo] = Field(..., min_length=1, max_length=100)
 
-    @field_validator('recipients')
+    @field_validator("recipients")
     def validate_recipients(cls, v):
         """Validate recipients list size and required fields."""
         if not (1 <= len(v) <= 100):
             raise ValueError("Recipients list must have between 1 and 100 items")
         for recipient in v:
-            if not recipient.shop_id or not recipient.shop_domain or not recipient.shop_email or not recipient.unsubscribe_token:
-                raise ValueError("Each recipient must have shop_id, shop_domain, shop_email, and unsubscribe_token")
+            if (
+                not recipient.merchant_id
+                or not recipient.shop_domain
+                or not recipient.shop_email
+                or not recipient.unsubscribe_token
+            ):
+                raise ValueError(
+                    "Each recipient must have merchant_id, shop_domain, shop_email, and unsubscribe_token"
+                )
         return v
+
 
 class NotificationUpdate(BaseModel):
     """Update notification status."""
+
     status: NotificationStatus
     provider_message_id: Optional[str] = None
     error_message: Optional[str] = None
@@ -50,7 +63,8 @@ class NotificationUpdate(BaseModel):
 
 class NotificationFilter(BaseModel):
     """Filter parameters for notification queries."""
-    shop_id: Optional[UUID] = None
+
+    merchant_id: Optional[UUID] = None
     recipient_email: Optional[EmailStr] = None
     type: Optional[str] = None
     status: Optional[NotificationStatus] = None
@@ -62,10 +76,12 @@ class NotificationFilter(BaseModel):
 
 # Response Schemas
 
+
 class NotificationResponse(BaseModel):
     """Basic notification response."""
+
     id: UUID
-    shop_id: UUID
+    merchant_id: UUID
     shop_domain: str
     shop_email: str
     type: str
@@ -73,12 +89,13 @@ class NotificationResponse(BaseModel):
     sent_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationDetailResponse(NotificationResponse):
     """Detailed notification response with full information."""
+
     content: str
     provider: Optional[NotificationProvider] = None
     provider_message_id: Optional[str] = None
@@ -89,6 +106,7 @@ class NotificationDetailResponse(NotificationResponse):
 
 class NotificationListResponse(BaseModel):
     """Paginated list of notifications."""
+
     notifications: List[NotificationResponse]
     total: int
     page: int

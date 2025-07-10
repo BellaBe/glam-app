@@ -2,14 +2,27 @@
 # glam-app/shared/database/base.py
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy import DateTime
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, String
 from datetime import datetime, timezone
-
 
 
 class Base(AsyncAttrs, DeclarativeBase):
     """Base class for all database models across microservices"""
     pass
+
+class MerchantMixin:
+    """Mixin to add merchant_id to any model"""
+    merchant_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        nullable=False, 
+        index=True
+    )
+    merchant_domain: Mapped[str] = mapped_column(
+        String(255), 
+        nullable=False, 
+        index=True
+    )
 
 
 class TimestampedMixin:

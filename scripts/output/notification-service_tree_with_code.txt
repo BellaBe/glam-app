@@ -233,7 +233,7 @@ src/
 │   │       async def publish_email_sent(
 │   │           self,
 │   │           notification_id: UUID,
-│   │           shop_id: UUID,
+│   │           merchant_id: UUID,
 │   │           notification_type: str,
 │   │           provider: str,
 │   │           provider_message_id: str,
@@ -259,7 +259,7 @@ src/
 │   │           # Create typed payload
 │   │           payload = EmailSentEventPayload(
 │   │               notification_id=notification_id,
-│   │               shop_id=shop_id,
+│   │               merchant_id=merchant_id,
 │   │               notification_type=notification_type,
 │   │               provider=provider,
 │   │               provider_message_id=provider_message_id,
@@ -283,7 +283,7 @@ src/
 │   │       async def publish_email_failed(
 │   │           self,
 │   │           notification_id: UUID,
-│   │           shop_id: UUID,
+│   │           merchant_id: UUID,
 │   │           notification_type: str,
 │   │           error: str,
 │   │           error_code: str,
@@ -312,7 +312,7 @@ src/
 │   │           # Create typed payload
 │   │           payload = EmailFailedEventPayload(
 │   │               notification_id=notification_id,
-│   │               shop_id=shop_id,
+│   │               merchant_id=merchant_id,
 │   │               notification_type=notification_type,
 │   │               error=error,
 │   │               error_code=error_code,
@@ -532,14 +532,14 @@ src/
 │                       **payload.context.to_dict(),
 │                       "notification_type": payload.notification_type,
 │                       "recipient": payload.recipient.email,
-│                       "shop_id": str(payload.recipient.id),
+│                       "merchant_id": str(payload.recipient.id),
 │                   }
 │               )
 │               
 │               # Build notification create with event context
 │               notification_create = NotificationCreate(
 │                   notification_type=payload.notification_type,
-│                   shop_id=payload.recipient.id,
+│                   merchant_id=payload.recipient.id,
 │                   shop_domain=payload.recipient.domain,
 │                   shop_email=payload.recipient.email,
 │                   unsubscribe_token=payload.recipient.unsubscribe_token,
@@ -617,7 +617,7 @@ src/
 │                   for recipient in batch:
 │                       try:
 │                           notification_create = NotificationCreate(
-│                               shop_id=recipient.shop_id,
+│                               merchant_id=recipient.merchant_id,
 │                               shop_domain=recipient.shop_domain,
 │                               shop_email=recipient.email,
 │                               unsubscribe_token=recipient.unsubscribe_token,
@@ -790,7 +790,7 @@ src/
 │               
 │               return Notification(
 │                   # Shop information
-│                   shop_id=str(create_schema.shop_id),
+│                   merchant_id=str(create_schema.merchant_id),
 │                   shop_domain=create_schema.shop_domain,
 │                   
 │                   # Recipient information
@@ -816,7 +816,7 @@ src/
 │               """Convert Notification model to response schema."""
 │               return NotificationResponse(
 │                   id=UUID(str(model.id)),
-│                   shop_id=UUID(model.shop_id),
+│                   merchant_id=UUID(model.merchant_id),
 │                   shop_domain=model.shop_domain,
 │                   shop_email=model.recipient_email,
 │                   type=model.type,
@@ -830,7 +830,7 @@ src/
 │               """Convert Notification model to detailed response schema."""
 │               return NotificationDetailResponse(
 │                   id=UUID(str(model.id)),
-│                   shop_id=UUID(model.shop_id),
+│                   merchant_id=UUID(model.merchant_id),
 │                   shop_domain=model.shop_domain,
 │                   shop_email=model.recipient_email,
 │                   type=model.type,
@@ -944,7 +944,7 @@ src/
 │   │   class ShopMixin:
 │   │       """Mixin for shop-related fields."""
 │   │       
-│   │       shop_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+│   │       merchant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 │   │       shop_domain: Mapped[str] = mapped_column(String(255), nullable=False)
 │   │   ```
 │   │   
@@ -1038,7 +1038,7 @@ src/
 │   │       # Indexes
 │   │       __table_args__ = (
 │   │           Index('idx_notifications_created_at', 'created_at'),
-│   │           Index('idx_notifications_shop_status', 'shop_id', 'status'),
+│   │           Index('idx_notifications_shop_status', 'merchant_id', 'status'),
 │   │           Index('idx_notifications_email_type', 'recipient_email', 'type'),
 │   │       )
 │   │       
@@ -1751,13 +1751,13 @@ src/
 │                   yield session
 │       
 │           # ------------------------------------------------------------------ queries
-│           async def get_by_shop_id(
+│           async def get_by_merchant_id(
 │               self,
-│               shop_id: UUID,
+│               merchant_id: UUID,
 │               limit: int = 100,
 │           ) -> List[Notification]:
 │               stmt = (
-│                   select(self.model).where(self.model.shop_id == shop_id).order_by(self.model.created_at.desc()).limit(limit)
+│                   select(self.model).where(self.model.merchant_id == merchant_id).order_by(self.model.created_at.desc()).limit(limit)
 │               )
 │               async for session in self._session():
 │                   result = await session.execute(stmt)
@@ -1802,13 +1802,13 @@ src/
 │       
 │           async def count_by_type_and_shop(
 │               self,
-│               shop_id: UUID,
+│               merchant_id: UUID,
 │               notification_type: str,
 │               since: Optional[datetime] = None,
 │           ) -> int:
 │               stmt = select(func.count(self.model.id)).where(
 │                   and_(
-│                       self.model.shop_id == shop_id,
+│                       self.model.merchant_id == merchant_id,
 │                       self.model.type == notification_type,
 │                   )
 │               )
@@ -1823,22 +1823,22 @@ src/
 │       
 │           async def get_stats(
 │               self,
-│               shop_id: Optional[UUID] = None,
+│               merchant_id: Optional[UUID] = None,
 │           ) -> Dict[str, Any]:
 │               base_query = select(
 │                   self.model.status,
 │                   func.count(self.model.id).label("count"),
 │               )
-│               if shop_id:
-│                   base_query = base_query.where(self.model.shop_id == shop_id)
+│               if merchant_id:
+│                   base_query = base_query.where(self.model.merchant_id == merchant_id)
 │               base_query = base_query.group_by(self.model.status)
 │       
 │               type_query = select(
 │                   self.model.type,
 │                   func.count(self.model.id).label("count"),
 │               )
-│               if shop_id:
-│                   type_query = type_query.where(self.model.shop_id == shop_id)
+│               if merchant_id:
+│                   type_query = type_query.where(self.model.merchant_id == merchant_id)
 │               type_query = type_query.group_by(self.model.type)
 │       
 │               async for session in self._session():
@@ -1867,7 +1867,7 @@ src/
 │       
 │           async def list(
 │               self,
-│               shop_id: Optional[UUID] = None,
+│               merchant_id: Optional[UUID] = None,
 │               status: Optional[str] = None,
 │               notification_type: Optional[str] = None,
 │               offset: int = 1,
@@ -1875,7 +1875,7 @@ src/
 │           ) -> tuple[list[Notification], int]:
 │               """List notifications with optional filters.
 │               Args:
-│                   shop_id (Optional[UUID]): Filter by shop ID.
+│                   merchant_id (Optional[UUID]): Filter by shop ID.
 │                   status (Optional[str]): Filter by notification status.
 │                   notification_type (Optional[str]): Filter by notification type.
 │                   offset (int): Pagination offset.
@@ -1888,8 +1888,8 @@ src/
 │               """
 │               stmt = select(self.model)
 │               
-│               if shop_id:
-│                   stmt = stmt.where(self.model.shop_id == shop_id)
+│               if merchant_id:
+│                   stmt = stmt.where(self.model.merchant_id == merchant_id)
 │               if status:
 │                   stmt = stmt.where(self.model.status == status)
 │               if notification_type:
@@ -2125,14 +2125,14 @@ src/
 │   │       svc: NotificationServiceDep,
 │   │       pagination: PaginationDep,
 │   │       ctx: RequestContextDep,
-│   │       shop_id: Optional[UUID] = Query(None),
+│   │       merchant_id: Optional[UUID] = Query(None),
 │   │       status: Optional[str] = Query(None),
 │   │       type: Optional[str] = Query(None),
 │   │   ):
 │   │       """List notifications with pagination."""
 │   │       # Service returns tuple of (items, total)
 │   │       items, total = await svc.list_notifications(
-│   │           shop_id=shop_id,
+│   │           merchant_id=merchant_id,
 │   │           status=status,
 │   │           notification_type=type,
 │   │           offset=pagination.offset,
@@ -2147,7 +2147,7 @@ src/
 │   │           base_url="/api/v1/notifications",
 │   │           request_id=ctx.request_id,
 │   │           correlation_id=ctx.correlation_id,
-│   │           shop_id=shop_id,
+│   │           merchant_id=merchant_id,
 │   │           status=status,
 │   │           type=type
 │   │       )
@@ -2493,7 +2493,7 @@ src/
 │   │   
 │   │   class ShopInfo(BaseModel):
 │   │       """Shop identification information."""
-│   │       shop_id: UUID
+│   │       merchant_id: UUID
 │   │       shop_domain: str = Field(..., min_length=1, max_length=255)
 │   │       shop_email: EmailStr
 │   │       unsubscribe_token: str = Field(..., min_length=1, max_length=255)
@@ -2547,7 +2547,7 @@ src/
 │   │       notification_type: str = Field(..., min_length=1, max_length=50)
 │   │       extra_metadata: Dict[str, Any] = Field(default_factory=dict)
 │   │       
-│   │       @field_validator("shop_id", "shop_domain", "shop_email", "unsubscribe_token")
+│   │       @field_validator("merchant_id", "shop_domain", "shop_email", "unsubscribe_token")
 │   │       def validate_content_source(cls, v):
 │   │           """Ensure required fields are provided."""
 │   │           if not v:
@@ -2565,8 +2565,8 @@ src/
 │   │           if not (1 <= len(v) <= 100):
 │   │               raise ValueError("Recipients list must have between 1 and 100 items")
 │   │           for recipient in v:
-│   │               if not recipient.shop_id or not recipient.shop_domain or not recipient.shop_email or not recipient.unsubscribe_token:
-│   │                   raise ValueError("Each recipient must have shop_id, shop_domain, shop_email, and unsubscribe_token")
+│   │               if not recipient.merchant_id or not recipient.shop_domain or not recipient.shop_email or not recipient.unsubscribe_token:
+│   │                   raise ValueError("Each recipient must have merchant_id, shop_domain, shop_email, and unsubscribe_token")
 │   │           return v
 │   │   
 │   │   class NotificationUpdate(BaseModel):
@@ -2579,7 +2579,7 @@ src/
 │   │   
 │   │   class NotificationFilter(BaseModel):
 │   │       """Filter parameters for notification queries."""
-│   │       shop_id: Optional[UUID] = None
+│   │       merchant_id: Optional[UUID] = None
 │   │       recipient_email: Optional[EmailStr] = None
 │   │       type: Optional[str] = None
 │   │       status: Optional[NotificationStatus] = None
@@ -2594,7 +2594,7 @@ src/
 │   │   class NotificationResponse(BaseModel):
 │   │       """Basic notification response."""
 │   │       id: UUID
-│   │       shop_id: UUID
+│   │       merchant_id: UUID
 │   │       shop_domain: str
 │   │       shop_email: str
 │   │       type: str
@@ -2981,7 +2981,7 @@ src/
 │   │           """
 │   │           
 │   │           # Validate input
-│   │           if not notification_create.shop_id or not notification_create.shop_domain:
+│   │           if not notification_create.merchant_id or not notification_create.shop_domain:
 │   │               raise ValueError("Shop ID and domain are required")
 │   │           
 │   │           # Create notification record
@@ -3004,7 +3004,7 @@ src/
 │   │           
 │   │           # Extract notification details
 │   │           notification_type = notification_create.notification_type
-│   │           shop_id = notification_create.shop_id
+│   │           merchant_id = notification_create.merchant_id
 │   │           shop_domain = notification_create.shop_domain
 │   │           unsubscribe_token = notification_create.unsubscribe_token
 │   │           dynamic_content = notification_create.dynamic_content or {}
@@ -3013,7 +3013,7 @@ src/
 │   │           self.logger.info(
 │   │               "Creating and sending notification",
 │   │               extra={
-│   │                   "shop_id": str(shop_id),
+│   │                   "merchant_id": str(merchant_id),
 │   │                   "shop_domain": shop_domain,
 │   │                   "notification_type": notification_type,
 │   │                   "correlation_id": extra_metadata.get("correlation_id", None),
@@ -3025,7 +3025,7 @@ src/
 │   │           self.logger.debug(
 │   │               f"Retrieved template for notification type {notification_type}",
 │   │               extra={
-│   │                   "shop_id": str(shop_id),
+│   │                   "merchant_id": str(merchant_id),
 │   │                   "shop_domain": shop_domain,
 │   │                   "correlation_id": extra_metadata.get("correlation_id", None),
 │   │               }
@@ -3034,7 +3034,7 @@ src/
 │   │               self.logger.error(
 │   │                   f"No template found for notification type: {notification_type}",
 │   │                   extra={
-│   │                       "shop_id": str(shop_id),
+│   │                       "merchant_id": str(merchant_id),
 │   │                       "shop_domain": shop_domain,
 │   │                       "correlation_id": extra_metadata.get("correlation_id", None),
 │   │                   }
@@ -3093,7 +3093,7 @@ src/
 │   │               "Sending notification",
 │   │               extra={
 │   │                   "notification_id": str(notification.id),
-│   │                   "shop_id": str(notification.shop_id),
+│   │                   "merchant_id": str(notification.merchant_id),
 │   │                   "shop_domain": notification.shop_domain,
 │   │                   "recipient_email": notification.recipient_email,
 │   │                   "notification_type": notification.type,
@@ -3134,7 +3134,7 @@ src/
 │   │               # Publish success event
 │   │               await self.publisher.publish_email_sent(
 │   │                   notification_id=UUID(str(notification.id)),
-│   │                   shop_id=UUID(str(notification.shop_id)),
+│   │                   merchant_id=UUID(str(notification.merchant_id)),
 │   │                   notification_type=notification.type,
 │   │                   provider=provider_response.provider,
 │   │                   provider_message_id=provider_response.provider_message_id if provider_response.provider_message_id else "No response received",
@@ -3167,7 +3167,7 @@ src/
 │   │               # Publish failure event
 │   │               await self.publisher.publish_email_failed(
 │   │                   notification_id=UUID(str(notification.id)),
-│   │                   shop_id=UUID(str(notification.shop_id)),
+│   │                   merchant_id=UUID(str(notification.merchant_id)),
 │   │                   notification_type=notification.type,
 │   │                   error=str(e),
 │   │                   error_code=getattr(e, 'code', 'UNKNOWN_ERROR'),
@@ -3210,14 +3210,14 @@ src/
 │   │               notification=notification
 │   │           )
 │   │       
-│   │       async def list_notifications(self, offset, limit, shop_id: Optional[UUID] = None, status: Optional[str] = None, notification_type: Optional[str] = None) -> tuple[list[Notification], int]:
+│   │       async def list_notifications(self, offset, limit, merchant_id: Optional[UUID] = None, status: Optional[str] = None, notification_type: Optional[str] = None) -> tuple[list[Notification], int]:
 │   │           """
 │   │           List notifications with optional filters
 │   │           
 │   │           Parameters:
 │   │               offset (int): Pagination offset
 │   │               limit (int): Number of records to return
-│   │               shop_id (Optional[UUID]): Filter by shop ID
+│   │               merchant_id (Optional[UUID]): Filter by shop ID
 │   │               status (Optional[str]): Filter by notification status
 │   │               notification_type (Optional[str]): Filter by notification type
 │   │               
@@ -3229,7 +3229,7 @@ src/
 │   │           self.logger.info(
 │   │               "Listing notifications",
 │   │               extra={
-│   │                   "shop_id": str(shop_id) if shop_id else None,
+│   │                   "merchant_id": str(merchant_id) if merchant_id else None,
 │   │                   "status": status,
 │   │                   "notification_type": notification_type,
 │   │                   "offset": offset,
@@ -3238,7 +3238,7 @@ src/
 │   │           )
 │   │           
 │   │           notifications, total_count = await self.notification_repo.list(
-│   │               shop_id=shop_id,
+│   │               merchant_id=merchant_id,
 │   │               status=status,
 │   │               notification_type=notification_type,
 │   │               offset=offset,
@@ -3248,7 +3248,7 @@ src/
 │   │           self.logger.info(
 │   │               f"Listed {len(notifications)} notifications",
 │   │               extra={
-│   │                   "shop_id": str(shop_id) if shop_id else None,
+│   │                   "merchant_id": str(merchant_id) if merchant_id else None,
 │   │                   "status": status,
 │   │                   "notification_type": notification_type,
 │   │                   "offset": offset,
@@ -4127,7 +4127,7 @@ src/
 │   │           missing_required = [var for var in required_vars if var not in provided_variables]
 │   │           unused_variables = [var for var in provided_variables 
 │   │                             if var not in required_vars + optional_vars + 
-│   │                             ["unsubscribe_token", "shop_id", "shop_domain"]]
+│   │                             ["unsubscribe_token", "merchant_id", "shop_domain"]]
 │   │           
 │   │           return {
 │   │               "is_valid": len(missing_required) == 0,
@@ -4337,7 +4337,7 @@ src/
 │   │   """,
 │   │               "variables": {
 │   │                   "required": ["shop_name", "shop_domain"],
-│   │                   "optional": ["shop_id"]
+│   │                   "optional": ["merchant_id"]
 │   │               }
 │   │           },
 │   │           
@@ -5434,12 +5434,12 @@ src/
 │           
 │   class PreferenceAlreadyExists(DomainError):
 │       """Raised when trying to create preferences that already exist"""
-│       def __init__(self, message: str, shop_id: str):
+│       def __init__(self, message: str, merchant_id: str):
 │           super().__init__(
 │               message=message,
 │               code="PREFERENCE_ALREADY_EXISTS",
 │               status=409,  # Conflict
-│               details={"shop_id": shop_id}
+│               details={"merchant_id": merchant_id}
 │           )
 │                   
 │   class TemplateAlreadyExistsError(DomainError):
@@ -5797,7 +5797,7 @@ src/
     rate_limit_hits_total = Counter(
         'rate_limit_hits_total',
         'Total rate limit hits',
-        ['shop_id', 'limit_type']
+        ['merchant_id', 'limit_type']
     )
     
     
@@ -5831,10 +5831,10 @@ src/
         ).observe(duration)
     
     
-    def increment_rate_limit_hit(shop_id: str, limit_type: str):
+    def increment_rate_limit_hit(merchant_id: str, limit_type: str):
         """Increment rate limit hit counter."""
         rate_limit_hits_total.labels(
-            shop_id=shop_id,
+            merchant_id=merchant_id,
             limit_type=limit_type
         ).inc()
     ```
@@ -6037,7 +6037,7 @@ Email notification service for the GlamYouUp platform.
 
 ### Preferences
 - `POST /api/v1/notifications/preferences` - Update preferences
-- `GET /api/v1/notifications/preferences/{shop_id}` - Get preferences
+- `GET /api/v1/notifications/preferences/{merchant_id}` - Get preferences
 
 ## Environment Variables
 

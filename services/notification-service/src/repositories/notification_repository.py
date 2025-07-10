@@ -7,11 +7,12 @@ from uuid import UUID
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
-    async_sessionmaker,      
+    async_sessionmaker,
 )
 
 from shared.database import Repository
 from ..models.notification import Notification, NotificationStatus, NotificationProvider
+
 
 class NotificationRepository(Repository[Notification]):
     """Async Notification repo that opens a fresh session per call."""
@@ -23,20 +24,16 @@ class NotificationRepository(Repository[Notification]):
     ):
         super().__init__(model_class, session_factory)
 
-    # ------------------------------------------------------------------ helpers
-    async def _session(self):
-        """Async context manager that yields a short-lived session."""
-        async with self.session_factory() as session:
-            yield session
-
-    # ------------------------------------------------------------------ queries
-    async def get_by_shop_id(
+    async def get_by_merchant_id(
         self,
-        shop_id: UUID,
+        merchant_id: UUID,
         limit: int = 100,
     ) -> List[Notification]:
         stmt = (
-            select(self.model).where(self.model.shop_id == shop_id).order_by(self.model.created_at.desc()).limit(limit)
+            select(self.model)
+            .where(self.model.merchant_id == merchant_id)
+            .order_by(self.model.created_at.desc())
+            .limit(limit)
         )
         async for session in self._session():
             result = await session.execute(stmt)
@@ -76,18 +73,18 @@ class NotificationRepository(Repository[Notification]):
         async for session in self._session():
             result = await session.execute(stmt)
             return list(result.scalars().all())
-        
+
         return []
 
     async def count_by_type_and_shop(
         self,
-        shop_id: UUID,
+        merchant_id: UUID,
         notification_type: str,
         since: Optional[datetime] = None,
     ) -> int:
         stmt = select(func.count(self.model.id)).where(
             and_(
-                self.model.shop_id == shop_id,
+                self.model.merchant_id == merchant_id,
                 self.model.type == notification_type,
             )
         )
@@ -97,27 +94,27 @@ class NotificationRepository(Repository[Notification]):
         async for session in self._session():
             result = await session.execute(stmt)
             return result.scalar() or 0
-        
+
         return 0
 
     async def get_stats(
         self,
-        shop_id: Optional[UUID] = None,
+        merchant_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         base_query = select(
             self.model.status,
             func.count(self.model.id).label("count"),
         )
-        if shop_id:
-            base_query = base_query.where(self.model.shop_id == shop_id)
+        if merchant_id:
+            base_query = base_query.where(self.model.merchant_id == merchant_id)
         base_query = base_query.group_by(self.model.status)
 
         type_query = select(
             self.model.type,
             func.count(self.model.id).label("count"),
         )
-        if shop_id:
-            type_query = type_query.where(self.model.shop_id == shop_id)
+        if merchant_id:
+            type_query = type_query.where(self.model.merchant_id == merchant_id)
         type_query = type_query.group_by(self.model.type)
 
         async for session in self._session():
@@ -146,7 +143,7 @@ class NotificationRepository(Repository[Notification]):
 
     async def list(
         self,
-        shop_id: Optional[UUID] = None,
+        merchant_id: Optional[UUID] = None,
         status: Optional[str] = None,
         notification_type: Optional[str] = None,
         offset: int = 1,
@@ -154,21 +151,21 @@ class NotificationRepository(Repository[Notification]):
     ) -> tuple[list[Notification], int]:
         """List notifications with optional filters.
         Args:
-            shop_id (Optional[UUID]): Filter by shop ID.
+            merchant_id (Optional[UUID]): Filter by shop ID.
             status (Optional[str]): Filter by notification status.
             notification_type (Optional[str]): Filter by notification type.
             offset (int): Pagination offset.
             limit (int): Number of records to return.
-            
+
         Returns:
             total (int): Total number of notifications.
             notifications (List[Notification]): List of notifications matching the filters.
-        
+
         """
         stmt = select(self.model)
-        
-        if shop_id:
-            stmt = stmt.where(self.model.shop_id == shop_id)
+
+        if merchant_id:
+            stmt = stmt.where(self.model.merchant_id == merchant_id)
         if status:
             stmt = stmt.where(self.model.status == status)
         if notification_type:
@@ -188,15 +185,15 @@ class NotificationRepository(Repository[Notification]):
             return list(notifications), total
 
         return [], 0
-    
+
     # ---------------------------------------------------------------- updates
     async def mark_as_sent(
         self,
         notification_id: UUID,
         provider_message_id: str,
         provider: NotificationProvider,
-    ) -> Notification: # type: ignore[return]
-        
+    ) -> Notification:  # type: ignore[return]
+
         async for session in self._session():
             stmt = select(self.model).where(self.model.id == notification_id)
             result = await session.execute(stmt)
@@ -219,8 +216,8 @@ class NotificationRepository(Repository[Notification]):
         notification_id: UUID,
         error_message: str,
         retry_count: int,
-    ) -> Notification: # type: ignore[return]
-        
+    ) -> Notification:  # type: ignore[return]
+
         async for session in self._session():
             stmt = select(self.model).where(self.model.id == notification_id)
             result = await session.execute(stmt)
@@ -237,12 +234,12 @@ class NotificationRepository(Repository[Notification]):
             session.add(notification)
             await session.commit()
             return notification
-        
-   # ------------------------------------------------------------------ create
+
+    # ------------------------------------------------------------------ create
     async def create(
         self,
         notification: Notification,
-    ) -> Notification: # type: ignore[return]
+    ) -> Notification:  # type: ignore[return]
         async for session in self._session():
             session.add(notification)
             await session.commit()

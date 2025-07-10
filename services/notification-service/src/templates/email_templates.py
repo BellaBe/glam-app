@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 class EmailTemplates:
     """System email templates with proper styling and variables"""
-    
+
     # Base HTML template wrapper for consistent styling
     BASE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -196,10 +196,9 @@ class EmailTemplates:
 """,
             "variables": {
                 "required": ["shop_name", "shop_domain"],
-                "optional": ["shop_id"]
-            }
+                "optional": ["merchant_id"],
+            },
         },
-        
         "registration_finish": {
             "subject": "✅ Product Import Complete - {{ product_count }} Products Ready!",
             "body": """
@@ -226,12 +225,8 @@ class EmailTemplates:
 
 <p>Tip: Start with your best-selling products to maximize impact!</p>
 """,
-            "variables": {
-                "required": ["product_count"],
-                "optional": []
-            }
+            "variables": {"required": ["product_count"], "optional": []},
         },
-        
         "registration_sync": {
             "subject": "📊 Product Sync Update - {{ added_count + updated_count }} Changes Detected",
             "body": """
@@ -277,10 +272,9 @@ class EmailTemplates:
 """,
             "variables": {
                 "required": ["added_count", "updated_count"],
-                "optional": ["removed_count"]
-            }
+                "optional": ["removed_count"],
+            },
         },
-        
         "billing_expired": {
             "subject": "⚠️ Subscription Expired - Action Required",
             "body": """
@@ -309,12 +303,8 @@ class EmailTemplates:
 
 <p>If you have any questions about your subscription or need assistance, please contact our support team.</p>
 """,
-            "variables": {
-                "required": ["plan_name", "renewal_link"],
-                "optional": []
-            }
+            "variables": {"required": ["plan_name", "renewal_link"], "optional": []},
         },
-        
         "billing_changed": {
             "subject": "✅ Subscription Updated to {{ plan_name }}",
             "body": """
@@ -341,12 +331,8 @@ class EmailTemplates:
 
 <p>Thank you for choosing {{ platform_name }}! We're excited to support your business growth.</p>
 """,
-            "variables": {
-                "required": ["plan_name"],
-                "optional": []
-            }
+            "variables": {"required": ["plan_name"], "optional": []},
         },
-        
         "billing_low_credits": {
             "subject": "⚠️ Low Credit Balance - {{ days_remaining }} Days Remaining",
             "body": """
@@ -390,11 +376,15 @@ class EmailTemplates:
 <p>Don't let your creative flow stop! Add credits now to continue creating amazing visuals.</p>
 """,
             "variables": {
-                "required": ["current_balance", "days_remaining", "expected_depletion_date", "billing_link"],
-                "optional": []
-            }
+                "required": [
+                    "current_balance",
+                    "days_remaining",
+                    "expected_depletion_date",
+                    "billing_link",
+                ],
+                "optional": [],
+            },
         },
-        
         "billing_zero_balance": {
             "subject": "🚨 Urgent: Zero Balance - Service Deactivation Pending",
             "body": """
@@ -431,10 +421,9 @@ class EmailTemplates:
 """,
             "variables": {
                 "required": ["deactivation_time", "billing_link"],
-                "optional": []
-            }
+                "optional": [],
+            },
         },
-        
         "billing_deactivated": {
             "subject": "❌ Services Deactivated - {{ reason|title }}",
             "body": """
@@ -468,58 +457,57 @@ class EmailTemplates:
 
 <p>We value your business and hope to have you back soon. If you need assistance or have questions about your account, our support team is here to help.</p>
 """,
-            "variables": {
-                "required": ["reason", "reactivation_link"],
-                "optional": []
-            }
-        }
+            "variables": {"required": ["reason", "reactivation_link"], "optional": []},
+        },
     }
-    
+
     @classmethod
     def get_template(cls, notification_type: str) -> Dict[str, Any]:
         """Get template for notification type"""
         if notification_type not in cls.TEMPLATES:
             raise ValueError(f"Unknown notification type: {notification_type}")
-        
+
         template = cls.TEMPLATES[notification_type].copy()
-        
+
         # Wrap body in base template
         template["body"] = cls.BASE_TEMPLATE.replace(
-            "{% block content %}{% endblock %}", 
-            template["body"]
+            "{% block content %}{% endblock %}", template["body"]
         )
-        
+
         return template
-    
+
     @classmethod
     def get_all_types(cls) -> list:
         """Get all available notification types"""
         return list(cls.TEMPLATES.keys())
-    
+
     @classmethod
     def validate_variables(
-        cls, 
-        notification_type: str, 
-        provided_variables: Dict[str, Any]
+        cls, notification_type: str, provided_variables: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Validate that required variables are provided"""
         if notification_type not in cls.TEMPLATES:
             raise ValueError(f"Unknown notification type: {notification_type}")
-        
+
         template_vars = cls.TEMPLATES[notification_type]["variables"]
         required = set(template_vars["required"])
         optional = set(template_vars["optional"])
         provided = set(provided_variables.keys())
-        
+
         # Global variables that are always available
-        global_vars = {"unsubscribe_url", "support_url", "current_year", "platform_name"}
-        
+        global_vars = {
+            "unsubscribe_url",
+            "support_url",
+            "current_year",
+            "platform_name",
+        }
+
         missing_required = required - provided
         unused_variables = provided - required - optional - global_vars
-        
+
         return {
             "is_valid": len(missing_required) == 0,
             "missing_required": list(missing_required),
             "unused_variables": list(unused_variables),
-            "all_variables": list(required | optional | global_vars)
+            "all_variables": list(required | optional | global_vars),
         }

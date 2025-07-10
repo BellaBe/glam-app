@@ -13,32 +13,27 @@ from prometheus_client import Counter, Histogram, Gauge
 
 # Notification-specific metrics
 notifications_sent_total = Counter(
-    'notifications_sent_total',
-    'Total notifications sent',
-    ['type', 'provider', 'status']
+    "notifications_sent_total",
+    "Total notifications sent",
+    ["type", "provider", "status"],
 )
 
 notifications_duration_seconds = Histogram(
-    'notifications_duration_seconds',
-    'Notification sending duration in seconds',
-    ['type', 'provider']
+    "notifications_duration_seconds",
+    "Notification sending duration in seconds",
+    ["type", "provider"],
 )
 
-email_queue_size = Gauge(
-    'email_queue_size',
-    'Current size of email queue'
-)
+email_queue_size = Gauge("email_queue_size", "Current size of email queue")
 
 template_render_duration_seconds = Histogram(
-    'template_render_duration_seconds',
-    'Template rendering duration in seconds',
-    ['template_type']
+    "template_render_duration_seconds",
+    "Template rendering duration in seconds",
+    ["template_type"],
 )
 
 rate_limit_hits_total = Counter(
-    'rate_limit_hits_total',
-    'Total rate limit hits',
-    ['shop_id', 'limit_type']
+    "rate_limit_hits_total", "Total rate limit hits", ["merchant_id", "limit_type"]
 )
 
 
@@ -46,17 +41,16 @@ rate_limit_hits_total = Counter(
 def increment_notification_sent(notification_type: str, provider: str, status: str):
     """Increment notification sent counter."""
     notifications_sent_total.labels(
-        type=notification_type,
-        provider=provider,
-        status=status
+        type=notification_type, provider=provider, status=status
     ).inc()
 
 
-def observe_notification_duration(notification_type: str, provider: str, duration: float):
+def observe_notification_duration(
+    notification_type: str, provider: str, duration: float
+):
     """Record notification sending duration."""
     notifications_duration_seconds.labels(
-        type=notification_type,
-        provider=provider
+        type=notification_type, provider=provider
     ).observe(duration)
 
 
@@ -67,14 +61,11 @@ def set_email_queue_size(size: int):
 
 def observe_template_render_duration(template_type: str, duration: float):
     """Record template rendering duration."""
-    template_render_duration_seconds.labels(
-        template_type=template_type
-    ).observe(duration)
+    template_render_duration_seconds.labels(template_type=template_type).observe(
+        duration
+    )
 
 
-def increment_rate_limit_hit(shop_id: str, limit_type: str):
+def increment_rate_limit_hit(merchant_id: str, limit_type: str):
     """Increment rate limit hit counter."""
-    rate_limit_hits_total.labels(
-        shop_id=shop_id,
-        limit_type=limit_type
-    ).inc()
+    rate_limit_hits_total.labels(merchant_id=merchant_id, limit_type=limit_type).inc()

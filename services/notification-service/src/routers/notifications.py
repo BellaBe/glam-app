@@ -8,41 +8,42 @@ from shared.api import (
     paginated_response,
     Links,
     RequestContextDep,
-    PaginationDep
+    PaginationDep,
 )
 from src.dependencies import NotificationServiceDep
 
 from src.schemas import (
     NotificationResponse,
     NotificationListResponse,
-    NotificationDetailResponse
+    NotificationDetailResponse,
 )
 
 router = APIRouter(tags=["notifications"])
 
+
 @router.get(
     "",
     response_model=ApiResponse[NotificationListResponse],
-    summary="List notification history"
+    summary="List notification history",
 )
 async def list_notifications(
     svc: NotificationServiceDep,
     pagination: PaginationDep,
     ctx: RequestContextDep,
-    shop_id: Optional[UUID] = Query(None),
+    merchant_id: Optional[UUID] = Query(None),
     status: Optional[str] = Query(None),
     type: Optional[str] = Query(None),
 ):
     """List notifications with pagination."""
     # Service returns tuple of (items, total)
     items, total = await svc.list_notifications(
-        shop_id=shop_id,
+        merchant_id=merchant_id,
         status=status,
         notification_type=type,
         offset=pagination.offset,
-        limit=pagination.limit
+        limit=pagination.limit,
     )
-    
+
     return paginated_response(
         data=items,
         page=pagination.page,
@@ -51,15 +52,16 @@ async def list_notifications(
         base_url="/api/v1/notifications",
         request_id=ctx.request_id,
         correlation_id=ctx.correlation_id,
-        shop_id=shop_id,
+        merchant_id=merchant_id,
         status=status,
-        type=type
+        type=type,
     )
+
 
 @router.get(
     "/{notification_id}",
     response_model=ApiResponse[NotificationResponse],
-    summary="Get notification details"
+    summary="Get notification details",
 )
 async def get_notification(
     notification_id: UUID,
@@ -68,14 +70,14 @@ async def get_notification(
 ):
     """Get detailed notification information."""
     notification = await svc.get_notification(notification_id)
-    
+
     if not notification:
         # The middleware will catch this and convert to standard error response
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
     return success_response(
         data=notification,
         request_id=ctx.request_id,
         correlation_id=ctx.correlation_id,
-        links=Links(self=f"/api/v1/notifications/{notification_id}")
+        links=Links(self=f"/api/v1/notifications/{notification_id}"),
     )

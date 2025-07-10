@@ -7,7 +7,7 @@ from datetime import datetime
 
 class EmailTemplates:
     """Email template definitions with all required variables"""
-    
+
     # Base footer template used in all emails
     FOOTER_TEMPLATE = """
     <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
@@ -20,7 +20,7 @@ class EmailTemplates:
         </div>
     </div>
     """
-    
+
     WELCOME = {
         "subject": "Welcome to GlamYouUp! 🎉",
         "body": """
@@ -65,17 +65,16 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
-        "variables": {
-            "required": ["shop_name"],
-            "optional": []
-        }
+        "variables": {"required": ["shop_name"], "optional": []},
     }
-    
+
     REGISTRATION_FINISH = {
         "subject": "Product Registration Complete! ✅",
         "body": """
@@ -103,17 +102,16 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
-        "variables": {
-            "required": ["product_count"],
-            "optional": []
-        }
+        "variables": {"required": ["product_count"], "optional": []},
     }
-    
+
     REGISTRATION_SYNC = {
         "subject": "Product Catalog Updated 🔄",
         "body": """
@@ -143,17 +141,19 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
         "variables": {
             "required": ["added_count", "updated_count"],
-            "optional": ["removed_count"]
-        }
+            "optional": ["removed_count"],
+        },
     }
-    
+
     BILLING_EXPIRED = {
         "subject": "Your GlamYouUp Subscription Has Expired ⚠️",
         "body": """
@@ -187,17 +187,16 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
-        "variables": {
-            "required": ["plan_name", "renewal_link"],
-            "optional": []
-        }
+        "variables": {"required": ["plan_name", "renewal_link"], "optional": []},
     }
-    
+
     BILLING_CHANGED = {
         "subject": "Billing Plan Updated Successfully ✅",
         "body": """
@@ -220,17 +219,16 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
-        "variables": {
-            "required": ["plan_name"],
-            "optional": []
-        }
+        "variables": {"required": ["plan_name"], "optional": []},
     }
-    
+
     BILLING_LOW_CREDITS = {
         "subject": "Credit Balance Running Low ⚠️",
         "body": """
@@ -264,17 +262,24 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
         "variables": {
-            "required": ["current_balance", "days_remaining", "expected_depletion_date", "billing_link"],
-            "optional": []
-        }
+            "required": [
+                "current_balance",
+                "days_remaining",
+                "expected_depletion_date",
+                "billing_link",
+            ],
+            "optional": [],
+        },
     }
-    
+
     BILLING_ZERO_BALANCE = {
         "subject": "URGENT: Zero Balance - Service Deactivation in 16 Hours 🚨",
         "body": """
@@ -309,17 +314,19 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
         "variables": {
             "required": ["deactivation_time", "billing_link"],
-            "optional": []
-        }
+            "optional": [],
+        },
     }
-    
+
     BILLING_DEACTIVATED = {
         "subject": "GlamYouUp Features Deactivated 🔒",
         "body": """
@@ -355,17 +362,16 @@ class EmailTemplates:
                 
                 <p>Best regards,<br>The GlamYouUp Team</p>
                 
-                """ + FOOTER_TEMPLATE + """
+                """
+        + FOOTER_TEMPLATE
+        + """
             </div>
         </body>
         </html>
         """,
-        "variables": {
-            "required": ["reason", "reactivation_link"],
-            "optional": []
-        }
+        "variables": {"required": ["reason", "reactivation_link"], "optional": []},
     }
-    
+
     @classmethod
     def get_template(cls, notification_type: str) -> Dict[str, Any]:
         """Get template for notification type"""
@@ -379,16 +385,16 @@ class EmailTemplates:
             "billing_zero_balance": cls.BILLING_ZERO_BALANCE,
             "billing_deactivated": cls.BILLING_DEACTIVATED,
         }
-        
-        return templates.get(notification_type, {
-            "subject": "GlamYouUp Notification",
-            "body": "<html><body><p>{{ content }}</p></body></html>",
-            "variables": {
-                "required": ["content"],
-                "optional": []
-            }
-        })
-    
+
+        return templates.get(
+            notification_type,
+            {
+                "subject": "GlamYouUp Notification",
+                "body": "<html><body><p>{{ content }}</p></body></html>",
+                "variables": {"required": ["content"], "optional": []},
+            },
+        )
+
     @classmethod
     def get_all_templates(cls) -> Dict[str, Dict[str, Any]]:
         """Get all available templates"""
@@ -402,7 +408,7 @@ class EmailTemplates:
             "billing_zero_balance": cls.BILLING_ZERO_BALANCE,
             "billing_deactivated": cls.BILLING_DEACTIVATED,
         }
-    
+
     @classmethod
     def get_template_info(cls, notification_type: str) -> Dict[str, Any]:
         """Get template information including variables"""
@@ -410,27 +416,33 @@ class EmailTemplates:
         return {
             "type": notification_type,
             "subject": template.get("subject", ""),
-            "variables": template.get("variables", {
-                "required": [],
-                "optional": []
-            }),
-            "has_body": bool(template.get("body"))
+            "variables": template.get("variables", {"required": [], "optional": []}),
+            "has_body": bool(template.get("body")),
         }
-    
+
     @classmethod
-    def validate_variables(cls, notification_type: str, provided_variables: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_variables(
+        cls, notification_type: str, provided_variables: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Validate that all required variables are provided"""
         template = cls.get_template(notification_type)
         required_vars = template.get("variables", {}).get("required", [])
         optional_vars = template.get("variables", {}).get("optional", [])
-        
-        missing_required = [var for var in required_vars if var not in provided_variables]
-        unused_variables = [var for var in provided_variables 
-                          if var not in required_vars + optional_vars + 
-                          ["unsubscribe_token", "shop_id", "shop_domain"]]
-        
+
+        missing_required = [
+            var for var in required_vars if var not in provided_variables
+        ]
+        unused_variables = [
+            var
+            for var in provided_variables
+            if var
+            not in required_vars
+            + optional_vars
+            + ["unsubscribe_token", "merchant_id", "shop_domain"]
+        ]
+
         return {
             "is_valid": len(missing_required) == 0,
             "missing_required": missing_required,
-            "unused_variables": unused_variables
+            "unused_variables": unused_variables,
         }

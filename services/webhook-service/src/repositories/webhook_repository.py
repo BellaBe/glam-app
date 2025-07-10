@@ -13,10 +13,10 @@ from ..models.webhook_entry import WebhookEntry, WebhookStatus, WebhookSource
 
 class WebhookRepository(Repository[WebhookEntry]):
     """Repository for webhook operations"""
-    
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         super().__init__(WebhookEntry, session_factory)
-    
+
     async def create_entry(
         self,
         source: WebhookSource,
@@ -25,8 +25,8 @@ class WebhookRepository(Repository[WebhookEntry]):
         payload: dict,
         hmac_signature: str,
         idempotency_key: str,
-        shop_id: Optional[str] = None,
-        shop_domain: Optional[str] = None
+        merchant_id: Optional[str] = None,
+        shop_domain: Optional[str] = None,
     ) -> WebhookEntry:
         """Create a new webhook entry"""
         async with self.session_factory() as session:
@@ -37,20 +37,19 @@ class WebhookRepository(Repository[WebhookEntry]):
                 payload=payload,
                 hmac_signature=hmac_signature,
                 idempotency_key=idempotency_key,
-                shop_id=shop_id,
+                merchant_id=merchant_id,
                 shop_domain=shop_domain,
-                status=WebhookStatus.RECEIVED
+                status=WebhookStatus.RECEIVED,
             )
-            
+
             session.add(entry)
             await session.commit()
             await session.refresh(entry)
-            
+
             return entry
-    
+
     async def find_by_idempotency_key(
-        self, 
-        idempotency_key: str
+        self, idempotency_key: str
     ) -> Optional[WebhookEntry]:
         """Find webhook by idempotency key"""
         async with self.session_factory() as session:
@@ -59,7 +58,7 @@ class WebhookRepository(Repository[WebhookEntry]):
             )
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
-    
+
     async def mark_as_processing(self, entry_id: UUID) -> bool:
         """Mark webhook as processing"""
         async with self.session_factory() as session:
@@ -68,20 +67,19 @@ class WebhookRepository(Repository[WebhookEntry]):
                 .where(
                     and_(
                         WebhookEntry.id == entry_id,
-                        WebhookEntry.status == WebhookStatus.RECEIVED
+                        WebhookEntry.status == WebhookStatus.RECEIVED,
                     )
                 )
                 .values(
-                    status=WebhookStatus.PROCESSING,
-                    attempts=WebhookEntry.attempts + 1
+                    status=WebhookStatus.PROCESSING, attempts=WebhookEntry.attempts + 1
                 )
             )
-            
+
             result = await session.execute(stmt)
             await session.commit()
-            
+
             return result.rowcount > 0
-    
+
     async def mark_as_processed(self, entry_id: UUID) -> bool:
         """Mark webhook as successfully processed"""
         async with self.session_factory() as session:
@@ -91,20 +89,16 @@ class WebhookRepository(Repository[WebhookEntry]):
                 .values(
                     status=WebhookStatus.PROCESSED,
                     processed_at=datetime.now(timezone.utc),
-                    error=None
+                    error=None,
                 )
             )
-            
+
             result = await session.execute(stmt)
             await session.commit()
-            
+
             return result.rowcount > 0
-    
-    async def mark_as_failed(
-        self, 
-        entry_id: UUID, 
-        error: str
-    ) -> bool:
+
+    async def mark_as_failed(self, entry_id: UUID, error: str) -> bool:
         """Mark webhook as failed"""
         async with self.session_factory() as session:
             stmt = (
@@ -113,19 +107,17 @@ class WebhookRepository(Repository[WebhookEntry]):
                 .values(
                     status=WebhookStatus.FAILED,
                     error=error,
-                    processed_at=datetime.now(timezone.utc)
+                    processed_at=datetime.now(timezone.utc),
                 )
             )
-            
+
             result = await session.execute(stmt)
             await session.commit()
-            
+
             return result.rowcount > 0
-    
+
     async def get_failed_webhooks(
-        self,
-        max_attempts: int = 5,
-        limit: int = 100
+        self, max_attempts: int = 5, limit: int = 100
     ) -> List[WebhookEntry]:
         """Get failed webhooks for retry"""
         async with self.session_factory() as session:
@@ -134,12 +126,12 @@ class WebhookRepository(Repository[WebhookEntry]):
                 .where(
                     and_(
                         WebhookEntry.status == WebhookStatus.FAILED,
-                        WebhookEntry.attempts < max_attempts
+                        WebhookEntry.attempts < max_attempts,
                     )
                 )
                 .order_by(WebhookEntry.created_at)
                 .limit(limit)
             )
-            
+
             result = await session.execute(stmt)
             return list(result.scalars())
