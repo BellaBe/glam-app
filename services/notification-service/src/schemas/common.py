@@ -20,7 +20,7 @@ class ShopInfo(BaseModel):
     """Shop identification information."""
 
     merchant_id: UUID
-    shop_domain: str = Field(..., min_length=1, max_length=255)
+    merchant_domain: str = Field(..., min_length=1, max_length=255)
     shop_email: EmailStr
     unsubscribe_token: str = Field(..., min_length=1, max_length=255)
     dynamic_content: Optional[dict] = None

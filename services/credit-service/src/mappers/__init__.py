@@ -1,10 +1,10 @@
 # services/credit-service/src/mappers/__init__.py
 """Mappers for credit service."""
 
-from .credit_account_mapper import CreditAccountMapper
+from .credit_mapper import CreditMapper
 from .credit_transaction_mapper import CreditTransactionMapper
 
 __all__ = [
-    "CreditAccountMapper",
+    "CreditMapper",
     "CreditTransactionMapper",
 ]

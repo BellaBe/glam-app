@@ -540,7 +540,7 @@ src/
 │               notification_create = NotificationCreate(
 │                   notification_type=payload.notification_type,
 │                   merchant_id=payload.recipient.id,
-│                   shop_domain=payload.recipient.domain,
+│                   merchant_domain=payload.recipient.domain,
 │                   shop_email=payload.recipient.email,
 │                   unsubscribe_token=payload.recipient.unsubscribe_token,
 │                   dynamic_content=payload.recipient.dynamic_content or {},
@@ -618,7 +618,7 @@ src/
 │                       try:
 │                           notification_create = NotificationCreate(
 │                               merchant_id=recipient.merchant_id,
-│                               shop_domain=recipient.shop_domain,
+│                               merchant_domain=recipient.merchant_domain,
 │                               shop_email=recipient.email,
 │                               unsubscribe_token=recipient.unsubscribe_token,
 │                               notification_type=payload.notification_type,
@@ -791,7 +791,7 @@ src/
 │               return Notification(
 │                   # Shop information
 │                   merchant_id=str(create_schema.merchant_id),
-│                   shop_domain=create_schema.shop_domain,
+│                   merchant_domain=create_schema.merchant_domain,
 │                   
 │                   # Recipient information
 │                   recipient_email=create_schema.shop_email,
@@ -817,7 +817,7 @@ src/
 │               return NotificationResponse(
 │                   id=UUID(str(model.id)),
 │                   merchant_id=UUID(model.merchant_id),
-│                   shop_domain=model.shop_domain,
+│                   merchant_domain=model.merchant_domain,
 │                   shop_email=model.recipient_email,
 │                   type=model.type,
 │                   status=model.status,
@@ -831,7 +831,7 @@ src/
 │               return NotificationDetailResponse(
 │                   id=UUID(str(model.id)),
 │                   merchant_id=UUID(model.merchant_id),
-│                   shop_domain=model.shop_domain,
+│                   merchant_domain=model.merchant_domain,
 │                   shop_email=model.recipient_email,
 │                   type=model.type,
 │                   status=model.status,
@@ -945,7 +945,7 @@ src/
 │   │       """Mixin for shop-related fields."""
 │   │       
 │   │       merchant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-│   │       shop_domain: Mapped[str] = mapped_column(String(255), nullable=False)
+│   │       merchant_domain: Mapped[str] = mapped_column(String(255), nullable=False)
 │   │   ```
 │   │   
 │   ├── notification.py
@@ -2494,7 +2494,7 @@ src/
 │   │   class ShopInfo(BaseModel):
 │   │       """Shop identification information."""
 │   │       merchant_id: UUID
-│   │       shop_domain: str = Field(..., min_length=1, max_length=255)
+│   │       merchant_domain: str = Field(..., min_length=1, max_length=255)
 │   │       shop_email: EmailStr
 │   │       unsubscribe_token: str = Field(..., min_length=1, max_length=255)
 │   │       dynamic_content: Optional[dict] = None
@@ -2547,7 +2547,7 @@ src/
 │   │       notification_type: str = Field(..., min_length=1, max_length=50)
 │   │       extra_metadata: Dict[str, Any] = Field(default_factory=dict)
 │   │       
-│   │       @field_validator("merchant_id", "shop_domain", "shop_email", "unsubscribe_token")
+│   │       @field_validator("merchant_id", "merchant_domain", "shop_email", "unsubscribe_token")
 │   │       def validate_content_source(cls, v):
 │   │           """Ensure required fields are provided."""
 │   │           if not v:
@@ -2565,8 +2565,8 @@ src/
 │   │           if not (1 <= len(v) <= 100):
 │   │               raise ValueError("Recipients list must have between 1 and 100 items")
 │   │           for recipient in v:
-│   │               if not recipient.merchant_id or not recipient.shop_domain or not recipient.shop_email or not recipient.unsubscribe_token:
-│   │                   raise ValueError("Each recipient must have merchant_id, shop_domain, shop_email, and unsubscribe_token")
+│   │               if not recipient.merchant_id or not recipient.merchant_domain or not recipient.shop_email or not recipient.unsubscribe_token:
+│   │                   raise ValueError("Each recipient must have merchant_id, merchant_domain, shop_email, and unsubscribe_token")
 │   │           return v
 │   │   
 │   │   class NotificationUpdate(BaseModel):
@@ -2595,7 +2595,7 @@ src/
 │   │       """Basic notification response."""
 │   │       id: UUID
 │   │       merchant_id: UUID
-│   │       shop_domain: str
+│   │       merchant_domain: str
 │   │       shop_email: str
 │   │       type: str
 │   │       status: NotificationStatus
@@ -2981,7 +2981,7 @@ src/
 │   │           """
 │   │           
 │   │           # Validate input
-│   │           if not notification_create.merchant_id or not notification_create.shop_domain:
+│   │           if not notification_create.merchant_id or not notification_create.merchant_domain:
 │   │               raise ValueError("Shop ID and domain are required")
 │   │           
 │   │           # Create notification record
@@ -3005,7 +3005,7 @@ src/
 │   │           # Extract notification details
 │   │           notification_type = notification_create.notification_type
 │   │           merchant_id = notification_create.merchant_id
-│   │           shop_domain = notification_create.shop_domain
+│   │           merchant_domain = notification_create.merchant_domain
 │   │           unsubscribe_token = notification_create.unsubscribe_token
 │   │           dynamic_content = notification_create.dynamic_content or {}
 │   │           extra_metadata = notification_create.extra_metadata or {}
@@ -3014,7 +3014,7 @@ src/
 │   │               "Creating and sending notification",
 │   │               extra={
 │   │                   "merchant_id": str(merchant_id),
-│   │                   "shop_domain": shop_domain,
+│   │                   "merchant_domain": merchant_domain,
 │   │                   "notification_type": notification_type,
 │   │                   "correlation_id": extra_metadata.get("correlation_id", None),
 │   │               }
@@ -3026,7 +3026,7 @@ src/
 │   │               f"Retrieved template for notification type {notification_type}",
 │   │               extra={
 │   │                   "merchant_id": str(merchant_id),
-│   │                   "shop_domain": shop_domain,
+│   │                   "merchant_domain": merchant_domain,
 │   │                   "correlation_id": extra_metadata.get("correlation_id", None),
 │   │               }
 │   │           )
@@ -3035,7 +3035,7 @@ src/
 │   │                   f"No template found for notification type: {notification_type}",
 │   │                   extra={
 │   │                       "merchant_id": str(merchant_id),
-│   │                       "shop_domain": shop_domain,
+│   │                       "merchant_domain": merchant_domain,
 │   │                       "correlation_id": extra_metadata.get("correlation_id", None),
 │   │                   }
 │   │               )
@@ -3094,7 +3094,7 @@ src/
 │   │               extra={
 │   │                   "notification_id": str(notification.id),
 │   │                   "merchant_id": str(notification.merchant_id),
-│   │                   "shop_domain": notification.shop_domain,
+│   │                   "merchant_domain": notification.merchant_domain,
 │   │                   "recipient_email": notification.recipient_email,
 │   │                   "notification_type": notification.type,
 │   │                   "correlation_id": (notification.extra_metadata or {}).get("correlation_id", None)
@@ -3581,7 +3581,7 @@ src/
 │               defaults = {
 │                   'welcome': {
 │                       'shop_name': 'Example Fashion Store',
-│                       'shop_domain': 'example-store.myshopify.com'
+│                       'merchant_domain': 'example-store.myshopify.com'
 │                   },
 │                   'registration_finish': {
 │                       'product_count': 150
@@ -3684,7 +3684,7 @@ src/
 │       if template:
 │           subject, html, text = await template_service.render_template(
 │               template,
-│               {'shop_name': 'My Shop', 'shop_domain': 'myshop.com'},
+│               {'shop_name': 'My Shop', 'merchant_domain': 'myshop.com'},
 │               unsubscribe_token='abc123'  # Only for marketing emails
 │           )
 │       
@@ -4127,7 +4127,7 @@ src/
 │   │           missing_required = [var for var in required_vars if var not in provided_variables]
 │   │           unused_variables = [var for var in provided_variables 
 │   │                             if var not in required_vars + optional_vars + 
-│   │                             ["unsubscribe_token", "merchant_id", "shop_domain"]]
+│   │                             ["unsubscribe_token", "merchant_id", "merchant_domain"]]
 │   │           
 │   │           return {
 │   │               "is_valid": len(missing_required) == 0,
@@ -4301,7 +4301,7 @@ src/
 │   │               "body": """
 │   │   <h2>Welcome aboard, {{ shop_name }}!</h2>
 │   │   
-│   │   <p>We're thrilled to have you join the {{ platform_name }} family! Your shop <strong>{{ shop_domain }}</strong> is now connected and ready to transform your product imagery.</p>
+│   │   <p>We're thrilled to have you join the {{ platform_name }} family! Your shop <strong>{{ merchant_domain }}</strong> is now connected and ready to transform your product imagery.</p>
 │   │   
 │   │   <div class="success">
 │   │       <strong>✅ Setup Complete!</strong><br>
@@ -4336,7 +4336,7 @@ src/
 │   │   <p><strong>The {{ platform_name }} Team</strong></p>
 │   │   """,
 │   │               "variables": {
-│   │                   "required": ["shop_name", "shop_domain"],
+│   │                   "required": ["shop_name", "merchant_domain"],
 │   │                   "optional": ["merchant_id"]
 │   │               }
 │   │           },
@@ -4953,7 +4953,7 @@ src/
 │               defaults = {
 │                   'welcome': {
 │                       'shop_name': 'Example Fashion Store',
-│                       'shop_domain': 'example-store.myshopify.com'
+│                       'merchant_domain': 'example-store.myshopify.com'
 │                   },
 │                   'registration_finish': {
 │                       'product_count': 150
@@ -5056,7 +5056,7 @@ src/
 │       if template:
 │           subject, html, text = await template_service.render_template(
 │               template,
-│               {'shop_name': 'My Shop', 'shop_domain': 'myshop.com'},
+│               {'shop_name': 'My Shop', 'merchant_domain': 'myshop.com'},
 │               unsubscribe_token='abc123'  # Only for marketing emails
 │           )
 │       

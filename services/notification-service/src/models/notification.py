@@ -5,9 +5,10 @@
 import enum
 from datetime import datetime
 from typing import Optional, Dict, Any
+from uuid import UUID, uuid4
 from sqlalchemy import String, Text, Integer, DateTime, Enum, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from shared.database.base import MerchantMixin, Base, TimestampedMixin
 
 
@@ -41,9 +42,9 @@ class Notification(Base, TimestampedMixin, MerchantMixin):
     
     # Primary key
     id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True),
+        PGUUID(as_uuid=True),
         primary_key=True,
-        server_default=func.gen_random_uuid()
+        default=uuid4
     )
     
     # Recipient and type

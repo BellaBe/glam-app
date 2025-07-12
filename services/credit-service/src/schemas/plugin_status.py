@@ -1,7 +1,6 @@
 # services/credit-service/src/schemas/plugin_status.py
 """Plugin status schemas."""
 
-from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 from typing import Literal, Dict, List
@@ -42,5 +41,5 @@ class PluginStatusMetrics(BaseModel):
     enabled_count: int
     disabled_count: int
     enabled_percentage: float
-    average_balance: Decimal
+    average_balance: int
     zero_balance_count: int

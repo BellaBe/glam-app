@@ -26,7 +26,7 @@ class WebhookRepository(Repository[WebhookEntry]):
         hmac_signature: str,
         idempotency_key: str,
         merchant_id: Optional[str] = None,
-        shop_domain: Optional[str] = None,
+        merchant_domain: Optional[str] = None,
     ) -> WebhookEntry:
         """Create a new webhook entry"""
         async with self.session_factory() as session:
@@ -38,7 +38,7 @@ class WebhookRepository(Repository[WebhookEntry]):
                 hmac_signature=hmac_signature,
                 idempotency_key=idempotency_key,
                 merchant_id=merchant_id,
-                shop_domain=shop_domain,
+                merchant_domain=merchant_domain,
                 status=WebhookStatus.RECEIVED,
             )
 

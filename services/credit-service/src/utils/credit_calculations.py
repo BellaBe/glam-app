@@ -1,7 +1,6 @@
 # services/credit-service/src/utils/credit_calculations.py
 """Utilities for credit calculations."""
 
-from decimal import Decimal
 from typing import Union
 
 

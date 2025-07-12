@@ -160,7 +160,7 @@ class EmailTemplates:
             "body": """
 <h2>Welcome aboard, {{ shop_name }}!</h2>
 
-<p>We're thrilled to have you join the {{ platform_name }} family! Your shop <strong>{{ shop_domain }}</strong> is now connected and ready to transform your product imagery.</p>
+<p>We're thrilled to have you join the {{ platform_name }} family! Your shop <strong>{{ merchant_domain }}</strong> is now connected and ready to transform your product imagery.</p>
 
 <div class="success">
     <strong>✅ Setup Complete!</strong><br>
@@ -195,7 +195,7 @@ class EmailTemplates:
 <p><strong>The {{ platform_name }} Team</strong></p>
 """,
             "variables": {
-                "required": ["shop_name", "shop_domain"],
+                "required": ["shop_name", "merchant_domain"],
                 "optional": ["merchant_id"],
             },
         },

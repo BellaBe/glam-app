@@ -1,7 +1,6 @@
 # services/credit-service/src/services/balance_monitor_service.py
 """Service for monitoring credit balance thresholds."""
 
-from decimal import Decimal
 from uuid import UUID
 from typing import Optional
 
@@ -28,14 +27,14 @@ class BalanceMonitorService:
         # Calculate threshold
         self.low_threshold = (
             self.config.TRIAL_CREDITS * 
-            Decimal(str(self.config.LOW_BALANCE_THRESHOLD_PERCENT / 100))
+            self.config.LOW_BALANCE_THRESHOLD_PERCENT / 100
         )
     
     async def check_balance_thresholds(
         self,
         merchant_id: UUID,
-        old_balance: Decimal,
-        new_balance: Decimal,
+        old_balance: int,
+        new_balance: int,
         correlation_id: Optional[str] = None
     ) -> None:
         """Check if balance crosses any thresholds and publish events"""

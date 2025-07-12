@@ -1,22 +1,17 @@
-# -------------------------------
 # services/notification-service/src/mappers/notification_mapper.py
-# -------------------------------
-
 """Mapper for notification schemas and models."""
 
 from typing import Dict, Any, Optional
 from uuid import UUID
-from datetime import datetime
 
 from shared.api.correlation import get_correlation_context
 from ..models import Notification, NotificationStatus, NotificationProvider
 from ..schemas import (
     NotificationCreate,
     NotificationUpdate,
-    NotificationResponse,
-    NotificationDetailResponse,
+    NotificationResponse
 )
-from .base import BaseMapper
+from shared.mappers.base import BaseMapper
 
 
 class NotificationMapper(
@@ -26,10 +21,9 @@ class NotificationMapper(
 ):
     """Maps between notification schemas and models."""
 
-    def create_to_model(  # type: ignore
+    def create_to_model(
         self,
         create_schema: NotificationCreate,
-        *,
         subject: str,
         content: str,
         provider: NotificationProvider = NotificationProvider.SENDGRID,
@@ -54,30 +48,24 @@ class NotificationMapper(
         )
 
         return Notification(
-            # Shop information
-            merchant_id=str(create_schema.merchant_id),
-            shop_domain=create_schema.shop_domain,
-            # Recipient information
+            merchant_id=create_schema.merchant_id,
+            merchant_domain=create_schema.merchant_domain,
             recipient_email=create_schema.shop_email,
             type=create_schema.notification_type,
-            # Email content
             subject=subject,
             content=content,
-            # Status and provider
             status=NotificationStatus.PENDING,
             provider=provider,
-            # Metadata
             extra_metadata=metadata,
-            # Initialize counters
             retry_count=0,
         )
 
     def model_to_response(self, model: Notification) -> NotificationResponse:
         """Convert Notification model to response schema."""
         return NotificationResponse(
-            id=UUID(str(model.id)),
-            merchant_id=UUID(model.merchant_id),
-            shop_domain=model.shop_domain,
+            id=model.id,
+            merchant_id=model.merchant_id,
+            merchant_domain=model.merchant_domain,
             shop_email=model.recipient_email,
             type=model.type,
             status=model.status,
@@ -85,50 +73,6 @@ class NotificationMapper(
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
-
-    def model_to_detail_response(
-        self, model: Notification
-    ) -> NotificationDetailResponse:
-        """Convert Notification model to detailed response schema."""
-        return NotificationDetailResponse(
-            id=UUID(str(model.id)),
-            merchant_id=UUID(model.merchant_id),
-            shop_domain=model.shop_domain,
-            shop_email=model.recipient_email,
-            type=model.type,
-            status=model.status,
-            sent_at=model.sent_at,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-            content=model.content,
-            provider=model.provider,
-            provider_message_id=model.provider_message_id,
-            error_message=model.error_message,
-            retry_count=model.retry_count,
-            extra_metadata=model.extra_metadata or {},
-        )
-
-    def update_to_model_dict(self, update_schema: NotificationUpdate) -> dict:
-        """
-        Convert update schema to dictionary for model updates.
-
-        Maps schema fields to model fields and handles special cases.
-        """
-        update_dict = {}
-
-        if update_schema.status is not None:
-            update_dict["status"] = update_schema.status
-
-        if update_schema.provider_message_id is not None:
-            update_dict["provider_message_id"] = update_schema.provider_message_id
-
-        if update_schema.error_message is not None:
-            update_dict["error_message"] = update_schema.error_message
-
-        if update_schema.sent_at is not None:
-            update_dict["sent_at"] = update_schema.sent_at
-
-        return update_dict
 
     def _build_metadata(
         self, create_schema: NotificationCreate, unsubscribe_token: Optional[str] = None

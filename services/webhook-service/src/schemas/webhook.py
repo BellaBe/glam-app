@@ -24,7 +24,7 @@ class ShopifyWebhookHeaders(WebhookHeaders):
 
     x_shopify_topic: str = Field(alias="X-Shopify-Topic")
     x_shopify_hmac_sha256: str = Field(alias="X-Shopify-Hmac-Sha256")
-    x_shopify_shop_domain: str = Field(alias="X-Shopify-Shop-Domain")
+    x_shopify_merchant_domain: str = Field(alias="X-Shopify-Shop-Domain")
     x_shopify_api_version: Optional[str] = Field(None, alias="X-Shopify-API-Version")
     x_shopify_webhook_id: Optional[str] = Field(None, alias="X-Shopify-Webhook-Id")
 

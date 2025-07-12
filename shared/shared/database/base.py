@@ -2,9 +2,10 @@
 # glam-app/shared/database/base.py
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy import DateTime, String
 from datetime import datetime, timezone
+from uuid import UUID
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -14,7 +15,7 @@ class Base(AsyncAttrs, DeclarativeBase):
 class MerchantMixin:
     """Mixin to add merchant_id to any model"""
     merchant_id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), 
+        PGUUID(as_uuid=True), 
         nullable=False, 
         index=True
     )

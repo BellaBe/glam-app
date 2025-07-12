@@ -9,7 +9,6 @@ Usage:
 import asyncio
 import json
 import uuid
-from decimal import Decimal
 from typing import Dict, Any
 
 import httpx

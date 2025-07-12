@@ -15,7 +15,6 @@ from src.dependencies import NotificationServiceDep
 from src.schemas import (
     NotificationResponse,
     NotificationListResponse,
-    NotificationDetailResponse,
 )
 
 router = APIRouter(tags=["notifications"])

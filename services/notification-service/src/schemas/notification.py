@@ -20,7 +20,9 @@ class NotificationCreate(ShopInfo):
     notification_type: str = Field(..., min_length=1, max_length=50)
     extra_metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("merchant_id", "shop_domain", "shop_email", "unsubscribe_token")
+    @field_validator(
+        "merchant_id", "merchant_domain", "shop_email", "unsubscribe_token"
+    )
     def validate_content_source(cls, v):
         """Ensure required fields are provided."""
         if not v:
@@ -42,12 +44,12 @@ class BulkNotificationCreate(BaseModel):
         for recipient in v:
             if (
                 not recipient.merchant_id
-                or not recipient.shop_domain
+                or not recipient.merchant_domain
                 or not recipient.shop_email
                 or not recipient.unsubscribe_token
             ):
                 raise ValueError(
-                    "Each recipient must have merchant_id, shop_domain, shop_email, and unsubscribe_token"
+                    "Each recipient must have merchant_id, merchant_domain, shop_email, and unsubscribe_token"
                 )
         return v
 
@@ -76,13 +78,12 @@ class NotificationFilter(BaseModel):
 
 # Response Schemas
 
-
 class NotificationResponse(BaseModel):
     """Basic notification response."""
 
     id: UUID
     merchant_id: UUID
-    shop_domain: str
+    merchant_domain: str
     shop_email: str
     type: str
     status: NotificationStatus

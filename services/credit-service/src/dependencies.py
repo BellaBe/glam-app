@@ -16,10 +16,13 @@ from .lifecycle import ServiceLifecycle
 from .services.credit_service import CreditService
 from .services.balance_monitor_service import BalanceMonitorService
 from .services.plugin_status_service import PluginStatusService
-from .repositories.credit_account_repository import CreditAccountRepository
+from .services.credit_transaction_service import CreditTransactionService
+
+from .repositories.credit_repository import CreditRepository
 from .repositories.credit_transaction_repository import CreditTransactionRepository
+
 from .events.publishers import CreditEventPublisher
-from .mappers.credit_account_mapper import CreditAccountMapper
+from .mappers.credit_mapper import CreditMapper
 from .mappers.credit_transaction_mapper import CreditTransactionMapper
 
 
@@ -47,7 +50,9 @@ def get_messaging_wrapper(lifecycle: LifecycleDep) -> JetStreamWrapper:
     return lifecycle.messaging_wrapper
 
 
-def get_publisher(wrapper: Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]) -> CreditEventPublisher:
+def get_publisher(
+    wrapper: Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)],
+) -> CreditEventPublisher:
     """Get credit event publisher"""
     pub = wrapper.get_publisher(CreditEventPublisher)
     if not pub:
@@ -61,11 +66,11 @@ PublisherDep = Annotated[CreditEventPublisher, Depends(get_publisher)]
 
 
 # Repository dependencies
-def get_credit_account_repo(lifecycle: LifecycleDep) -> CreditAccountRepository:
+def get_credit_repo(lifecycle: LifecycleDep) -> CreditRepository:
     """Get credit account repository"""
-    if not lifecycle.credit_account_repo:
-        raise HTTPException(500, "CreditAccountRepository not initialized")
-    return lifecycle.credit_account_repo
+    if not lifecycle.credit_repo:
+        raise HTTPException(500, "CreditRepository not initialized")
+    return lifecycle.credit_repo
 
 
 def get_credit_transaction_repo(lifecycle: LifecycleDep) -> CreditTransactionRepository:
@@ -76,8 +81,10 @@ def get_credit_transaction_repo(lifecycle: LifecycleDep) -> CreditTransactionRep
 
 
 # Type aliases for repositories
-CreditAccountRepoDep = Annotated[CreditAccountRepository, Depends(get_credit_account_repo)]
-CreditTransactionRepoDep = Annotated[CreditTransactionRepository, Depends(get_credit_transaction_repo)]
+CreditRepoDep = Annotated[CreditRepository, Depends(get_credit_repo)]
+CreditTransactionRepoDep = Annotated[
+    CreditTransactionRepository, Depends(get_credit_transaction_repo)
+]
 
 
 # Service dependencies
@@ -102,10 +109,27 @@ def get_plugin_status_service(lifecycle: LifecycleDep) -> PluginStatusService:
     return lifecycle.plugin_status_service
 
 
+def get_credit_transaction_service(
+    lifecycle: LifecycleDep,
+) -> CreditTransactionService:
+    """Get credit transaction service"""
+    if not lifecycle.credit_transaction_service:
+        raise HTTPException(500, "CreditTransactionService not initialized")
+    return lifecycle.credit_transaction_service
+
+
 # Type aliases for services
 CreditServiceDep = Annotated[CreditService, Depends(get_credit_service)]
-BalanceMonitorServiceDep = Annotated[BalanceMonitorService, Depends(get_balance_monitor_service)]
-PluginStatusServiceDep = Annotated[PluginStatusService, Depends(get_plugin_status_service)]
+BalanceMonitorServiceDep = Annotated[
+    BalanceMonitorService, Depends(get_balance_monitor_service)
+]
+PluginStatusServiceDep = Annotated[
+    PluginStatusService, Depends(get_plugin_status_service)
+]
+
+CreditTransactionServiceDep = Annotated[
+    CreditTransactionService, Depends(get_credit_transaction_service)
+]
 
 
 # Utility dependencies
@@ -116,11 +140,11 @@ def get_redis_client(lifecycle: LifecycleDep) -> redis.Redis:
     return lifecycle.redis_client
 
 
-def get_credit_account_mapper(lifecycle: LifecycleDep) -> CreditAccountMapper:
+def get_credit_mapper(lifecycle: LifecycleDep) -> CreditMapper:
     """Get credit account mapper"""
-    if not lifecycle.credit_account_mapper:
-        raise HTTPException(500, "CreditAccountMapper not initialized")
-    return lifecycle.credit_account_mapper
+    if not lifecycle.credit_mapper:
+        raise HTTPException(500, "CreditMapper not initialized")
+    return lifecycle.credit_mapper
 
 
 def get_credit_transaction_mapper(lifecycle: LifecycleDep) -> CreditTransactionMapper:
@@ -132,5 +156,7 @@ def get_credit_transaction_mapper(lifecycle: LifecycleDep) -> CreditTransactionM
 
 # Type aliases for utilities
 RedisClientDep = Annotated[redis.Redis, Depends(get_redis_client)]
-CreditAccountMapperDep = Annotated[CreditAccountMapper, Depends(get_credit_account_mapper)]
-CreditTransactionMapperDep = Annotated[CreditTransactionMapper, Depends(get_credit_transaction_mapper)]
+CreditMapperDep = Annotated[CreditMapper, Depends(get_credit_mapper)]
+CreditTransactionMapperDep = Annotated[
+    CreditTransactionMapper, Depends(get_credit_transaction_mapper)
+]

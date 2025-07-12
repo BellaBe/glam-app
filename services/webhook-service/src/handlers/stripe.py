@@ -40,7 +40,7 @@ class StripeWebhookHandler(WebhookHandler):
         # Get shop info from metadata if available
         metadata = data.get("metadata", {})
         merchant_id = metadata.get("merchant_id")
-        shop_domain = metadata.get("shop_domain")
+        merchant_domain = metadata.get("merchant_domain")
 
         # Generate idempotency key
         idempotency_key = self.get_idempotency_key(body, event_type, headers)
@@ -56,7 +56,7 @@ class StripeWebhookHandler(WebhookHandler):
         return WebhookData(
             topic=event_type,
             merchant_id=merchant_id,
-            shop_domain=shop_domain,
+            merchant_domain=merchant_domain,
             idempotency_key=idempotency_key,
             payload=data,
             metadata=webhook_metadata,
@@ -92,7 +92,7 @@ class StripeWebhookHandler(WebhookHandler):
             webhook_data.topic,
             webhook_data.payload,
             webhook_data.merchant_id,
-            webhook_data.shop_domain,
+            webhook_data.merchant_domain,
         )
 
         return DomainEvent(event_type=event_type, payload=payload)
@@ -102,13 +102,13 @@ class StripeWebhookHandler(WebhookHandler):
         event_type: str,
         stripe_data: Dict[str, Any],
         merchant_id: Optional[str],
-        shop_domain: Optional[str],
+        merchant_domain: Optional[str],
     ) -> Dict[str, Any]:
         """Build domain event payload for Stripe events"""
 
         base_payload = {
             "merchant_id": merchant_id,
-            "shop_domain": shop_domain,
+            "merchant_domain": merchant_domain,
             "stripe_object_id": stripe_data.get("id"),
             "created": stripe_data.get("created"),
         }

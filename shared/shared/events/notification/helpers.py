@@ -14,7 +14,7 @@ from .types import (
 
 def create_send_email_command(
     merchant_id: UUID,
-    shop_domain: str,
+    merchant_domain: str,
     recipient_email: str,
     notification_type: str,
     dynamic_content: Dict[str, Any],
@@ -49,7 +49,7 @@ def create_send_email_command(
 
     recipient = Recipient(
         merchant_id=merchant_id,
-        shop_domain=shop_domain,
+        merchant_domain=merchant_domain,
         email=recipient_email,
         unsubscribe_token=unsubscribe_token,
         dynamic_content=dynamic_content,
@@ -96,7 +96,7 @@ def create_bulk_email_command(
     typed_recipients = [
         Recipient(
             merchant_id=r["merchant_id"],
-            shop_domain=r["shop_domain"],
+            merchant_domain=r["merchant_domain"],
             email=r["email"],
             unsubscribe_token=r["unsubscribe_token"],
             dynamic_content=r.get("dynamic_content", {}),

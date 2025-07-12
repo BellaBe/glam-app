@@ -17,7 +17,7 @@ from typing import List, Optional, cast
 
 from nats.js.api import StreamConfig, RetentionPolicy, StorageType
 
-from shared.utils.logger import create_logger, ServiceLogger
+from shared.utils.logger import ServiceLogger
 from shared.database import DatabaseSessionManager, set_database_manager
 from shared.messaging.jetstream_wrapper import JetStreamWrapper
 
@@ -44,9 +44,9 @@ from .mappers.notification_mapper import NotificationMapper
 class ServiceLifecycle:
     """Owns singletons that must exist exactly once per process."""
 
-    def __init__(self, config: ServiceConfig) -> None:
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger) -> None:
         self.config = config
-        self.logger: ServiceLogger = create_logger(config.SERVICE_NAME)
+        self.logger = logger
 
         # external connections
         self.messaging_wrapper: Optional[JetStreamWrapper]        = None

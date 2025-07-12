@@ -25,7 +25,7 @@ class NotificationEvents:
 
 class Recipient(BaseModel):
     merchant_id: UUID
-    shop_domain: str
+    merchant_domain: str
     email: str
     unsubscribe_token: str
     dynamic_content: Dict[str, Any] = Field(default_factory=dict)

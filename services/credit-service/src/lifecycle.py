@@ -21,27 +21,27 @@ from .config import ServiceConfig
 from .services.credit_service import CreditService
 from .services.balance_monitor_service import BalanceMonitorService
 from .services.plugin_status_service import PluginStatusService
+from .services.credit_transaction_service import CreditTransactionService
 
 # Repositories
-from .repositories.credit_account_repository import CreditAccountRepository
+from .repositories.credit_repository import CreditRepository
 from .repositories.credit_transaction_repository import CreditTransactionRepository
 
 # Models
-from .models.credit_account import CreditAccount
+from .models.credit import Credit
 from .models.credit_transaction import CreditTransaction
 
 # Events
 from .events.publishers import CreditEventPublisher
 from .events.subscribers import (
     ShopifyOrderPaidSubscriber,
-    ShopifyOrderRefundedSubscriber,
     BillingPaymentSucceededSubscriber,
     MerchantCreatedSubscriber,
     ManualAdjustmentSubscriber
 )
 
 # Mappers
-from .mappers.credit_account_mapper import CreditAccountMapper
+from .mappers.credit_mapper import CreditMapper
 from .mappers.credit_transaction_mapper import CreditTransactionMapper
 
 
@@ -58,17 +58,18 @@ class ServiceLifecycle:
         self.messaging_wrapper: Optional[JetStreamWrapper] = None
         
         # Repositories
-        self.credit_account_repo: Optional[CreditAccountRepository] = None
+        self.credit_repo: Optional[CreditRepository] = None
         self.credit_transaction_repo: Optional[CreditTransactionRepository] = None
         
         # Mappers
-        self.credit_account_mapper: Optional[CreditAccountMapper] = None
+        self.credit_mapper: Optional[CreditMapper] = None
         self.credit_transaction_mapper: Optional[CreditTransactionMapper] = None
         
         # Services
         self.credit_service: Optional[CreditService] = None
         self.balance_monitor_service: Optional[BalanceMonitorService] = None
         self.plugin_status_service: Optional[PluginStatusService] = None
+        self.credit_transaction_service: Optional[CreditTransactionService] = None
         
         # Events
         self.credit_publisher: Optional[CreditEventPublisher] = None
@@ -227,8 +228,14 @@ class ServiceLifecycle:
         
         session_factory = self.db_manager.get_session_factory()
         
-        self.credit_account_repo = CreditAccountRepository(session_factory)
-        self.credit_transaction_repo = CreditTransactionRepository(session_factory)
+        self.credit_repo = CreditRepository(
+            model_class=Credit,
+            session_factory=session_factory
+        )
+        self.credit_transaction_repo = CreditTransactionRepository(
+            model_class=CreditTransaction,
+            session_factory=session_factory
+        )
         
         self.logger.info("Repositories setup complete")
     
@@ -237,7 +244,7 @@ class ServiceLifecycle:
         
         self.logger.info("Setting up mappers...")
         
-        self.credit_account_mapper = CreditAccountMapper()
+        self.credit_mapper = CreditMapper()
         self.credit_transaction_mapper = CreditTransactionMapper()
         
         self.logger.info("Mappers setup complete")
@@ -263,7 +270,7 @@ class ServiceLifecycle:
         # Plugin status service
         self.plugin_status_service = PluginStatusService(
             config=self.config,
-            account_repo=self.credit_account_repo,
+            account_repo=self.credit_repo,
             redis_client=self.redis_client,
             logger=self.logger
         )
@@ -272,11 +279,25 @@ class ServiceLifecycle:
         self.credit_service = CreditService(
             config=self.config,
             publisher=self.credit_publisher,
-            account_repo=self.credit_account_repo,
+            account_repo=self.credit_repo,
             transaction_repo=self.credit_transaction_repo,
             balance_monitor=self.balance_monitor_service,
-            account_mapper=self.credit_account_mapper,
+            account_mapper=self.credit_mapper,
             transaction_mapper=self.credit_transaction_mapper,
+            logger=self.logger
+        )
+        
+        if not self.credit_service:
+            raise RuntimeError("CreditService initialization failed")
+        if not self.credit_transaction_repo:
+            raise RuntimeError("CreditTransactionRepository not initialized")
+        if not self.credit_transaction_mapper:
+            raise RuntimeError("CreditTransactionMapper not initialized")
+
+        self.credit_transaction_service = CreditTransactionService(
+            transaction_repo=self.credit_transaction_repo,
+            transaction_mapper=self.credit_transaction_mapper,
+            credit_service=self.credit_service,
             logger=self.logger
         )
         

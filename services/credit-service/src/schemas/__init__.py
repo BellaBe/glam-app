@@ -1,36 +1,31 @@
 # services/credit-service/src/schemas/__init__.py
 """Schemas for credit service API."""
 
-from .credit_account import (
-    CreditAccountResponse,
-    CreditAccountSummary
-)
+from .credit import CreditResponse, CreditSummary
 from .credit_transaction import (
     CreditTransactionResponse,
     CreditTransactionFilter,
     CreditTransactionCreate,
-    BulkTransactionSummary
+    BulkTransactionSummary,
 )
 from .plugin_status import (
     PluginStatusResponse,
     PluginStatusCheck,
     BatchPluginStatusResponse,
-    PluginStatusMetrics
+    PluginStatusMetrics,
 )
 
 __all__ = [
     # Credit Account
-    "CreditAccountResponse",
-    "CreditAccountSummary",
-    
-    # Credit Transaction  
+    "CreditResponse",
+    "CreditSummary",
+    # Credit Transaction
     "CreditTransactionResponse",
     "CreditTransactionFilter",
     "CreditTransactionCreate",
     "BulkTransactionSummary",
-    
     # Plugin Status
-    "PluginStatusResponse", 
+    "PluginStatusResponse",
     "PluginStatusCheck",
     "BatchPluginStatusResponse",
     "PluginStatusMetrics",

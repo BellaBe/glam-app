@@ -1,31 +1,27 @@
 # services/credit-service/src/models/credit_transaction.py
-"""Credit transaction model for audit trail."""
+"""Simplified credit transaction model."""
 
 from enum import Enum
-from decimal import Decimal
 from uuid import UUID, uuid4
-from sqlalchemy import String, Text, DECIMAL, JSON, Enum as SQLEnum, Index
+from sqlalchemy import String, Integer, JSON, Enum as SQLEnum, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from shared.database.base import TimestampedMixin, MerchantMixin, Base
 
 
-class TransactionType(str, Enum):
+class OperationType(str, Enum):
     """Types of credit transactions"""
-    RECHARGE = "RECHARGE"
-    REFUND = "REFUND"
-    ADJUSTMENT = "ADJUSTMENT"
+    INCREASE = "INCREASE"
+    DECREASE = "DECREASE"
 
 
-class ReferenceType(str, Enum):
+class TransactionType(str, Enum):
     """Reference types for transactions"""
     ORDER_PAID = "ORDER_PAID"
-    BILLING_PAYMENT = "BILLING_PAYMENT"
-    SUBSCRIPTION = "SUBSCRIPTION"
+    SUBSCRIPTION = "SUBSCRIPTION" 
     TRIAL = "TRIAL"
     MANUAL = "MANUAL"
-    ORDER_REFUND = "ORDER_REFUND"
 
 
 class CreditTransaction(Base, TimestampedMixin, MerchantMixin):
@@ -39,71 +35,56 @@ class CreditTransaction(Base, TimestampedMixin, MerchantMixin):
         default=uuid4
     )
     
-    account_id: Mapped[UUID] = mapped_column(
+    credit_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         nullable=False,
         index=True
     )
     
     # Transaction details
-    type: Mapped[TransactionType] = mapped_column(
+    operation_type: Mapped[OperationType] = mapped_column(
+        SQLEnum(OperationType),
+        nullable=False,
+        index=True
+    )
+    
+    credits_used: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    balance_before: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    balance_after: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+    
+    transaction_type: Mapped[TransactionType] = mapped_column(
         SQLEnum(TransactionType),
         nullable=False,
         index=True
     )
     
-    amount: Mapped[Decimal] = mapped_column(
-        DECIMAL(precision=10, scale=2),
-        nullable=False
-    )
-    
-    # Balance tracking
-    balance_before: Mapped[Decimal] = mapped_column(
-        DECIMAL(precision=10, scale=2),
-        nullable=False
-    )
-    
-    balance_after: Mapped[Decimal] = mapped_column(
-        DECIMAL(precision=10, scale=2),
-        nullable=False
-    )
-    
-    # Reference information
-    reference_type: Mapped[ReferenceType] = mapped_column(
-        SQLEnum(ReferenceType),
-        nullable=False,
-        index=True
-    )
-    
-    reference_id: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        index=True
-    )
-    
-    description: Mapped[str] = mapped_column(
-        Text,
-        nullable=False
-    )
-    
-    # Additional context
     extra_metadata: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True
     )
     
-    # Idempotency
     idempotency_key: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         unique=True,
-        index=True
+        index=True,
+        comment="Unique reference ID that serves as idempotency key"
     )
     
     # Performance indexes
     __table_args__ = (
-        Index("idx_merchant_type", "merchant_id", "type"),
+        Index("idx_merchant_type", "merchant_id", "transaction_type"),
         Index("idx_merchant_created", "merchant_id", "created_at"),
-        Index("idx_reference", "reference_type", "reference_id"),
-        Index("idx_account_created", "account_id", "created_at"),
+        Index("idx_credit_created", "credit_id", "created_at"),
     )

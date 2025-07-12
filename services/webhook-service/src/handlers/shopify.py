@@ -45,8 +45,8 @@ class ShopifyWebhookHandler(WebhookHandler):
             topic = headers.get("x-shopify-topic", "unknown")
 
         # Extract shop info
-        shop_domain = headers.get("x-shopify-shop-domain", "")
-        merchant_id = shop_domain.split(".")[0] if shop_domain else None
+        merchant_domain = headers.get("x-shopify-shop-domain", "")
+        merchant_id = merchant_domain.split(".")[0] if merchant_domain else None
 
         # Generate idempotency key
         idempotency_key = self.get_idempotency_key(body, topic, headers)
@@ -61,7 +61,7 @@ class ShopifyWebhookHandler(WebhookHandler):
         return WebhookData(
             topic=topic,
             merchant_id=merchant_id,
-            shop_domain=shop_domain,
+            merchant_domain=merchant_domain,
             idempotency_key=idempotency_key,
             payload=body,
             metadata={k: v for k, v in metadata.items() if v},
@@ -78,15 +78,15 @@ class ShopifyWebhookHandler(WebhookHandler):
             return f"shopify:{webhook_id}"
 
         # Fallback to hash of key components
-        shop_domain = headers.get("x-shopify-shop-domain", "")
+        merchant_domain = headers.get("x-shopify-shop-domain", "")
 
         # For orders/products, use their ID
         if "id" in body:
-            key_parts = f"shopify:{topic}:{shop_domain}:{body['id']}"
+            key_parts = f"shopify:{topic}:{merchant_domain}:{body['id']}"
         else:
             # Hash the entire payload as last resort
             payload_hash = hashlib.sha256(str(body).encode()).hexdigest()[:16]
-            key_parts = f"shopify:{topic}:{shop_domain}:{payload_hash}"
+            key_parts = f"shopify:{topic}:{merchant_domain}:{payload_hash}"
 
         return hashlib.sha256(key_parts.encode()).hexdigest()
 
@@ -105,7 +105,7 @@ class ShopifyWebhookHandler(WebhookHandler):
             webhook_data.topic,
             webhook_data.payload,
             webhook_data.merchant_id,
-            webhook_data.shop_domain,
+            webhook_data.merchant_domain,
         )
 
         return DomainEvent(event_type=event_type, payload=payload)
@@ -115,13 +115,13 @@ class ShopifyWebhookHandler(WebhookHandler):
         topic: str,
         webhook_payload: Dict[str, Any],
         merchant_id: Optional[str],
-        shop_domain: Optional[str],
+        merchant_domain: Optional[str],
     ) -> Dict[str, Any]:
         """Build domain event payload based on topic"""
 
         base_payload = {
             "merchant_id": merchant_id,
-            "shop_domain": shop_domain,
+            "merchant_domain": merchant_domain,
             "timestamp": datetime.utcnow().isoformat(),
         }
 

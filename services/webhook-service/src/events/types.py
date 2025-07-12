@@ -57,7 +57,7 @@ class WebhookReceivedPayload(BaseModel):
     source: str
     topic: str
     merchant_id: Optional[str] = None
-    shop_domain: Optional[str] = None
+    merchant_domain: Optional[str] = None
     webhook_id: Optional[str] = None
     received_at: datetime
 
@@ -70,7 +70,7 @@ class WebhookProcessedPayload(BaseModel):
     topic: str
     event_type: str
     merchant_id: Optional[str] = None
-    shop_domain: Optional[str] = None
+    merchant_domain: Optional[str] = None
     processed_at: datetime
 
 
@@ -99,7 +99,7 @@ class AppUninstalledPayload(BaseModel):
     """App uninstalled event payload"""
 
     merchant_id: str
-    shop_domain: str
+    merchant_domain: str
     timestamp: datetime
 
 
@@ -107,7 +107,7 @@ class CatalogItemPayload(BaseModel):
     """Catalog item event payload"""
 
     merchant_id: str
-    shop_domain: Optional[str] = None
+    merchant_domain: Optional[str] = None
     item_id: str
     external_id: str
     title: Optional[str] = None
@@ -118,7 +118,7 @@ class OrderPayload(BaseModel):
     """Order event payload"""
 
     merchant_id: str
-    shop_domain: Optional[str] = None
+    merchant_domain: Optional[str] = None
     order_id: str
     order_number: Optional[str] = None
     total: Optional[str] = None

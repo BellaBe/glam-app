@@ -72,7 +72,10 @@ class NotificationService:
         """
 
         # Validate input
-        if not notification_create.merchant_id or not notification_create.shop_domain:
+        if (
+            not notification_create.merchant_id
+            or not notification_create.merchant_domain
+        ):
             raise ValueError("Shop ID and domain are required")
 
         # Create notification record
@@ -94,7 +97,7 @@ class NotificationService:
         # Extract notification details
         notification_type = notification_create.notification_type
         merchant_id = notification_create.merchant_id
-        shop_domain = notification_create.shop_domain
+        merchant_domain = notification_create.merchant_domain
         unsubscribe_token = notification_create.unsubscribe_token
         dynamic_content = notification_create.dynamic_content or {}
         extra_metadata = notification_create.extra_metadata or {}
@@ -103,7 +106,7 @@ class NotificationService:
             "Creating and sending notification",
             extra={
                 "merchant_id": str(merchant_id),
-                "shop_domain": shop_domain,
+                "merchant_domain": merchant_domain,
                 "notification_type": notification_type,
                 "correlation_id": extra_metadata.get("correlation_id", None),
             },
@@ -115,7 +118,7 @@ class NotificationService:
             f"Retrieved template for notification type {notification_type}",
             extra={
                 "merchant_id": str(merchant_id),
-                "shop_domain": shop_domain,
+                "merchant_domain": merchant_domain,
                 "correlation_id": extra_metadata.get("correlation_id", None),
             },
         )
@@ -124,7 +127,7 @@ class NotificationService:
                 f"No template found for notification type: {notification_type}",
                 extra={
                     "merchant_id": str(merchant_id),
-                    "shop_domain": shop_domain,
+                    "merchant_domain": merchant_domain,
                     "correlation_id": extra_metadata.get("correlation_id", None),
                 },
             )
@@ -177,7 +180,7 @@ class NotificationService:
             extra={
                 "notification_id": str(notification.id),
                 "merchant_id": str(notification.merchant_id),
-                "shop_domain": notification.shop_domain,
+                "merchant_domain": notification.merchant_domain,
                 "recipient_email": notification.recipient_email,
                 "notification_type": notification.type,
                 "correlation_id": (notification.extra_metadata or {}).get(

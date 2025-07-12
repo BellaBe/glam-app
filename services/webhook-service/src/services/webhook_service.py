@@ -121,7 +121,7 @@ class WebhookService:
                 ),
                 idempotency_key=idempotency_key,
                 merchant_id=webhook_data.merchant_id,
-                shop_domain=webhook_data.shop_domain,
+                merchant_domain=webhook_data.merchant_domain,
             )
 
             # 6. Mark as seen for deduplication
@@ -132,7 +132,7 @@ class WebhookService:
                 source=source.value,
                 topic=webhook_data.topic,
                 merchant_id=webhook_data.merchant_id,
-                shop_domain=webhook_data.shop_domain,
+                merchant_domain=webhook_data.merchant_domain,
                 webhook_id=str(entry.id),
                 correlation_id=correlation_id,
             )
@@ -183,7 +183,7 @@ class WebhookService:
                 topic=webhook_data.topic,
                 event_type=domain_event.event_type if domain_event else "none",
                 merchant_id=webhook_data.merchant_id,
-                shop_domain=webhook_data.shop_domain,
+                merchant_domain=webhook_data.merchant_domain,
                 correlation_id=correlation_id,
             )
 

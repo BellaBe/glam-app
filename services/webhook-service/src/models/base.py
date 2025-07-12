@@ -12,4 +12,4 @@ class ShopMixin:
     """Mixin for shop-related fields."""
 
     merchant_id: Mapped[str] = mapped_column(String(36), nullable=True, index=True)
-    shop_domain: Mapped[str] = mapped_column(String(255), nullable=True)
+    merchant_domain: Mapped[str] = mapped_column(String(255), nullable=True)

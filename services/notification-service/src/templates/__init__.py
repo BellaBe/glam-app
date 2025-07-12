@@ -438,7 +438,7 @@ class EmailTemplates:
             if var
             not in required_vars
             + optional_vars
-            + ["unsubscribe_token", "merchant_id", "shop_domain"]
+            + ["unsubscribe_token", "merchant_id", "merchant_domain"]
         ]
 
         return {

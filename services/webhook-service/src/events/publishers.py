@@ -34,7 +34,7 @@ class WebhookEventPublisher(DomainEventPublisher):
         source: str,
         topic: str,
         merchant_id: Optional[str] = None,
-        shop_domain: Optional[str] = None,
+        merchant_domain: Optional[str] = None,
         webhook_id: Optional[str] = None,
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
@@ -58,7 +58,7 @@ class WebhookEventPublisher(DomainEventPublisher):
             source=source,
             topic=topic,
             merchant_id=merchant_id,
-            shop_domain=shop_domain,
+            merchant_domain=merchant_domain,
             webhook_id=webhook_id,
             received_at=context.timestamp,
         )
@@ -96,7 +96,7 @@ class WebhookEventPublisher(DomainEventPublisher):
         topic: str,
         event_type: str,
         merchant_id: Optional[str] = None,
-        shop_domain: Optional[str] = None,
+        merchant_domain: Optional[str] = None,
         correlation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -120,7 +120,7 @@ class WebhookEventPublisher(DomainEventPublisher):
             topic=topic,
             event_type=event_type,
             merchant_id=merchant_id,
-            shop_domain=shop_domain,
+            merchant_domain=merchant_domain,
             processed_at=context.timestamp,
         )
 

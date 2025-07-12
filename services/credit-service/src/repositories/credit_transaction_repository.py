@@ -3,142 +3,209 @@
 
 from typing import Optional, List
 from uuid import UUID
-from decimal import Decimal
 from datetime import datetime
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.database.repository import Repository
 from shared.api.dependencies import PaginationParams
-from ..models.credit_transaction import CreditTransaction, TransactionType, ReferenceType
+from ..models.credit_transaction import CreditTransaction, TransactionType, OperationType
 
 
 class CreditTransactionRepository(Repository[CreditTransaction]):
-    """Repository for credit transaction operations"""
+    """Repository for credit transaction data access only"""
     
     def __init__(self, 
                 model_class: type[CreditTransaction],
                 session_factory: async_sessionmaker[AsyncSession]):
         super().__init__(model_class, session_factory)
-
-    async def create_transaction(
-        self,
-        merchant_id: UUID,
-        account_id: UUID,
-        transaction_type: TransactionType,
-        amount: Decimal,
-        balance_before: Decimal,
-        balance_after: Decimal,
-        reference_type: ReferenceType,
-        reference_id: str,
-        description: str,
-        idempotency_key: str,
-        metadata: Optional[dict] = None
-    ) -> CreditTransaction:
-        """Create a new credit transaction"""
         
-        transaction = CreditTransaction(
-                merchant_id=merchant_id,
-                account_id=account_id,
-                type=transaction_type,
-                amount=amount,
-                balance_before=balance_before,
-                balance_after=balance_after,
-                reference_type=reference_type,
-                reference_id=reference_id,
-                description=description,
-                idempotency_key=idempotency_key,
-                metadata=metadata or {}
-            )
+    async def get_by_id(self, transaction_id: UUID) -> Optional[CreditTransaction]:
+        """Get transaction by ID"""
+        stmt = select(CreditTransaction).where(CreditTransaction.id == transaction_id)
         async with self.session_factory() as session:
-            session.add(transaction)
-            await session.commit()
-            await session.refresh(transaction)
-            
-            return transaction
-    
-    async def find_by_idempotency_key(self, idempotency_key: str) -> Optional[CreditTransaction]:
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[CreditTransaction]:
         """Find transaction by idempotency key"""
         stmt = select(CreditTransaction).where(
-                CreditTransaction.idempotency_key == idempotency_key
-            )
+            CreditTransaction.idempotency_key == idempotency_key
+        )
         async with self.session_factory() as session:
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
     
-    async def find_by_reference(
-        self,
-        reference_type: ReferenceType,
-        reference_id: str
-    ) -> Optional[CreditTransaction]:
-        """Find transaction by reference"""
-        
-        stmt = select(CreditTransaction).where(
-                and_(
-                    CreditTransaction.reference_type == reference_type,
-                    CreditTransaction.reference_id == reference_id
-                )
-            )
-        async with self.session_factory() as session:
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
-    
-    async def get_merchant_transactions(
+    async def get_by_merchant_id(
         self,
         merchant_id: UUID,
-        pagination: PaginationParams,
+        limit: int,
+        offset: int,
+        operation_type: Optional[OperationType] = None,
         transaction_type: Optional[TransactionType] = None,
-        reference_type: Optional[ReferenceType] = None
-    ) -> tuple[List[CreditTransaction], int]:
-        """Get paginated transactions for a merchant"""
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[CreditTransaction]:
+        """Get transactions for a merchant with optional filtering"""
+        
         async with self.session_factory() as session:
-            # Build base query
-            base_query = select(CreditTransaction).where(
+            stmt = select(CreditTransaction).where(
                 CreditTransaction.merchant_id == merchant_id
             )
             
             # Add filters
+            if operation_type:
+                stmt = stmt.where(CreditTransaction.operation_type == operation_type)
+            
             if transaction_type:
-                base_query = base_query.where(CreditTransaction.type == transaction_type)
+                stmt = stmt.where(CreditTransaction.transaction_type == transaction_type)
             
-            if reference_type:
-                base_query = base_query.where(CreditTransaction.reference_type == reference_type)
+            if start_date:
+                stmt = stmt.where(CreditTransaction.created_at >= start_date)
             
-            # Count query
-            count_query = select(func.count()).select_from(
-                base_query.subquery()
-            )
-            total_result = await session.execute(count_query)
-            total = total_result.scalar() or 0
+            if end_date:
+                stmt = stmt.where(CreditTransaction.created_at <= end_date)
             
-            # Data query with pagination
-            data_query = (
-                base_query
+            # Order and paginate
+            stmt = (
+                stmt
                 .order_by(desc(CreditTransaction.created_at))
-                .offset(pagination.offset)
-                .limit(pagination.limit)
+                .offset(offset)
+                .limit(limit)
             )
-            
-            result = await session.execute(data_query)
-            transactions = list(result.scalars().all())
-            
-            return transactions, total
-    
-    async def get_account_transactions(
-        self,
-        account_id: UUID,
-        limit: Optional[int] = None
-    ) -> List[CreditTransaction]:
-        """Get recent transactions for an account"""
-        
-        stmt = (
-                select(CreditTransaction)
-                .where(CreditTransaction.account_id == account_id)
-                .order_by(desc(CreditTransaction.created_at))
-            )
-        async with self.session_factory() as session:
-            if limit:
-                stmt = stmt.limit(limit)
             
             result = await session.execute(stmt)
             return list(result.scalars().all())
+    
+    async def get_by_credit_id(
+        self,
+        credit_id: UUID,
+        limit: Optional[int] = None
+    ) -> List[CreditTransaction]:
+        """Get recent transactions for a credit account"""
+        
+        stmt = (
+            select(CreditTransaction)
+            .where(CreditTransaction.credit_id == credit_id)
+            .order_by(desc(CreditTransaction.created_at))
+        )
+        
+        if limit:
+            stmt = stmt.limit(limit)
+        
+        async with self.session_factory() as session:
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+    
+    async def count_by_merchant_id(
+        self,
+        merchant_id: UUID,
+        operation_type: Optional[OperationType] = None,
+        transaction_type: Optional[TransactionType] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> int:
+        """Count transactions for a merchant with optional filtering"""
+        
+        async with self.session_factory() as session:
+            stmt = select(func.count(CreditTransaction.id)).where(
+                CreditTransaction.merchant_id == merchant_id
+            )
+            
+            # Add same filters as get_by_merchant_id
+            if operation_type:
+                stmt = stmt.where(CreditTransaction.operation_type == operation_type)
+            
+            if transaction_type:
+                stmt = stmt.where(CreditTransaction.transaction_type == transaction_type)
+            
+            if start_date:
+                stmt = stmt.where(CreditTransaction.created_at >= start_date)
+            
+            if end_date:
+                stmt = stmt.where(CreditTransaction.created_at <= end_date)
+            
+            result = await session.execute(stmt)
+            return result.scalar() or 0
+    
+    async def get_merchant_stats(
+        self,
+        merchant_id: UUID,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> dict:
+        """
+        Get transaction statistics for a merchant.
+        
+        Since increases/decreases are always by 1 credit:
+        - total_increases = count of increase transactions = total credits increased
+        - total_decreases = count of decrease transactions = total credits decreased
+        """
+        
+        async with self.session_factory() as session:
+            # Base filters
+            base_filters = [CreditTransaction.merchant_id == merchant_id]
+            
+            if start_date:
+                base_filters.append(CreditTransaction.created_at >= start_date)
+            
+            if end_date:
+                base_filters.append(CreditTransaction.created_at <= end_date)
+            
+            # Count increases (no need to sum since each is +1)
+            increase_stmt = select(
+                func.count(CreditTransaction.id)
+            ).where(
+                and_(
+                    *base_filters,
+                    CreditTransaction.operation_type == OperationType.INCREASE
+                )
+            )
+            
+            # Count decreases (no need to sum since each is -1)
+            decrease_stmt = select(
+                func.count(CreditTransaction.id)
+            ).where(
+                and_(
+                    *base_filters,
+                    CreditTransaction.operation_type == OperationType.DECREASE
+                )
+            )
+            
+            # Get latest transaction timestamp
+            latest_stmt = (
+                select(CreditTransaction.created_at)
+                .where(and_(*base_filters))
+                .order_by(desc(CreditTransaction.created_at))
+                .limit(1)
+            )
+            
+            # Execute all queries
+            increase_result = await session.execute(increase_stmt)
+            decrease_result = await session.execute(decrease_stmt)
+            latest_result = await session.execute(latest_stmt)
+            
+            # Extract results
+            total_increases = increase_result.scalar() or 0
+            total_decreases = decrease_result.scalar() or 0
+            last_transaction_at = latest_result.scalar_one_or_none()
+            
+            return {
+                "total_increases": total_increases,          
+                "total_decreases": total_decreases,         
+                "transaction_count": total_increases + total_decreases,
+                "last_transaction_at": last_transaction_at
+            }
+    
+    
+    async def create_transaction(
+        self,
+        transaction: CreditTransaction
+    ) -> CreditTransaction:
+        """Create a new credit transaction"""
+        
+        async with self.session_factory() as session:
+            session.add(transaction)
+            await session.commit()
+            await session.refresh(transaction)
+            return transaction

@@ -12,6 +12,7 @@ from shared.events.notification.types import (
     SendEmailCommandPayload,
     SendEmailBulkCommandPayload,
 )
+from shared.utils.logger import ServiceLogger
 
 from shared.events import EventContextManager, EventContext, EventPayload
 from ..schemas import NotificationCreate
@@ -22,7 +23,7 @@ class NotificationEventSubscriber(DomainEventSubscriber):
     """Base class for notification event subscribers with standardized context handling."""
 
     def __init__(
-        self, client, js, notification_service: NotificationService, logger=None
+        self, client, js, notification_service: NotificationService, logger: ServiceLogger
     ):
         super().__init__(client, js, logger)
         self.notification_service = notification_service
@@ -127,7 +128,7 @@ class SendEmailSubscriber(NotificationEventSubscriber):
         notification_create = NotificationCreate(
             notification_type=payload.notification_type,
             merchant_id=payload.recipient.id,
-            shop_domain=payload.recipient.domain,
+            merchant_domain=payload.recipient.domain,
             shop_email=payload.recipient.email,
             unsubscribe_token=payload.recipient.unsubscribe_token,
             dynamic_content=payload.recipient.dynamic_content or {},
@@ -205,7 +206,7 @@ class SendBulkEmailSubscriber(NotificationEventSubscriber):
                 try:
                     notification_create = NotificationCreate(
                         merchant_id=recipient.merchant_id,
-                        shop_domain=recipient.shop_domain,
+                        merchant_domain=recipient.merchant_domain,
                         shop_email=recipient.email,
                         unsubscribe_token=recipient.unsubscribe_token,
                         notification_type=payload.notification_type,

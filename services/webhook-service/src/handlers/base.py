@@ -14,7 +14,7 @@ class WebhookData:
 
     topic: str
     merchant_id: Optional[str]
-    shop_domain: Optional[str]
+    merchant_domain: Optional[str]
     idempotency_key: str
     payload: Dict[str, Any]
     metadata: Dict[str, Any]
