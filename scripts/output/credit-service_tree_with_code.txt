@@ -8,126 +8,126 @@ credit-service/
     └── credit_service.yml
         
         ```yml
-        name: Credit Service CI/CD
+        # name: Credit Service CI/CD
         
-        on:
-          push:
-            branches: [ main, develop ]
-            paths:
-              - 'services/credit-service/**'
-          pull_request:
-            branches: [ main ]
-            paths:
-              - 'services/credit-service/**'
+        # on:
+        #   push:
+        #     branches: [ main, develop ]
+        #     paths:
+        #       - 'services/credit-service/**'
+        #   pull_request:
+        #     branches: [ main ]
+        #     paths:
+        #       - 'services/credit-service/**'
         
-        defaults:
-          run:
-            working-directory: services/credit-service
+        # defaults:
+        #   run:
+        #     working-directory: services/credit-service
         
-        jobs:
-          test:
-            runs-on: ubuntu-latest
+        # jobs:
+        #   test:
+        #     runs-on: ubuntu-latest
             
-            services:
-              postgres:
-                image: postgres:15
-                env:
-                  POSTGRES_PASSWORD: postgres
-                  POSTGRES_DB: test_credit_db
-                options: >-
-                  --health-cmd pg_isready
-                  --health-interval 10s
-                  --health-timeout 5s
-                  --health-retries 5
-                ports:
-                  - 5432:5432
+        #     services:
+        #       postgres:
+        #         image: postgres:15
+        #         env:
+        #           POSTGRES_PASSWORD: postgres
+        #           POSTGRES_DB: test_credit_db
+        #         options: >-
+        #           --health-cmd pg_isready
+        #           --health-interval 10s
+        #           --health-timeout 5s
+        #           --health-retries 5
+        #         ports:
+        #           - 5432:5432
               
-              redis:
-                image: redis:7
-                options: >-
-                  --health-cmd "redis-cli ping"
-                  --health-interval 10s
-                  --health-timeout 5s
-                  --health-retries 5
-                ports:
-                  - 6379:6379
+        #       redis:
+        #         image: redis:7
+        #         options: >-
+        #           --health-cmd "redis-cli ping"
+        #           --health-interval 10s
+        #           --health-timeout 5s
+        #           --health-retries 5
+        #         ports:
+        #           - 6379:6379
         
-            steps:
-            - uses: actions/checkout@v4
+        #     steps:
+        #     - uses: actions/checkout@v4
             
-            - name: Set up Python
-              uses: actions/setup-python@v4
-              with:
-                python-version: '3.11'
+        #     - name: Set up Python
+        #       uses: actions/setup-python@v4
+        #       with:
+        #         python-version: '3.11'
             
-            - name: Install Poetry
-              uses: snok/install-poetry@v1
-              with:
-                version: latest
-                virtualenvs-create: true
-                virtualenvs-in-project: true
+        #     - name: Install Poetry
+        #       uses: snok/install-poetry@v1
+        #       with:
+        #         version: latest
+        #         virtualenvs-create: true
+        #         virtualenvs-in-project: true
             
-            - name: Load cached venv
-              id: cached-poetry-dependencies
-              uses: actions/cache@v3
-              with:
-                path: services/credit-service/.venv
-                key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        #     - name: Load cached venv
+        #       id: cached-poetry-dependencies
+        #       uses: actions/cache@v3
+        #       with:
+        #         path: services/credit-service/.venv
+        #         key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
             
-            - name: Install dependencies
-              if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-              run: poetry install --no-interaction --no-root
+        #     - name: Install dependencies
+        #       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        #       run: poetry install --no-interaction --no-root
             
-            - name: Install project
-              run: poetry install --no-interaction
+        #     - name: Install project
+        #       run: poetry install --no-interaction
             
-            - name: Run linting
-              run: |
-                poetry run flake8 src tests
-                poetry run black --check src tests
-                poetry run isort --check src tests
-                poetry run mypy src
+        #     - name: Run linting
+        #       run: |
+        #         poetry run flake8 src tests
+        #         poetry run black --check src tests
+        #         poetry run isort --check src tests
+        #         poetry run mypy src
             
-            - name: Run tests
-              run: poetry run pytest -v --cov=src --cov-report=xml
-              env:
-                DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_credit_db
-                REDIS_URL: redis://localhost:6379
+        #     - name: Run tests
+        #       run: poetry run pytest -v --cov=src --cov-report=xml
+        #       env:
+        #         DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_credit_db
+        #         REDIS_URL: redis://localhost:6379
             
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3
-              with:
-                file: services/credit-service/coverage.xml
-                flags: credit-service
+        #     - name: Upload coverage to Codecov
+        #       uses: codecov/codecov-action@v3
+        #       with:
+        #         file: services/credit-service/coverage.xml
+        #         flags: credit-service
         
-          docker:
-            runs-on: ubuntu-latest
-            needs: test
-            if: github.ref == 'refs/heads/main'
+        #   docker:
+        #     runs-on: ubuntu-latest
+        #     needs: test
+        #     if: github.ref == 'refs/heads/main'
             
-            steps:
-            - uses: actions/checkout@v4
+        #     steps:
+        #     - uses: actions/checkout@v4
             
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
+        #     - name: Set up Docker Buildx
+        #       uses: docker/setup-buildx-action@v3
             
-            - name: Login to Container Registry
-              uses: docker/login-action@v3
-              with:
-                registry: ghcr.io
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN }}
+        #     - name: Login to Container Registry
+        #       uses: docker/login-action@v3
+        #       with:
+        #         registry: ghcr.io
+        #         username: ${{ github.actor }}
+        #         password: ${{ secrets.GITHUB_TOKEN }}
             
-            - name: Build and push Docker image
-              uses: docker/build-push-action@v5
-              with:
-                context: services/credit-service
-                push: true
-                tags: |
-                  ghcr.io/${{ github.repository }}/credit-service:latest
-                  ghcr.io/${{ github.repository }}/credit-service:${{ github.sha }}
-                cache-from: type=gha
-                cache-to: type=gha,mode=max
+        #     - name: Build and push Docker image
+        #       uses: docker/build-push-action@v5
+        #       with:
+        #         context: services/credit-service
+        #         push: true
+        #         tags: |
+        #           ghcr.io/${{ github.repository }}/credit-service:latest
+        #           ghcr.io/${{ github.repository }}/credit-service:${{ github.sha }}
+        #         cache-from: type=gha
+        #         cache-to: type=gha,mode=max
         ```
         
 alembic/
@@ -820,22 +820,29 @@ src/
 │   │   # services/credit-service/src/events/publishers.py
 │   │   """Event publishers for separated credit services."""
 │   │   
+│   │   
+│   │   
 │   │   from datetime import datetime, timezone
 │   │   from typing import Dict, Any, Optional
 │   │   from uuid import UUID
 │   │   
+│   │   from shared.events import (
+│   │       Streams,
+│   │       DomainEventPublisher,
+│   │       EventContextManager,
+│   │       EventContext,
+│   │   )
 │   │   from shared.events.base_publisher import DomainEventPublisher
 │   │   
 │   │   
 │   │   class CreditEventPublisher(DomainEventPublisher):
 │   │       """Publisher for credit domain events"""
+│   │       domain_stream = Streams.CREDIT
+│   │       service_name_override = "credit-service"
 │   │       
-│   │       def __init__(self, jetstream_wrapper, logger):
-│   │           super().__init__(
-│   │               jetstream_wrapper=jetstream_wrapper,
-│   │               domain="credit",
-│   │               logger=logger
-│   │           )
+│   │       def __init__(self, client, js, logger=None):
+│   │           super().__init__(client, js, logger)
+│   │           self.context_manager = EventContextManager(logger or self.logger)
 │   │   
 │   │       # Credit Account Events
 │   │       async def publish_credit_record_created(
@@ -893,7 +900,6 @@ src/
 │   │           )
 │   │   
 │   │   
-│   │       # Balance Threshold Events (from balance monitor)
 │   │       async def publish_low_balance_reached(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -964,12 +970,15 @@ src/
 │       
 │       from shared.events.base_subscriber import DomainEventSubscriber
 │       from shared.utils.logger import ServiceLogger
+│       from shared.events import EventContextManager, EventContext, EventPayload
 │       
 │       from ..services.credit_service import CreditService
-│       from ..services.credit_transaction_service import CreditTransactionService
+│       from ..services.credit_transaction_service import CreditTransactionService, Trial, Subscription
+│       
+│       from ..models.credit_transaction import OperationType
 │       
 │       
-│       class CreditBalanceUpdateSubscriber(DomainEventSubscriber):
+│       class OrderUpdatedSubscriber(DomainEventSubscriber):
 │           """
 │           Handle transaction events to update balances.
 │           This creates the communication between transaction service and credit service.
@@ -977,106 +986,32 @@ src/
 │           
 │           def __init__(
 │               self,
-│               jetstream_wrapper,
-│               credit_service: CreditService,
+│               client,
+│               js,
+│               svc: CreditTransactionService,
 │               logger: ServiceLogger
 │           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="credit",
-│                   logger=logger
-│               )
-│               self.credit_service = credit_service
+│               super().__init__(client, js, logger)
+│               self.credit_transaction_service = svc
+│               self.context_manager = EventContextManager(logger)
 │           
-│           async def handle_credits_recharged(self, event_data: Dict[str, Any]) -> None:
-│               """Handle credits recharged event to update balance"""
+│           async def handle_order_updated(self, event_data: Dict[str, Any]) -> None:
+│               """Handle order updated event to record credit transaction"""
 │               try:
 │                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   new_balance = int(str(event_data.get("new_balance")))
-│                   transaction_id = event_data.get("transaction_id")
 │                   
-│                   await self.credit_service.update_balance_from_transaction(
+│                   await self.credit_transaction_service.process_order_paid(
 │                       merchant_id=merchant_id,
-│                       new_balance=new_balance,
-│                       transaction_id=transaction_id,
-│                       transaction_type="RECHARGE"
+│                       order_items=event_data.get("order_items", [])
 │                   )
 │                   
-│                   self.logger.info(
-│                       "Balance updated from recharge event",
-│                       merchant_id=str(merchant_id),
-│                       new_balance=float(new_balance),
-│                       transaction_id=transaction_id
-│                   )
+│                   self.logger.info("Processed order update event")
+│                      
 │                   
 │               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle credits recharged event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
-│                   raise
+│                   self.logger.error("Failed to process order update event")
+│                   raise 
 │       
-│           async def handle_credits_refunded(self, event_data: Dict[str, Any]) -> None:
-│               """Handle credits refunded event to update balance"""
-│               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   new_balance = int(str(event_data.get("new_balance")))
-│                   transaction_id = event_data.get("transaction_id")
-│                   
-│                   await self.credit_service.update_balance_from_transaction(
-│                       merchant_id=merchant_id,
-│                       new_balance=new_balance,
-│                       transaction_id=transaction_id,
-│                       transaction_type="REFUND"
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Balance updated from refund event",
-│                       merchant_id=str(merchant_id),
-│                       new_balance=float(new_balance),
-│                       transaction_id=transaction_id
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle credits refunded event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
-│                   raise
-│       
-│           async def handle_credits_adjusted(self, event_data: Dict[str, Any]) -> None:
-│               """Handle credits adjusted event to update balance"""
-│               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   new_balance = int(str(event_data.get("new_balance")))
-│                   transaction_id = event_data.get("transaction_id")
-│                   
-│                   await self.credit_service.update_balance_from_transaction(
-│                       merchant_id=merchant_id,
-│                       new_balance=new_balance,
-│                       transaction_id=transaction_id,
-│                       transaction_type="ADJUSTMENT"
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Balance updated from adjustment event",
-│                       merchant_id=str(merchant_id),
-│                       new_balance=float(new_balance),
-│                       transaction_id=transaction_id
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle credits adjusted event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
-│                   raise
 │       
 │       class TrialCreditsSubscriber(DomainEventSubscriber):
 │           """
@@ -1085,291 +1020,185 @@ src/
 │           
 │           def __init__(
 │               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
+│               client,
+│               js,
+│               svc: CreditTransactionService,
 │               logger: ServiceLogger
 │           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="credit",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
+│               super().__init__(client, js, logger)
+│               self.credit_transaction_service = svc
+│               self.context_manager = EventContextManager(logger)
 │           
 │           async def handle_account_created(self, event_data: Dict[str, Any]) -> None:
 │               """Handle account created event to create trial transaction"""
 │               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   initial_balance = int(str(event_data.get("initial_balance")))
+│                   trial_id = event_data.get("trial_id")
+│                   merchant_id = event_data.get("merchant_id")
+│                   credits_to_use = event_data.get("credits_to_use")
 │                   
-│                   await self.transaction_service.process_trial_credits(
-│                       merchant_id=merchant_id,
-│                       amount=initial_balance
+│                   trial = Trial(
+│                       trial_id=UUID(trial_id),
+│                       merchant_id=UUID(merchant_id),
+│                       credits_to_use=int(str(credits_to_use))
 │                   )
+│                   await self.credit_transaction_service.process_trial_credits(trial=trial)
 │                   
-│                   self.logger.info(
-│                       "Trial credits transaction created",
-│                       merchant_id=str(merchant_id),
-│                       amount=float(initial_balance)
-│                   )
+│                   self.logger.info("Trial credits transaction created")
 │                   
 │               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle account created event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
-│                   raise
-│               
-│               
-│       class ShopifyOrderPaidSubscriber(DomainEventSubscriber):
-│           """Handle Shopify order paid events"""
-│           
-│           def __init__(
-│               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="shopify",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
-│               self.ref_generator = CreditReferenceIdGenerator()
-│           
-│           async def handle_order_paid(self, event_data: Dict[str, Any]) -> None:
-│               """Handle evt.shopify.webhook.order_paid"""
-│               try:
-│                   # Extract data from event
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   order_total = int(str(event_data.get("order_total", "0")))
-│                   currency = event_data.get("currency", "USD")
-│                   
-│                   # Generate prefixed reference ID from event data
-│                   reference_id = self.ref_generator.from_shopify_order_event(event_data)
-│                   
-│                   # Process order transaction
-│                   await self.transaction_service.process_order_paid(
-│                       merchant_id=merchant_id,
-│                       reference_id=reference_id,  # Use generated reference ID
-│                       order_total=order_total,
-│                       currency=currency,
-│                       event_data=event_data  # Pass full event for metadata
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Processed Shopify order paid event",
-│                       reference_id=reference_id,
-│                       merchant_id=str(merchant_id),
-│                       order_total=float(order_total)
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle Shopify order paid event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
-│                   
-│       class BillingPaymentSucceededSubscriber(DomainEventSubscriber):
-│           """Handle billing payment events"""
-│           
-│           def __init__(
-│               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="billing",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
-│               self.ref_generator = CreditReferenceIdGenerator()
-│           
-│           async def handle_payment_succeeded(self, event_data: Dict[str, Any]) -> None:
-│               """Handle evt.billing.payment_succeeded"""
-│               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   amount = int(str(event_data.get("amount", "0")))
-│                   
-│                   # Generate billing payment reference ID
-│                   reference_id = self.ref_generator.from_billing_payment_event(event_data)
-│                   
-│                   await self.transaction_service.process_billing_payment(
-│                       merchant_id=merchant_id,
-│                       reference_id=reference_id,
-│                       amount=amount,
-│                       event_data=event_data
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Processed billing payment succeeded event",
-│                       reference_id=reference_id,
-│                       merchant_id=str(merchant_id),
-│                       amount=float(amount)
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to handle billing payment succeeded event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
-│                   )
+│                   self.logger.error("Failed to create trial credit transaction")
 │                   raise
 │       
 │       
-│       class SubscriptionRenewedSubscriber(DomainEventSubscriber):
-│           """Handle subscription renewal events"""
+│       class SubscriptionSubscriber(DomainEventSubscriber):
+│           """
+│           Handle subscription events to create credit increase transactions.
+│           """
 │           
 │           def __init__(
 │               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
+│               client,
+│               js,
+│               svc: CreditTransactionService,
 │               logger: ServiceLogger
 │           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="billing",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
-│               self.ref_generator = CreditReferenceIdGenerator()
+│               super().__init__(client, js, logger)
+│               self.credit_transaction_service = svc
+│               self.context_manager = EventContextManager(logger)
 │           
 │           async def handle_subscription_renewed(self, event_data: Dict[str, Any]) -> None:
-│               """Handle evt.billing.subscription_renewed"""
+│               """Handle subscription renewal event to create credit increase transaction"""
 │               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   credits = int(str(event_data.get("credits", "0")))
+│                   subscription_id = event_data.get("subscription_id")
+│                   merchant_id = event_data.get("merchant_id")
+│                   credits_used = event_data.get("credits_used")
 │                   
-│                   # Generate subscription reference ID
-│                   reference_id = self.ref_generator.from_subscription_event(event_data)
+│                   subscription = Subscription(
+│                       id=UUID(subscription_id),
+│                       merchant_id=UUID(merchant_id),
+│                       credits_used=int(str(credits_used))
+│                   )
 │                   
-│                   await self.transaction_service.process_subscription_renewal(
-│                       merchant_id=merchant_id,
-│                       reference_id=reference_id,
-│                       credits=credits,
-│                       event_data=event_data
+│                   await self.credit_transaction_service.process_subscription(
+│                       subscription=subscription
 │                   )
 │                   
 │                   self.logger.info(
-│                       "Processed subscription renewed event",
-│                       reference_id=reference_id,
-│                       merchant_id=str(merchant_id),
-│                       credits=float(credits)
+│                       "Processed subscription renewal event",
+│                       extra={
+│                           "subscription_id": subscription_id,
+│                           "merchant_id": merchant_id,
+│                           "credits_used": credits_used
+│                       }
 │                   )
 │                   
 │               except Exception as e:
 │                   self.logger.error(
-│                       "Failed to handle subscription renewed event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
+│                       "Failed to process subscription renewal event",
+│                       extra={
+│                           "event_data": event_data,
+│                           "error": str(e)
+│                       }
 │                   )
 │                   raise
 │       
 │       
 │       class MerchantCreatedSubscriber(DomainEventSubscriber):
-│           """Handle merchant created events for trial credits"""
+│           """
+│           Handle merchant created events to create initial credit account.
+│           """
 │           
 │           def __init__(
 │               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
+│               client,
+│               js,
+│               credit_svc: CreditService,
 │               logger: ServiceLogger
 │           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="merchant",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
-│               self.ref_generator = CreditReferenceIdGenerator()
+│               super().__init__(client, js, logger)
+│               self.credit_service = credit_svc
+│               self.context_manager = EventContextManager(logger)
 │           
 │           async def handle_merchant_created(self, event_data: Dict[str, Any]) -> None:
-│               """Handle evt.merchant.created"""
+│               """Handle merchant created event to create initial credit account"""
 │               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
+│                   merchant_id = event_data.get("merchant_id")
 │                   
-│                   # Generate trial reference ID
-│                   reference_id = self.ref_generator.from_merchant_created_event(merchant_id)
-│                   
-│                   await self.transaction_service.process_trial_credits(
-│                       merchant_id=merchant_id,
-│                       reference_id=reference_id,
-│                       event_data=event_data
+│                   # Create initial credit account for new merchant
+│                   await self.credit_service.create_credit(
+│                       merchant_id=UUID(merchant_id)
 │                   )
 │                   
 │                   self.logger.info(
-│                       "Processed merchant created event",
-│                       reference_id=reference_id,
-│                       merchant_id=str(merchant_id)
+│                       "Processed merchant created event - credit account created",
+│                       extra={
+│                           "merchant_id": merchant_id
+│                       }
 │                   )
 │                   
 │               except Exception as e:
 │                   self.logger.error(
-│                       "Failed to handle merchant created event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
+│                       "Failed to create credit account for new merchant",
+│                       extra={
+│                           "event_data": event_data,
+│                           "error": str(e)
+│                       }
 │                   )
 │                   raise
 │       
 │       
 │       class ManualAdjustmentSubscriber(DomainEventSubscriber):
-│           """Handle manual adjustment events"""
+│           """
+│           Handle manual adjustment events for admin credit modifications.
+│           """
 │           
 │           def __init__(
 │               self,
-│               jetstream_wrapper,
-│               transaction_service: CreditTransactionService,
+│               client,
+│               js,
+│               svc: CreditTransactionService,
 │               logger: ServiceLogger
 │           ):
-│               super().__init__(
-│                   jetstream_wrapper=jetstream_wrapper,
-│                   domain="credit",
-│                   logger=logger
-│               )
-│               self.transaction_service = transaction_service
-│               self.ref_generator = CreditReferenceIdGenerator()
+│               super().__init__(client, js, logger)
+│               self.credit_transaction_service = svc
+│               self.context_manager = EventContextManager(logger)
 │           
 │           async def handle_manual_adjustment(self, event_data: Dict[str, Any]) -> None:
-│               """Handle evt.credits.manual_adjustment"""
+│               """Handle manual adjustment event"""
 │               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   amount = int(str(event_data.get("amount", "0")))
-│                   reason = event_data.get("reason", "Manual adjustment")
+│                   merchant_id = event_data.get("merchant_id")
+│                   operation_type_str = event_data.get("operation_type")
+│                   credits_to_use = event_data.get("credits_to_use")
+│                   reason = event_data.get("reason", "No reason specified")
+│                   admin_id = event_data.get("admin_id", "No admin specified")
 │                   
-│                   # Generate manual adjustment reference ID
-│                   reference_id = self.ref_generator.from_manual_adjustment_event(event_data)
+│                   operation_type = OperationType(operation_type_str)
 │                   
-│                   await self.transaction_service.process_manual_adjustment(
-│                       merchant_id=merchant_id,
-│                       reference_id=reference_id,
-│                       amount=amount,
+│                   await self.credit_transaction_service.process_manual_adjustment(
+│                       merchant_id=UUID(merchant_id),
+│                       operation_type=operation_type,
+│                       credits_to_use=int(str(credits_to_use)),
 │                       reason=reason,
-│                       event_data=event_data
+│                       admin_id=admin_id
 │                   )
 │                   
 │                   self.logger.info(
 │                       "Processed manual adjustment event",
-│                       reference_id=reference_id,
-│                       merchant_id=str(merchant_id),
-│                       amount=float(amount)
+│                       extra={
+│                           "merchant_id": merchant_id,
+│                           "operation_type": operation_type,
+│                           "credits_to_use": credits_to_use,
+│                           "admin_id": admin_id
+│                       }
 │                   )
 │                   
 │               except Exception as e:
 │                   self.logger.error(
-│                       "Failed to handle manual adjustment event",
-│                       event_data=event_data,
-│                       error=str(e),
-│                       exc_info=True
+│                       "Failed to process manual adjustment event",
+│                       extra={
+│                           "event_data": event_data,
+│                           "error": str(e)
+│                       }
 │                   )
 │                   raise
 │       ```
@@ -2531,7 +2360,7 @@ src/
 │   │       """Trial credits for new merchants"""
 │   │       trial_id: UUID
 │   │       merchant_id: UUID
-│   │       credits_used: int
+│   │       credits_to_use: int
 │   │       
 │   │       
 │   │   class ManualAdjustment(BaseModel):
@@ -2635,7 +2464,7 @@ src/
 │   │                   }
 │   │               )
 │   │               
-│   │       async def process_subscription_renewal(
+│   │       async def process_subscription(
 │   │           self,
 │   │           subscription: Subscription
 │   │       ) -> None:
@@ -2693,13 +2522,12 @@ src/
 │   │   
 │   │       async def process_trial_credits(
 │   │               self,
-│   │               merchant_id: UUID,
 │   │               trial: Trial,
 │   │           ) -> None:
 │   │               """Process trial credits for new merchants"""
 │   │               
 │   │               # Generate idempotency key
-│   │               idempotency_key = generate_idempotency_key("TRIAL", "MERCHANT", merchant_id)
+│   │               idempotency_key = generate_idempotency_key("TRIAL", "MERCHANT", trial.merchant_id)
 │   │               
 │   │               # Check if already processed
 │   │               existing = await self.transaction_repo.get_by_idempotency_key(idempotency_key)
@@ -2707,21 +2535,21 @@ src/
 │   │                   return
 │   │               
 │   │               # Get existing credit record
-│   │               credit_record = await self.credit_service.get_credit(merchant_id)
+│   │               credit_record = await self.credit_service.get_credit(trial.merchant_id)
 │   │               if not credit_record:
-│   │                   raise NotFoundError(f"Credit record not found for merchant {merchant_id}")
-│   │               
+│   │                   raise NotFoundError(f"Credit record not found for merchant {trial.merchant_id}")
+│   │   
 │   │               current_balance = credit_record.balance
 │   │               
 │   │               # Create transaction
 │   │               transaction = CreditTransaction(
-│   │                   merchant_id=merchant_id,
+│   │                   merchant_id=trial.merchant_id,
 │   │                   credit_id=credit_record.id,
 │   │                   operation_type=OperationType.INCREASE,
 │   │                   transaction_type=TransactionType.TRIAL,
-│   │                   credits_used=trial.credits_used,
+│   │                   credits_used=trial.credits_to_use,
 │   │                   balance_before=current_balance,
-│   │                   balance_after=current_balance + trial.credits_used,
+│   │                   balance_after=current_balance + trial.credits_to_use,
 │   │                   idempotency_key=idempotency_key,
 │   │                   extra_metadata={
 │   │                       **(trial.model_dump()),
@@ -2738,8 +2566,8 @@ src/
 │   │               self.logger.info(
 │   │                   "Trial credits processed",
 │   │                   extra={
-│   │                       "merchant_id": str(merchant_id),
-│   │                       "credit_amount": trial.credits_used,
+│   │                       "merchant_id": str(trial.merchant_id),
+│   │                       "credit_amount": trial.credits_to_use,
 │   │                       "transaction_id": str(created_transaction.id)
 │   │                   }
 │   │           )

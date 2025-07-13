@@ -25,12 +25,12 @@ class PluginStatusService:
     def __init__(
         self,
         config: CreditServiceConfig,
-        account_repo: CreditRepository,
+        credit_repo: CreditRepository,
         redis_client: redis.Redis,
         logger: ServiceLogger,
     ):
         self.config = config
-        self.account_repo = account_repo
+        self.credit_repo = credit_repo
         self.redis = redis_client
         self.logger = logger
 
@@ -49,7 +49,7 @@ class PluginStatusService:
                 return status
 
             # Get account from database
-            account = await self.account_repo.find_by_merchant_id(merchant_id)
+            account = await self.credit_repo.find_by_merchant_id(merchant_id)
 
             if not account:
                 raise NotFoundError(

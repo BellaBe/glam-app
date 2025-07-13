@@ -36,7 +36,6 @@ class CreditRepository(Repository[Credit]):
         account = Credit(
             merchant_id=merchant_id,
             balance=initial_balance,
-            lifetime_credits=initial_balance,
         )
         async with self.session_factory() as session:
             session.add(account)

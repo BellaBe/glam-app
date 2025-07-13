@@ -6,7 +6,7 @@ from typing import Optional
 
 from shared.utils.logger import ServiceLogger
 
-from ..config import ServiceConfig
+from ..config import CreditServiceConfig
 from ..events.publishers import CreditEventPublisher
 from ..metrics import increment_event_published
 
@@ -16,7 +16,7 @@ class BalanceMonitorService:
     
     def __init__(
         self,
-        config: ServiceConfig,
+        config: CreditServiceConfig,
         publisher: CreditEventPublisher,
         logger: ServiceLogger
     ):
@@ -57,21 +57,6 @@ class BalanceMonitorService:
                     threshold=float(self.low_threshold)
                 )
             
-            # Balance restored
-            elif old_balance <= self.low_threshold and new_balance > self.low_threshold:
-                await self.publisher.publish_balance_restored(
-                    merchant_id=merchant_id,
-                    balance=new_balance,
-                    correlation_id=correlation_id
-                )
-                increment_event_published("balance_restored")
-                
-                self.logger.info(
-                    "Balance restored above threshold",
-                    merchant_id=str(merchant_id),
-                    balance=float(new_balance),
-                    threshold=float(self.low_threshold)
-                )
             
             # Balance exhausted
             if old_balance > 0 and new_balance == 0:
@@ -97,8 +82,6 @@ class BalanceMonitorService:
                     previous_status=previous_status,
                     current_status=current_status,
                     reason=reason,
-                    balance=new_balance,
-                    correlation_id=correlation_id
                 )
                 increment_event_published("plugin_status_changed")
                 

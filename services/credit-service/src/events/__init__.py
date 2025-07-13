@@ -2,9 +2,9 @@
 
 from .publishers import CreditEventPublisher
 from .subscribers import (
-    ShopifyOrderPaidSubscriber,
-    ShopifyOrderRefundedSubscriber,
-    BillingPaymentSucceededSubscriber,
+    OrderUpdatedSubscriber,
+    TrialCreditsSubscriber,
+    SubscriptionSubscriber,
     MerchantCreatedSubscriber,
     ManualAdjustmentSubscriber
 )
@@ -14,9 +14,9 @@ __all__ = [
     "CreditEventPublisher",
     
     # Subscribers
-    "ShopifyOrderPaidSubscriber",
-    "ShopifyOrderRefundedSubscriber", 
-    "BillingPaymentSucceededSubscriber",
+    "OrderUpdatedSubscriber",
+    "TrialCreditsSubscriber",
+    "SubscriptionSubscriber",
     "MerchantCreatedSubscriber",
     "ManualAdjustmentSubscriber",
 ]

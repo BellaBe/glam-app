@@ -139,8 +139,8 @@ class ServiceLifecycle:
         if not self.db_manager:
             return
 
-        sf = self.db_manager.session_factory
-        self.notification_repo = NotificationRepository(Notification, sf)
+        session_factory = self.db_manager.session_factory
+        self.notification_repo = NotificationRepository(Notification, session_factory)
 
     def _init_local_services(self) -> None:
 

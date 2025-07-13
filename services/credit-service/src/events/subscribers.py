@@ -48,7 +48,6 @@ class OrderUpdatedSubscriber(DomainEventSubscriber):
             self.logger.error("Failed to process order update event")
             raise 
 
-
 class TrialCreditsSubscriber(DomainEventSubscriber):
     """
     Handle account creation events to create trial transaction.
@@ -84,7 +83,6 @@ class TrialCreditsSubscriber(DomainEventSubscriber):
         except Exception as e:
             self.logger.error("Failed to create trial credit transaction")
             raise
-
 
 class SubscriptionSubscriber(DomainEventSubscriber):
     """
@@ -138,7 +136,6 @@ class SubscriptionSubscriber(DomainEventSubscriber):
             )
             raise
 
-
 class MerchantCreatedSubscriber(DomainEventSubscriber):
     """
     Handle merchant created events to create initial credit account.
@@ -181,7 +178,6 @@ class MerchantCreatedSubscriber(DomainEventSubscriber):
                 }
             )
             raise
-
 
 class ManualAdjustmentSubscriber(DomainEventSubscriber):
     """
