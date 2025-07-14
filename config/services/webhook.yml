@@ -1,0 +1,14 @@
+service:
+  name: "webhook-service"
+
+api:
+  port: 8012
+  workers: 4
+
+webhook:
+  max_payload_size_mb: 10
+  dedup_ttl_hours: 24
+
+circuit_breaker:
+  failure_threshold: 5
+  recovery_timeout: 30

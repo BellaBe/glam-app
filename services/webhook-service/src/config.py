@@ -1,61 +1,63 @@
-# services/webhook-service/src/config.py
-"""
-Webhook service configuration management.
-
-Follows the same pattern as notification service for consistency.
-"""
-
+from functools import lru_cache
 from typing import Optional
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import BaseModel, Field
+from shared.config_loader import merged_config
+from shared.database import DatabaseConfig, create_database_config
 
-from shared.config.base import BaseServiceConfig
 
-
-class WebhookServiceConfig(BaseServiceConfig):
-    """Configuration for webhook service"""
+class WebhookConfig(BaseModel):
+    # Service Identity (from shared + service YAML)
+    service_name: str = Field(..., alias="service.name")
+    service_version: str = Field(..., alias="service.version")
+    environment: str
+    debug: bool
     
-    # Service identification
-    SERVICE_NAME: str = Field(default="webhook-service", env="SERVICE_NAME")
-    SERVICE_PORT: int = Field(default=8012, env="SERVICE_PORT")
+    # API Configuration (from shared + service YAML)
+    api_host: str = Field(..., alias="api.host")
+    api_port: int = Field(..., alias="api.port")
+    api_workers: int = Field(..., alias="api.workers")
     
-    # Webhook-specific settings
-    SHOPIFY_WEBHOOK_SECRET: str = Field(..., env="SHOPIFY_WEBHOOK_SECRET")
-    SHOPIFY_API_VERSION: str = Field(default="2024-01", env="SHOPIFY_API_VERSION")
-    STRIPE_WEBHOOK_SECRET: Optional[str] = Field(default=None, env="STRIPE_WEBHOOK_SECRET")
+    # Infrastructure (from shared YAML)
+    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
+    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Redis for deduplication
-    REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
-    DEDUP_TTL_HOURS: int = Field(default=24, env="DEDUP_TTL_HOURS")
+    # Database (from shared YAML)
+    database_host: str = Field(..., alias="database.host")
+    database_port: int = Field(..., alias="database.port")
+    database_pool_size: int = Field(..., alias="database.pool_size")
+    database_echo: bool = Field(..., alias="database.echo")
     
-    # Performance settings
-    MAX_PAYLOAD_SIZE_MB: int = Field(default=10, env="MAX_PAYLOAD_SIZE_MB")
-    WEBHOOK_TIMEOUT_SECONDS: int = Field(default=30, env="WEBHOOK_TIMEOUT_SECONDS")
+    # Logging (from shared YAML)
+    logging_level: str = Field(..., alias="logging.level")
+    logging_format: str = Field(..., alias="logging.format")
     
-    # Circuit breaker settings
-    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(default=5, env="CIRCUIT_BREAKER_FAILURE_THRESHOLD")
-    CIRCUIT_BREAKER_TIMEOUT_SECONDS: int = Field(default=60, env="CIRCUIT_BREAKER_TIMEOUT_SECONDS")
-    CIRCUIT_BREAKER_WINDOW_SECONDS: int = Field(default=30, env="CIRCUIT_BREAKER_WINDOW_SECONDS")
+    # Rate Limiting (from shared YAML)
+    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    # Dead letter queue settings
-    DLQ_MAX_RETRIES: int = Field(default=5, env="DLQ_MAX_RETRIES")
+    # Monitoring (from shared YAML)
+    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    # Webhook Configuration (service-specific)
+    webhook_max_payload_size_mb: int = Field(..., alias="webhook.max_payload_size_mb")
+    webhook_dedup_ttl_hours: int = Field(..., alias="webhook.dedup_ttl_hours")
+    
+    # Circuit Breaker Configuration (service-specific)
+    circuit_breaker_failure_threshold: int = Field(..., alias="circuit_breaker.failure_threshold")
+    circuit_breaker_recovery_timeout: int = Field(..., alias="circuit_breaker.recovery_timeout")
+    
+    # External Services (env-only, optional)
+    shopify_webhook_secret: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    
+    @property
+    def database_config(self) -> DatabaseConfig:
+        """Get database configuration"""
+        return create_database_config(prefix="WEBHOOK_")
 
 
-# Global config instance
-_config: Optional[WebhookServiceConfig] = None
-
-
-def get_config() -> WebhookServiceConfig:
-    """Get or create config instance"""
-    global _config
-    if _config is None:
-        _config = WebhookServiceConfig()
-    return _config
-
-
-# For convenience
-ServiceConfig = WebhookServiceConfig
+@lru_cache
+def get_service_config() -> WebhookConfig:
+    """Load and cache service configuration"""
+    cfg_dict = merged_config("webhook", env_prefix="WEBHOOK")
+    return WebhookConfig(**cfg_dict)

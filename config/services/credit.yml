@@ -1,0 +1,16 @@
+service:
+  name: "credit-service"
+
+# Credit business logic
+credit:
+  trial_credits: 100
+  low_balance_threshold_percent: 20
+
+# Plugin management
+plugin:
+  status_cache_ttl: 15
+  rate_limit_per_merchant: 100
+
+# Service-specific cache settings
+cache:
+  ttl_seconds: 60

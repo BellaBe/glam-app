@@ -12,7 +12,7 @@ from .api.v1 import health, credits, transactions, plugin_status
 
 # Global singletons
 config = get_service_config()
-logger = create_logger(config.SERVICE_NAME)
+logger = create_logger(config.service_name)
 lifecycle = ServiceLifecycle(config, logger)
 
 
@@ -20,7 +20,7 @@ lifecycle = ServiceLifecycle(config, logger)
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     
-    logger.info("Starting Credit Service", version=config.SERVICE_VERSION)
+    logger.info("Starting Credit Service", version=config.service_version)
     
     app.state.lifecycle = lifecycle
     app.state.config = config
@@ -39,8 +39,8 @@ def create_application() -> FastAPI:
 
     # Create FastAPI app
     app = FastAPI(
-        title=config.SERVICE_NAME,
-        version=config.SERVICE_VERSION,
+        title=config.service_name,
+        version=config.service_version,
         lifespan=lifespan,
         description="Credit management service for merchant credits and plugin access control",
         exception_handlers={}  # Use shared middleware for exception handling
@@ -48,7 +48,7 @@ def create_application() -> FastAPI:
 
     setup_middleware(
         app,
-        service_name=config.SERVICE_NAME,
+        service_name=config.service_name,
         enable_metrics=True
     )
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
-        port=config.SERVICE_PORT,
-        reload=config.DEBUG
+        host=config.api_host,
+        port=config.api_port,
+        reload=config.debug
     )

@@ -1,82 +1,62 @@
-# services/credit-service/src/config.py
-"""
-Credit service configuration management.
-
-Follows the same pattern as notification service for consistency.
-"""
-
 from functools import lru_cache
-from typing import List, Optional
-from pydantic import ValidationError, Field, field_validator, BaseModel
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pathlib import Path
-import os
-import json
-
-# Import after loading env vars
+from pydantic import BaseModel, Field
+from shared.config_loader import merged_config
 from shared.database import DatabaseConfig, create_database_config
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # Goes up to glam-app/
-ENV_FILE = BASE_DIR / ".env"
-
-class CreditServiceConfig(BaseSettings):
-    """Configuration for credit service"""
+class CreditConfig(BaseModel):
+    # Service Identity (from shared + service YAML)
+    service_name: str = Field(..., alias="service.name")
+    service_version: str = Field(..., alias="service.version")
+    environment: str
+    debug: bool
     
-    model_config = SettingsConfigDict(
-        env_file=str(ENV_FILE) if ENV_FILE.exists() else None,
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        env_prefix="CREDIT_",
-        extra="ignore",
-    )
+    # Infrastructure (from shared YAML)
+    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
+    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Service identification
-    SERVICE_NAME: str = Field(default="credit-service")
-    SERVICE_VERSION: str = Field(default="1.0.0", env="SERVICE_VERSION")
-
-    # Redis for caching
-    REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
-    CACHE_TTL_SECONDS: int = Field(default=60, env="CACHE_TTL_SECONDS")
+    # Database (from shared YAML)
+    database_host: str = Field(..., alias="database.host")
+    database_port: int = Field(..., alias="database.port")
+    database_pool_size: int = Field(..., alias="database.pool_size")
+    database_echo: bool = Field(..., alias="database.echo")
     
-    # Credit Configuration
-    TRIAL_CREDITS: int = Field(default=100, env="TRIAL_CREDITS")
-    LOW_BALANCE_THRESHOLD_PERCENT: int = Field(default=20, env="LOW_BALANCE_THRESHOLD_PERCENT")
+    # Logging (from shared YAML)
+    logging_level: str = Field(..., alias="logging.level")
+    logging_format: str = Field(..., alias="logging.format")
     
-    # Order Credits
-    ORDER_CREDIT_ENABLED: bool = Field(default=True, env="ORDER_CREDIT_ENABLED")
-    ORDER_CREDIT_FIXED_AMOUNT: int = Field(default=10, env="ORDER_CREDIT_FIXED_AMOUNT")
-    ORDER_CREDIT_PERCENTAGE: int = Field(default=1, env="ORDER_CREDIT_PERCENTAGE")
-    ORDER_CREDIT_MINIMUM: int = Field(default=1, env="ORDER_CREDIT_MINIMUM")
-
-    # Plugin Status
-    PLUGIN_STATUS_CACHE_TTL: int = Field(default=15, env="PLUGIN_STATUS_CACHE_TTL")
-    PLUGIN_RATE_LIMIT_PER_MERCHANT: int = Field(default=100, env="PLUGIN_RATE_LIMIT_PER_MERCHANT")
+    # Rate Limiting (from shared YAML)
+    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    # Rate Limiting
-    RATE_LIMIT_WINDOW_SECONDS: int = Field(default=60, env="RATE_LIMIT_WINDOW_SECONDS")
+    # Monitoring (from shared YAML)
+    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
+    
+    # Cache (service override of shared defaults)
+    cache_ttl_seconds: int = Field(..., alias="cache.ttl_seconds")
+    
+    # Credit Configuration (service-specific)
+    credit_trial_credits: int = Field(..., alias="credit.trial_credits")
+    credit_low_balance_threshold_percent: int = Field(..., alias="credit.low_balance_threshold_percent")
+    
+    # Order Credit Configuration (service-specific)
+    order_credit_enabled: bool = Field(..., alias="order_credit.enabled")
+    order_credit_fixed_amount: int = Field(..., alias="order_credit.fixed_amount")
+    order_credit_percentage: int = Field(..., alias="order_credit.percentage")
+    order_credit_minimum: int = Field(..., alias="order_credit.minimum")
+    
+    # Plugin Configuration (service-specific)
+    plugin_status_cache_ttl: int = Field(..., alias="plugin.status_cache_ttl")
+    plugin_rate_limit_per_merchant: int = Field(..., alias="plugin.rate_limit_per_merchant")
+    
+    @property
+    def database_config(self) -> DatabaseConfig:
+        """Get database configuration"""
+        return create_database_config(prefix="CREDIT_")
 
 
-
-@lru_cache()
-def get_service_config() -> CreditServiceConfig:
-    """Singleton accessor for service configuration."""
-    try:
-        # Debug what pydantic settings sees
-        print("\n=== Environment Variables Debug ===")
-        print(f"ENV_FILE exists: {ENV_FILE.exists()}")
-        print(f"ENV_FILE path: {ENV_FILE}")
-        
-        # Show what env vars are available
-        credit_vars = {k: v for k, v in os.environ.items() if k.startswith("CREDIT_")}
-        print(f"\nFound {len(credit_vars)} CREDIT_ variables in environment")
-
-        config = CreditServiceConfig()
-        print("\nServiceConfig loaded successfully!")
-        return config
-    except ValidationError as exc:
-        print("\n=== Validation Error Details ===")
-        for error in exc.errors():
-            print(f"Field: {error['loc']}, Type: {error['type']}, Message: {error['msg']}")
-        
-        raise
+@lru_cache
+def get_service_config() -> CreditConfig:
+    """Load and cache service configuration"""
+    cfg_dict = merged_config("credit", env_prefix="CREDIT")
+    return CreditConfig(**cfg_dict)

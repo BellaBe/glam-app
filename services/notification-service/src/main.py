@@ -12,7 +12,7 @@ from .routers import health, notifications, templates
 
 # Global singletons
 config = get_service_config()
-logger = create_logger(config.SERVICE_NAME)
+logger = create_logger(config.service_name)
 lifecycle = ServiceLifecycle(config, logger)
 
 
@@ -20,7 +20,7 @@ lifecycle = ServiceLifecycle(config, logger)
 async def lifespan(app: FastAPI):
     """FastAPI lifespan adapter"""
    
-    logger.info("Starting Notification Service", version=config.SERVICE_VERSION)
+    logger.info("Starting Notification Service", version=config.service_version)
     app.state.lifecycle = lifecycle
     app.state.config = config
     app.state.logger = logger
@@ -34,8 +34,8 @@ async def lifespan(app: FastAPI):
 def create_application() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
-        title=config.SERVICE_NAME,
-        version=config.SERVICE_VERSION,
+        title=config.service_name,
+        version=config.service_version,
         lifespan=lifespan,
         description="Email notification service for GlamYouUp platform",
         exception_handlers={} # Use shared middleware for exception handling
@@ -43,7 +43,7 @@ def create_application() -> FastAPI:
     
     setup_middleware(
         app,
-        service_name=config.SERVICE_NAME,
+        service_name=config.service_name,
         enable_metrics=True
     )
     
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
-        port=config.API_PORT,
-        reload=config.DEBUG
+        host=config.api_host,
+        port=config.api_port,
+        reload=config.debug
     )
