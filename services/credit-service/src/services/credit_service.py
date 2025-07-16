@@ -48,19 +48,19 @@ class CreditService:
 
         credit = await self.credit_repo.create_credit(
             merchant_id=merchant_id,
-            initial_balance=self.config.TRIAL_CREDITS
+            initial_balance=self.config.credit_trial_credits
         )
 
         # Publish account created event
         await self.publisher.publish_credit_record_created(
             merchant_id=merchant_id,
-            initial_balance=self.config.TRIAL_CREDITS
+            initial_balance=self.config.credit_trial_credits
         )
 
         self.logger.info(
             "Created new credit account",
             merchant_id=str(merchant_id),
-            initial_balance=float(self.config.TRIAL_CREDITS)
+            initial_balance=float(self.config.credit_trial_credits)
         )
 
         return self.credit_mapper.model_to_response(credit)

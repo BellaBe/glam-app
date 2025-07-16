@@ -7,11 +7,24 @@ import yaml
 from dotenv import load_dotenv
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]        # /glam-app
+_REPO_ROOT = Path(__file__).resolve()    
+
+while _REPO_ROOT.name != "glam-app":
+    if _REPO_ROOT.parent == _REPO_ROOT:
+        raise RuntimeError("Unable to locate glam-app root directory")
+    _REPO_ROOT = _REPO_ROOT.parent
+
 _CONFIG_DIR = _REPO_ROOT / "config"                     # ./config
-_SHARED_CONFIG = _CONFIG_DIR / "shared.yaml"            # ./config/shared.yaml
+_SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yaml
 _SVC_CFG_DIR = _CONFIG_DIR / "services"                 # ./config/services
 _ENV_FILE = _REPO_ROOT / ".env"                         # optional
+
+
+# Check if files exist
+print(f"\nFile existence check:")
+print(f"  .env exists: {_ENV_FILE.exists()}")
+print(f"  shared.yaml exists: {_SHARED_CONFIG.exists()}")
+print(f"  config/services/ exists: {_SVC_CFG_DIR.exists()}")
 
 # Load .env once so os.environ is ready (local runs)
 if _ENV_FILE.exists():
@@ -57,7 +70,7 @@ def merged_config(service: str, *, env_prefix: str) -> Dict[str, Any]:
     cfg = _load_yaml_file(_SHARED_CONFIG)
     
     # 2. Load service-specific configuration and merge
-    service_config_path = _SVC_CFG_DIR / f"{service}.yaml"
+    service_config_path = _SVC_CFG_DIR / f"{service}.yml"
     if not service_config_path.is_file():
         raise FileNotFoundError(f"Service config not found: {service_config_path}")
     
@@ -87,3 +100,14 @@ def merged_config(service: str, *, env_prefix: str) -> Dict[str, Any]:
                 cfg[yaml_key] = val
     
     return cfg
+
+def flatten_config(data: dict, parent_key: str = '', sep: str = '.') -> dict:
+    """Flatten nested dict for Pydantic validation_alias to work"""
+    items = []
+    for k, v in data.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_config(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)

@@ -1,3 +1,4 @@
+# config/shared.yml
 infrastructure:
   nats_url: nats://localhost:4222
   redis_url: redis://localhost:6379
@@ -10,6 +11,7 @@ logging:
   format: json
 
 api:
+  port: 8000
   host: 0.0.0.0
   cors_origins: ["*"]
   

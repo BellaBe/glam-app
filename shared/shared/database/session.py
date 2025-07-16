@@ -71,11 +71,7 @@ class DatabaseSessionManager:
         logger.info("Database engine closed")
     
     @asynccontextmanager
-    async def session(self) -> AsyncGenerator[AsyncSession, None]:
-        """
-        Provide a transactional scope around a series of operations.
-        Automatically commits on success and rolls back on error.
-        """
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         if self._session_factory is None:
             raise RuntimeError("Database session manager not initialized")
         
@@ -88,14 +84,6 @@ class DatabaseSessionManager:
                 raise
             finally:
                 await session.close()
-    
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """
-        Dependency injection function for FastAPI.
-        Yields a database session and handles cleanup.
-        """
-        async with self.session() as session:
-            yield session
     
     @property
     def engine(self) -> AsyncEngine:

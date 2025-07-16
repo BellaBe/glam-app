@@ -64,10 +64,10 @@ class PluginStatusService:
                     else PluginStatusResponse(status=PluginStatus.DISABLED)
                 )
 
-            # Cache result
-            await self.redis.setex(
-                cache_key, self.config.PLUGIN_STATUS_CACHE_TTL, result.model_dump_json()
-            )
+            # # Cache result
+            # await self.redis.setex(
+            #     cache_key, self.config.PLUGIN_STATUS_CACHE_TTL, result.model_dump_json()
+            # )
 
             increment_plugin_status_check(result.status)
 

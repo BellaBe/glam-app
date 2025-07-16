@@ -146,6 +146,29 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
+      
+  # ----------------- Catalog Database -----------------
+  credit-db:
+    image: postgres:15-alpine
+    container_name: credit-db-local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${CREDIT_DB_USER}
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD}
+      POSTGRES_DB: ${CREDIT_DB_NAME}
+    ports:
+      - "${CREDIT_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - credit-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
 
   # ----------------- S3-compatible Storage (MinIO) -----------------
   minio:
@@ -257,3 +280,4 @@ volumes:
   notification-db-local-data:
   prometheus-data:
   grafana-data:
+  credit-db-local-data:

@@ -38,7 +38,6 @@ from .events.subscribers import (
     TrialCreditsSubscriber,
     SubscriptionSubscriber,
     MerchantCreatedSubscriber,
-    ManualAdjustmentSubscriber
 )
 
 # Mappers
@@ -152,8 +151,8 @@ class ServiceLifecycle:
     
     async def _init_messaging(self) -> None:
         self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect(self.config.NATS_SERVERS)
-        self.logger.info("Connected to NATS %s", self.config.NATS_SERVERS)
+        await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
+        self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
 
         js = self.messaging_wrapper.js
         cfg = StreamConfig(
@@ -174,13 +173,17 @@ class ServiceLifecycle:
     
   
     async def _init_database(self) -> None:
-        if not (self.config.DB_ENABLED and self.config.database_config):
+        if not (self.config.db_enabled and self.config.database_config):
             self.logger.warning("DB disabled; repositories will not be initialised")
             return
+        
+        print("Database URL:", self.config.database_config.database_url)
 
         self.db_manager = DatabaseSessionManager(
             database_url=self.config.database_config.database_url,
-            **self.config.database_config.get_engine_kwargs(),
+            echo=self.config.database_config.DB_ECHO,
+            pool_size=self.config.database_config.DB_POOL_SIZE,
+            max_overflow=self.config.database_config.DB_MAX_OVERFLOW,
         )
         await self.db_manager.init()
         set_database_manager(self.db_manager)
@@ -218,12 +221,12 @@ class ServiceLifecycle:
         
         self.logger.info("Setting up Redis...")
         
-        if not self.config.REDIS_URL:
-            self.logger.warning("REDIS_URL not configured, skipping Redis setup")
+        if not self.config.infrastructure_redis_url:
+            self.logger.warning("INFRASTRUCTURE_REDIS_URL not configured, skipping Redis setup")
             return
         
         self.redis_client = redis.from_url(
-            self.config.REDIS_URL,
+            self.config.infrastructure_redis_url,
             decode_responses=True,
             retry_on_timeout=True,
             health_check_interval=30
@@ -317,21 +320,25 @@ class ServiceLifecycle:
     
     
     async def _init_subscribers(self) -> None:
-        """Start event subscribers"""
-        
         if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper is not initialized, cant start subscribers")
+            raise RuntimeError("Messaging wrapper not initialized")
 
+        # ⚠️ Register deps BEFORE launching subscribers – they may receive a
+        # message immediately after pull_subscribe().
+        self.messaging_wrapper.register_dependency("credit_service", self.credit_service)
+        self.messaging_wrapper.register_dependency("credit_transaction_service", self.credit_transaction_service)
+        self.messaging_wrapper.register_dependency("logger", self.logger)
+        
+        # Start all subscribers with registered dependencies
         subscribers = [
             OrderUpdatedSubscriber,
-            TrialCreditsSubscriber,
+            TrialCreditsSubscriber, 
             SubscriptionSubscriber,
             MerchantCreatedSubscriber,
-            ManualAdjustmentSubscriber
         ]
         
-        for sub_cls in subscribers:
-            await self.messaging_wrapper.start_subscriber(sub_cls)
+        for subscriber_class in subscribers:
+            await self.messaging_wrapper.start_subscriber(subscriber_class)
 
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)

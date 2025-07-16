@@ -137,20 +137,25 @@ download-all-models: download-models download-cloth-models download-selfie-model
 # Usage: make run SERVICE=catalog-service PORT=8000
 run-service:
 	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make run-service SERVICE=$$SERVICE"; \
+	  echo "❌ Usage: make run-service SERVICE=notification-service"; \
 	  exit 1; \
 	fi
-	@echo "Running service: $(SERVICE)"
-	# Convert "notification-service" -> "NOTIFICATION" -> "NOTIFICATION_EXTERNAL_PORT"
-	@PORT=$$(grep $$(echo $(SERVICE) \
-	  | sed 's/-service//g' \
-	  | sed 's/-/_/g' \
-	  | tr a-z A-Z)_EXTERNAL_PORT .env \
-	  | cut -d '=' -f2) && \
-	echo "Using port: $$PORT" && \
-	cd services/$(SERVICE) && \
-	pip install -e ../../shared && \
-	PYTHONPATH=../../common poetry run uvicorn src.main:app --reload --host 0.0.0.0 --port $$PORT
+	@echo "🚀 Running service: $(SERVICE)"
+	
+	# Check if service directory exists
+	@if [ ! -d "services/$(SERVICE)" ]; then \
+	  echo "❌ Service directory not found: services/$(SERVICE)"; \
+	  exit 1; \
+	fi
+	
+	# Install shared package
+	@echo "📦 Installing shared package..."
+	@cd services/$(SERVICE) && pip install -e ../../shared
+	
+	# NO PORT EXTRACTION - service handles its own port via effective_port!
+	@echo "🎯 Starting $(SERVICE) (port determined by service config)..."
+	@cd services/$(SERVICE) && \
+	PYTHONPATH=../../shared:../../config poetry run python -m src.main --reload --host 0.0.0.0
 
 		
 # Run one non-FASTAPI service (e.g. catalog-job-processor) with hot-reload
@@ -159,7 +164,7 @@ run-non-fastapi-service: ## SERVICE=<folder>
 	  echo "Usage: make run-non-fastapi-service SERVICE=catalog-job-processor"; exit 1; fi
 	cd services/$(SERVICE) && \
 	pip install -e ../../shared && \
-	PYTHONPATH=../../shared poetry run python src.main
+	PYTHONPATH=../../shared poetry run -m python src.main
 
 # Run ALL services locally with hot-reload (Ctrl-C to kill)
 

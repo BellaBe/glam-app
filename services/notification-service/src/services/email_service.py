@@ -17,7 +17,7 @@ class EmailService:
         self.config = config
         self.logger = logger
         self.providers: Dict[str, EmailProvider] = {}
-        self.current_provider = config.get('primary_provider')
+        self.current_provider = config.get('email_primary_provider')
         self._init_providers()
     
     def _init_providers(self):

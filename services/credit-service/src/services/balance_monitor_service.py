@@ -26,8 +26,7 @@ class BalanceMonitorService:
         
         # Calculate threshold
         self.low_threshold = (
-            self.config.TRIAL_CREDITS * 
-            self.config.LOW_BALANCE_THRESHOLD_PERCENT / 100
+            self.config.credit_trial_credits * self.config.low_balance_threshold_percent / 100
         )
     
     async def check_balance_thresholds(

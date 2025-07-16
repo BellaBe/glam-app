@@ -1,11 +1,12 @@
 from functools import lru_cache
+import os
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from shared.config_loader import merged_config
+from shared.config.loader import merged_config, flatten_config
 from shared.database import DatabaseConfig, create_database_config
 
 
-class NotificationConfig(BaseModel):
+class ServiceConfig(BaseModel):
     # Service Identity (from shared + service YAML)
     service_name: str = Field(..., alias="service.name")
     service_version: str = Field(..., alias="service.version")
@@ -15,18 +16,15 @@ class NotificationConfig(BaseModel):
     # API Configuration (from shared + service YAML)
     api_host: str = Field(..., alias="api.host")
     api_port: int = Field(..., alias="api.port")
+    api_external_port: int = Field(..., alias="api.external_port")  # Local development port
     api_cors_origins: List[str] = Field(..., alias="api.cors_origins")
     
     # Infrastructure (from shared YAML)
     infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
     infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Database (from shared YAML)
-    database_host: str = Field(..., alias="database.host")
-    database_port: int = Field(..., alias="database.port")
-    database_pool_size: int = Field(..., alias="database.pool_size")
-    database_max_overflow: int = Field(..., alias="database.max_overflow")
-    database_echo: bool = Field(..., alias="database.echo")
+    # Database Configuration
+    db_enabled: bool = Field(..., alias="database.enabled")
     
     # Logging (from shared YAML)
     logging_level: str = Field(..., alias="logging.level")
@@ -82,10 +80,36 @@ class NotificationConfig(BaseModel):
     def database_config(self) -> DatabaseConfig:
         """Get database configuration"""
         return create_database_config(prefix="NOTIFICATION_")
+    
+    @property
+    def effective_port(self) -> int:
+        """
+        Get the effective port to use based on environment.
+        
+        Logic:
+        - Local development (not in Docker): use external_port
+        - Docker/container environment: use internal port
+        - Environment override: NOTIFICATION_USE_EXTERNAL_PORT=true forces external_port
+        """
+        # Check if explicitly requested to use external port
+        use_external = os.getenv("NOTIFICATION_USE_EXTERNAL_PORT", "false").lower() == "true"
+
+        # Check if running in container (common Docker environment variables)
+        in_container = any([
+            os.getenv("DOCKER_CONTAINER"),
+            os.getenv("HOSTNAME", "").startswith("notification-service"),
+            os.path.exists("/.dockerenv")
+        ])
+        
+        if use_external or (not in_container and self.environment == "development"):
+            return self.api_external_port
+        else:
+            return self.api_port
 
 
 @lru_cache
-def get_service_config() -> NotificationConfig:
+def get_service_config() -> ServiceConfig:
     """Load and cache service configuration"""
     cfg_dict = merged_config("notification", env_prefix="NOTIFICATION")
-    return NotificationConfig(**cfg_dict)
+    flattened = flatten_config(cfg_dict)
+    return ServiceConfig(**flattened) #type: ingnore

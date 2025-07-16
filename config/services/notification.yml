@@ -2,11 +2,15 @@ service:
   name: notification-service
 
 api:
-  port: 8007
+  port: 8000
+  external_port: 8001
 
 email: 
   primary_provider: "sendgrid"
   fallback_provider: "smtp"
+  
+sendgrid:
+  api_key: "your_sendgrid_api_key"
 
 rate_limiting:
   enabled: true
@@ -29,3 +33,10 @@ bulk_email:
   batch_delay_seconds: 1.0
   max_delay_seconds: 60.0
   concurrent_batches: 10
+  
+database:
+  enabled: true
+  
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: true

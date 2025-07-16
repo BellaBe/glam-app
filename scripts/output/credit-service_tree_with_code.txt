@@ -788,32 +788,6 @@ src/
 │   └── __init__.py
 ├── events/
 │   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   """Event handling for credit service."""
-│   │   
-│   │   from .publishers import CreditEventPublisher
-│   │   from .subscribers import (
-│   │       ShopifyOrderPaidSubscriber,
-│   │       ShopifyOrderRefundedSubscriber,
-│   │       BillingPaymentSucceededSubscriber,
-│   │       MerchantCreatedSubscriber,
-│   │       ManualAdjustmentSubscriber
-│   │   )
-│   │   
-│   │   __all__ = [
-│   │       # Publishers
-│   │       "CreditEventPublisher",
-│   │       
-│   │       # Subscribers
-│   │       "ShopifyOrderPaidSubscriber",
-│   │       "ShopifyOrderRefundedSubscriber", 
-│   │       "BillingPaymentSucceededSubscriber",
-│   │       "MerchantCreatedSubscriber",
-│   │       "ManualAdjustmentSubscriber",
-│   │   ]
-│   │   ```
-│   │   
 │   ├── publishers.py
 │   │   
 │   │   ```py
@@ -1012,7 +986,6 @@ src/
 │                   self.logger.error("Failed to process order update event")
 │                   raise 
 │       
-│       
 │       class TrialCreditsSubscriber(DomainEventSubscriber):
 │           """
 │           Handle account creation events to create trial transaction.
@@ -1048,7 +1021,6 @@ src/
 │               except Exception as e:
 │                   self.logger.error("Failed to create trial credit transaction")
 │                   raise
-│       
 │       
 │       class SubscriptionSubscriber(DomainEventSubscriber):
 │           """
@@ -1102,7 +1074,6 @@ src/
 │                   )
 │                   raise
 │       
-│       
 │       class MerchantCreatedSubscriber(DomainEventSubscriber):
 │           """
 │           Handle merchant created events to create initial credit account.
@@ -1145,7 +1116,6 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
 │       
 │       class ManualAdjustmentSubscriber(DomainEventSubscriber):
 │           """
@@ -1606,7 +1576,6 @@ src/
 │   │           account = Credit(
 │   │               merchant_id=merchant_id,
 │   │               balance=initial_balance,
-│   │               lifetime_credits=initial_balance,
 │   │           )
 │   │           async with self.session_factory() as session:
 │   │               session.add(account)
@@ -2077,7 +2046,7 @@ src/
 │   │   
 │   │   from shared.utils.logger import ServiceLogger
 │   │   
-│   │   from ..config import ServiceConfig
+│   │   from ..config import CreditServiceConfig
 │   │   from ..events.publishers import CreditEventPublisher
 │   │   from ..metrics import increment_event_published
 │   │   
@@ -2087,7 +2056,7 @@ src/
 │   │       
 │   │       def __init__(
 │   │           self,
-│   │           config: ServiceConfig,
+│   │           config: CreditServiceConfig,
 │   │           publisher: CreditEventPublisher,
 │   │           logger: ServiceLogger
 │   │       ):
@@ -2128,21 +2097,6 @@ src/
 │   │                       threshold=float(self.low_threshold)
 │   │                   )
 │   │               
-│   │               # Balance restored
-│   │               elif old_balance <= self.low_threshold and new_balance > self.low_threshold:
-│   │                   await self.publisher.publish_balance_restored(
-│   │                       merchant_id=merchant_id,
-│   │                       balance=new_balance,
-│   │                       correlation_id=correlation_id
-│   │                   )
-│   │                   increment_event_published("balance_restored")
-│   │                   
-│   │                   self.logger.info(
-│   │                       "Balance restored above threshold",
-│   │                       merchant_id=str(merchant_id),
-│   │                       balance=float(new_balance),
-│   │                       threshold=float(self.low_threshold)
-│   │                   )
 │   │               
 │   │               # Balance exhausted
 │   │               if old_balance > 0 and new_balance == 0:
@@ -2168,8 +2122,6 @@ src/
 │   │                       previous_status=previous_status,
 │   │                       current_status=current_status,
 │   │                       reason=reason,
-│   │                       balance=new_balance,
-│   │                       correlation_id=correlation_id
 │   │                   )
 │   │                   increment_event_published("plugin_status_changed")
 │   │                   
@@ -2206,7 +2158,7 @@ src/
 │   │   from shared.errors import NotFoundError, DomainError
 │   │   
 │   │   from ..config import CreditServiceConfig
-│   │   from ..events.publishers import CreditEventPublisher
+│   │   from ..events import CreditEventPublisher
 │   │   from ..repositories.credit_repository import CreditRepository
 │   │   from ..mappers.credit_mapper import CreditMapper
 │   │   from ..schemas.credit import CreditResponse
@@ -2246,19 +2198,19 @@ src/
 │   │   
 │   │           credit = await self.credit_repo.create_credit(
 │   │               merchant_id=merchant_id,
-│   │               initial_balance=self.config.TRIAL_CREDITS
+│   │               initial_balance=self.config.credit_trial_credits
 │   │           )
 │   │   
 │   │           # Publish account created event
 │   │           await self.publisher.publish_credit_record_created(
 │   │               merchant_id=merchant_id,
-│   │               initial_balance=self.config.TRIAL_CREDITS
+│   │               initial_balance=self.config.credit_trial_credits
 │   │           )
 │   │   
 │   │           self.logger.info(
 │   │               "Created new credit account",
 │   │               merchant_id=str(merchant_id),
-│   │               initial_balance=float(self.config.TRIAL_CREDITS)
+│   │               initial_balance=float(self.config.credit_trial_credits)
 │   │           )
 │   │   
 │   │           return self.credit_mapper.model_to_response(credit)
@@ -2727,12 +2679,12 @@ src/
 │           def __init__(
 │               self,
 │               config: CreditServiceConfig,
-│               account_repo: CreditRepository,
+│               credit_repo: CreditRepository,
 │               redis_client: redis.Redis,
 │               logger: ServiceLogger,
 │           ):
 │               self.config = config
-│               self.account_repo = account_repo
+│               self.credit_repo = credit_repo
 │               self.redis = redis_client
 │               self.logger = logger
 │       
@@ -2751,7 +2703,7 @@ src/
 │                       return status
 │       
 │                   # Get account from database
-│                   account = await self.account_repo.find_by_merchant_id(merchant_id)
+│                   account = await self.credit_repo.find_by_merchant_id(merchant_id)
 │       
 │                   if not account:
 │                       raise NotFoundError(
@@ -3008,53 +2960,100 @@ src/
 ├── config.py
 │   
 │   ```py
-│   # services/credit-service/src/config.py
-│   """
-│   Credit service configuration management.
-│   
-│   Follows the same pattern as notification service for consistency.
-│   """
-│   
-│   from typing import Optional
-│   from pydantic_settings import BaseSettings
-│   from pydantic import Field
+│   from functools import lru_cache
+│   from pydantic import BaseModel, Field
+│   from shared.config_loader import merged_config
+│   from shared.database import DatabaseConfig, create_database_config
+│   import os
 │   
 │   
-│   
-│   class CreditServiceConfig(BaseSettings):
-│       """Configuration for credit service"""
+│   class CreditServiceConfig(BaseModel):
+│       # Service Identity (from shared + service YAML)
+│       service_name: str = Field(..., alias="service.name")
+│       service_version: str = Field(..., alias="service.version")
+│       environment: str
+│       debug: bool
 │       
-│       # Service identification
-│       SERVICE_NAME: str = Field(default="credit-service", env="SERVICE_NAME")
-│       SERVICE_PORT: int = Field(default=8015, env="SERVICE_PORT")
+│       # API Configuration - BOTH PORTS
+│       api_host: str = Field(..., alias="api.host")
+│       api_port: int = Field(..., alias="api.port")                    # Internal/container port
+│       api_external_port: int = Field(..., alias="api.external_port")  # Local development port
+│       api_cors_origins: list = Field(..., alias="api.cors_origins")
 │       
-│       # Redis for caching
-│       REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
-│       CACHE_TTL_SECONDS: int = Field(default=60, env="CACHE_TTL_SECONDS")
+│       # Infrastructure (from shared YAML)
+│       infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
+│       infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
 │       
-│       # Credit Configuration
-│       TRIAL_CREDITS: int = Field(default=100, env="TRIAL_CREDITS")
-│       LOW_BALANCE_THRESHOLD_PERCENT: int = Field(default=20, env="LOW_BALANCE_THRESHOLD_PERCENT")
+│       # Database (from shared YAML)
+│       database_host: str = Field(..., alias="database.host")
+│       database_port: int = Field(..., alias="database.port")
+│       database_pool_size: int = Field(..., alias="database.pool_size")
+│       database_echo: bool = Field(..., alias="database.echo")
 │       
-│       # Order Credits
-│       ORDER_CREDIT_ENABLED: bool = Field(default=True, env="ORDER_CREDIT_ENABLED")
-│       ORDER_CREDIT_FIXED_AMOUNT: int = Field(default=10, env="ORDER_CREDIT_FIXED_AMOUNT")
-│       ORDER_CREDIT_PERCENTAGE: int = Field(default=1, env="ORDER_CREDIT_PERCENTAGE")
-│       ORDER_CREDIT_MINIMUM: int = Field(default=1, env="ORDER_CREDIT_MINIMUM")
-│   
-│       # Plugin Status
-│       PLUGIN_STATUS_CACHE_TTL: int = Field(default=15, env="PLUGIN_STATUS_CACHE_TTL")
-│       PLUGIN_RATE_LIMIT_PER_MERCHANT: int = Field(default=100, env="PLUGIN_RATE_LIMIT_PER_MERCHANT")
+│       # Logging (from shared YAML)
+│       logging_level: str = Field(..., alias="logging.level")
+│       logging_format: str = Field(..., alias="logging.format")
 │       
-│       # Rate Limiting
-│       RATE_LIMIT_WINDOW_SECONDS: int = Field(default=60, env="RATE_LIMIT_WINDOW_SECONDS")
+│       # Rate Limiting (from shared YAML)
+│       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+│       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
+│       
+│       # Monitoring (from shared YAML)
+│       monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
+│       
+│       # Cache (service override of shared defaults)
+│       cache_ttl_seconds: int = Field(..., alias="cache.ttl_seconds")
+│       
+│       # Credit Configuration (service-specific)
+│       credit_trial_credits: int = Field(..., alias="credit.trial_credits")
+│       credit_low_balance_threshold_percent: int = Field(..., alias="credit.low_balance_threshold_percent")
+│       
+│       # Order Credit Configuration (service-specific)
+│       order_credit_enabled: bool = Field(..., alias="order_credit.enabled")
+│       order_credit_fixed_amount: int = Field(..., alias="order_credit.fixed_amount")
+│       order_credit_percentage: int = Field(..., alias="order_credit.percentage")
+│       order_credit_minimum: int = Field(..., alias="order_credit.minimum")
+│       
+│       # Plugin Configuration (service-specific)
+│       plugin_status_cache_ttl: int = Field(..., alias="plugin.status_cache_ttl")
+│       plugin_rate_limit_per_merchant: int = Field(..., alias="plugin.rate_limit_per_merchant")
+│       
+│       @property
+│       def database_config(self) -> DatabaseConfig:
+│           """Get database configuration"""
+│           return create_database_config(prefix="CREDIT_")
+│       
+│       @property
+│       def effective_port(self) -> int:
+│           """
+│           Get the effective port to use based on environment.
+│           
+│           Logic:
+│           - Local development (not in Docker): use external_port
+│           - Docker/container environment: use internal port
+│           - Environment override: CREDIT_USE_EXTERNAL_PORT=true forces external_port
+│           """
+│           # Check if explicitly requested to use external port
+│           use_external = os.getenv("CREDIT_USE_EXTERNAL_PORT", "false").lower() == "true"
+│           
+│           # Check if running in container (common Docker environment variables)
+│           in_container = any([
+│               os.getenv("DOCKER_CONTAINER"),
+│               os.getenv("HOSTNAME", "").startswith("credit-service"),
+│               os.path.exists("/.dockerenv")
+│           ])
+│           
+│           if use_external or (not in_container and self.environment == "development"):
+│               return self.api_external_port
+│           else:
+│               return self.api_port
 │   
 │   
-│   
+│   @lru_cache
 │   def get_service_config() -> CreditServiceConfig:
-│       """Get or create config instance"""
-│       config = CreditServiceConfig()
-│       return config
+│       """Load and cache service configuration"""
+│       cfg_dict = merged_config("credit", env_prefix="CREDIT")
+│       return CreditServiceConfig(**cfg_dict)
 │   ```
 │   
 ├── dependencies.py
@@ -3344,7 +3343,7 @@ src/
 │   from __future__ import annotations
 │   
 │   import asyncio
-│   from typing import Optional
+│   from typing import Optional, List, cast
 │   
 │   import redis.asyncio as redis
 │   from nats.js.api import StreamConfig, RetentionPolicy, StorageType
@@ -3353,7 +3352,7 @@ src/
 │   from shared.database import DatabaseSessionManager, set_database_manager
 │   from shared.messaging.jetstream_wrapper import JetStreamWrapper
 │   
-│   from .config import ServiceConfig
+│   from .config import CreditServiceConfig
 │   from .services.credit_service import CreditService
 │   from .services.balance_monitor_service import BalanceMonitorService
 │   from .services.plugin_status_service import PluginStatusService
@@ -3370,8 +3369,9 @@ src/
 │   # Events
 │   from .events.publishers import CreditEventPublisher
 │   from .events.subscribers import (
-│       ShopifyOrderPaidSubscriber,
-│       BillingPaymentSucceededSubscriber,
+│       OrderUpdatedSubscriber,
+│       TrialCreditsSubscriber,
+│       SubscriptionSubscriber,
 │       MerchantCreatedSubscriber,
 │       ManualAdjustmentSubscriber
 │   )
@@ -3384,14 +3384,15 @@ src/
 │   class ServiceLifecycle:
 │       """Manages service lifecycle and dependencies"""
 │       
-│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│       def __init__(self, config: CreditServiceConfig, logger: ServiceLogger):
 │           self.config = config
 │           self.logger = logger
 │           
-│           # Core infrastructure
+│           # External connections
+│           self.messaging_wrapper: Optional[JetStreamWrapper] = None
 │           self.db_manager: Optional[DatabaseSessionManager] = None
 │           self.redis_client: Optional[redis.Redis] = None
-│           self.messaging_wrapper: Optional[JetStreamWrapper] = None
+│           
 │           
 │           # Repositories
 │           self.credit_repo: Optional[CreditRepository] = None
@@ -3407,15 +3408,12 @@ src/
 │           self.plugin_status_service: Optional[PluginStatusService] = None
 │           self.credit_transaction_service: Optional[CreditTransactionService] = None
 │           
-│           # Events
-│           self.credit_publisher: Optional[CreditEventPublisher] = None
 │           
-│           # Subscribers
-│           self.subscribers: list = []
+│           # bookkeeping
+│           self._tasks: List[asyncio.Task] = []
+│           self._shutdown_event = asyncio.Event()
 │           
-│           # Background tasks
-│           self._background_tasks: set[asyncio.Task] = set()
-│       
+│   
 │       async def startup(self) -> None:
 │           """Start all service components"""
 │           
@@ -3423,28 +3421,25 @@ src/
 │               self.logger.info("Starting service components...")
 │               
 │               # 1. Initialize database
-│               await self._setup_database()
+│               await self._init_database()
 │               
 │               # 2. Initialize Redis
-│               await self._setup_redis()
-│               
+│               await self._init_redis()
+│   
 │               # 3. Initialize messaging
-│               await self._setup_messaging()
+│               await self._init_messaging()
 │               
 │               # 4. Initialize repositories
-│               self._setup_repositories()
+│               self._init_repositories()
 │               
 │               # 5. Initialize mappers
-│               self._setup_mappers()
-│               
+│               self._init_mappers()
+│   
 │               # 6. Initialize services
-│               self._setup_services()
+│               self._init_local_services()
 │               
-│               # 7. Initialize events
-│               await self._setup_events()
-│               
-│               # 8. Start subscribers
-│               await self._start_subscribers()
+│               # 7. Start subscribers
+│               await self._init_subscribers()
 │               
 │               self.logger.info("All service components started successfully")
 │               
@@ -3459,13 +3454,10 @@ src/
 │           self.logger.info("Shutting down service components...")
 │           
 │           # Stop background tasks
-│           for task in self._background_tasks:
-│               if not task.done():
-│                   task.cancel()
-│                   try:
-│                       await task
-│                   except asyncio.CancelledError:
-│                       pass
+│           for t in self._tasks:
+│               t.cancel()
+│           if self._tasks:
+│               await asyncio.gather(*self._tasks, return_exceptions=True)
 │           
 │           # Close Redis
 │           if self.redis_client:
@@ -3493,31 +3485,77 @@ src/
 │           
 │           self.logger.info("Service shutdown complete")
 │       
-│       async def _setup_database(self) -> None:
-│           """Initialize database connection and create tables"""
-│           
-│           self.logger.info("Setting up database...")
-│           
+│       async def _init_messaging(self) -> None:
+│           self.messaging_wrapper = JetStreamWrapper(self.logger)
+│           await self.messaging_wrapper.connect(self.config.NATS_SERVERS)
+│           self.logger.info("Connected to NATS %s", self.config.NATS_SERVERS)
+│   
+│           js = self.messaging_wrapper.js
+│           cfg = StreamConfig(
+│               name      = "CREDIT",
+│               subjects  = ["cmd.credit.*", "evt.credit.*"],
+│               retention = RetentionPolicy.LIMITS,
+│               max_age   = 7 * 24 * 60 * 60,
+│               max_msgs  = 1_000_000,
+│               max_bytes = 1_024 ** 3,
+│               storage   = StorageType.FILE,
+│               duplicate_window = 60,
+│           )
+│           try:
+│               await js.stream_info("CREDIT")
+│           except Exception:
+│               await js.add_stream(cfg)
+│               self.logger.info("Created CREDIT stream")
+│       
+│     
+│       async def _init_database(self) -> None:
+│           if not (self.config.DB_ENABLED and self.config.database_config):
+│               self.logger.warning("DB disabled; repositories will not be initialised")
+│               return
+│   
 │           self.db_manager = DatabaseSessionManager(
-│               database_url=self.config.DATABASE_URL,
-│               pool_size=self.config.DATABASE_POOL_SIZE,
-│               max_overflow=self.config.DATABASE_MAX_OVERFLOW
+│               database_url=self.config.database_config.database_url,
+│               **self.config.database_config.get_engine_kwargs(),
+│           )
+│           await self.db_manager.init()
+│           set_database_manager(self.db_manager)
+│           self.logger.info("Connected to DB")
+│   
+│           from shared.database.base import Base
+│           async with self.db_manager.engine.begin() as conn:
+│               await conn.run_sync(Base.metadata.create_all)
+│       
+│       
+│       def _init_repositories(self) -> None:
+│           """Initialize repositories"""
+│           
+│           if not self.db_manager:
+│               self.logger.warning("DB manager not initialized, repositories will not be set up")
+│               return
+│           
+│           self.logger.info("Setting up repositories...")
+│           
+│           session_factory = self.db_manager.session_factory
+│           
+│           self.credit_repo = CreditRepository(
+│               model_class=Credit,
+│               session_factory=session_factory
+│           )
+│           self.credit_transaction_repo = CreditTransactionRepository(
+│               model_class=CreditTransaction,
+│               session_factory=session_factory
 │           )
 │           
-│           # Set global database manager
-│           set_database_manager(self.db_manager)
-│           
-│           # Create tables
-│           async with self.db_manager.get_engine().begin() as conn:
-│               from .models.base import Base
-│               await conn.run_sync(Base.metadata.create_all)
-│           
-│           self.logger.info("Database setup complete")
+│           self.logger.info("Repositories setup complete")
 │       
-│       async def _setup_redis(self) -> None:
+│       async def _init_redis(self) -> None:
 │           """Initialize Redis connection"""
 │           
 │           self.logger.info("Setting up Redis...")
+│           
+│           if not self.config.REDIS_URL:
+│               self.logger.warning("REDIS_URL not configured, skipping Redis setup")
+│               return
 │           
 │           self.redis_client = redis.from_url(
 │               self.config.REDIS_URL,
@@ -3531,51 +3569,9 @@ src/
 │           
 │           self.logger.info("Redis setup complete")
 │       
-│       async def _setup_messaging(self) -> None:
-│           """Initialize NATS JetStream messaging"""
-│           
-│           self.logger.info("Setting up messaging...")
-│           
-│           self.messaging_wrapper = JetStreamWrapper(
-│               nats_url=self.config.NATS_URL,
-│               logger=self.logger
-│           )
-│           
-│           await self.messaging_wrapper.connect()
-│           
-│           # Ensure CREDIT stream exists
-│           credit_stream_config = StreamConfig(
-│               name="CREDIT",
-│               subjects=["evt.credits.*", "cmd.credits.*"],
-│               retention=RetentionPolicy.LIMITS,
-│               storage=StorageType.FILE,
-│               max_age=30 * 24 * 60 * 60,  # 30 days
-│               max_msgs=1000000
-│           )
-│           
-│           await self.messaging_wrapper.ensure_stream(credit_stream_config)
-│           
-│           self.logger.info("Messaging setup complete")
-│       
-│       def _setup_repositories(self) -> None:
-│           """Initialize repositories"""
-│           
-│           self.logger.info("Setting up repositories...")
-│           
-│           session_factory = self.db_manager.get_session_factory()
-│           
-│           self.credit_repo = CreditRepository(
-│               model_class=Credit,
-│               session_factory=session_factory
-│           )
-│           self.credit_transaction_repo = CreditTransactionRepository(
-│               model_class=CreditTransaction,
-│               session_factory=session_factory
-│           )
-│           
-│           self.logger.info("Repositories setup complete")
-│       
-│       def _setup_mappers(self) -> None:
+│      
+│        
+│       def _init_mappers(self) -> None:
 │           """Initialize mappers"""
 │           
 │           self.logger.info("Setting up mappers...")
@@ -3585,28 +3581,44 @@ src/
 │           
 │           self.logger.info("Mappers setup complete")
 │       
-│       def _setup_services(self) -> None:
+│       
+│       
+│       def _init_local_services(self) -> None:
 │           """Initialize business services"""
 │           
 │           self.logger.info("Setting up services...")
 │           
-│           # Create publisher first (will be properly initialized in events setup)
-│           self.credit_publisher = CreditEventPublisher(
-│               jetstream_wrapper=self.messaging_wrapper,
-│               logger=self.logger
+│           if not self.messaging_wrapper:
+│               raise RuntimeError("Messaging wrapper is not initialized")
+│           
+│           event_publisher = cast(CreditEventPublisher, 
+│               self.messaging_wrapper.create_publisher(CreditEventPublisher)
 │           )
+│           
 │           
 │           # Balance monitor service
 │           self.balance_monitor_service = BalanceMonitorService(
 │               config=self.config,
-│               publisher=self.credit_publisher,
+│               publisher=event_publisher,
 │               logger=self.logger
 │           )
+│           
+│           if not self.credit_repo:
+│               raise RuntimeError("Credit repository is not initialized")
+│           
+│           if not self.credit_transaction_repo:
+│               raise RuntimeError("Credit transaction repository is not initialized")
+│           
+│           if not self.redis_client:
+│               raise RuntimeError("Redis client is not initialized")
+│           
+│           if not self.credit_mapper:
+│               raise RuntimeError("CreditMapper is not initialized")
 │           
 │           # Plugin status service
 │           self.plugin_status_service = PluginStatusService(
 │               config=self.config,
-│               account_repo=self.credit_repo,
+│               credit_repo=self.credit_repo,
 │               redis_client=self.redis_client,
 │               logger=self.logger
 │           )
@@ -3614,12 +3626,10 @@ src/
 │           # Main credit service
 │           self.credit_service = CreditService(
 │               config=self.config,
-│               publisher=self.credit_publisher,
-│               account_repo=self.credit_repo,
-│               transaction_repo=self.credit_transaction_repo,
+│               credit_repo=self.credit_repo,
+│               publisher=event_publisher,
 │               balance_monitor=self.balance_monitor_service,
-│               account_mapper=self.credit_mapper,
-│               transaction_mapper=self.credit_transaction_mapper,
+│               credit_mapper=self.credit_mapper,
 │               logger=self.logger
 │           )
 │           
@@ -3639,86 +3649,35 @@ src/
 │           
 │           self.logger.info("Services setup complete")
 │       
-│       async def _setup_events(self) -> None:
-│           """Initialize event publishers"""
-│           
-│           self.logger.info("Setting up events...")
-│           
-│           # Register publisher with messaging wrapper
-│           await self.messaging_wrapper.register_publisher(
-│               CreditEventPublisher,
-│               jetstream_wrapper=self.messaging_wrapper,
-│               logger=self.logger
-│           )
-│           
-│           self.logger.info("Events setup complete")
 │       
-│       async def _start_subscribers(self) -> None:
+│       
+│       async def _init_subscribers(self) -> None:
 │           """Start event subscribers"""
 │           
-│           self.logger.info("Starting event subscribers...")
-│           
-│           # Create subscribers
+│           if not self.messaging_wrapper:
+│               raise RuntimeError("Messaging wrapper is not initialized, cant start subscribers")
+│   
 │           subscribers = [
-│               ShopifyOrderPaidSubscriber(
-│                   jetstream_wrapper=self.messaging_wrapper,
-│                   credit_service=self.credit_service,
-│                   logger=self.logger
-│               ),
-│               ShopifyOrderRefundedSubscriber(
-│                   jetstream_wrapper=self.messaging_wrapper,
-│                   credit_service=self.credit_service,
-│                   logger=self.logger
-│               ),
-│               BillingPaymentSucceededSubscriber(
-│                   jetstream_wrapper=self.messaging_wrapper,
-│                   credit_service=self.credit_service,
-│                   logger=self.logger
-│               ),
-│               MerchantCreatedSubscriber(
-│                   jetstream_wrapper=self.messaging_wrapper,
-│                   credit_service=self.credit_service,
-│                   logger=self.logger
-│               ),
-│               ManualAdjustmentSubscriber(
-│                   jetstream_wrapper=self.messaging_wrapper,
-│                   credit_service=self.credit_service,
-│                   logger=self.logger
-│               )
+│               OrderUpdatedSubscriber,
+│               TrialCreditsSubscriber,
+│               SubscriptionSubscriber,
+│               MerchantCreatedSubscriber,
+│               ManualAdjustmentSubscriber
 │           ]
 │           
-│           # Start subscriber tasks
-│           for subscriber in subscribers:
-│               # Subscribe to specific events based on subscriber type
-│               if isinstance(subscriber, ShopifyOrderPaidSubscriber):
-│                   task = asyncio.create_task(
-│                       subscriber.subscribe_to_event("evt.shopify.webhook.order_paid", subscriber.handle_order_paid)
-│                   )
-│               elif isinstance(subscriber, ShopifyOrderRefundedSubscriber):
-│                   task = asyncio.create_task(
-│                       subscriber.subscribe_to_event("evt.shopify.webhook.order_refunded", subscriber.handle_order_refunded)
-│                   )
-│               elif isinstance(subscriber, BillingPaymentSucceededSubscriber):
-│                   task = asyncio.create_task(
-│                       subscriber.subscribe_to_event("evt.billing.payment_succeeded", subscriber.handle_payment_succeeded)
-│                   )
-│               elif isinstance(subscriber, MerchantCreatedSubscriber):
-│                   task = asyncio.create_task(
-│                       subscriber.subscribe_to_event("evt.merchant.created", subscriber.handle_merchant_created)
-│                   )
-│               elif isinstance(subscriber, ManualAdjustmentSubscriber):
-│                   task = asyncio.create_task(
-│                       subscriber.subscribe_to_event("evt.credits.manual_adjustment", subscriber.handle_manual_adjustment)
-│                   )
-│               
-│               self._background_tasks.add(task)
-│               self.subscribers.append(subscriber)
-│               
-│               # Clean up completed tasks
-│               task.add_done_callback(self._background_tasks.discard)
-│           
-│           self.logger.info(f"Started {len(subscribers)} event subscribers")
-│   ```
+│           for sub_cls in subscribers:
+│               await self.messaging_wrapper.start_subscriber(sub_cls)
+│   
+│       def add_task(self, coro) -> asyncio.Task:
+│           t = asyncio.create_task(coro)
+│           self._tasks.append(t)
+│           return t
+│   
+│       async def wait_for_shutdown(self) -> None:
+│           await self._shutdown_event.wait()
+│   
+│       def signal_shutdown(self) -> None:
+│           self._shutdown_event.set()
 │   ```
 │   
 ├── main.py
@@ -3738,7 +3697,8 @@ src/
 │   
 │   # Global singletons
 │   config = get_service_config()
-│   logger = create_logger(config.SERVICE_NAME)
+│   print(f"Loaded config======", config.dict())
+│   logger = create_logger(config.service_name)
 │   lifecycle = ServiceLifecycle(config, logger)
 │   
 │   
@@ -3746,7 +3706,7 @@ src/
 │   async def lifespan(app: FastAPI):
 │       """Application lifespan management"""
 │       
-│       logger.info("Starting Credit Service", version=config.SERVICE_VERSION)
+│       logger.info("Starting Credit Service", version=config.service_version)
 │       
 │       app.state.lifecycle = lifecycle
 │       app.state.config = config
@@ -3765,8 +3725,8 @@ src/
 │   
 │       # Create FastAPI app
 │       app = FastAPI(
-│           title=config.SERVICE_NAME,
-│           version=config.SERVICE_VERSION,
+│           title=config.service_name,
+│           version=config.service_version,
 │           lifespan=lifespan,
 │           description="Credit management service for merchant credits and plugin access control",
 │           exception_handlers={}  # Use shared middleware for exception handling
@@ -3774,7 +3734,7 @@ src/
 │   
 │       setup_middleware(
 │           app,
-│           service_name=config.SERVICE_NAME,
+│           service_name=config.service_name,
 │           enable_metrics=True
 │       )
 │   
@@ -3790,11 +3750,22 @@ src/
 │   
 │   if __name__ == "__main__":
 │       import uvicorn
+│       
+│       # Smart port selection
+│       port = config.effective_port
+│       
+│       logger.info(f"Starting server", extra={
+│           "internal_port": config.api_port,
+│           "external_port": config.api_external_port,
+│           "effective_port": port,
+│           "environment": config.environment
+│       })
+│       
 │       uvicorn.run(
 │           "src.main:app",
-│           host="0.0.0.0",
-│           port=config.SERVICE_PORT,
-│           reload=config.DEBUG
+│           host=config.api_host,
+│           port=port,
+│           reload=config.debug
 │       )
 │   ```
 │   
@@ -4074,6 +4045,7 @@ repos:
         args: [--strict, --ignore-missing-imports]
 ```
 
+.python-version
 alembic.ini
 
 ```ini
@@ -4428,6 +4400,7 @@ ci: lint test
 	@echo "CI checks passed!"
 ```
 
+poetry.lock
 pyproject.toml
 
 ```toml

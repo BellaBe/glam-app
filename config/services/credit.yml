@@ -1,3 +1,4 @@
+# config/services/credit.yml
 service:
   name: "credit-service"
 
@@ -14,3 +15,14 @@ plugin:
 # Service-specific cache settings
 cache:
   ttl_seconds: 60
+  
+api:
+  port: 8000
+  external_port: 8000
+  
+database:
+  enabled: true
+  
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: true

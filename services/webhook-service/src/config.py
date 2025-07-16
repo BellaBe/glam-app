@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Optional
 from pydantic import BaseModel, Field
-from shared.config_loader import merged_config
+from shared.config.loader import merged_config
 from shared.database import DatabaseConfig, create_database_config
 
 

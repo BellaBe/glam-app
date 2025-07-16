@@ -20,7 +20,13 @@ lifecycle = ServiceLifecycle(config, logger)
 async def lifespan(app: FastAPI):
     """FastAPI lifespan adapter"""
    
-    logger.info("Starting Notification Service", version=config.service_version)
+    logger.info(f"Starting {config.service_name}", extra={
+        "service_name": config.service_name,
+        "version": config.service_version,
+        "environment": config.environment,
+        "api_host": config.api_host,
+        "api_port": config.effective_port,
+    })
     app.state.lifecycle = lifecycle
     app.state.config = config
     app.state.logger = logger
@@ -59,9 +65,11 @@ app = create_application()
 
 if __name__ == "__main__":
     import uvicorn
+    
+    port = config.effective_port
     uvicorn.run(
         "src.main:app",
         host=config.api_host,
-        port=config.api_port,
+        port=port,
         reload=config.debug
     )

@@ -2,9 +2,9 @@
 """Database models for credit service."""
 
 from shared.database.base import Base, TimestampedMixin
-from .base import MerchantMixin
+from shared.database.base import MerchantMixin
 from .credit import Credit
-from .credit_transaction import CreditTransaction, TransactionType, ReferenceType
+from .credit_transaction import CreditTransaction, TransactionType
 
 __all__ = [
     # Base (from shared)
@@ -17,5 +17,4 @@ __all__ = [
     # Credit Transaction
     "CreditTransaction",
     "TransactionType",
-    "ReferenceType",
 ]

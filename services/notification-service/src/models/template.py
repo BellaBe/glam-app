@@ -8,7 +8,7 @@ from typing import Optional, Dict, List
 from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, UniqueConstraint, Index, func, Enum, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from .base import Base, TimestampedMixin
+from shared.database.base import Base, TimestampedMixin
 
 
 class ChangeType(str,enum.Enum):

@@ -51,5 +51,3 @@ def get_stream_from_event_type(event_type: str) -> Streams:
             return Streams[domain]
     
     raise ValueError(f"Cannot infer stream from event type: {event_type}")
-
-# EVENT_REGISTRY and related functions removed - no longer needed

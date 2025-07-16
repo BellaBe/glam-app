@@ -72,15 +72,15 @@ class ServiceLifecycle:
             await self._init_database()
             self._init_repositories()
             self._init_local_services()
-            await self._start_subscribers()
-            self.logger.info("%s started successfully", self.config.SERVICE_NAME)
+            await self._init_subscribers()
+            self.logger.info("%s started successfully", self.config.service_name)
         except Exception:
             self.logger.critical("Service failed to start")
             await self.shutdown()
             raise
 
     async def shutdown(self) -> None:
-        self.logger.info("Shutting down %s", self.config.SERVICE_NAME)
+        self.logger.info("Shutting down %s", self.config.service_name)
 
         for t in self._tasks:
             t.cancel()
@@ -92,13 +92,13 @@ class ServiceLifecycle:
         if self.db_manager:
             await self.db_manager.close()
 
-        self.logger.info("%s shutdown complete", self.config.SERVICE_NAME)
+        self.logger.info("%s shutdown complete", self.config.service_name)
 
     # ───────────────────────────── init helpers ────────────────────────────
     async def _init_messaging(self) -> None:
         self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect(self.config.NATS_SERVERS)
-        self.logger.info("Connected to NATS %s", self.config.NATS_SERVERS)
+        await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
+        self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
 
         js = self.messaging_wrapper.js
         cfg = StreamConfig(
@@ -118,13 +118,17 @@ class ServiceLifecycle:
             self.logger.info("Created NOTIFICATION stream")
 
     async def _init_database(self) -> None:
-        if not (self.config.DB_ENABLED and self.config.database_config):
+        if not (self.config.db_enabled and self.config.database_config):
             self.logger.warning("DB disabled; repositories will not be initialised")
             return
+        
+        print("Database URL:", self.config.database_config.database_url)
 
         self.db_manager = DatabaseSessionManager(
             database_url=self.config.database_config.database_url,
-            **self.config.database_config.get_engine_kwargs(),
+            echo=self.config.database_config.DB_ECHO,
+            pool_size=self.config.database_config.DB_POOL_SIZE,
+            max_overflow=self.config.database_config.DB_MAX_OVERFLOW,
         )
         await self.db_manager.init()
         set_database_manager(self.db_manager)
@@ -144,13 +148,24 @@ class ServiceLifecycle:
 
     def _init_local_services(self) -> None:
 
+        # self.email_service = EmailService(
+        #     {
+        #         "primary_provider":  self.config.email_primary_provider,
+        #         "fallback_provider": self.config.email_fallback_provider,
+        #         "sendgrid_config":   self.config.sendgrid_config.model_dump(),
+        #         "ses_config":        self.config.ses_config.model_dump(),
+        #         "smtp_config":       self.config.smtp_config.model_dump(),
+        #     },
+        #     self.logger,
+        # )
+        
         self.email_service = EmailService(
             {
-                "primary_provider":  self.config.PRIMARY_PROVIDER,
-                "fallback_provider": self.config.FALLBACK_PROVIDER,
-                "sendgrid_config":   self.config.sendgrid_config.model_dump(),
-                "ses_config":        self.config.ses_config.model_dump(),
-                "smtp_config":       self.config.smtp_config.model_dump(),
+                "primary_provider":  self.config.email_primary_provider,
+                "fallback_provider": self.config.email_fallback_provider,
+                "sendgrid_config":   {},
+                "ses_config":        {},
+                "smtp_config":       {},
             },
             self.logger,
         )
@@ -182,18 +197,18 @@ class ServiceLifecycle:
             logger                  = self.logger,
         )
 
-    async def _start_subscribers(self) -> None:
-        
+    async def _init_subscribers(self) -> None:
         if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper is not initialized")
+            raise RuntimeError("Messaging wrapper not initialized")
         
-        subscribers = [
-            SendEmailSubscriber,
-            SendBulkEmailSubscriber
-        ]
-        for sub_cls in subscribers:
-            await self.messaging_wrapper.start_subscriber(sub_cls)
-
+        # ⚠️ Register deps BEFORE launching subscribers – they may receive a
+        # message immediately after pull_subscribe().
+        self.messaging_wrapper.register_dependency("notification_service", self.notification_service)
+        self.messaging_wrapper.register_dependency("logger", self.logger)
+        
+        # Start subscribers - wrapper provides dependencies
+        await self.messaging_wrapper.start_subscriber(SendEmailSubscriber)
+        await self.messaging_wrapper.start_subscriber(SendBulkEmailSubscriber)
     # ──────────────────────────── convenience tools ───────────────────────
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)

@@ -84,7 +84,7 @@ class CreditTransaction(Base, TimestampedMixin, MerchantMixin):
     
     # Performance indexes
     __table_args__ = (
-        Index("idx_merchant_type", "merchant_id", "transaction_type"),
-        Index("idx_merchant_created", "merchant_id", "created_at"),
-        Index("idx_credit_created", "credit_id", "created_at"),
-    )
+    Index("idx_credit_tx_merchant_type", "merchant_id", "transaction_type"),
+    Index("idx_credit_tx_merchant_created", "merchant_id", "created_at"),
+    Index("idx_credit_tx_credit_created", "credit_id", "created_at"),
+)

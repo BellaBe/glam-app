@@ -30,8 +30,7 @@ class Credit(Base, TimestampedMixin, MerchantMixin):
         PGUUID(as_uuid=True), nullable=True, index=True
     )
 
-    # Indexes for performance
     __table_args__ = (
-        Index("idx_merchant_balance", "merchant_id", "balance"),
-        Index("idx_merchant_created", "merchant_id", "created_at"),
-    )
+    Index("idx_credits_merchant_balance", "merchant_id", "balance"),
+    Index("idx_credits_merchant_created", "merchant_id", "created_at"),
+)

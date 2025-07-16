@@ -20,7 +20,15 @@ lifecycle = ServiceLifecycle(config, logger)
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     
-    logger.info("Starting Credit Service", version=config.service_version)
+    logger.info(
+        f"Starting {config.service_name}",
+        extra={
+            "version": config.service_version,
+            "environment": config.environment,
+            "api_host": config.api_host,
+            "api_port": config.effective_port,
+        }
+    )
     
     app.state.lifecycle = lifecycle
     app.state.config = config
@@ -64,9 +72,20 @@ app = create_application()
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Smart port selection
+    port = config.effective_port
+    
+    logger.info(f"Starting server", extra={
+        "internal_port": config.api_port,
+        "external_port": config.api_external_port,
+        "effective_port": port,
+        "environment": config.environment
+    })
+    
     uvicorn.run(
         "src.main:app",
         host=config.api_host,
-        port=config.api_port,
+        port=port,
         reload=config.debug
     )
