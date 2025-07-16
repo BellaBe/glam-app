@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from shared.api import (

@@ -236,6 +236,7 @@ alembic/
         run_migrations_online()
     ```
     
+logs/
 monitoring/
 └── prometheus.yml
     
@@ -500,77 +501,18 @@ src/
 │   │   ├── health.py
 │   │   │   
 │   │   │   ```py
-│   │   │   # services/credit-service/src/api/v1/health.py
-│   │   │   """Health check endpoints."""
+│   │   │   # glam-app/services/credit-service/src/api/v1/health.py
 │   │   │   
 │   │   │   from fastapi import APIRouter
 │   │   │   from shared.api.health import create_health_router
 │   │   │   
-│   │   │   from ...dependencies import LifecycleDep
-│   │   │   
 │   │   │   router = APIRouter()
 │   │   │   
-│   │   │   # Add the standard health endpoints
-│   │   │   health_router = create_health_router()
+│   │   │   # Include reusable shared health routes for this service
+│   │   │   health_router = create_health_router("credit-service")
 │   │   │   router.include_router(health_router)
 │   │   │   
 │   │   │   
-│   │   │   @router.get("/health/detailed")
-│   │   │   async def detailed_health_check(lifecycle: LifecycleDep):
-│   │   │       """Detailed health check with component status"""
-│   │   │   
-│   │   │       health_status = {
-│   │   │           "status": "healthy",
-│   │   │           "components": {
-│   │   │               "database": "healthy",
-│   │   │               "redis": "healthy",
-│   │   │               "messaging": "healthy",
-│   │   │           },
-│   │   │           "metrics": {
-│   │   │               "total_accounts": 0,
-│   │   │               "total_transactions": 0,
-│   │   │               "zero_balance_accounts": 0,
-│   │   │           },
-│   │   │       }
-│   │   │   
-│   │   │       try:
-│   │   │           # Check database
-│   │   │           if lifecycle.db_manager:
-│   │   │               async with lifecycle.db_manager.get_session() as session:
-│   │   │                   result = await session.execute("SELECT 1")
-│   │   │                   if not result.scalar():
-│   │   │                       health_status["components"]["database"] = "unhealthy"
-│   │   │                       health_status["status"] = "degraded"
-│   │   │   
-│   │   │           # Check Redis
-│   │   │           if lifecycle.redis_client:
-│   │   │               await lifecycle.redis_client.ping()
-│   │   │           else:
-│   │   │               health_status["components"]["redis"] = "unhealthy"
-│   │   │               health_status["status"] = "degraded"
-│   │   │   
-│   │   │           # Check messaging
-│   │   │           if (
-│   │   │               not lifecycle.messaging_wrapper
-│   │   │               or not lifecycle.messaging_wrapper.is_connected()
-│   │   │           ):
-│   │   │               health_status["components"]["messaging"] = "unhealthy"
-│   │   │               health_status["status"] = "degraded"
-│   │   │   
-│   │   │           # Get some basic metrics
-│   │   │           if lifecycle.credit_repo:
-│   │   │               zero_balance_merchants = (
-│   │   │                   await lifecycle.credit_repo.get_merchants_with_zero_balance()
-│   │   │               )
-│   │   │               health_status["metrics"]["zero_balance_accounts"] = len(
-│   │   │                   zero_balance_merchants
-│   │   │               )
-│   │   │   
-│   │   │       except Exception as e:
-│   │   │           health_status["status"] = "unhealthy"
-│   │   │           health_status["error"] = str(e)
-│   │   │   
-│   │   │       return health_status
 │   │   │   ```
 │   │   │   
 │   │   ├── plugin_status.py
@@ -937,240 +879,117 @@ src/
 │       
 │       ```py
 │       # services/credit-service/src/events/subscribers.py
-│       """Event subscribers for internal service communication."""
-│       
-│       from typing import Dict, Any
+│       from shared.events.base_subscriber import DomainEventSubscriber
+│       from shared.events.credit.types import CreditEvents
 │       from uuid import UUID
 │       
-│       from shared.events.base_subscriber import DomainEventSubscriber
-│       from shared.utils.logger import ServiceLogger
-│       from shared.events import EventContextManager, EventContext, EventPayload
-│       
-│       from ..services.credit_service import CreditService
-│       from ..services.credit_transaction_service import CreditTransactionService, Trial, Subscription
-│       
-│       from ..models.credit_transaction import OperationType
-│       
-│       
 │       class OrderUpdatedSubscriber(DomainEventSubscriber):
-│           """
-│           Handle transaction events to update balances.
-│           This creates the communication between transaction service and credit service.
-│           """
 │           
-│           def __init__(
-│               self,
-│               client,
-│               js,
-│               svc: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(client, js, logger)
-│               self.credit_transaction_service = svc
-│               self.context_manager = EventContextManager(logger)
+│           @property
+│           def event_type(self) -> str:
+│               return CreditEvents.ORDER_UPDATED
 │           
-│           async def handle_order_updated(self, event_data: Dict[str, Any]) -> None:
-│               """Handle order updated event to record credit transaction"""
-│               try:
-│                   merchant_id = UUID(event_data.get("merchant_id"))
-│                   
-│                   await self.credit_transaction_service.process_order_paid(
-│                       merchant_id=merchant_id,
-│                       order_items=event_data.get("order_items", [])
-│                   )
-│                   
-│                   self.logger.info("Processed order update event")
-│                      
-│                   
-│               except Exception as e:
-│                   self.logger.error("Failed to process order update event")
-│                   raise 
+│           @property
+│           def subject(self) -> str:
+│               return CreditEvents.ORDER_UPDATED
+│           
+│           @property
+│           def durable_name(self) -> str:
+│               return "credit-order-updated"
+│       
+│           async def on_event(self, event: dict, headers=None):
+│               # Type-safe keys - IDE shows valid options, mypy catches typos
+│               credit_transaction_service = self.get_dependency("credit_transaction_service")
+│               
+│               payload = event.get("payload", {})
+│               merchant_id = UUID(payload["merchant_id"])
+│               order_items = payload.get("order_items", [])
+│               
+│               await credit_transaction_service.process_order_paid(
+│                   merchant_id=merchant_id,
+│                   order_items=order_items
+│               )
 │       
 │       class TrialCreditsSubscriber(DomainEventSubscriber):
-│           """
-│           Handle account creation events to create trial transaction.
-│           """
 │           
-│           def __init__(
-│               self,
-│               client,
-│               js,
-│               svc: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(client, js, logger)
-│               self.credit_transaction_service = svc
-│               self.context_manager = EventContextManager(logger)
+│           @property
+│           def event_type(self) -> str:
+│               return CreditEvents.ACCOUNT_CREATED
 │           
-│           async def handle_account_created(self, event_data: Dict[str, Any]) -> None:
-│               """Handle account created event to create trial transaction"""
-│               try:
-│                   trial_id = event_data.get("trial_id")
-│                   merchant_id = event_data.get("merchant_id")
-│                   credits_to_use = event_data.get("credits_to_use")
-│                   
-│                   trial = Trial(
-│                       trial_id=UUID(trial_id),
-│                       merchant_id=UUID(merchant_id),
-│                       credits_to_use=int(str(credits_to_use))
-│                   )
-│                   await self.credit_transaction_service.process_trial_credits(trial=trial)
-│                   
-│                   self.logger.info("Trial credits transaction created")
-│                   
-│               except Exception as e:
-│                   self.logger.error("Failed to create trial credit transaction")
-│                   raise
+│           @property
+│           def subject(self) -> str:
+│               return CreditEvents.ACCOUNT_CREATED
+│           
+│           @property
+│           def durable_name(self) -> str:
+│               return "credit-trial-credits"
+│       
+│           async def on_event(self, event: dict, headers=None):
+│               credit_transaction_service = self.get_dependency("credit_transaction_service")
+│               
+│               payload = event.get("payload", {})
+│               trial_id = UUID(payload["trial_id"])
+│               merchant_id = UUID(payload["merchant_id"])
+│               credits_to_use = int(payload["credits_to_use"])
+│               
+│               from ..services.credit_transaction_service import Trial
+│               trial = Trial(
+│                   trial_id=trial_id,
+│                   merchant_id=merchant_id,
+│                   credits_to_use=credits_to_use
+│               )
+│               await credit_transaction_service.process_trial_credits(trial=trial)
 │       
 │       class SubscriptionSubscriber(DomainEventSubscriber):
-│           """
-│           Handle subscription events to create credit increase transactions.
-│           """
 │           
-│           def __init__(
-│               self,
-│               client,
-│               js,
-│               svc: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(client, js, logger)
-│               self.credit_transaction_service = svc
-│               self.context_manager = EventContextManager(logger)
+│           @property
+│           def event_type(self) -> str:
+│               return CreditEvents.SUBSCRIPTION_RENEWED
 │           
-│           async def handle_subscription_renewed(self, event_data: Dict[str, Any]) -> None:
-│               """Handle subscription renewal event to create credit increase transaction"""
-│               try:
-│                   subscription_id = event_data.get("subscription_id")
-│                   merchant_id = event_data.get("merchant_id")
-│                   credits_used = event_data.get("credits_used")
-│                   
-│                   subscription = Subscription(
-│                       id=UUID(subscription_id),
-│                       merchant_id=UUID(merchant_id),
-│                       credits_used=int(str(credits_used))
-│                   )
-│                   
-│                   await self.credit_transaction_service.process_subscription(
-│                       subscription=subscription
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Processed subscription renewal event",
-│                       extra={
-│                           "subscription_id": subscription_id,
-│                           "merchant_id": merchant_id,
-│                           "credits_used": credits_used
-│                       }
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to process subscription renewal event",
-│                       extra={
-│                           "event_data": event_data,
-│                           "error": str(e)
-│                       }
-│                   )
-│                   raise
+│           @property
+│           def subject(self) -> str:
+│               return CreditEvents.SUBSCRIPTION_RENEWED
+│           
+│           @property
+│           def durable_name(self) -> str:
+│               return "credit-subscription-renewed"
+│       
+│           async def on_event(self, event: dict, headers=None):
+│               credit_transaction_service = self.get_dependency("credit_transaction_service")
+│               
+│               payload = event.get("payload", {})
+│               subscription_id = UUID(payload["subscription_id"])
+│               merchant_id = UUID(payload["merchant_id"])
+│               credits_used = int(payload["credits_used"])
+│               
+│               from ..services.credit_transaction_service import Subscription
+│               subscription = Subscription(
+│                   id=subscription_id,
+│                   merchant_id=merchant_id,
+│                   credits_used=credits_used
+│               )
+│               await credit_transaction_service.process_subscription(subscription=subscription)
 │       
 │       class MerchantCreatedSubscriber(DomainEventSubscriber):
-│           """
-│           Handle merchant created events to create initial credit account.
-│           """
 │           
-│           def __init__(
-│               self,
-│               client,
-│               js,
-│               credit_svc: CreditService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(client, js, logger)
-│               self.credit_service = credit_svc
-│               self.context_manager = EventContextManager(logger)
+│           @property
+│           def event_type(self) -> str:
+│               return CreditEvents.MERCHANT_CREATED
 │           
-│           async def handle_merchant_created(self, event_data: Dict[str, Any]) -> None:
-│               """Handle merchant created event to create initial credit account"""
-│               try:
-│                   merchant_id = event_data.get("merchant_id")
-│                   
-│                   # Create initial credit account for new merchant
-│                   await self.credit_service.create_credit(
-│                       merchant_id=UUID(merchant_id)
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Processed merchant created event - credit account created",
-│                       extra={
-│                           "merchant_id": merchant_id
-│                       }
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to create credit account for new merchant",
-│                       extra={
-│                           "event_data": event_data,
-│                           "error": str(e)
-│                       }
-│                   )
-│                   raise
+│           @property
+│           def subject(self) -> str:
+│               return CreditEvents.MERCHANT_CREATED
+│           
+│           @property
+│           def durable_name(self) -> str:
+│               return "credit-merchant-created"
 │       
-│       class ManualAdjustmentSubscriber(DomainEventSubscriber):
-│           """
-│           Handle manual adjustment events for admin credit modifications.
-│           """
-│           
-│           def __init__(
-│               self,
-│               client,
-│               js,
-│               svc: CreditTransactionService,
-│               logger: ServiceLogger
-│           ):
-│               super().__init__(client, js, logger)
-│               self.credit_transaction_service = svc
-│               self.context_manager = EventContextManager(logger)
-│           
-│           async def handle_manual_adjustment(self, event_data: Dict[str, Any]) -> None:
-│               """Handle manual adjustment event"""
-│               try:
-│                   merchant_id = event_data.get("merchant_id")
-│                   operation_type_str = event_data.get("operation_type")
-│                   credits_to_use = event_data.get("credits_to_use")
-│                   reason = event_data.get("reason", "No reason specified")
-│                   admin_id = event_data.get("admin_id", "No admin specified")
-│                   
-│                   operation_type = OperationType(operation_type_str)
-│                   
-│                   await self.credit_transaction_service.process_manual_adjustment(
-│                       merchant_id=UUID(merchant_id),
-│                       operation_type=operation_type,
-│                       credits_to_use=int(str(credits_to_use)),
-│                       reason=reason,
-│                       admin_id=admin_id
-│                   )
-│                   
-│                   self.logger.info(
-│                       "Processed manual adjustment event",
-│                       extra={
-│                           "merchant_id": merchant_id,
-│                           "operation_type": operation_type,
-│                           "credits_to_use": credits_to_use,
-│                           "admin_id": admin_id
-│                       }
-│                   )
-│                   
-│               except Exception as e:
-│                   self.logger.error(
-│                       "Failed to process manual adjustment event",
-│                       extra={
-│                           "event_data": event_data,
-│                           "error": str(e)
-│                       }
-│                   )
-│                   raise
+│           async def on_event(self, event: dict, headers=None):
+│               credit_service = self.get_dependency("credit_service")
+│               
+│               payload = event.get("payload", {})
+│               merchant_id = UUID(payload["merchant_id"])
+│               await credit_service.create_credit(merchant_id=merchant_id)
 │       ```
 │       
 ├── mappers/
@@ -1363,9 +1182,9 @@ src/
 │   │   """Database models for credit service."""
 │   │   
 │   │   from shared.database.base import Base, TimestampedMixin
-│   │   from .base import MerchantMixin
+│   │   from shared.database.base import MerchantMixin
 │   │   from .credit import Credit
-│   │   from .credit_transaction import CreditTransaction, TransactionType, ReferenceType
+│   │   from .credit_transaction import CreditTransaction, TransactionType
 │   │   
 │   │   __all__ = [
 │   │       # Base (from shared)
@@ -1378,7 +1197,6 @@ src/
 │   │       # Credit Transaction
 │   │       "CreditTransaction",
 │   │       "TransactionType",
-│   │       "ReferenceType",
 │   │   ]
 │   │   ```
 │   │   
@@ -1417,11 +1235,10 @@ src/
 │   │           PGUUID(as_uuid=True), nullable=True, index=True
 │   │       )
 │   │   
-│   │       # Indexes for performance
 │   │       __table_args__ = (
-│   │           Index("idx_merchant_balance", "merchant_id", "balance"),
-│   │           Index("idx_merchant_created", "merchant_id", "created_at"),
-│   │       )
+│   │       Index("idx_credits_merchant_balance", "merchant_id", "balance"),
+│   │       Index("idx_credits_merchant_created", "merchant_id", "created_at"),
+│   │   )
 │   │   ```
 │   │   
 │   └── credit_transaction.py
@@ -1513,10 +1330,10 @@ src/
 │           
 │           # Performance indexes
 │           __table_args__ = (
-│               Index("idx_merchant_type", "merchant_id", "transaction_type"),
-│               Index("idx_merchant_created", "merchant_id", "created_at"),
-│               Index("idx_credit_created", "credit_id", "created_at"),
-│           )
+│           Index("idx_credit_tx_merchant_type", "merchant_id", "transaction_type"),
+│           Index("idx_credit_tx_merchant_created", "merchant_id", "created_at"),
+│           Index("idx_credit_tx_credit_created", "credit_id", "created_at"),
+│       )
 │       ```
 │       
 ├── repositories/
@@ -1846,16 +1663,13 @@ src/
 │   │   # services/credit-service/src/schemas/__init__.py
 │   │   """Schemas for credit service API."""
 │   │   
-│   │   from .credit import CreditResponse, CreditSummary
+│   │   from .credit import CreditResponse
 │   │   from .credit_transaction import (
 │   │       CreditTransactionResponse,
-│   │       CreditTransactionFilter,
 │   │       CreditTransactionCreate,
-│   │       BulkTransactionSummary,
 │   │   )
 │   │   from .plugin_status import (
 │   │       PluginStatusResponse,
-│   │       PluginStatusCheck,
 │   │       BatchPluginStatusResponse,
 │   │       PluginStatusMetrics,
 │   │   )
@@ -1863,15 +1677,11 @@ src/
 │   │   __all__ = [
 │   │       # Credit Account
 │   │       "CreditResponse",
-│   │       "CreditSummary",
 │   │       # Credit Transaction
 │   │       "CreditTransactionResponse",
-│   │       "CreditTransactionFilter",
 │   │       "CreditTransactionCreate",
-│   │       "BulkTransactionSummary",
 │   │       # Plugin Status
 │   │       "PluginStatusResponse",
-│   │       "PluginStatusCheck",
 │   │       "BatchPluginStatusResponse",
 │   │       "PluginStatusMetrics",
 │   │   ]
@@ -2066,8 +1876,7 @@ src/
 │   │           
 │   │           # Calculate threshold
 │   │           self.low_threshold = (
-│   │               self.config.TRIAL_CREDITS * 
-│   │               self.config.LOW_BALANCE_THRESHOLD_PERCENT / 100
+│   │               self.config.credit_trial_credits * self.config.low_balance_threshold_percent / 100
 │   │           )
 │   │       
 │   │       async def check_balance_thresholds(
@@ -2158,7 +1967,7 @@ src/
 │   │   from shared.errors import NotFoundError, DomainError
 │   │   
 │   │   from ..config import CreditServiceConfig
-│   │   from ..events import CreditEventPublisher
+│   │   from ..events.publishers import CreditEventPublisher
 │   │   from ..repositories.credit_repository import CreditRepository
 │   │   from ..mappers.credit_mapper import CreditMapper
 │   │   from ..schemas.credit import CreditResponse
@@ -2718,10 +2527,10 @@ src/
 │                           else PluginStatusResponse(status=PluginStatus.DISABLED)
 │                       )
 │       
-│                   # Cache result
-│                   await self.redis.setex(
-│                       cache_key, self.config.PLUGIN_STATUS_CACHE_TTL, result.model_dump_json()
-│                   )
+│                   # # Cache result
+│                   # await self.redis.setex(
+│                   #     cache_key, self.config.PLUGIN_STATUS_CACHE_TTL, result.model_dump_json()
+│                   # )
 │       
 │                   increment_plugin_status_check(result.status)
 │       
@@ -2962,7 +2771,7 @@ src/
 │   ```py
 │   from functools import lru_cache
 │   from pydantic import BaseModel, Field
-│   from shared.config_loader import merged_config
+│   from shared.config.loader import merged_config, flatten_config
 │   from shared.database import DatabaseConfig, create_database_config
 │   import os
 │   
@@ -2984,11 +2793,8 @@ src/
 │       infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
 │       infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
 │       
-│       # Database (from shared YAML)
-│       database_host: str = Field(..., alias="database.host")
-│       database_port: int = Field(..., alias="database.port")
-│       database_pool_size: int = Field(..., alias="database.pool_size")
-│       database_echo: bool = Field(..., alias="database.echo")
+│       # Database Configuration
+│       db_enabled: bool = Field(..., alias="database.enabled")
 │       
 │       # Logging (from shared YAML)
 │       logging_level: str = Field(..., alias="logging.level")
@@ -2997,32 +2803,25 @@ src/
 │       # Rate Limiting (from shared YAML)
 │       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
 │       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-│       
+│   
 │       # Monitoring (from shared YAML)
 │       monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
+│       monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
 │       
 │       # Cache (service override of shared defaults)
 │       cache_ttl_seconds: int = Field(..., alias="cache.ttl_seconds")
 │       
 │       # Credit Configuration (service-specific)
 │       credit_trial_credits: int = Field(..., alias="credit.trial_credits")
-│       credit_low_balance_threshold_percent: int = Field(..., alias="credit.low_balance_threshold_percent")
-│       
-│       # Order Credit Configuration (service-specific)
-│       order_credit_enabled: bool = Field(..., alias="order_credit.enabled")
-│       order_credit_fixed_amount: int = Field(..., alias="order_credit.fixed_amount")
-│       order_credit_percentage: int = Field(..., alias="order_credit.percentage")
-│       order_credit_minimum: int = Field(..., alias="order_credit.minimum")
-│       
-│       # Plugin Configuration (service-specific)
-│       plugin_status_cache_ttl: int = Field(..., alias="plugin.status_cache_ttl")
-│       plugin_rate_limit_per_merchant: int = Field(..., alias="plugin.rate_limit_per_merchant")
-│       
+│       low_balance_threshold_percent: int = Field(..., alias="credit.low_balance_threshold_percent")
+│   
+│   
 │       @property
 │       def database_config(self) -> DatabaseConfig:
 │           """Get database configuration"""
-│           return create_database_config(prefix="CREDIT_")
-│       
+│           cfg = create_database_config(prefix="CREDIT_")
+│           return cfg
+│   
 │       @property
 │       def effective_port(self) -> int:
 │           """
@@ -3052,8 +2851,9 @@ src/
 │   @lru_cache
 │   def get_service_config() -> CreditServiceConfig:
 │       """Load and cache service configuration"""
-│       cfg_dict = merged_config("credit", env_prefix="CREDIT")
-│       return CreditServiceConfig(**cfg_dict)
+│       cfg_dict = merged_config("credit", env_prefix="CREDIT") 
+│       flattened = flatten_config(cfg_dict)
+│       return CreditServiceConfig(**flattened)
 │   ```
 │   
 ├── dependencies.py
@@ -3373,7 +3173,6 @@ src/
 │       TrialCreditsSubscriber,
 │       SubscriptionSubscriber,
 │       MerchantCreatedSubscriber,
-│       ManualAdjustmentSubscriber
 │   )
 │   
 │   # Mappers
@@ -3487,8 +3286,8 @@ src/
 │       
 │       async def _init_messaging(self) -> None:
 │           self.messaging_wrapper = JetStreamWrapper(self.logger)
-│           await self.messaging_wrapper.connect(self.config.NATS_SERVERS)
-│           self.logger.info("Connected to NATS %s", self.config.NATS_SERVERS)
+│           await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
+│           self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
 │   
 │           js = self.messaging_wrapper.js
 │           cfg = StreamConfig(
@@ -3509,13 +3308,17 @@ src/
 │       
 │     
 │       async def _init_database(self) -> None:
-│           if not (self.config.DB_ENABLED and self.config.database_config):
+│           if not (self.config.db_enabled and self.config.database_config):
 │               self.logger.warning("DB disabled; repositories will not be initialised")
 │               return
+│           
+│           print("Database URL:", self.config.database_config.database_url)
 │   
 │           self.db_manager = DatabaseSessionManager(
 │               database_url=self.config.database_config.database_url,
-│               **self.config.database_config.get_engine_kwargs(),
+│               echo=self.config.database_config.DB_ECHO,
+│               pool_size=self.config.database_config.DB_POOL_SIZE,
+│               max_overflow=self.config.database_config.DB_MAX_OVERFLOW,
 │           )
 │           await self.db_manager.init()
 │           set_database_manager(self.db_manager)
@@ -3553,12 +3356,12 @@ src/
 │           
 │           self.logger.info("Setting up Redis...")
 │           
-│           if not self.config.REDIS_URL:
-│               self.logger.warning("REDIS_URL not configured, skipping Redis setup")
+│           if not self.config.infrastructure_redis_url:
+│               self.logger.warning("INFRASTRUCTURE_REDIS_URL not configured, skipping Redis setup")
 │               return
 │           
 │           self.redis_client = redis.from_url(
-│               self.config.REDIS_URL,
+│               self.config.infrastructure_redis_url,
 │               decode_responses=True,
 │               retry_on_timeout=True,
 │               health_check_interval=30
@@ -3652,21 +3455,25 @@ src/
 │       
 │       
 │       async def _init_subscribers(self) -> None:
-│           """Start event subscribers"""
-│           
 │           if not self.messaging_wrapper:
-│               raise RuntimeError("Messaging wrapper is not initialized, cant start subscribers")
+│               raise RuntimeError("Messaging wrapper not initialized")
 │   
+│           # ⚠️ Register deps BEFORE launching subscribers – they may receive a
+│           # message immediately after pull_subscribe().
+│           self.messaging_wrapper.register_dependency("credit_service", self.credit_service)
+│           self.messaging_wrapper.register_dependency("credit_transaction_service", self.credit_transaction_service)
+│           self.messaging_wrapper.register_dependency("logger", self.logger)
+│           
+│           # Start all subscribers with registered dependencies
 │           subscribers = [
 │               OrderUpdatedSubscriber,
-│               TrialCreditsSubscriber,
+│               TrialCreditsSubscriber, 
 │               SubscriptionSubscriber,
 │               MerchantCreatedSubscriber,
-│               ManualAdjustmentSubscriber
 │           ]
 │           
-│           for sub_cls in subscribers:
-│               await self.messaging_wrapper.start_subscriber(sub_cls)
+│           for subscriber_class in subscribers:
+│               await self.messaging_wrapper.start_subscriber(subscriber_class)
 │   
 │       def add_task(self, coro) -> asyncio.Task:
 │           t = asyncio.create_task(coro)
@@ -3697,7 +3504,6 @@ src/
 │   
 │   # Global singletons
 │   config = get_service_config()
-│   print(f"Loaded config======", config.dict())
 │   logger = create_logger(config.service_name)
 │   lifecycle = ServiceLifecycle(config, logger)
 │   
@@ -3706,7 +3512,15 @@ src/
 │   async def lifespan(app: FastAPI):
 │       """Application lifespan management"""
 │       
-│       logger.info("Starting Credit Service", version=config.service_version)
+│       logger.info(
+│           f"Starting {config.service_name}",
+│           extra={
+│               "version": config.service_version,
+│               "environment": config.environment,
+│               "api_host": config.api_host,
+│               "api_port": config.effective_port,
+│           }
+│       )
 │       
 │       app.state.lifecycle = lifecycle
 │       app.state.config = config

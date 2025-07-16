@@ -170,6 +170,28 @@ services:
       retries: 5
       start_period: 10s
 
+  webhook-db:
+    image: postgres:15-alpine
+    container_name: webhook-db-local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${WEBHOOK_DB_USER}
+      POSTGRES_PASSWORD: ${WEBHOOK_DB_PASSWORD}
+      POSTGRES_DB: ${WEBHOOK_DB_NAME}
+    ports:
+      - "${WEBHOOK_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - webhook-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WEBHOOK_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+  
   # ----------------- S3-compatible Storage (MinIO) -----------------
   minio:
     image: minio/minio:latest
@@ -281,3 +303,4 @@ volumes:
   prometheus-data:
   grafana-data:
   credit-db-local-data:
+  webhook-db-local-data:

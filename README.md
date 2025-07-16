@@ -59,3 +59,11 @@ nats consumer info NOTIFICATION notification-send-email
 
 # Monitor JetStream
 nats server report jetstream
+
+
+poetry env list
+$ pyenv local 3.11.9 
+poetry env use python3.11
+poetry install
+poetry shell
+python --version

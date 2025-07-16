@@ -1,14 +1,29 @@
 service:
-  name: "webhook-service"
+  name: webhook-service
+  version: 1.0.0
+  description: "Webhook service for receiving and processing webhooks from external platforms"
 
 api:
+  host: 0.0.0.0
   port: 8012
-  workers: 4
+  external_port: 8012
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
 
+database:
+  enabled: true
+
+# Webhook-specific configuration
 webhook:
   max_payload_size_mb: 10
+  timeout_seconds: 30
   dedup_ttl_hours: 24
 
-circuit_breaker:
-  failure_threshold: 5
-  recovery_timeout: 30
+# Platform configurations
+shopify:
+  webhook_secret: "${SHOPIFY_WEBHOOK_SECRET}"
+  api_version: "2024-01"
+
+cache:
+  ttl_seconds: 900  # 15 minutes

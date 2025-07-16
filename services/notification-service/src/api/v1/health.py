@@ -3,8 +3,8 @@ from typing import Annotated
 from datetime import datetime
 from shared.api import success_response, RequestContextDep
 from shared.errors import GlamBaseError
-from ..dependencies import get_email_service
-from ..services.email_service import EmailService
+from src.dependencies import get_email_service
+from src.services.email_service import EmailService
 from shared.database import get_database_health
 
 router = APIRouter()

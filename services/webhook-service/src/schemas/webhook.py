@@ -1,124 +1,94 @@
 # services/webhook-service/src/schemas/webhook.py
-"""Webhook schemas for API requests and responses."""
+"""Webhook-related request/response schemas"""
 
-from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from ..models.webhook import WebhookStatus
-
-
-class WebhookHeaders(BaseModel):
-    """Common webhook headers"""
-
-    content_type: str = Field(alias="Content-Type")
-    user_agent: Optional[str] = Field(None, alias="User-Agent")
-
-    # Platform specific headers will be in extra
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
+from ..models.webhook_entry import WebhookStatus
 
 
-class ShopifyWebhookHeaders(WebhookHeaders):
-    """Shopify specific webhook headers"""
+class CreateWebhookSchema(BaseModel):
+    id: UUID = Field(default_factory=UUID, description="Unique identifier for the webhook entry")
+    platform: str = Field(..., description="Platform for which the webhook is created")
+    topic: str = Field(..., description="Webhook topic (e.g., 'orders/create')")
+    shop_id: str = Field(..., description="Shop identifier where the webhook is registered")
+    status: WebhookStatus = Field(..., description="Current status of the webhook entry")
+    attempts: int = Field(0, description="Number of processing attempts")
+    error: Optional[str] = Field(None, description="Error message if processing failed")
+    received_at: datetime = Field(default_factory=datetime.utcnow, description="When the webhook was received")
+    processed_at: Optional[datetime] = Field(None, description="When the webhook was processed")
 
-    x_shopify_topic: str = Field(alias="X-Shopify-Topic")
-    x_shopify_hmac_sha256: str = Field(alias="X-Shopify-Hmac-Sha256")
-    x_shopify_merchant_domain: str = Field(alias="X-Shopify-Shop-Domain")
-    x_shopify_api_version: Optional[str] = Field(None, alias="X-Shopify-API-Version")
-    x_shopify_webhook_id: Optional[str] = Field(None, alias="X-Shopify-Webhook-Id")
-
-
-class WebhookReceive(BaseModel):
-    """Schema for receiving webhook data"""
-
-    platform: str
-    topic: Optional[str] = None  # May come from headers
-    headers: Dict[str, Any]
-    body: Dict[str, Any]
-    raw_body: bytes = Field(exclude=True)  # For signature validation
-
-    @field_validator("platform")
-    def validate_platform(cls, v):
-        """Validate platform is supported"""
-        supported = ["shopify", "stripe", "square"]  # Add more as needed
-        if v.lower() not in supported:
-            raise ValueError(f"Platform {v} not supported. Must be one of {supported}")
-        return v.lower()
+class ShopifyWebhookHeaders(BaseModel):
+    """Expected headers for Shopify webhooks"""
+    
+    x_shopify_topic: str = Field(..., alias="X-Shopify-Topic")
+    x_shopify_hmac_sha256: str = Field(..., alias="X-Shopify-Hmac-Sha256")
+    x_shopify_shop_domain: str = Field(..., alias="X-Shopify-Shop-Domain")
+    x_shopify_api_version: str = Field(..., alias="X-Shopify-API-Version")
+    x_shopify_webhook_id: str = Field(..., alias="X-Shopify-Webhook-Id")
 
 
-class WebhookCreate(BaseModel):
-    """Internal schema for creating webhook record"""
-
-    platform: str
-    topic: str
-    webhook_id: Optional[str] = None
-    merchant_id: str
-    payload: Dict[str, Any]
-    headers: Dict[str, Any]
-    signature: Optional[str] = None
-    status: WebhookStatus = WebhookStatus.RECEIVED
-
-
-class WebhookUpdate(BaseModel):
-    """Update webhook status"""
-
-    status: WebhookStatus
-    error: Optional[str] = None
-    processed_at: Optional[datetime] = None
-    published_event_id: Optional[str] = None
-    published_event_type: Optional[str] = None
-    attempts: Optional[int] = None
-
-
-class WebhookFilter(BaseModel):
-    """Filter parameters for webhook queries"""
-
-    platform: Optional[str] = None
-    topic: Optional[str] = None
-    merchant_id: Optional[str] = None
-    status: Optional[WebhookStatus] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    limit: int = Field(default=100, le=1000)
-    offset: int = Field(default=0, ge=0)
+class WebhookRequest(BaseModel):
+    """Generic webhook request body"""
+    
+    data: Dict[str, Any] = Field(..., description="Webhook payload data")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "data": {
+                    "id": 12345,
+                    "shop_domain": "example-shop.myshopify.com",
+                    "created_at": "2025-01-15T10:00:00Z"
+                }
+            }
+        }
 
 
 class WebhookResponse(BaseModel):
-    """Basic webhook response"""
+    """Webhook processing response"""
+    
+    success: bool = Field(..., description="Whether webhook was processed successfully")
+    webhook_id: UUID = Field(..., description="Internal webhook entry ID")
+    message: str = Field(..., description="Processing result message")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "webhook_id": "550e8400-e29b-41d4-a716-446655440000",
+                "message": "Webhook processed successfully"
+            }
+        }
 
+
+class WebhookEntryResponse(BaseModel):
+    """Webhook entry response schema"""
+    
     id: UUID
     platform: str
     topic: str
-    merchant_id: str
+    shop_id: str
     status: WebhookStatus
+    attempts: int
+    error: Optional[str] = None
     received_at: datetime
     processed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class WebhookDetailResponse(WebhookResponse):
-    """Detailed webhook response with full information"""
-
-    webhook_id: Optional[str] = None
-    payload: Dict[str, Any]
-    headers: Dict[str, Any]
-    signature: Optional[str] = None
-    attempts: int
-    error: Optional[str] = None
-    published_event_id: Optional[str] = None
-    published_event_type: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
 
-class WebhookStats(BaseModel):
-    """Webhook statistics"""
-
+class WebhookListResponse(BaseModel):
+    """Paginated list of webhook entries"""
+    
+    webhooks: List[WebhookEntryResponse]
     total: int
-    by_status: Dict[str, int]
-    by_platform: Dict[str, int]
-    by_topic: Dict[str, int]
-    success_rate: float
-    average_processing_time_ms: Optional[float] = None
+    page: int
+    limit: int
+    has_next: bool
+    has_previous: bool

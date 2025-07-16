@@ -1,94 +1,95 @@
 # services/webhook-service/src/api/v1/health.py
-"""Health check endpoints."""
+"""Health check endpoints for webhook service."""
 
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
 
+from shared.api.dependencies import RequestIdDep
 from shared.database.dependencies import get_database_health
-from ...dependencies import LifecycleDep
 
+from ...dependencies import LifecycleDep, ConfigDep
 
-router = APIRouter(tags=["health"])
+router = APIRouter(tags=["Health"])
 
 
 @router.get("/health")
 async def health_check(
-    lifecycle: LifecycleDep,
-    db_health: Dict[str, Any] = Depends(get_database_health)
+    request_id: RequestIdDep,
+    config: ConfigDep
 ) -> Dict[str, Any]:
-    """
-    Comprehensive health check for webhook service.
+    """Basic health check endpoint."""
     
-    Validates:
-    - Database connectivity
-    - Redis connectivity
-    - NATS connectivity
-    - Platform secrets presence
-    """
-    
-    health_status = {
+    return {
         "status": "healthy",
-        "service": "webhook-service",
-        "checks": {
-            "database": db_health["status"],
-            "redis": "unknown",
-            "nats": "unknown",
-            "secrets": "unknown"
-        }
+        "service": config.service_name,
+        "version": config.service_version,
+        "request_id": request_id
+    }
+
+
+@router.get("/health/detailed")
+async def detailed_health_check(
+    request_id: RequestIdDep,
+    lifecycle: LifecycleDep,
+    config: ConfigDep
+) -> Dict[str, Any]:
+    """Detailed health check with component status."""
+    
+    health_data = {
+        "status": "healthy",
+        "service": config.service_name,
+        "version": config.service_version,
+        "request_id": request_id,
+        "components": {}
     }
     
+    # Check database
+    if config.db_enabled and lifecycle.db_manager:
+        try:
+            db_health = await get_database_health()
+            health_data["components"]["database"] = {
+                "status": "healthy" if db_health["connected"] else "unhealthy",
+                "details": db_health
+            }
+        except Exception as e:
+            health_data["components"]["database"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
     # Check Redis
-    try:
-        if lifecycle.redis_client:
+    if lifecycle.redis_client:
+        try:
             await lifecycle.redis_client.ping()
-            health_status["checks"]["redis"] = "healthy"
-        else:
-            health_status["checks"]["redis"] = "unhealthy"
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["checks"]["redis"] = f"unhealthy: {str(e)}"
-        health_status["status"] = "degraded"
+            health_data["components"]["redis"] = {"status": "healthy"}
+        except Exception as e:
+            health_data["components"]["redis"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
     
     # Check NATS
-    try:
-        if lifecycle.messaging_wrapper and lifecycle.messaging_wrapper._client:
-            if lifecycle.messaging_wrapper._client.is_connected:
-                health_status["checks"]["nats"] = "healthy"
-            else:
-                health_status["checks"]["nats"] = "unhealthy: disconnected"
-                health_status["status"] = "degraded"
-        else:
-            health_status["checks"]["nats"] = "unhealthy: not initialized"
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["checks"]["nats"] = f"unhealthy: {str(e)}"
-        health_status["status"] = "degraded"
+    if lifecycle.messaging_wrapper:
+        try:
+            is_connected = lifecycle.messaging_wrapper._nats.is_connected
+            health_data["components"]["nats"] = {
+                "status": "healthy" if is_connected else "unhealthy",
+                "connected": is_connected
+            }
+        except Exception as e:
+            health_data["components"]["nats"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
     
-    # Check secrets
-    if lifecycle.config.SHOPIFY_WEBHOOK_SECRET:
-        health_status["checks"]["secrets"] = "healthy"
-    else:
-        health_status["checks"]["secrets"] = "unhealthy: missing Shopify secret"
-        health_status["status"] = "unhealthy"
+    # Check if any component is unhealthy
+    unhealthy_components = [
+        name for name, component in health_data["components"].items()
+        if component["status"] == "unhealthy"
+    ]
     
-    return health_status
-
-
-@router.get("/health/ready")
-async def readiness_check(lifecycle: LifecycleDep) -> Dict[str, str]:
-    """Simple readiness check for k8s"""
+    if unhealthy_components:
+        health_data["status"] = "degraded"
+        health_data["unhealthy_components"] = unhealthy_components
     
-    # Quick checks
-    if not lifecycle.webhook_service:
-        return {"status": "not_ready", "reason": "service not initialized"}
-    
-    if not lifecycle.messaging_wrapper or not lifecycle.messaging_wrapper._client.is_connected:
-        return {"status": "not_ready", "reason": "messaging not connected"}
-    
-    return {"status": "ready"}
-
-
-@router.get("/health/live")
-async def liveness_check() -> Dict[str, str]:
-    """Simple liveness check for k8s"""
-    return {"status": "alive"}
+    return health_data

@@ -8,7 +8,7 @@ from shared.api import setup_middleware
 from shared.utils.logger import create_logger
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
-from .routers import health, notifications, templates
+from .api.v1 import health, notifications, templates
 
 # Global singletons
 config = get_service_config()

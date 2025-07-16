@@ -1,95 +1,93 @@
 # services/webhook-service/src/main.py
-"""
-Webhook service FastAPI application.
+"""Main entry point for the Webhook Service"""
 
-Entry point for the webhook service that receives and processes
-external webhooks from various platforms.
-"""
-
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from shared.api.error_handlers import (
-    validation_exception_handler,
-    http_exception_handler,
-    general_exception_handler
-)
-from shared.api.middleware import (
-    RequestLoggingMiddleware,
-    CorrelationIdMiddleware,
-    MetricsMiddleware
-)
-from shared.monitoring.metrics import init_metrics
+from shared.utils.logger import create_logger
+from shared.api import setup_middleware
 
-from .config import get_config
+from .config import get_service_config
 from .lifecycle import ServiceLifecycle
 from .api.v1 import health, webhooks
+
+# Global singletons
+config = get_service_config()
+logger = create_logger(config.service_name)
+lifecycle = ServiceLifecycle(config, logger)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
-    # Startup
-    config = get_config()
-    lifecycle = ServiceLifecycle(config)
+    """Application lifespan management"""
     
-    await lifecycle.startup()
+    logger.info(
+        f"Starting {config.service_name}",
+        extra={
+            "version": config.service_version,
+            "environment": config.environment,
+            "api_host": config.api_host,
+            "api_port": config.effective_port,
+        }
+    )
     
-    # Store in app state
     app.state.lifecycle = lifecycle
     app.state.config = config
+    app.state.logger = logger
     
-    # Initialize metrics
-    init_metrics(service_name=config.SERVICE_NAME)
+    try:
+        await lifecycle.startup()
+        logger.info("Webhook Service started successfully")
+        yield
+    finally:
+        logger.info("Shutting down Webhook Service")
+        await lifecycle.shutdown()
+        logger.info("Webhook Service stopped")
+
+
+def create_application() -> FastAPI:
+    """Create and configure the FastAPI application."""
     
-    yield
+    # Create FastAPI app
+    app = FastAPI(
+        title=config.service_name,
+        version=config.service_version,
+        lifespan=lifespan,
+        description="Webhook service for receiving and processing webhooks from external platforms",
+        exception_handlers={}  # Use shared middleware for exception handling
+    )
+
+    setup_middleware(
+        app,
+        service_name=config.service_name,
+        enable_metrics=True
+    )
+
+    # Include routers
+    app.include_router(health.router, prefix="/api/v1")
+    app.include_router(webhooks.router, prefix="/webhooks")
     
-    # Shutdown
-    await lifecycle.shutdown()
+    return app
 
 
-# Create FastAPI app
-app = FastAPI(
-    title="Webhook Service",
-    description="Unified webhook ingestion service for GlamYouUp platform",
-    version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
-)
+app = create_application()
 
-# Add middleware
-app.add_middleware(MetricsMiddleware)
-app.add_middleware(CorrelationIdMiddleware)
-app.add_middleware(RequestLoggingMiddleware)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure based on environment
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Exception handlers
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
-
-# Include routers
-app.include_router(health.router, prefix="/api/v1")
-app.include_router(webhooks.router, prefix="/api/v1")
-
-
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "service": "webhook-service",
-        "version": "2.0.0",
-        "status": "operational"
-    }
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Smart port selection
+    port = config.effective_port
+    
+    logger.info(f"Starting server", extra={
+        "internal_port": config.api_port,
+        "external_port": config.api_external_port,
+        "effective_port": port,
+        "environment": config.environment
+    })
+    
+    uvicorn.run(
+        "src.main:app",
+        host=config.api_host,
+        port=port,
+        reload=config.debug
+    )

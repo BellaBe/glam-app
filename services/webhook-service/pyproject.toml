@@ -1,7 +1,8 @@
+# services/webhook-service/pyproject.toml
 [tool.poetry]
 name = "webhook-service"
-version = "2.0.0"
-description = "Unified webhook ingestion service for GlamYouUp platform"
+version = "1.0.0"
+description = "Webhook service for receiving and processing webhooks from external platforms"
 authors = ["GlamYouUp Team"]
 package-mode = false
 
@@ -16,11 +17,11 @@ asyncpg = "^0.29.0"
 alembic = "^1.13.0"
 nats-py = "^2.6.0"
 redis = "^5.0.1"
-httpx = "^0.25.2"
-python-jose = {extras = ["cryptography"], version = "^3.3.0"}
-python-dotenv = "^1.0.0"
 python-multipart = "^0.0.6"
+httpx = "^0.25.2"
+python-dotenv = "^1.0.0"
 shared = { path = "../../shared", develop = true }
+prometheus-client = "^0.19.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
@@ -45,7 +46,34 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-asyncio_mode = "auto"
+[tool.pylance]
+reportMissingImports = "error"
+reportMissingTypeStubs = "warning"
+reportGeneralTypeIssues = "error"
+reportUnusedImport = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = "warning"
+reportPrivateUsage = "warning"
+reportConstantRedefinition = "error"
+reportIncompatibleMethodOverride = "error"
+reportIncompatibleVariableOverride = "error"
+reportOverlappingOverloads = "error"
+reportUninitializedInstanceVariable = "warning"
+reportCallInDefaultInitializer = "warning"
+reportUnnecessaryIsInstance = "warning"
+reportUnnecessaryCast = "warning"
+reportUnnecessaryComparison = "warning"
+reportImplicitStringConcatenation = "warning"
+reportInvalidStringEscapeSequence = "error"
+reportUnknownParameterType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownLambdaType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownMemberType = "warning"
+reportMissingParameterType = "warning"
+reportMissingTypeArgument = "warning"
+reportInvalidTypeVarUse = "error"
+reportUnsupportedDunderAll = "warning"
+reportUnusedCoroutine = "error"

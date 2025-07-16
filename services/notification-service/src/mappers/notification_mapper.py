@@ -24,11 +24,12 @@ class NotificationMapper(
     def create_to_model(
         self,
         create_schema: NotificationCreate,
-        subject: str,
-        content: str,
-        provider: NotificationProvider = NotificationProvider.SENDGRID,
-        unsubscribe_token: Optional[str] = None,
+        **kwargs,
     ) -> Notification:
+        subject = kwargs.get("subject")
+        content = kwargs.get("content")
+        provider = kwargs.get("provider", NotificationProvider.SENDGRID)
+        unsubscribe_token = kwargs.get("unsubscribe_token")
         """
         Map NotificationCreate schema to Notification model.
 

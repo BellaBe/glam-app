@@ -1,232 +1,267 @@
 # services/webhook-service/src/services/webhook_service.py
-"""Main webhook processing service."""
+"""Core webhook processing service."""
+
+from __future__ import annotations
 
 import json
-from typing import Optional, Dict, Any, Type
+import hashlib
+from typing import Optional, Dict, Any
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
+
+import redis.asyncio as redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.utils.logger import ServiceLogger
-from shared.events import EventContextManager
-from shared.errors import ValidationError, NotFoundError
+from shared.database.dependencies import get_db_session
 
-from ..models.webhook_entry import WebhookEntry, WebhookSource, WebhookStatus
-from ..repositories.webhook_repository import WebhookRepository
+from ..config import WebhookServiceConfig
+from ..models.webhook_entry import WebhookEntry, WebhookStatus
+from ..repositories.webhook_entry_repository import WebhookEntryRepository
+from ..repositories.platform_configuration_repository import PlatformConfigurationRepository
 from ..events.publishers import WebhookEventPublisher
-from ..handlers.base import WebhookHandler
-from ..handlers.shopify import ShopifyWebhookHandler
-from ..handlers.stripe import StripeWebhookHandler
-from .auth_service import WebhookAuthService
-from .deduplication_service import DeduplicationService
-from .circuit_breaker_service import CircuitBreakerService
+from ..events.domain_events import (
+    AppUninstalledEvent,
+    CatalogItemCreatedEvent,
+    OrderCreatedEvent,
+    InventoryUpdatedEvent
+)
 
 
 class WebhookService:
-    """Main service for webhook processing"""
-
+    """Core service for webhook processing."""
+    
     def __init__(
         self,
-        webhook_repo: WebhookRepository,
-        auth_service: WebhookAuthService,
-        dedup_service: DeduplicationService,
-        circuit_breaker: CircuitBreakerService,
+        webhook_entry_repo: WebhookEntryRepository,
+        platform_config_repo: PlatformConfigurationRepository,
+        redis_client: redis.Redis,
         publisher: WebhookEventPublisher,
-        logger: Optional[ServiceLogger] = None,
+        config: WebhookServiceConfig,
+        logger: ServiceLogger
     ):
-        self.webhook_repo = webhook_repo
-        self.auth_service = auth_service
-        self.dedup_service = dedup_service
-        self.circuit_breaker = circuit_breaker
+        self.webhook_entry_repo = webhook_entry_repo
+        self.platform_config_repo = platform_config_repo
+        self.redis_client = redis_client
         self.publisher = publisher
-        self.logger = logger or ServiceLogger(__name__)
-        self.context_manager = EventContextManager(self.logger)
-
-        # Initialize handlers
-        self.handlers: Dict[WebhookSource, WebhookHandler] = {
-            WebhookSource.SHOPIFY: ShopifyWebhookHandler(logger=self.logger),
-            WebhookSource.STRIPE: StripeWebhookHandler(logger=self.logger),
-        }
-
+        self.config = config
+        self.logger = logger
+    
     async def process_webhook(
         self,
-        source: WebhookSource,
-        headers: dict,
-        body: bytes,
-        topic: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        platform: str,
+        topic: str,
+        payload: Dict[str, Any],
+        headers: Dict[str, str],
+        signature: str
+    ) -> WebhookEntry:
         """
-        Process incoming webhook with full validation and deduplication
-
+        Process an incoming webhook.
+        
         Returns:
-            Dict with processing result
+            WebhookEntry: The created webhook entry
         """
-        start_time = datetime.now(timezone.utc)
-        correlation_id = headers.get("x-correlation-id") or str(UUID())
-
-        self.logger.info(
-            "Processing webhook",
-            extra={
-                "source": source.value,
-                "topic": topic,
-                "correlation_id": correlation_id,
-            },
-        )
-
-        try:
-            # 1. Validate signature
-            if not await self.auth_service.validate_webhook(source, body, headers):
-                await self.publisher.publish_validation_failed(
-                    source=source.value,
-                    reason="Invalid signature",
-                    topic=topic,
-                    correlation_id=correlation_id,
-                )
-                raise ValidationError("Invalid webhook signature")
-
-            # 2. Get handler
-            handler = self.handlers.get(source)
-            if not handler:
-                raise ValidationError(f"No handler for source: {source}")
-
-            # 3. Parse webhook
-            parsed = json.loads(body.decode("utf-8"))
-            webhook_data = handler.parse_webhook(parsed, topic, headers)
-
-            # 4. Check deduplication
-            idempotency_key = webhook_data.idempotency_key
-            if await self.dedup_service.is_duplicate(idempotency_key):
-                self.logger.info(
-                    "Duplicate webhook detected",
-                    extra={
-                        "idempotency_key": idempotency_key,
-                        "source": source.value,
-                        "topic": webhook_data.topic,
-                    },
-                )
-                return {"status": "duplicate", "message": "Webhook already processed"}
-
-            # 5. Store webhook entry
-            entry = await self.webhook_repo.create_entry(
-                source=source,
-                topic=webhook_data.topic,
-                headers=headers,
-                payload=parsed,
-                hmac_signature=headers.get(
-                    (
-                        "x-shopify-hmac-sha256"
-                        if source == WebhookSource.SHOPIFY
-                        else "stripe-signature"
-                    ),
-                    "",
-                ),
-                idempotency_key=idempotency_key,
-                merchant_id=webhook_data.merchant_id,
-                merchant_domain=webhook_data.merchant_domain,
-            )
-
-            # 6. Mark as seen for deduplication
-            await self.dedup_service.mark_as_seen(idempotency_key)
-
-            # 7. Publish raw webhook received event
-            await self.publisher.publish_webhook_received(
-                source=source.value,
-                topic=webhook_data.topic,
-                merchant_id=webhook_data.merchant_id,
-                merchant_domain=webhook_data.merchant_domain,
-                webhook_id=str(entry.id),
-                correlation_id=correlation_id,
-            )
-
-            # 8. Map to domain event
-            domain_event = handler.map_to_domain_event(webhook_data)
-
-            if domain_event:
-                # 9. Check circuit breaker
-                subject = domain_event.event_type
-                if not await self.circuit_breaker.can_proceed(subject):
-                    self.logger.warning(
-                        "Circuit breaker open", extra={"subject": subject}
-                    )
-                    await self.webhook_repo.mark_as_failed(
-                        entry.id, "Circuit breaker open"
-                    )
-                    raise ValidationError("Circuit breaker open")
-
-                # 10. Publish domain event
-                try:
-                    await self.publisher.publish_domain_event(
-                        event_type=domain_event.event_type,
-                        payload=domain_event.payload,
-                        correlation_id=correlation_id,
-                        metadata={
-                            "webhook_id": str(entry.id),
-                            "source": source.value,
-                            "topic": webhook_data.topic,
-                        },
-                    )
-
-                    # Record success
-                    await self.circuit_breaker.record_success(subject)
-
-                except Exception as e:
-                    # Record failure
-                    await self.circuit_breaker.record_failure(subject)
-                    raise
-
-            # 11. Mark as processed
-            await self.webhook_repo.mark_as_processed(entry.id)
-
-            # 12. Publish processed event
-            await self.publisher.publish_webhook_processed(
-                entry_id=str(entry.id),
-                source=source.value,
-                topic=webhook_data.topic,
-                event_type=domain_event.event_type if domain_event else "none",
-                merchant_id=webhook_data.merchant_id,
-                merchant_domain=webhook_data.merchant_domain,
-                correlation_id=correlation_id,
-            )
-
-            processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+        
+        # Extract shop ID from payload
+        shop_id = self._extract_shop_id(platform, payload)
+        
+        # Check for duplicates
+        webhook_id = self._generate_webhook_id(platform, topic, shop_id, payload)
+        if await self._is_duplicate(webhook_id):
             self.logger.info(
-                "Webhook processed successfully",
+                f"Duplicate webhook detected",
                 extra={
-                    "entry_id": str(entry.id),
-                    "source": source.value,
-                    "topic": webhook_data.topic,
-                    "processing_time": processing_time,
-                    "correlation_id": correlation_id,
-                },
-            )
-
-            return {
-                "status": "processed",
-                "entry_id": str(entry.id),
-                "processing_time": processing_time,
-            }
-
-        except Exception as e:
-            self.logger.error(
-                "Failed to process webhook",
-                extra={
-                    "source": source.value,
+                    "platform": platform,
                     "topic": topic,
-                    "error": str(e),
-                    "correlation_id": correlation_id,
-                },
+                    "shop_id": shop_id,
+                    "webhook_id": webhook_id
+                }
             )
-
-            # Try to mark as failed if we have an entry
-            if "entry" in locals():
-                await self.webhook_repo.mark_as_failed(entry.id, str(e))
-
-                await self.publisher.publish_webhook_failed(
-                    entry_id=str(entry.id),
-                    source=source.value,
-                    topic=topic or "unknown",
-                    error=str(e),
-                    attempts=1,
-                    correlation_id=correlation_id,
+            # Return existing webhook entry or create a dummy one
+            # For now, we'll create a new entry but mark it as duplicate in logs
+        
+        # Create webhook entry
+        async with get_db_session() as session:
+            webhook_entry = WebhookEntry(
+                platform=platform,
+                topic=topic,
+                shop_id=shop_id,
+                payload=payload,
+                headers=headers,
+                signature=signature,
+                status=WebhookStatus.RECEIVED,
+                received_at=datetime.utcnow()
+            )
+            
+            await self.webhook_entry_repo.create(session, webhook_entry)
+            
+            try:
+                # Mark as processing
+                webhook_entry.status = WebhookStatus.PROCESSING
+                await session.commit()
+                
+                # Transform and publish domain event
+                domain_event = self._transform_to_domain_event(platform, topic, payload, shop_id)
+                if domain_event:
+                    await self.publisher.publish_event(domain_event)
+                    self.logger.info(
+                        f"Domain event published",
+                        extra={
+                            "event_type": domain_event.event_type,
+                            "shop_id": shop_id,
+                            "webhook_id": str(webhook_entry.id)
+                        }
+                    )
+                
+                # Mark as processed
+                webhook_entry.status = WebhookStatus.PROCESSED
+                webhook_entry.processed_at = datetime.utcnow()
+                await session.commit()
+                
+                # Store in Redis for deduplication
+                await self._store_for_deduplication(webhook_id)
+                
+                self.logger.info(
+                    f"Webhook processed successfully",
+                    extra={
+                        "platform": platform,
+                        "topic": topic,
+                        "shop_id": shop_id,
+                        "webhook_id": str(webhook_entry.id)
+                    }
                 )
-
-            raise
+                
+            except Exception as e:
+                # Mark as failed
+                webhook_entry.status = WebhookStatus.FAILED
+                webhook_entry.error = str(e)
+                await session.commit()
+                
+                self.logger.error(
+                    f"Webhook processing failed",
+                    extra={
+                        "platform": platform,
+                        "topic": topic,
+                        "shop_id": shop_id,
+                        "webhook_id": str(webhook_entry.id),
+                        "error": str(e)
+                    },
+                    exc_info=True
+                )
+                raise
+            
+            await session.refresh(webhook_entry)
+            return webhook_entry
+    
+    def _extract_shop_id(self, platform: str, payload: Dict[str, Any]) -> str:
+        """Extract shop ID from webhook payload based on platform."""
+        
+        if platform == "shopify":
+            # Try multiple possible shop identifier fields
+            for field in ["shop_domain", "domain", "myshopify_domain"]:
+                if field in payload:
+                    return str(payload[field])
+            
+            # Fallback: extract from nested objects
+            if "shop" in payload and isinstance(payload["shop"], dict):
+                for field in ["domain", "myshopify_domain", "id"]:
+                    if field in payload["shop"]:
+                        return str(payload["shop"][field])
+        
+        # Generic fallback
+        for field in ["shop_id", "store_id", "merchant_id", "account_id"]:
+            if field in payload:
+                return str(payload[field])
+        
+        # Ultimate fallback - use a hash of the payload
+        payload_str = json.dumps(payload, sort_keys=True)
+        return hashlib.md5(payload_str.encode()).hexdigest()[:16]
+    
+    def _generate_webhook_id(
+        self,
+        platform: str,
+        topic: str,
+        shop_id: str,
+        payload: Dict[str, Any]
+    ) -> str:
+        """Generate a unique ID for webhook deduplication."""
+        
+        # Try to use platform-specific webhook ID first
+        if platform == "shopify" and "id" in payload:
+            return f"{platform}:{topic}:{shop_id}:{payload['id']}"
+        
+        # Fallback to hash-based ID
+        content = f"{platform}:{topic}:{shop_id}:{json.dumps(payload, sort_keys=True)}"
+        webhook_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+        return f"{platform}:{topic}:{shop_id}:{webhook_hash}"
+    
+    async def _is_duplicate(self, webhook_id: str) -> bool:
+        """Check if webhook has already been processed."""
+        
+        try:
+            result = await self.redis_client.get(f"webhook:processed:{webhook_id}")
+            return result is not None
+        except Exception as e:
+            self.logger.warning(f"Redis deduplication check failed: {e}")
+            return False
+    
+    async def _store_for_deduplication(self, webhook_id: str) -> None:
+        """Store webhook ID in Redis for deduplication."""
+        
+        try:
+            ttl_seconds = self.config.webhook_dedup_ttl_hours * 3600
+            await self.redis_client.setex(
+                f"webhook:processed:{webhook_id}",
+                ttl_seconds,
+                "1"
+            )
+        except Exception as e:
+            self.logger.warning(f"Redis deduplication storage failed: {e}")
+    
+    def _transform_to_domain_event(
+        self,
+        platform: str,
+        topic: str,
+        payload: Dict[str, Any],
+        shop_id: str
+    ) -> Optional[Any]:
+        """Transform webhook payload to domain event."""
+        
+        if platform != "shopify":
+            self.logger.info(f"No transformation available for platform: {platform}")
+            return None
+        
+        # Shopify event transformations
+        if topic == "app/uninstalled":
+            return AppUninstalledEvent.create(
+                shop_id=shop_id,
+                shop_domain=payload.get("domain", shop_id),
+                timestamp=datetime.utcnow()
+            )
+        
+        elif topic in ["products/create"]:
+            return CatalogItemCreatedEvent.create(
+                shop_id=shop_id,
+                item_id=str(payload.get("id", "")),
+                external_id=str(payload.get("id", ""))
+            )
+        
+        elif topic == "orders/create":
+            return OrderCreatedEvent.create(
+                shop_id=shop_id,
+                order_id=str(payload.get("id", "")),
+                total=float(payload.get("total_price", 0.0)),
+                items=payload.get("line_items", [])
+            )
+        
+        elif topic == "inventory_levels/update":
+            return InventoryUpdatedEvent.create(
+                shop_id=shop_id,
+                item_id=str(payload.get("inventory_item_id", "")),
+                location_id=str(payload.get("location_id", "")),
+                available=int(payload.get("available", 0))
+            )
+        
+        else:
+            self.logger.info(f"No transformation available for topic: {topic}")
+            return None

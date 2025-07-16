@@ -1,157 +1,202 @@
 # services/webhook-service/src/api/v1/webhooks.py
-"""Webhook API endpoints."""
+"""Webhook endpoints for receiving external webhooks."""
 
-from fastapi import APIRouter, Request, Response, Header, HTTPException
-from typing import Optional, Dict, Any
+import json
+from typing import Dict, Any
+from fastapi import APIRouter, Request, HTTPException, Header, Body, status
+from fastapi.responses import JSONResponse
 
-from shared.api.responses import success_response, error_response
-from shared.errors import ValidationError
+from shared.api.dependencies import RequestIdDep
+from shared.utils.logger import ServiceLogger
 
-from ...dependencies import WebhookServiceDep
-from ...models.webhook_entry import WebhookSource
+from ...dependencies import (
+    LifecycleDep,
+    ConfigDep,
+    WebhookServiceDep,
+    PlatformHandlerServiceDep
+)
+from ...schemas.webhook import WebhookResponse
+from ...exceptions import (
+    InvalidSignatureError,
+    WebhookValidationError,
+    PayloadTooLargeError
+)
 
-
-router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+router = APIRouter(tags=["Webhooks"])
 
 
 @router.post("/shopify/{topic}")
-async def shopify_webhook_with_topic(
-    request: Request,
+async def receive_shopify_webhook_with_topic(
     topic: str,
+    request: Request,
+    request_id: RequestIdDep,
+    config: ConfigDep,
     webhook_service: WebhookServiceDep,
-    x_shopify_topic: Optional[str] = Header(None),
-    x_shopify_merchant_domain: Optional[str] = Header(None),
-    x_shopify_webhook_id: Optional[str] = Header(None),
-    x_shopify_hmac_sha256: Optional[str] = Header(None),
-    x_shopify_api_version: Optional[str] = Header(None),
-) -> Response:
-    """Handle Shopify webhook with topic in path"""
-
-    # Validate required headers
-    if not x_shopify_hmac_sha256:
-        raise HTTPException(status_code=401, detail="Missing signature header")
-
-    if not x_shopify_merchant_domain:
-        raise HTTPException(status_code=400, detail="Missing shop domain header")
-
-    # Get raw body
-    body = await request.body()
-
-    # Build headers dict
-    headers = {
-        "x-shopify-topic": x_shopify_topic or topic,
-        "x-shopify-shop-domain": x_shopify_merchant_domain,
-        "x-shopify-webhook-id": x_shopify_webhook_id,
-        "x-shopify-hmac-sha256": x_shopify_hmac_sha256,
-        "x-shopify-api-version": x_shopify_api_version,
-    }
-
-    try:
-        result = await webhook_service.process_webhook(
-            source=WebhookSource.SHOPIFY, headers=headers, body=body, topic=topic
-        )
-
-        # Always return 200 for accepted webhooks
-        return Response(status_code=200)
-
-    except ValidationError as e:
-        # Return 401 for auth failures
-        if "signature" in str(e).lower():
-            raise HTTPException(status_code=401, detail=str(e))
-        # Return 400 for other validation errors
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        # Log but return 200 to prevent retries
-        return Response(status_code=200)
+    platform_handler_service: PlatformHandlerServiceDep,
+    x_shopify_topic: str = Header(..., alias="X-Shopify-Topic"),
+    x_shopify_hmac_sha256: str = Header(..., alias="X-Shopify-Hmac-Sha256"),
+    x_shopify_shop_domain: str = Header(..., alias="X-Shopify-Shop-Domain"),
+    x_shopify_api_version: str = Header(..., alias="X-Shopify-API-Version"),
+    x_shopify_webhook_id: str = Header(..., alias="X-Shopify-Webhook-Id"),
+) -> WebhookResponse:
+    """
+    Receive Shopify webhook with topic in URL path.
+    
+    This endpoint handles Shopify webhooks where the topic is specified
+    in the URL path (e.g., /webhooks/shopify/orders/create).
+    """
+    
+    return await _process_shopify_webhook(
+        topic=topic,
+        request=request,
+        request_id=request_id,
+        config=config,
+        webhook_service=webhook_service,
+        platform_handler_service=platform_handler_service,
+        headers={
+            "X-Shopify-Topic": x_shopify_topic,
+            "X-Shopify-Hmac-Sha256": x_shopify_hmac_sha256,
+            "X-Shopify-Shop-Domain": x_shopify_shop_domain,
+            "X-Shopify-API-Version": x_shopify_api_version,
+            "X-Shopify-Webhook-Id": x_shopify_webhook_id,
+        }
+    )
 
 
 @router.post("/shopify")
-async def shopify_webhook_fallback(
+async def receive_shopify_webhook_generic(
     request: Request,
+    request_id: RequestIdDep,
+    config: ConfigDep,
     webhook_service: WebhookServiceDep,
-    x_shopify_topic: str = Header(...),
-    x_shopify_merchant_domain: str = Header(...),
-    x_shopify_webhook_id: Optional[str] = Header(None),
-    x_shopify_hmac_sha256: str = Header(...),
-    x_shopify_api_version: Optional[str] = Header(None),
-) -> Response:
-    """Handle Shopify webhook with topic in header (fallback)"""
-
-    body = await request.body()
-
-    headers = {
-        "x-shopify-topic": x_shopify_topic,
-        "x-shopify-shop-domain": x_shopify_merchant_domain,
-        "x-shopify-webhook-id": x_shopify_webhook_id,
-        "x-shopify-hmac-sha256": x_shopify_hmac_sha256,
-        "x-shopify-api-version": x_shopify_api_version,
-    }
-
-    try:
-        result = await webhook_service.process_webhook(
-            source=WebhookSource.SHOPIFY,
-            headers=headers,
-            body=body,
-            topic=x_shopify_topic,
-        )
-
-        return Response(status_code=200)
-
-    except ValidationError as e:
-        if "signature" in str(e).lower():
-            raise HTTPException(status_code=401, detail=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        return Response(status_code=200)
-
-
-@router.post("/stripe")
-async def stripe_webhook(
-    request: Request,
-    webhook_service: WebhookServiceDep,
-    stripe_signature: str = Header(...),
-) -> Response:
-    """Handle Stripe webhook"""
-
-    body = await request.body()
-
-    headers = {"stripe-signature": stripe_signature}
-
-    try:
-        # Parse body to get event type
-        import json
-
-        parsed = json.loads(body)
-        topic = parsed.get("type", "unknown")
-
-        result = await webhook_service.process_webhook(
-            source=WebhookSource.STRIPE, headers=headers, body=body, topic=topic
-        )
-
-        return Response(status_code=200)
-
-    except ValidationError as e:
-        if "signature" in str(e).lower():
-            raise HTTPException(status_code=401, detail=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        return Response(status_code=200)
-
-
-@router.post("/{source}")
-async def generic_webhook(
-    request: Request, source: str, webhook_service: WebhookServiceDep
-) -> Response:
-    """Handle generic webhook (future extensibility)"""
-
-    # For now, just accept and log
-    body = await request.body()
-    headers = dict(request.headers)
-
-    # Log for future implementation
-    webhook_service.logger.info(
-        f"Received webhook from unsupported source: {source}",
-        extra={"source": source, "headers": headers},
+    platform_handler_service: PlatformHandlerServiceDep,
+    x_shopify_topic: str = Header(..., alias="X-Shopify-Topic"),
+    x_shopify_hmac_sha256: str = Header(..., alias="X-Shopify-Hmac-Sha256"),
+    x_shopify_shop_domain: str = Header(..., alias="X-Shopify-Shop-Domain"),
+    x_shopify_api_version: str = Header(..., alias="X-Shopify-API-Version"),
+    x_shopify_webhook_id: str = Header(..., alias="X-Shopify-Webhook-Id"),
+) -> WebhookResponse:
+    """
+    Receive Shopify webhook with topic in header.
+    
+    This endpoint handles Shopify webhooks where the topic is specified
+    in the X-Shopify-Topic header.
+    """
+    
+    return await _process_shopify_webhook(
+        topic=x_shopify_topic,
+        request=request,
+        request_id=request_id,
+        config=config,
+        webhook_service=webhook_service,
+        platform_handler_service=platform_handler_service,
+        headers={
+            "X-Shopify-Topic": x_shopify_topic,
+            "X-Shopify-Hmac-Sha256": x_shopify_hmac_sha256,
+            "X-Shopify-Shop-Domain": x_shopify_shop_domain,
+            "X-Shopify-API-Version": x_shopify_api_version,
+            "X-Shopify-Webhook-Id": x_shopify_webhook_id,
+        }
     )
 
-    return Response(status_code=200)
+
+async def _process_shopify_webhook(
+    topic: str,
+    request: Request,
+    request_id: str,
+    config: Any,
+    webhook_service: Any,
+    platform_handler_service: Any,
+    headers: Dict[str, str]
+) -> WebhookResponse:
+    """Internal function to process Shopify webhooks."""
+    
+    logger = ServiceLogger(config.service_name)
+    
+    try:
+        # Read raw body
+        body = await request.body()
+        
+        # Check payload size
+        if len(body) > config.webhook_max_payload_size_mb * 1024 * 1024:
+            raise PayloadTooLargeError(
+                f"Payload size {len(body)} exceeds maximum {config.webhook_max_payload_size_mb}MB"
+            )
+        
+        # Validate signature
+        if not platform_handler_service.validate_webhook("shopify", body, headers):
+            logger.warning(
+                "Invalid webhook signature",
+                extra={
+                    "platform": "shopify",
+                    "topic": topic,
+                    "request_id": request_id,
+                    "shop_domain": headers.get("X-Shopify-Shop-Domain")
+                }
+            )
+            raise InvalidSignatureError("Invalid webhook signature")
+        
+        # Parse JSON payload
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(
+                "Failed to parse webhook payload",
+                extra={
+                    "platform": "shopify",
+                    "topic": topic,
+                    "request_id": request_id,
+                    "error": str(e)
+                }
+            )
+            raise WebhookValidationError(f"Invalid JSON payload: {str(e)}")
+        
+        # Process webhook
+        webhook_entry = await webhook_service.process_webhook(
+            platform="shopify",
+            topic=topic,
+            payload=payload,
+            headers=headers,
+            signature=headers["X-Shopify-Hmac-Sha256"]
+        )
+        
+        logger.info(
+            "Webhook processed successfully",
+            extra={
+                "platform": "shopify",
+                "topic": topic,
+                "request_id": request_id,
+                "webhook_id": str(webhook_entry.id),
+                "shop_domain": headers.get("X-Shopify-Shop-Domain")
+            }
+        )
+        
+        return WebhookResponse(
+            success=True,
+            webhook_id=webhook_entry.id,
+            message="Webhook processed successfully"
+        )
+        
+    except (InvalidSignatureError, WebhookValidationError, PayloadTooLargeError):
+        # Re-raise known webhook errors
+        raise
+    
+    except Exception as e:
+        logger.error(
+            "Unexpected error processing webhook",
+            extra={
+                "platform": "shopify",
+                "topic": topic,
+                "request_id": request_id,
+                "error": str(e)
+            },
+            exc_info=True
+        )
+        
+        # Return 200 OK even for processing errors to prevent retries
+        # The webhook entry will be marked as failed in the database
+        return WebhookResponse(
+            success=False,
+            webhook_id="00000000-0000-0000-0000-000000000000",  # Placeholder UUID
+            message=f"Webhook processing failed: {str(e)}"
+        )
