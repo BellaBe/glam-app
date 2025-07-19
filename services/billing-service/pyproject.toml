@@ -1,14 +1,52 @@
 [tool.poetry]
 name = "billing-service"
-version = "0.1.0"
-description = ""
-authors = ["bellabe <bella.belgarokova@hotmail.com>"]
-readme = "README.md"
+version = "1.0.0"
+description = "Billing service for subscription and payment management"
+authors = ["GlamYouUp Team"]
+packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
+fastapi = "^0.104.1"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+sqlalchemy = "^2.0.23"
+asyncpg = "^0.29.0"
+alembic = "^1.12.1"
+redis = "^5.0.1"
+pydantic = {extras = ["email"], version = "^2.5.0"}
+httpx = "^0.25.2"
+prometheus-client = "^0.19.0"
+nats-py = "^2.6.0"
+shared = {path = "../../shared", develop = true}
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+pytest-cov = "^4.1.0"
+black = "^23.11.0"
+isort = "^5.12.0"
+mypy = "^1.7.1"
+ruff = "^0.1.6"
+httpx = "^0.25.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
