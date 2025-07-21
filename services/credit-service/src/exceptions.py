@@ -9,38 +9,32 @@ across the platform.
 # Re-export all shared exceptions
 from shared.errors import (
     # Base exceptions
-    CreditServiceError,
-    BusinessError,
+    DomainError,
     ValidationError,
     NotFoundError,
     ConflictError,
     
     # HTTP exceptions
-    BadRequestError,
     UnauthorizedError,
     ForbiddenError,
-    InternalServerError,
     ServiceUnavailableError,
     
     # Database exceptions
     DatabaseError,
-    IntegrityError,
-    
-    # External service exceptions
-    ExternalServiceError,
-    RateLimitError,
 )
 
-# Credit-specific exceptions
-class InsufficientCreditsError(BusinessError):
-    """Raised when merchant has insufficient credits"""
+class CreditServiceError(DomainError):
+    """Base class for all credit service errors"""
     pass
 
+# Credit-specific exceptions
+class InsufficientCreditsError(DomainError):
+    """Raised when merchant has insufficient credits"""
+    pass
 
 class InvalidCreditAmountError(ValidationError):
     """Raised when credit amount is invalid"""
     pass
-
 
 class DuplicateTransactionError(ConflictError):
     """Raised when attempting to create duplicate transaction"""
@@ -51,23 +45,19 @@ class AccountNotFoundError(NotFoundError):
     """Raised when credit account is not found"""
     pass
 
-
 class TransactionNotFoundError(NotFoundError):
     """Raised when transaction is not found"""
     pass
 
-
-class BalanceCalculationError(BusinessError):
+class BalanceCalculationError(DomainError):
     """Raised when balance calculation fails"""
     pass
-
 
 class ThresholdConfigurationError(ValidationError):
     """Raised when threshold configuration is invalid"""
     pass
 
-
-class PluginStatusError(BusinessError):
+class PluginStatusError(DomainError):
     """Raised when plugin status cannot be determined"""
     pass
 
@@ -76,19 +66,14 @@ class PluginStatusError(BusinessError):
 __all__ = [
     # Shared exceptions
     "CreditServiceError",
-    "BusinessError", 
+    "DomainError", 
     "ValidationError",
     "NotFoundError",
     "ConflictError",
-    "BadRequestError",
     "UnauthorizedError", 
     "ForbiddenError",
-    "InternalServerError",
     "ServiceUnavailableError",
     "DatabaseError",
-    "IntegrityError",
-    "ExternalServiceError",
-    "RateLimitError",
     
     # Credit-specific exceptions
     "InsufficientCreditsError",

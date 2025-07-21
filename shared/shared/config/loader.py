@@ -15,7 +15,7 @@ while _REPO_ROOT.name != "glam-app":
     _REPO_ROOT = _REPO_ROOT.parent
 
 _CONFIG_DIR = _REPO_ROOT / "config"                     # ./config
-_SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yaml
+_SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yml
 _SVC_CFG_DIR = _CONFIG_DIR / "services"                 # ./config/services
 _ENV_FILE = _REPO_ROOT / ".env"                         # optional
 
@@ -23,7 +23,7 @@ _ENV_FILE = _REPO_ROOT / ".env"                         # optional
 # Check if files exist
 print(f"\nFile existence check:")
 print(f"  .env exists: {_ENV_FILE.exists()}")
-print(f"  shared.yaml exists: {_SHARED_CONFIG.exists()}")
+print(f"  shared.yml exists: {_SHARED_CONFIG.exists()}")
 print(f"  config/services/ exists: {_SVC_CFG_DIR.exists()}")
 
 # Load .env once so os.environ is ready (local runs)
@@ -57,8 +57,8 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 def merged_config(service: str, *, env_prefix: str) -> Dict[str, Any]:
     """
     Load configuration in order of precedence:
-    1. config/shared.yaml              -> baseline shared config
-    2. config/services/{service}.yaml  -> service-specific config  
+    1. config/shared.yml              -> baseline shared config
+    2. config/services/{service}.yml  -> service-specific config  
     3. Environment variables           -> runtime overrides
     
     YAML                      -> baseline

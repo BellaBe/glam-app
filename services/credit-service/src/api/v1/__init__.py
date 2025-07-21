@@ -11,6 +11,6 @@ router = APIRouter()
 router.include_router(health.router)
 router.include_router(credits.router, prefix="/credits") 
 router.include_router(transactions.router, prefix="/credits")
-router.include_router(plugin_status.router, prefix="/credits")
+router.include_router(plugin_status.router)
 
 __all__ = ["router"]

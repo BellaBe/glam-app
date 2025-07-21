@@ -5,14 +5,21 @@ from shared.events import DomainEventSubscriber
 class WebhookEventSubscriber(DomainEventSubscriber):
     """Subscribe to webhook events from other services"""
     
-    stream_name = "WEBHOOK"
-    subject = "evt.webhook.app.subscription_updated"
-    event_type = "evt.webhook.app.subscription_updated"
-    durable_name = "billing-subscription-updated"
+    @property
+    def event_type(self) -> str:
+        return WebhookEvents.SUBSCRIPTION_UPDATED
     
-    async def on_event(self, event: dict, headers: dict):
+    @property
+    def subject(self) -> str:
+        return WebhookEvents.SUBSCRIPTION_UPDATED
+
+    @property
+    def durable_name(self) -> str:
+        return "billing-subscription-updated"
+
+    async def on_event(self, event: dict, headers=None):
         """Process subscription payment webhook"""
-        billing_service = self.get_dependency("billing_service")
+        billing_service = self.get_dependency("billing_service") # type: ignore
         logger = self.get_dependency("logger")
         
         payload = event["payload"]
@@ -37,14 +44,24 @@ class WebhookEventSubscriber(DomainEventSubscriber):
 class PurchaseWebhookSubscriber(DomainEventSubscriber):
     """Subscribe to purchase webhook events"""
     
-    stream_name = "WEBHOOK"
-    subject = "evt.webhook.app.purchase_updated"
-    event_type = "evt.webhook.app.purchase_updated"
-    durable_name = "billing-purchase-updated"
+    @property
+    def subject(self) -> str:
+        """The subject pattern to subscribe to"""
+        return WebhookEvents.PURCHASE_UPDATED
+
+    @property
+    def event_type(self) -> str:
+        """The expected event_type for validation"""
+        return WebhookEvents.PURCHASE_UPDATED
+
+    @property
+    def durable_name(self) -> str:
+        """The durable consumer name"""
+        return "billing-purchase-updated"
     
-    async def on_event(self, event: dict, headers: dict):
+    async def on_event(self, event: dict, headers=None):
         """Process purchase payment webhook"""
-        purchase_service = self.get_dependency("purchase_service")
+        purchase_service = self.get_dependency("purchase_service") # type: ignore
         logger = self.get_dependency("logger")
         
         payload = event["payload"]
@@ -69,14 +86,22 @@ class PurchaseWebhookSubscriber(DomainEventSubscriber):
 class AppUninstalledSubscriber(DomainEventSubscriber):
     """Subscribe to app uninstallation events"""
     
-    stream_name = "WEBHOOK"
-    subject = "evt.webhook.app.uninstalled"
-    event_type = "evt.webhook.app.uninstalled"
-    durable_name = "billing-app-uninstalled"
-    
-    async def on_event(self, event: dict, headers: dict):
+    @property
+    def event_type(self) -> str:
+        """The expected event_type for validation"""
+        return WebhookEvents.APP_UNINSTALLED
+    @property
+    def subject(self) -> str:
+        """The subject pattern to subscribe to"""
+        return WebhookEvents.APP_UNINSTALLED
+    @property
+    def durable_name(self) -> str:
+        """The durable consumer name"""
+        return "billing-app-uninstalled"
+
+    async def on_event(self, event: dict, headers=None):
         """Cancel all subscriptions on app uninstall"""
-        billing_service = self.get_dependency("billing_service")
+        billing_service = self.get_dependency("billing_service") # type: ignore
         logger = self.get_dependency("logger")
         
         payload = event["payload"]
@@ -89,6 +114,10 @@ class AppUninstalledSubscriber(DomainEventSubscriber):
                 "correlation_id": correlation_id
             }
         )
+        # Cancel all subscriptions for the shop
+        await billing_service.cancel_all_subscriptions(
+            shop_id=payload["shop_id"],
+            correlation_id=correlation_id
+        )
         
-        # Cancel all active subscriptions for the shop
-        # Implementation would find and cancel subscriptions
+        

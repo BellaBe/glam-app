@@ -12,13 +12,12 @@ from ..models.webhook_entry import WebhookEntry
 from ..schemas.webhook import WebhookEntryResponse, CreateWebhookSchema
 
 
-class WebhookEntryMapper(BaseMapper[WebhookEntry, CreateWebhookSchema, None, WebhookEntryResponse]):
+class WebhookEntryMapper(BaseMapper[WebhookEntry, CreateWebhookSchema, None, WebhookEntryResponse]): #type: ignore
     """Mapper for webhook entry operations."""
     
     
     def create_to_model(self, create_schema: CreateWebhookSchema, **kwargs) -> WebhookEntry:
         """Convert create schema to webhook entry model."""
-        # Since create_schema is None, we can return a new WebhookEntry instance
         webhook_entry_data = WebhookEntry(
             id=UUID(),
             platform=create_schema.platform,
@@ -29,8 +28,6 @@ class WebhookEntryMapper(BaseMapper[WebhookEntry, CreateWebhookSchema, None, Web
             error=create_schema.error,
             received_at=create_schema.received_at,
             processed_at=create_schema.processed_at,
-            created_at=create_schema.created_at,
-            updated_at=create_schema.updated_at
         )
         return webhook_entry_data
 

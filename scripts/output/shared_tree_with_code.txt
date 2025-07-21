@@ -301,7 +301,7 @@ shared/
 │   │   # glam-app/shared/api/health.py
 │   │   
 │   │   from fastapi import APIRouter, Request
-│   │   from datetime import datetime
+│   │   from datetime import datetime, timezone
 │   │   from shared.api.responses import success_response
 │   │   
 │   │   
@@ -315,26 +315,8 @@ shared/
 │   │               data={
 │   │                   "status": "healthy",
 │   │                   "service": service_name,
-│   │                   "timestamp": datetime.utcnow().isoformat()
+│   │                   "timestamp": datetime.now(timezone.utc).isoformat(),
 │   │               },
-│   │               request_id=getattr(request.state, "request_id", None),
-│   │               correlation_id=getattr(request.state, "correlation_id", None),
-│   │           )
-│   │   
-│   │       @router.get("/live", tags=["Health"])
-│   │       async def liveness_check(request: Request):
-│   │           """Kubernetes-style liveness probe"""
-│   │           return success_response(
-│   │               data={"alive": True},
-│   │               request_id=getattr(request.state, "request_id", None),
-│   │               correlation_id=getattr(request.state, "correlation_id", None),
-│   │           )
-│   │   
-│   │       @router.get("/ready", tags=["Health"])
-│   │       async def readiness_check(request: Request):
-│   │           """Kubernetes-style readiness probe"""
-│   │           return success_response(
-│   │               data={"ready": True},
 │   │               request_id=getattr(request.state, "request_id", None),
 │   │               correlation_id=getattr(request.state, "correlation_id", None),
 │   │           )
@@ -754,6 +736,7 @@ shared/
 │       ```
 │       
 ├── config/
+│   ├── __init__.py
 │   └── loader.py
 │       
 │       ```py
@@ -774,7 +757,7 @@ shared/
 │           _REPO_ROOT = _REPO_ROOT.parent
 │       
 │       _CONFIG_DIR = _REPO_ROOT / "config"                     # ./config
-│       _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yaml
+│       _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.aml
 │       _SVC_CFG_DIR = _CONFIG_DIR / "services"                 # ./config/services
 │       _ENV_FILE = _REPO_ROOT / ".env"                         # optional
 │       
@@ -782,7 +765,7 @@ shared/
 │       # Check if files exist
 │       print(f"\nFile existence check:")
 │       print(f"  .env exists: {_ENV_FILE.exists()}")
-│       print(f"  shared.yaml exists: {_SHARED_CONFIG.exists()}")
+│       print(f"  shared.yml exists: {_SHARED_CONFIG.exists()}")
 │       print(f"  config/services/ exists: {_SVC_CFG_DIR.exists()}")
 │       
 │       # Load .env once so os.environ is ready (local runs)
@@ -816,8 +799,8 @@ shared/
 │       def merged_config(service: str, *, env_prefix: str) -> Dict[str, Any]:
 │           """
 │           Load configuration in order of precedence:
-│           1. config/shared.yaml              -> baseline shared config
-│           2. config/services/{service}.yaml  -> service-specific config  
+│           1. config/shared.yml              -> baseline shared config
+│           2. config/services/{service}.yml  -> service-specific config  
 │           3. Environment variables           -> runtime overrides
 │           
 │           YAML                      -> baseline
@@ -2238,259 +2221,6 @@ shared/
 │   │               self.details["subject"] = subject
 │   │           if event_type:
 │   │               self.details["event_type"] = event_type
-│   │   ```
-│   │   
-│   ├── middleware.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/middleware.py
-│   │   # -------------------------------
-│   │   
-│   │   """
-│   │   FastAPI middleware and exception handlers for consistent error handling.
-│   │   
-│   │   This module provides middleware and handlers that can be used by all
-│   │   services to ensure consistent error responses.
-│   │   """
-│   │   
-│   │   import time
-│   │   import uuid
-│   │   import logging
-│   │   from typing import Callable, Optional
-│   │   from contextlib import asynccontextmanager
-│   │   
-│   │   from fastapi import FastAPI, Request, Response, HTTPException
-│   │   from fastapi.responses import JSONResponse
-│   │   from fastapi.exceptions import RequestValidationError
-│   │   from shared.api.responses import exception_to_error_response
-│   │   from starlette.middleware.base import BaseHTTPMiddleware
-│   │   from starlette.types import ASGIApp
-│   │   
-│   │   from .base import GlamBaseError, ValidationError
-│   │   
-│   │   
-│   │   logger = logging.getLogger(__name__)
-│   │   
-│   │   
-│   │   class ErrorHandlingMiddleware(BaseHTTPMiddleware):
-│   │       """
-│   │       Middleware that ensures all errors are converted to standard format.
-│   │       
-│   │       This middleware:
-│   │       - Catches all exceptions and converts to standard error responses
-│   │       - Logs request metrics and errors
-│   │       """
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           app: ASGIApp,
-│   │           *,
-│   │           include_details: bool = True,
-│   │           log_errors: bool = True
-│   │       ):
-│   │           super().__init__(app)
-│   │           self.include_details = include_details
-│   │           self.log_errors = log_errors
-│   │       
-│   │       async def dispatch(self, request: Request, call_next: Callable) -> Response:
-│   │           # Track request timing
-│   │           start_time = time.perf_counter()
-│   │           
-│   │           try:
-│   │               response = await call_next(request)
-│   │               return response
-│   │               
-│   │           except Exception as exc:
-│   │               # Get request_id and correlation_id from request state if available
-│   │               request_id = getattr(request.state, "request_id", None)
-│   │               correlation_id = getattr(request.state, "correlation_id", None)
-│   │               
-│   │               # Convert exception to standard error response
-│   │               error_response, status_code = exception_to_error_response(
-│   │                   exc,
-│   │                   request_id=request_id,
-│   │                   correlation_id=correlation_id,
-│   │                   include_details=self.include_details,
-│   │                   log_traceback=self.log_errors
-│   │               )
-│   │               
-│   │               # Log error with context
-│   │               if self.log_errors:
-│   │                   duration_ms = (time.perf_counter() - start_time) * 1000
-│   │                   logger.error(
-│   │                       "Request failed",
-│   │                       extra={
-│   │                           "request_id": request_id,
-│   │                           "method": request.method,
-│   │                           "path": request.url.path,
-│   │                           "status": status_code,
-│   │                           "duration_ms": round(duration_ms, 2),
-│   │                           "error_code": error_response.error.code,
-│   │                       }
-│   │                   )
-│   │               
-│   │               return JSONResponse(
-│   │                   content=error_response.model_dump(),
-│   │                   status_code=status_code
-│   │               )
-│   │           
-│   │           finally:
-│   │               # Always log request completion
-│   │               duration_ms = (time.perf_counter() - start_time) * 1000
-│   │               logger.info(
-│   │                   "Request completed",
-│   │                   extra={
-│   │                       "method": request.method,
-│   │                       "path": request.url.path,
-│   │                       "duration_ms": round(duration_ms, 2),
-│   │                   }
-│   │               )
-│   │   
-│   │   
-│   │   def setup_exception_handlers(
-│   │       app: FastAPI,
-│   │       *,
-│   │       include_details: bool = True
-│   │   ):
-│   │       """
-│   │       Set up standard exception handlers for a FastAPI app.
-│   │       
-│   │       This adds handlers for:
-│   │       - GlamBaseError (our custom errors)
-│   │       - RequestValidationError (Pydantic validation)
-│   │       - HTTPException (FastAPI HTTP errors)
-│   │       - Generic Exception (unexpected errors)
-│   │       
-│   │       Args:
-│   │           app: FastAPI application instance
-│   │           include_details: Whether to include error details in responses
-│   │       """
-│   │       
-│   │       @app.exception_handler(GlamBaseError)
-│   │       async def glam_error_handler(request: Request, exc: GlamBaseError):
-│   │           """Handle our custom domain/infrastructure errors."""
-│   │           request_id = getattr(request.state, "request_id", None)
-│   │           correlation_id = getattr(request.state, "correlation_id", None)
-│   │           
-│   │           error_response, status_code = exception_to_error_response(
-│   │               exc,
-│   │               request_id=request_id,
-│   │               correlation_id=correlation_id,
-│   │               include_details=include_details,
-│   │               log_traceback=False  # Don't log expected errors
-│   │           )
-│   │           
-│   │           return JSONResponse(
-│   │               content=error_response.model_dump(),
-│   │               status_code=status_code
-│   │           )
-│   │       
-│   │       @app.exception_handler(RequestValidationError)
-│   │       async def validation_error_handler(request: Request, exc: RequestValidationError):
-│   │           """Handle Pydantic validation errors."""
-│   │           request_id = getattr(request.state, "request_id", None)
-│   │           correlation_id = getattr(request.state, "correlation_id", None)
-│   │           
-│   │           # Convert Pydantic errors to our format
-│   │           validation_errors = []
-│   │           for error in exc.errors():
-│   │               field_path = ".".join(str(loc) for loc in error["loc"])
-│   │               validation_errors.append({
-│   │                   "field": field_path,
-│   │                   "message": error["msg"],
-│   │                   "type": error["type"]
-│   │               })
-│   │           
-│   │           # Create a ValidationError with details
-│   │           validation_exc = ValidationError(
-│   │               "Request validation failed",
-│   │               details={"validation_errors": validation_errors}
-│   │           )
-│   │           
-│   │           error_response, status_code = exception_to_error_response(
-│   │               validation_exc,
-│   │               request_id=request_id,
-│   │               correlation_id=correlation_id,
-│   │               include_details=include_details
-│   │           )
-│   │           
-│   │           return JSONResponse(
-│   │               content=error_response.model_dump(),
-│   │               status_code=status_code
-│   │           )
-│   │       
-│   │       @app.exception_handler(HTTPException)
-│   │       async def http_exception_handler(request: Request, exc: HTTPException):
-│   │           """Handle FastAPI HTTP exceptions."""
-│   │           request_id = getattr(request.state, "request_id", None)
-│   │           correlation_id = getattr(request.state, "correlation_id", None)
-│   │           
-│   │           # Map common HTTP exceptions to our error types
-│   │           if exc.status_code == 401:
-│   │               from .base import UnauthorizedError
-│   │               domain_exc = UnauthorizedError(exc.detail)
-│   │           elif exc.status_code == 403:
-│   │               from .base import ForbiddenError
-│   │               domain_exc = ForbiddenError(exc.detail)
-│   │           elif exc.status_code == 404:
-│   │               from .base import NotFoundError
-│   │               domain_exc = NotFoundError(exc.detail)
-│   │           else:
-│   │               # Generic error
-│   │               domain_exc = GlamBaseError(
-│   │                   exc.detail,
-│   │                   code="HTTP_ERROR",
-│   │                   status=exc.status_code
-│   │               )
-│   │           
-│   │           error_response, status_code = exception_to_error_response(
-│   │               domain_exc,
-│   │               request_id=request_id,
-│   │               correlation_id=correlation_id,
-│   │               include_details=include_details
-│   │           )
-│   │           
-│   │           return JSONResponse(
-│   │               content=error_response.model_dump(),
-│   │               status_code=status_code
-│   │           )
-│   │       
-│   │       @app.exception_handler(Exception)
-│   │       async def generic_exception_handler(request: Request, exc: Exception):
-│   │           """Handle unexpected errors."""
-│   │           request_id = getattr(request.state, "request_id", None)
-│   │           correlation_id = getattr(request.state, "correlation_id", None)
-│   │           
-│   │           error_response, status_code = exception_to_error_response(
-│   │               exc,
-│   │               request_id=request_id,
-│   │               correlation_id=correlation_id,
-│   │               include_details=include_details,
-│   │               log_traceback=True
-│   │           )
-│   │           
-│   │           return JSONResponse(
-│   │               content=error_response.model_dump(),
-│   │               status_code=status_code
-│   │           )
-│   │   
-│   │   
-│   │   @asynccontextmanager
-│   │   async def get_request_id(request: Request):
-│   │       """
-│   │       Context manager to access the current request's ID.
-│   │       
-│   │       Usage:
-│   │           async with get_request_id(request) as request_id:
-│   │               # Use request_id in your code
-│   │       """
-│   │       request_id = getattr(request.state, "request_id", None)
-│   │       if not request_id:
-│   │           request_id = f"req_{uuid.uuid4().hex[:12]}"
-│   │           request.state.request_id = request_id
-│   │       
-│   │       yield request_id
 │   │   ```
 │   │   
 │   ├── notification.py
@@ -4328,264 +4058,62 @@ shared/
 │   │   ]
 │   │   ```
 │   │   
-│   ├── mappers.py
-│   │   
-│   │   ```py
-│   │   # shared/events/mappers.py
-│   │   from typing import List
-│   │   from .base import Streams
-│   │   
-│   │   # Simple service to stream mapping
-│   │   SERVICE_STREAM_MAP = {
-│   │       "analytics-service": Streams.ANALYTICS,
-│   │       "auth-service": Streams.AUTH,
-│   │       "billing-service": Streams.BILLING,
-│   │       "catalog-ai-service": Streams.AI_PROCESSING,
-│   │       "catalog-connector": Streams.CATALOG,
-│   │       "catalog-image-cache": Streams.CATALOG,
-│   │       "catalog-job-processor": Streams.CATALOG,
-│   │       "catalog-service": Streams.CATALOG,
-│   │       "credit-service": Streams.CREDIT,
-│   │       "merchant-service": Streams.MERCHANT,
-│   │       "notification-service": Streams.NOTIFICATION,
-│   │       "profile-ai-selfie": Streams.AI_PROCESSING,
-│   │       "profile-service": Streams.PROFILE,
-│   │       "rate-limit-service": Streams.RATE_LIMIT,
-│   │       "scheduler-service": Streams.SCHEDULER,
-│   │       "webhook-service": Streams.WEBHOOKS,
-│   │   }
-│   │   
-│   │   
-│   │   def get_stream_subjects(stream: Streams) -> List[str]:
-│   │       """Get all subjects for a stream"""
-│   │       stream_prefix = stream.value.lower()
-│   │       return [
-│   │           f"cmd.{stream_prefix}.*",
-│   │           f"evt.{stream_prefix}.*"
-│   │       ]
-│   │   
-│   │   
-│   │   def get_stream_for_service(service_name: str) -> Streams:
-│   │       """Get the stream for a service"""
-│   │       if service_name not in SERVICE_STREAM_MAP:
-│   │           raise ValueError(f"Unknown service: {service_name}")
-│   │       return SERVICE_STREAM_MAP[service_name]
-│   │   
-│   │   
-│   │   def get_stream_from_event_type(event_type: str) -> Streams:
-│   │       """
-│   │       Infer stream from event type.
-│   │       Event types follow pattern: cmd.domain.* or evt.domain.*
-│   │       """
-│   │       parts = event_type.split(".")
-│   │       if len(parts) >= 2 and parts[0] in ["cmd", "evt"]:
-│   │           domain = parts[1].upper()
-│   │           if hasattr(Streams, domain):
-│   │               return Streams[domain]
-│   │       
-│   │       raise ValueError(f"Cannot infer stream from event type: {event_type}")
-│   │   ```
-│   │   
-│   └── types.py
+│   └── mappers.py
 │       
 │       ```py
-│       # shared/events/notification/types.py
-│       from pydantic import BaseModel, Field
-│       from typing import Dict, List, Any
-│       from datetime import datetime
-│       from uuid import UUID
+│       # shared/events/mappers.py
+│       from typing import List
+│       from .base import Streams
 │       
-│       from shared.events.base import EventWrapper
-│       from shared.events.context import EventContext
-│       
-│       
-│       class NotificationCommands:
-│           """Notification command types"""
-│       
-│           NOTIFICATION_SEND_EMAIL = "cmd.notification.send_email"
-│           NOTIFICATION_SEND_BULK = "cmd.notification.bulk_send"
-│       
-│       
-│       class NotificationEvents:
-│           """Notification event types"""
-│       
-│           NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent"
-│           NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed"
-│           NOTIFICATION_BULK_SEND_COMPLETED = "evt.notification.bulk_send.completed"
-│       
-│       
-│       class Recipient(BaseModel):
-│           merchant_id: UUID
-│           merchant_domain: str
-│           email: str
-│           unsubscribe_token: str
-│           dynamic_content: Dict[str, Any] = Field(default_factory=dict)
+│       # Simple service to stream mapping
+│       SERVICE_STREAM_MAP = {
+│           "analytics-service": Streams.ANALYTICS,
+│           "auth-service": Streams.AUTH,
+│           "billing-service": Streams.BILLING,
+│           "catalog-ai-service": Streams.AI_PROCESSING,
+│           "catalog-connector": Streams.CATALOG,
+│           "catalog-image-cache": Streams.CATALOG,
+│           "catalog-job-processor": Streams.CATALOG,
+│           "catalog-service": Streams.CATALOG,
+│           "credit-service": Streams.CREDIT,
+│           "merchant-service": Streams.MERCHANT,
+│           "notification-service": Streams.NOTIFICATION,
+│           "profile-ai-selfie": Streams.AI_PROCESSING,
+│           "profile-service": Streams.PROFILE,
+│           "rate-limit-service": Streams.RATE_LIMIT,
+│           "scheduler-service": Streams.SCHEDULER,
+│           "webhook-service": Streams.WEBHOOKS,
+│       }
 │       
 │       
-│       class SendEmailCommandPayload(BaseModel):
-│           """Payload for sending a single email"""
-│       
-│           notification_type: str
-│           recipient: Recipient
-│       
-│       
-│       class SendEmailBulkCommandPayload(BaseModel):
-│           """Payload for sending bulk emails by notification type"""
-│       
-│           notification_type: str
-│           recipients: List[Recipient]
+│       def get_stream_subjects(stream: Streams) -> List[str]:
+│           """Get all subjects for a stream"""
+│           stream_prefix = stream.value.lower()
+│           return [
+│               f"cmd.{stream_prefix}.*",
+│               f"evt.{stream_prefix}.*"
+│           ]
 │       
 │       
-│       # Event payloads
-│       class EmailSentEventPayload(BaseModel):
-│           """Payload for NOTIFICATION_EMAIL_SENT event"""
-│       
-│           notification_id: UUID
-│           merchant_id: UUID
-│           notification_type: str
-│           provider: str
-│           provider_message_id: str
-│           sent_at: datetime
-│           metadata: Dict[str, Any] = Field(default_factory=dict)
-│       
-│           class Config:
-│               json_encoders = {UUID: str, datetime: lambda v: v.isoformat()}
+│       def get_stream_for_service(service_name: str) -> Streams:
+│           """Get the stream for a service"""
+│           if service_name not in SERVICE_STREAM_MAP:
+│               raise ValueError(f"Unknown service: {service_name}")
+│           return SERVICE_STREAM_MAP[service_name]
 │       
 │       
-│       class EmailFailedEventPayload(BaseModel):
-│           """Payload for NOTIFICATION_EMAIL_FAILED event"""
-│       
-│           notification_id: UUID
-│           merchant_id: UUID
-│           notification_type: str
-│           error: str
-│           error_code: str
-│           retry_count: int
-│           will_retry: bool
-│           failed_at: datetime
-│       
-│       
-│       class BulkCompletedEventPayload(BaseModel):
-│           """Payload for bulk send completion"""
-│       
-│           bulk_job_id: UUID
-│           notification_type: str
-│           total_recipients: int
-│           total_sent: int
-│           total_failed: int
-│           total_skipped: int
-│           duration_seconds: float
-│           completed_at: datetime
-│       
-│       
-│       # Now use the generic EventWrapper with specific payload types
-│       class SendEmailCommand(EventWrapper[SendEmailCommandPayload]):
-│           """Command to send a single email"""
-│       
-│           subject: str = NotificationCommands.NOTIFICATION_SEND_EMAIL
-│       
-│           @classmethod
-│           def create_from_context(
-│               cls, context: EventContext, notification_type: str, recipient: Recipient
-│           ) -> "SendEmailCommand":
-│               """Create command with context"""
-│               return cls(
-│                   subject=cls.subject,
-│                   idempotency_key=context.idempotency_key,
-│                   event_id=context.event_id,
-│                   correlation_id=context.correlation_id,
-│                   timestamp=context.timestamp,
-│                   metadata=context.metadata,
-│                   data=SendEmailCommandPayload(
-│                       notification_type=notification_type, recipient=recipient
-│                   ),
-│               )
-│       
-│       
-│       class SendEmailBulkCommand(EventWrapper[SendEmailBulkCommandPayload]):
-│           """Command to send bulk emails with same notification type"""
-│       
-│           subject: str = NotificationCommands.NOTIFICATION_SEND_BULK
-│       
-│           @classmethod
-│           def create_from_context(
-│               cls, context: EventContext, notification_type: str, recipients: List[Recipient]
-│           ) -> "SendEmailBulkCommand":
-│               """Create bulk command with context"""
-│               return cls(
-│                   subject=cls.subject,
-│                   idempotency_key=context.idempotency_key,
-│                   event_id=context.event_id,
-│                   correlation_id=context.correlation_id,
-│                   timestamp=context.timestamp,
-│                   metadata=context.metadata,
-│                   data=SendEmailBulkCommandPayload(
-│                       notification_type=notification_type, recipients=recipients
-│                   ),
-│               )
-│       
-│       
-│       class EmailSentEvent(EventWrapper[EmailSentEventPayload]):
-│           """Event emitted when an email is successfully sent"""
-│       
-│           subject: str = NotificationEvents.NOTIFICATION_EMAIL_SENT
-│       
-│           @classmethod
-│           def create_from_context(
-│               cls, context: EventContext, payload: EmailSentEventPayload
-│           ) -> "EmailSentEvent":
-│               """Create event with context"""
-│               return cls(
-│                   subject=cls.subject,
-│                   idempotency_key=context.idempotency_key,
-│                   event_id=context.event_id,
-│                   correlation_id=context.correlation_id,
-│                   timestamp=context.timestamp,
-│                   metadata=context.metadata,
-│                   data=payload,
-│               )
-│       
-│       
-│       class EmailDeliveryFailedEvent(EventWrapper[EmailFailedEventPayload]):
-│           """Event emitted when email delivery fails"""
-│       
-│           subject: str = NotificationEvents.NOTIFICATION_EMAIL_FAILED
-│       
-│           @classmethod
-│           def create_from_context(
-│               cls, context: EventContext, payload: EmailFailedEventPayload
-│           ) -> "EmailDeliveryFailedEvent":
-│               """Create event with context"""
-│               return cls(
-│                   subject=cls.subject,
-│                   idempotency_key=context.idempotency_key,
-│                   event_id=context.event_id,
-│                   correlation_id=context.correlation_id,
-│                   timestamp=context.timestamp,
-│                   metadata=context.metadata,
-│                   data=payload,
-│               )
-│       
-│       
-│       class BulkSendCompletedEvent(EventWrapper[BulkCompletedEventPayload]):
-│           """Event emitted when a bulk email send operation completes"""
-│       
-│           subject: str = NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED
-│       
-│           @classmethod
-│           def create_from_context(
-│               cls, context: EventContext, payload: BulkCompletedEventPayload
-│           ) -> "BulkSendCompletedEvent":
-│               """Create event with context"""
-│               return cls(
-│                   subject=cls.subject,
-│                   idempotency_key=context.idempotency_key,
-│                   event_id=context.event_id,
-│                   correlation_id=context.correlation_id,
-│                   timestamp=context.timestamp,
-│                   metadata=context.metadata,
-│                   data=payload,
-│               )
+│       def get_stream_from_event_type(event_type: str) -> Streams:
+│           """
+│           Infer stream from event type.
+│           Event types follow pattern: cmd.domain.* or evt.domain.*
+│           """
+│           parts = event_type.split(".")
+│           if len(parts) >= 2 and parts[0] in ["cmd", "evt"]:
+│               domain = parts[1].upper()
+│               if hasattr(Streams, domain):
+│                   return Streams[domain]
+│           
+│           raise ValueError(f"Cannot infer stream from event type: {event_type}")
 │       ```
 │       
 ├── mappers/

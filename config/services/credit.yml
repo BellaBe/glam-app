@@ -22,7 +22,3 @@ api:
   
 database:
   enabled: true
-  
-monitoring:
-  metrics_enabled: true
-  tracing_enabled: true

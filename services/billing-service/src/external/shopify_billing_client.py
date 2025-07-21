@@ -1,14 +1,10 @@
 # services/billing-service/src/external/shopify_billing_client.py
 import httpx
-import json
 from typing import Dict, Any
 from decimal import Decimal
 
-
-class ShopifyBillingError(Exception):
-    """Shopify billing API error"""
-    pass
-
+from ..models import BillingInterval
+from ..exceptions import ShopifyBillingError
 
 class ShopifyBillingClient:
     """Shopify billing operations client"""

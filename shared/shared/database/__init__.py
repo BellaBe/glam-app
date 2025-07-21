@@ -45,7 +45,6 @@ __all__ = [
     
     # Configuration
     "DatabaseConfig",
-    "TestDatabaseConfig",
     "create_database_config",
     
     # Migrations

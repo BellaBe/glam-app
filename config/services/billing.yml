@@ -1,0 +1,28 @@
+# config/services/billing.yml
+service:
+  name: billing-service
+  port: 8016
+
+api:
+  external_port: 8116
+  rate_limit:
+    requests_per_minute: 200
+
+features:
+  cache_enabled: true
+  max_retries: 3
+  timeout_seconds: 30
+
+billing:
+  trial_period_days: 14
+  max_trial_extensions: 2
+  max_extension_days: 30
+
+shopify:
+  api_version: "2024-01"
+  test_mode: false
+
+circuit_breaker:
+  failure_threshold: 5
+  recovery_timeout: 30
+  expected_exception: HTTPException

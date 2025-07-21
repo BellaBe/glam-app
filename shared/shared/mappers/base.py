@@ -35,11 +35,12 @@ class BaseMapper(Generic[ModelT, CreateT, UpdateT, ResponseT], ABC):
         """Convert model instance to basic response schema."""
         pass
     
+    @abstractmethod
     def models_to_responses(self, models: List[ModelT]) -> List[ResponseT]:
         """Convert list of models to list of response schemas."""
         return [self.model_to_response(model) for model in models]
     
-    
+    @abstractmethod
     def update_to_dict(self, update_schema: UpdateT) -> Dict[str, Any]:
         """
         Optional: Convert update schema to dict for partial updates.

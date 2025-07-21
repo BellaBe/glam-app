@@ -1,95 +1,102 @@
- services/billing-service/src/api/v1/subscriptions.py
-from fastapi import APIRouter, Request, HTTPException, Query
-from shared.api import success_response, paginated_response, CorrelationIdDep
-from shared.database import DBSessionDep
-from typing import Optional
+# glam-app/services/billing-service/src/api/v1/subscriptions.py
+from typing import List
+from uuid import UUID
 
+from fastapi import APIRouter, HTTPException, Path, Query, Body, status
 
-def create_subscription_router(
-    billing_service: BillingService,
-    trial_service: TrialService
-) -> APIRouter:
-    """Create subscription management router"""
+from shared.api import ApiResponse, success_response, RequestContextDep
+from ...dependencies import BillingServiceDep
+from ...schemas import (
+    SubscriptionCreateIn,
+    SubscriptionCreateOut,
+    SubscriptionOut,
+)
+
+router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
+
+@router.post(
+    "",
+    response_model=ApiResponse[SubscriptionCreateOut],
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new subscription (initiates Shopify charge)",
+)
+async def create_subscription(
+    svc: BillingServiceDep,
+    ctx: RequestContextDep,
+    body: SubscriptionCreateIn = Body(...),
+):
+    result = await svc.create_subscription(
+        merchant_id=body.merchant_id,
+        shop_id=body.shop_id,
+        plan_id=body.plan_id,
+        return_url=body.return_url,
+        test_mode=body.test_mode,
+        correlation_id=ctx.correlation_id,
+    )
+
+    return success_response(
+        data=result,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
+    )
+
+@router.get(
+    "/{subscription_id}",
+    response_model=ApiResponse[SubscriptionOut],
+    summary="Get subscription details",
+    status_code=status.HTTP_200_OK,
+)
+async def get_subscription(
+    svc: BillingServiceDep,
+    ctx: RequestContextDep,
+    subscription_id: UUID = Path(...),
     
-    router = APIRouter(prefix="/api/v1/billing/subscriptions", tags=["Subscriptions"])
-    
-    @router.post("", response_model=dict)
-    async def create_subscription(
-        request: Request,
-        data: SubscriptionCreateRequest,
-        correlation_id: CorrelationIdDep,
-        db: DBSessionDep
-    ):
-        """Create new subscription (initiates Shopify charge)"""
-        
-        try:
-            result = await billing_service.create_subscription(
-                merchant_id=data.merchant_id,
-                shop_id=data.shop_id,
-                plan_id=data.plan_id,
-                return_url=data.return_url,
-                test_mode=data.test_mode,
-                correlation_id=correlation_id
-            )
-            
-            return success_response(
-                data=result.__dict__,
-                request_id=request.state.request_id,
-                correlation_id=correlation_id
-            )
-            
-        except BillingError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-    
-    @router.get("/{subscription_id}")
-    async def get_subscription(
-        request: Request,
-        subscription_id: UUID,
-        correlation_id: CorrelationIdDep
-    ):
-        """Get subscription details"""
-        
-        subscription = await billing_service.get_subscription(subscription_id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail="Subscription not found")
-        
-        return success_response(
-            data=SubscriptionResponse.from_orm(subscription).__dict__,
-            request_id=request.state.request_id,
-            correlation_id=correlation_id
-        )
-    
-    @router.get("/merchant/{merchant_id}")
-    async def list_merchant_subscriptions(
-        request: Request,
-        merchant_id: UUID,
-        correlation_id: CorrelationIdDep
-    ):
-        """List merchant subscriptions"""
-        
-        subscriptions = await billing_service.list_merchant_subscriptions(merchant_id)
-        
-        return success_response(
-            data=[SubscriptionResponse.from_orm(s).__dict__ for s in subscriptions],
-            request_id=request.state.request_id,
-            correlation_id=correlation_id
-        )
-    
-    @router.delete("/{subscription_id}")
-    async def cancel_subscription(
-        request: Request,
-        subscription_id: UUID,
-        immediate: bool = Query(False),
-        reason: str = Query("merchant_request"),
-        correlation_id: CorrelationIdDep
-    ):
-        """Cancel subscription"""
-        
-        # Implementation would cancel the subscription
-        return success_response(
-            data={"cancelled": True, "subscription_id": str(subscription_id)},
-            request_id=request.state.request_id,
-            correlation_id=correlation_id
-        )
-    
-    return router
+):
+    subscription = await svc.get_subscription(subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    return success_response(
+        data=subscription,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
+    )
+
+@router.get(
+    "/merchant/{merchant_id}",
+    response_model=ApiResponse[List[SubscriptionOut]],
+    summary="List a merchant’s subscriptions",
+)
+async def list_merchant_subscriptions(
+    svc: BillingServiceDep,
+    ctx: RequestContextDep,
+    merchant_id: UUID = Path(..., description="The ID of the merchant"),
+):
+    subs = await svc.list_merchant_subscriptions(merchant_id)
+    return success_response(
+        data=subs,
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
+    )
+
+@router.delete(
+    "/{subscription_id}",
+    response_model=ApiResponse[dict],
+    summary="Cancel a subscription",
+)
+async def cancel_subscription(
+    svc: BillingServiceDep,
+    ctx: RequestContextDep,
+    subscription_id: UUID = Path(...),
+    immediate: bool = Query(False),
+    reason: str = Query("merchant_request"),
+
+):
+    # TODO: use `immediate` / `reason` once business rules are defined
+    await svc.cancel_subscription(subscription_id)
+
+    return success_response(
+        data={"message": "Subscription cancelled successfully"},
+        request_id=ctx.request_id,
+        correlation_id=ctx.correlation_id,
+    )

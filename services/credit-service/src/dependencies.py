@@ -9,7 +9,6 @@ from typing import Annotated, Any
 from fastapi import Depends, Request, HTTPException
 import redis.asyncio as redis
 
-from shared.database.dependencies import DBSessionDep
 from shared.messaging.jetstream_wrapper import JetStreamWrapper
 
 from .lifecycle import ServiceLifecycle

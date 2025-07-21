@@ -61,11 +61,11 @@ def create_application() -> FastAPI:
     )
 
     # Include routers
-    app.include_router(health.router, prefix="/api/v1/credits")
-    app.include_router(credits.router, prefix="/api/v1/credits")
-    app.include_router(transactions.router, prefix="/api/v1/credits")
-    app.include_router(plugin_status.router, prefix="/api/v1")
-    
+    app.include_router(health.router, prefix="/api/v1", tags=["Health"])
+    app.include_router(credits.router, prefix="/api/v1", tags=["Credits"])
+    app.include_router(transactions.router, prefix="/api/v1", tags=["Credits"])
+    app.include_router(plugin_status.router, prefix="/api/v1", tags=["Plugin Status"])
+
     return app
 
 app = create_application()
