@@ -1,0 +1,98 @@
+"""
+version: '3.8'
+
+services:
+  analytics-service:
+    build: .
+    ports:
+      - "8117:8017"  # External:Internal
+      - "9091:9090"   # Metrics
+    environment:
+      - ANALYTICS_DB_HOST=analytics-postgres
+      - ANALYTICS_DB_PORT=5432
+      - ANALYTICS_DB_NAME=analytics_db
+      - ANALYTICS_DB_USER=analytics
+      - ANALYTICS_DB_PASSWORD=password
+      - REDIS_URL=redis://analytics-redis:6379
+      - NATS_URL=nats://analytics-nats:4222
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+      - TIMESCALE_ENABLED=true
+    depends_on:
+      analytics-postgres:
+        condition: service_healthy
+      analytics-redis:
+        condition: service_healthy
+      analytics-nats:
+        condition: service_started
+    volumes:
+      - ./src:/app/src  # Hot reload
+    networks:
+      - analytics-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8017/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  analytics-postgres:
+    image: timescale/timescaledb:2.14.2-pg15
+    environment:
+      POSTGRES_DB: analytics_db
+      POSTGRES_USER: analytics
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - analytics_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql
+    networks:
+      - analytics-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics -d analytics_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analytics-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - analytics_redis_data:/data
+    networks:
+      - analytics-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analytics-nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4223:4222"
+      - "8223:8222"  # HTTP monitoring
+    command: [
+      "nats-server",
+      "--jetstream",
+      "--store_dir=/data",
+      "--http_port=8222"
+    ]
+    volumes:
+      - analytics_nats_data:/data
+    networks:
+      - analytics-network
+
+volumes:
+  analytics_postgres_data:
+  analytics_redis_data:
+  analytics_nats_data:
+
+networks:
+  analytics-network:
+    driver: bridge
+"""
+

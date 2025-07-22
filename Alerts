@@ -1,0 +1,246 @@
+ANALYTICS_ALERT_COOLDOWN_MINUTES=60
+ANALYTICS_ALERT_MAX_PER_DAY=10
+```
+
+## API Documentation
+
+### Usage Analytics
+```http
+GET /api/v1/merchants/{merchant_id}/analytics/usage
+GET /api/v1/merchants/{merchant_id}/analytics/usage/trends
+GET /api/v1/merchants/{merchant_id}/analytics/features/{feature_name}
+```
+
+### Predictions
+```http
+GET /api/v1/merchants/{merchant_id}/analytics/predictions
+GET /api/v1/merchants/{merchant_id}/analytics/predictions/churn-risk
+GET /api/v1/merchants/{merchant_id}/analytics/patterns
+```
+
+### Alerts
+```http
+POST /api/v1/merchants/{merchant_id}/analytics/alerts/rules
+GET  /api/v1/merchants/{merchant_id}/analytics/alerts/active
+POST /api/v1/merchants/{merchant_id}/analytics/alerts/{alert_id}/acknowledge
+```
+
+### Platform Analytics
+```http
+GET /api/v1/analytics/platform/overview
+GET /api/v1/analytics/platform/trends
+GET /api/v1/analytics/platform/cohorts
+```
+
+## Event Processing
+
+### Subscribed Events
+The service processes events from multiple domains:
+
+```python
+# Credit consumption
+evt.credits.consumed
+evt.credits.balance_low
+
+# AI feature usage  
+evt.ai.selfie_analyzed
+evt.ai.match_requested
+evt.ai.analysis_failed
+
+# Merchant lifecycle
+evt.merchant.created
+evt.merchant.activated
+
+# Shopify integration
+evt.shopify.app_installed
+evt.shopify.orders_created
+```
+
+### Published Events
+```python
+# Predictive alerts
+analytics.churn.detected.v1
+analytics.credits.forecast.v1
+
+# Usage intelligence
+analytics.usage.anomaly.v1
+analytics.milestone.reached.v1
+
+# Alert events
+analytics.alert.triggered.v1
+analytics.alert.resolved.v1
+```
+
+## Background Processing
+
+The service runs several background tasks:
+
+### Daily Aggregation (02:30 UTC)
+- Aggregate previous day's events
+- Calculate daily metrics per merchant
+- Update rolling window calculations
+- Detect usage patterns and anomalies
+- Update predictive models
+
+### Real-time Alert Evaluation (every 30s)
+- Evaluate active alert rules
+- Check threshold conditions
+- Trigger notifications
+- Update alert history
+
+### Weekly Model Updates (Sunday 03:00 UTC)
+- Retrain churn prediction models
+- Update credit depletion forecasts
+- Recalibrate trial conversion models
+- Validate model accuracy
+
+## Testing
+
+### Run Tests
+```bash
+# All tests
+make test
+
+# Unit tests only
+make test-unit
+
+# Integration tests only
+make test-integration
+```
+
+### Test Coverage
+The service maintains >80% test coverage with comprehensive:
+- Unit tests for services and business logic
+- Integration tests for API endpoints
+- Event processing tests
+- Database repository tests
+
+### Load Testing
+```bash
+# Performance testing
+make load-test
+
+# Prediction benchmarks
+make benchmark-predictions
+```
+
+## Monitoring & Observability
+
+### Health Checks
+```http
+GET /health        # Basic service health
+GET /metrics       # Prometheus metrics
+GET /analytics/metrics/custom  # Analytics-specific metrics
+```
+
+### Key Metrics
+- `analytics_events_processed_total{event_type, status}`
+- `analytics_predictions_total{model_type}`
+- `analytics_alerts_triggered_total{alert_type}`
+- `analytics_model_accuracy_score{model_type}`
+
+### Logging
+Structured JSON logging with correlation IDs:
+```json
+{
+  "timestamp": "2024-01-20T10:30:00Z",
+  "level": "INFO",
+  "service": "analytics-service",
+  "correlation_id": "req-123",
+  "merchant_id": "merchant-456",
+  "message": "Processing credit consumption event"
+}
+```
+
+## Data Models
+
+### Core Analytics
+- `UsageAnalytics`: Daily usage roll-ups per merchant
+- `OrderAnalytics`: Order limit tracking and forecasting  
+- `EngagementMetric`: Rolling activity metrics
+- `UsagePattern`: Detected behavioral patterns
+
+### Predictions & Alerts
+- `PredictionModel`: ML prediction outputs with validation
+- `AlertRule`: Configurable alert rules
+- `AlertHistory`: Historical alert records
+
+### Platform Metrics
+- `PlatformMetrics`: Daily platform-wide aggregates
+- `ShopifyAnalytics`: Integration health metrics
+
+## Production Deployment
+
+### Database Setup
+The service requires PostgreSQL with TimescaleDB:
+
+```sql
+-- Enable TimescaleDB extension
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- Create hypertables for time-series data
+SELECT create_hypertable('usage_analytics', 'created_at');
+SELECT create_hypertable('platform_metrics', 'date');
+```
+
+### Scaling Considerations
+- **Horizontal Scaling**: Multiple service instances for high availability
+- **Database Sharding**: TimescaleDB automatic partitioning
+- **Cache Strategy**: Redis clustering for distributed caching
+- **Event Processing**: NATS JetStream consumer groups
+
+### Performance Targets
+- **Real-time Processing**: <100ms event processing latency
+- **API Response**: <200ms P95 for standard queries
+- **Complex Analytics**: <2s P95 for complex queries
+- **Alert Delivery**: <30s from trigger to notification
+- **Availability**: 99.9% uptime with graceful degradation
+
+## Security & Compliance
+
+### Data Protection
+- AES-256 encryption for sensitive data at rest
+- GDPR-compliant data anonymization
+- Role-based access control
+- Complete audit logging
+
+### API Security
+- JWT authentication with scope-based authorization
+- Rate limiting per merchant and endpoint
+- Input validation and sanitization
+
+## Contributing
+
+### Development Workflow
+1. Create feature branch
+2. Implement changes with tests
+3. Run quality checks: `make lint`
+4. Submit PR with description
+
+### Code Quality
+- Black formatting (100 characters)
+- Type hints with mypy
+- Comprehensive test coverage
+- Pre-commit hooks for consistency
+
+### Architecture Guidelines
+- Follow microservice patterns from blueprint
+- Use shared package components
+- Implement proper error handling
+- Add structured logging and metrics
+
+## Support
+
+### Troubleshooting
+- Check service health: `make check-health`
+- Validate configuration: `make validate-config`
+- View service logs: `make docker-logs`
+
+### Common Issues
+1. **Database Connection**: Verify credentials in `.env`
+2. **Event Processing**: Check NATS connectivity
+3. **Memory Usage**: Monitor TimescaleDB memory settings
+4. **Model Accuracy**: Review prediction validation metrics
+
+For additional support, check the shared documentation or contact the platform team.
+"""

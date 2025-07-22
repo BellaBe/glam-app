@@ -1,44 +1,33 @@
+# pyproject.toml
 [tool.poetry]
-name = "connector-service"
-version = "0.1.0"
-description = "Connector Service for GLAM - Shopify integration"
-authors = ["GLAM Team"]
-readme = "README.md"
+name = "platform-connector"
+version = "1.0.0"
+description = "Platform connector service for fetching products from e-commerce platforms"
+authors = ["GlamYouUp Team"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-shared = {path = "../../shared", develop = true}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+sqlalchemy = "^2.0.23"
+asyncpg = "^0.29.0"
+alembic = "^1.13.0"
+nats-py = "^2.6.0"
 httpx = "^0.25.2"
-redis = "^5.0.1"
-cryptography = "^41.0.7"
+python-dotenv = "^1.0.0"
+shared = { path = "../../shared", develop = true }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 pytest-asyncio = "^0.21.1"
 pytest-cov = "^4.1.0"
 black = "^23.11.0"
-ruff = "^0.1.6"
+isort = "^5.12.0"
+flake8 = "^6.1.0"
 mypy = "^1.7.1"
-pre-commit = "^3.5.0"
-factory-boy = "^3.3.0"
-faker = "^20.1.0"
+pre-commit = "^3.6.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.black]
-line-length = 100
-target-version = ['py311']
-
-[tool.ruff]
-line-length = 100
-select = ["E", "F", "I", "N", "UP", "YTT", "BLE", "B", "A", "COM", "DTZ", "T10", "EM", "EXE", "ISC", "ICN", "INP", "PIE", "PT", "RSE", "SIM", "TID", "ARG", "ERA", "PD", "PGH", "PL", "TRY", "RUF"]
-ignore = ["E501", "B008", "RUF001", "RUF002", "RUF003"]
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-plugins = ["pydantic.mypy"]

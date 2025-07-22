@@ -68,3 +68,13 @@ report.xml
 *.onnx
 *.tflite
 data/
+
+# ML Models (if large, track with git-lfs)
+models/*.tflite
+
+# Analysis outputs
+*/analysis/
+
+# Temporary files
+scripts/tmp/
+

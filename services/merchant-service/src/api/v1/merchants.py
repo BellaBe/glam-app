@@ -1,29 +1,98 @@
-"""Router layer – I/O only, zero business logic."""
+# services/merchant-service/src/api/router.py
 
-from __future__ import annotations
 
-from typing import List
+# ================================================================
+# services/merchant-service/src/api/v1/merchants.py
 from uuid import UUID
-
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
-
-from ...schemas.merchant import MerchantIn, MerchantOut, MerchantPatch
-from ...services.merchant import MerchantService
-from ..responses import ApiResponse, success_response  # tiny helper, see shared/api.py
+from fastapi import APIRouter, Path, Body, status, HTTPException, Query
+from shared.api import ApiResponse, success_response, RequestContextDep
+from ...dependencies import MerchantServiceDep
+from ...schemas.merchant import MerchantResponse, MerchantConfigResponse, MerchantConfigUpdate, ActivityRecord
 from ...exceptions import MerchantNotFoundError
-from ...dependencies import RequestContextDep, merchant_service_dep
 
-router = APIRouter(prefix="/api/v1/merchants", tags=["Merchants"])
+router = APIRouter(prefix="/merchants", tags=["Merchants"])
 
-
-@router.get("/{merchant_id}", response_model=ApiResponse[MerchantOut])
+@router.get(
+    "/{merchant_id}",
+    response_model=ApiResponse[MerchantResponse],
+    summary="Get Merchant by ID",
+)
 async def get_merchant(
+    svc: MerchantServiceDep,
+    ctx: RequestContextDep,
     merchant_id: UUID = Path(...),
-    svc: MerchantService = Depends(merchant_service_dep),
-    ctx: RequestContextDep = Depends(),
 ):
+    """Get merchant by canonical UUID"""
     try:
-        out = await svc.get(merchant_id)
-        return success_response(out, ctx.request_id, ctx.correlation_id)
+        merchant = await svc.get_merchant(merchant_id)
+        return success_response(merchant, ctx.request_id, ctx.correlation_id)
     except MerchantNotFoundError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Merchant not found")
+        raise HTTPException(404, "Merchant not found")
+
+@router.get(
+    "/lookup",
+    response_model=ApiResponse[MerchantResponse],
+    summary="Lookup Merchant by Platform ID",
+)
+async def lookup_merchant(
+    svc: MerchantServiceDep,
+    ctx: RequestContextDep,
+    platform: str = Query(..., description="Platform name (e.g., 'shopify', 'woocommerce')"),
+    external_id: str = Query(..., description="Platform-specific store ID"),
+):
+    """Lookup merchant by platform-specific external ID"""
+    try:
+        merchant = await svc.lookup_merchant(platform, external_id)
+        return success_response(merchant, ctx.request_id, ctx.correlation_id)
+    except MerchantNotFoundError:
+        raise HTTPException(404, "Merchant not found")
+
+@router.get(
+    "/{merchant_id}/config",
+    response_model=ApiResponse[MerchantConfigResponse],
+    summary="Get Merchant Configuration",
+)
+async def get_merchant_config(
+    svc: MerchantServiceDep,
+    ctx: RequestContextDep,
+    merchant_id: UUID = Path(...),
+):
+    """Get merchant configuration"""
+    try:
+        merchant = await svc.get_merchant(merchant_id)
+        return success_response(merchant.configuration, ctx.request_id, ctx.correlation_id)
+    except MerchantNotFoundError:
+        raise HTTPException(404, "Merchant not found")
+
+@router.patch(
+    "/{merchant_id}/config",
+    response_model=ApiResponse[MerchantConfigResponse],
+    summary="Update Merchant Configuration",
+)
+async def update_merchant_config(
+    svc: MerchantServiceDep,
+    ctx: RequestContextDep,
+    merchant_id: UUID = Path(...),
+    config_data: MerchantConfigUpdate = Body(...),
+):
+    """Update merchant configuration"""
+    try:
+        updated_config = await svc.update_merchant_configuration(merchant_id, config_data)
+        return success_response(updated_config, ctx.request_id, ctx.correlation_id)
+    except MerchantNotFoundError:
+        raise HTTPException(404, "Merchant not found")
+
+@router.post(
+    "/{merchant_id}/activity",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Record Activity",
+)
+async def record_activity(
+    svc: MerchantServiceDep,
+    ctx: RequestContextDep,
+    merchant_id: UUID = Path(...),
+    activity_data: ActivityRecord = Body(...),
+):
+    """Record merchant activity"""
+    await svc.record_activity(merchant_id, activity_data)
+    return

@@ -1,0 +1,18 @@
+# ================================================================================================
+# config/services/catalog-analysis.yml
+# ================================================================================================
+service:
+  name: "catalog-analysis"
+api:
+  external_port: 8003
+features:
+  cache_enabled: false
+  max_retries: 3
+  timeout_seconds: 60
+catalog_analysis:
+  model_path: "services/cv_cloth/models/selfie_multiclass_256x256.tflite"
+  products_base_path: "selfie/products"
+  analysis_dir_name: "analysis"
+  default_colors: 5
+  sample_size: 20000
+  min_chroma: 8.0

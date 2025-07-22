@@ -1,0 +1,15 @@
+service:
+  name: "analytics-service"
+api:
+  external_port: 8117
+analytics:
+  batch_size: 1000
+  processing_interval_seconds: 30
+  churn_risk_threshold: 0.7
+  anomaly_detection_sensitivity: 0.95
+  timescale_enabled: true
+```
+
+### Environment Variables
+
+```bash

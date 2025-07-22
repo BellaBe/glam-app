@@ -1,0 +1,30 @@
+clean:
+	find . -type d -name __pycache__ -delete
+	find . -name "*.pyc" -delete
+	docker-compose down -v
+
+# Full setup
+setup-dev: dev migrate generate-sample-data
+	@echo "Analytics service development environment ready!"
+
+# Production readiness checks
+check-health:
+	curl -f http://localhost:8117/health || exit 1
+
+check-metrics:
+	curl -f http://localhost:8117/metrics || exit 1
+
+check-custom-metrics:
+	curl -f http://localhost:8117/analytics/metrics/custom || exit 1
+
+validate-config:
+	poetry run python -c "from src.config import config; print('Config valid:', config.service_name)"
+
+# Performance testing
+load-test:
+	poetry run python scripts/load_test.py
+
+benchmark-predictions:
+	poetry run python scripts/benchmark_predictions.py
+"""
+

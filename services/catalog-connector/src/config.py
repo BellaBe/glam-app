@@ -1,80 +1,60 @@
-# File: services/connector-service/src/config.py
+# src/config.py
+import os
+from functools import lru_cache
+from pydantic import BaseModel, Field
+from shared.config.loader import merged_config, flatten_config
+from shared.database import create_database_config
 
-"""
-Configuration for Connector Service.
-
-Environment variables use CONNECTOR_ prefix to avoid conflicts.
-"""
-
-from typing import Optional
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from shared.database import DatabaseConfig
-
-class ServiceConfig(BaseSettings):
-    """Connector service configuration."""
+class ConnectorServiceConfig(BaseModel):
+    """Platform connector service configuration"""
+    # Service Identity
+    service_name: str = Field(..., alias="service.name")
+    service_version: str = Field(..., alias="service.version")
+    environment: str
+    debug: bool
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-    )
+    # Infrastructure
+    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
+    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Service Info
-    SERVICE_NAME: str = "connector-service"
-    SERVICE_VERSION: str = "0.1.0"
-    ENV: str = Field("development", pattern="^(development|staging|production)$")
-    LOG_LEVEL: str = Field("INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+    # Database (for tracking operations)
+    db_enabled: bool = Field(True, alias="database.enabled")
     
-    # Database Configuration - uses CONNECTOR_ prefix
-    DB_ENABLED: bool = True
-    database_config: Optional[DatabaseConfig] = None
-    
-    # NATS Configuration
-    NATS_SERVERS: str = "nats://localhost:4222"
-    
-    # Redis Configuration
-    REDIS_URL: str = "redis://localhost:6379/2"
+    # Logging
+    logging_level: str = Field(..., alias="logging.level")
+    logging_format: str = Field(..., alias="logging.format")
     
     # Shopify Configuration
-    SHOPIFY_API_VERSION: str = "2024-01"
-    SHOPIFY_RATE_LIMIT: int = 4  # requests per second
-    SHOPIFY_TIMEOUT: int = 30  # seconds
-    MAX_RETRIES: int = 3
-    BACKOFF_FACTOR: float = 2.0
+    shopify_api_version: str = Field("2024-01", alias="connector.shopify_api_version")
+    shopify_bulk_poll_interval_sec: int = Field(10, alias="connector.shopify_bulk_poll_interval_sec")
+    shopify_bulk_timeout_sec: int = Field(600, alias="connector.shopify_bulk_timeout_sec")
+    shopify_rate_limit_per_sec: int = Field(4, alias="connector.shopify_rate_limit_per_sec")
     
-    # Security
-    ENCRYPTION_KEY: str = Field(..., min_length=32)
+    # Rate limiting
+    rate_limit_window_sec: int = Field(60, alias="connector.rate_limit_window_sec")
     
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Initialize database config with CONNECTOR_ prefix
-        if self.DB_ENABLED:
-            self.database_config = DatabaseConfig(
-                DB_HOST=kwargs.get('CONNECTOR_DB_HOST', 'localhost'),
-                DB_PORT=kwargs.get('CONNECTOR_DB_PORT', 5436),
-                DB_NAME=kwargs.get('CONNECTOR_DB_NAME', 'connector_db'),
-                DB_USER=kwargs.get('CONNECTOR_DB_USER', 'connector_user'),
-                DB_PASSWORD=kwargs.get('CONNECTOR_DB_PASSWORD', 'connector_pass'),
-                DB_ECHO=kwargs.get('CONNECTOR_DB_ECHO', False),
-                DB_POOL_SIZE=kwargs.get('CONNECTOR_DB_POOL_SIZE', 20),
-                DB_MAX_OVERFLOW=kwargs.get('CONNECTOR_DB_MAX_OVERFLOW', 10),
-            )
+    # Processing
+    batch_size: int = Field(100, alias="connector.batch_size")
+    max_retries: int = Field(3, alias="connector.max_retries")
+    
+    @property
+    def database_config(self):
+        """Get database configuration with CONNECTOR prefix"""
+        return create_database_config("CONNECTOR_")
+    
+    @property
+    def nats_servers(self) -> list[str]:
+        return [self.infrastructure_nats_url]
+    
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
 
+@lru_cache
+def get_connector_config() -> ConnectorServiceConfig:
+    """Load and cache connector service configuration"""
+    cfg_dict = merged_config("platform-connector", env_prefix="CONNECTOR")
+    flattened = flatten_config(cfg_dict)
+    return ConnectorServiceConfig(**flattened)
 
-def get_service_config() -> ServiceConfig:
-    """Get service configuration."""
-    import os
-    from pydantic import ValidationError
-    from pathlib import Path
-    
-    ENV_FILE = Path(__file__).parent.parent / ".env"
-    
-    try:
-        config = ServiceConfig(_env_file=str(ENV_FILE) if ENV_FILE.exists() else None)
-        return config
-    except ValidationError as exc:
-        print("\n=== Validation Error Details ===")
-        for error in exc.errors():
-            print(f"Field: {error['loc']}, Type: {error['type']}, Message: {error['msg']}")
-        raise
+config = get_connector_config()

@@ -1,63 +1,76 @@
-# services/catalog-ai-apparel/Dockerfile
-# -------------------
-# 🛠 Stage 1: Builder
-# -------------------
+# ================================================================================================
+# services/catalog-analysis/Dockerfile
+# ================================================================================================
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 1 ─ Builder
+# ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
-
-RUN pip install --no-cache-dir poetry==1.7.1
-
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV POETRY_NO_INTERACTION=1
 
 WORKDIR /app
 
-ARG CACHE_BUSTER=1
-
-# Install shared package
-COPY shared /shared
-RUN pip install --no-cache-dir -e /shared
-
-ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
-
-# Install service dependencies
-COPY services/catalog-ai-apparel/pyproject.toml services/catalog-ai-apparel/poetry.lock /app/
-
-RUN poetry install --no-root --no-ansi && rm -rf ~/.cache/pypoetry ~/.cache/pip
-
-# Copy service code
-COPY services/catalog-ai-apparel /app
-
-# -------------------
-# 📦 Stage 2: Runtime
-# -------------------
-FROM python:3.11-slim
-
-# Install system dependencies for ML
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies for OpenCV and ML libraries
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
-    libglu1-mesa \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry==1.7.1
+# Install Poetry
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
 
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV POETRY_NO_INTERACTION=1
+# ---- 1️⃣  Install shared package dependencies
+COPY shared /shared
+WORKDIR /shared
+RUN poetry install --no-dev
 
+# ---- 2️⃣  Install service dependencies  
 WORKDIR /app
+COPY services/catalog-analysis/pyproject.toml services/catalog-analysis/poetry.lock* ./
+RUN poetry install --no-dev --no-interaction --no-ansi
 
-ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
+# ---- 3️⃣  Copy service code
+COPY services/catalog-analysis /app
 
-# Copy from builder
+# ---- 4️⃣  Copy config
+COPY config /app/config
+
+# ---- 5️⃣  Copy model file
+COPY services/cv_cloth/models /app/models
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime  
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Install runtime dependencies for OpenCV
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy everything from builder
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 COPY --from=builder /shared /shared
 
-# Create models directory
-RUN mkdir -p /app/models
+ENV PYTHONPATH="/shared:/app"
+WORKDIR /app
 
-# Start the worker
-CMD ["poetry", "run", "python", "-m", "src.main"]
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import asyncio; print('Service running')" || exit 1
+
+CMD ["python", "-m", "src.main"]

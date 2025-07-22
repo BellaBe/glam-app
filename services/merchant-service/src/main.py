@@ -1,15 +1,12 @@
 # services/merchant-service/src/main.py
-from fastapi import FastAPI
 from contextlib import asynccontextmanager
-
+from fastapi import FastAPI
 from shared.api import setup_middleware
+from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
-
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
-
-from .api.v1 import health
-
+from .api.v1 import router as merchants_router
 
 # Create lifecycle manager
 config = get_service_config()
@@ -18,71 +15,34 @@ lifecycle = ServiceLifecycle(config, logger)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan management"""
+    """Manage application lifecycle"""
+    # Startup
+    await lifecycle.startup()
     
-    logger.info(
-        f"Starting {config.service_name}",
-        extra={
-            "version": config.service_version,
-            "environment": config.environment,
-            "api_host": config.api_host,
-            "api_port": config.effective_port,
-        }
-    )
-    
+    # Store dependencies in app state
     app.state.lifecycle = lifecycle
     app.state.config = config
-    app.state.logger = logger
     
-    try:
-        await lifecycle.startup()
-        logger.info("Merchant Service started successfully")
-        yield
-    finally:
-        logger.info("Shutting down Merchant Service")
-        await lifecycle.shutdown()
-        logger.info("Merchant Service stopped")
-        
-def create_application() -> FastAPI:
-
-    # Create FastAPI app
-    app = FastAPI(
-        title=config.service_name,
-        version=config.service_version,
-        lifespan=lifespan,
-        description="Merchant management service",
-        exception_handlers={}  # Use shared middleware for exception handling
-    )
-
-    setup_middleware(
-        app,
-        service_name=config.service_name,
-        enable_metrics=True
-    )
-
-    # Include routers
-    app.include_router(health.router, prefix="/api/v1", tags=["Health"])
-
-    return app
-
-app = create_application()
-
-if __name__ == "__main__":
-    import uvicorn
+    yield
     
-    # Smart port selection
-    port = config.effective_port
-    
-    logger.info(f"Starting server", extra={
-        "internal_port": config.api_port,
-        "external_port": config.api_external_port,
-        "effective_port": port,
-        "environment": config.environment
-    })
-    
-    uvicorn.run(
-        "src.main:app",
-        host=config.api_host,
-        port=port,
-        reload=config.debug
-    )
+    # Shutdown
+    await lifecycle.shutdown()
+
+# Create FastAPI app
+app = FastAPI(
+    title=config.service_name,
+    version=config.service_version,
+    lifespan=lifespan
+)
+
+# Setup middleware from shared package
+setup_middleware(
+    app,
+    service_name=config.service_name,
+    enable_metrics=True,
+    metrics_path="/metrics"
+)
+
+# Add routers
+app.include_router(create_health_router(config.service_name), prefix="/health", tags=["Health"])
+app.include_router(merchants_router, prefix="/api/v1", tags=["Merchants"])
