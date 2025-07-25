@@ -36,6 +36,7 @@ class ServiceLifecycle:
 
         # messaging helpers
         self.email_send_publisher: Optional[EmailSendPublisher] = None
+        
         self._listeners:  list = []
 
         # repositories & services
@@ -83,29 +84,14 @@ class ServiceLifecycle:
     # ====================================================== init helpers
     async def _init_messaging(self) -> None:
         self.messaging_client = JetStreamClient(self.logger)
+        
         await self.messaging_client.connect([self.config.infrastructure_nats_url])
-        self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
-
-        # create NOTIFICATION stream (private, optional)
-        js = self.messaging_client.js
-        cfg = StreamConfig(
-            name="NOTIFICATION",
-            subjects=["cmd.notification.*", "evt.notification.*"],
-            retention=RetentionPolicy.LIMITS,
-            max_age=7 * 24 * 60 * 60,
-            max_msgs=1_000_000,
-            max_bytes=1_024 ** 3,
-            storage=StorageType.FILE,
-            duplicate_window=60,
-        )
-        try:
-            await js.stream_info("NOTIFICATION")
-        except Exception:
-            await js.add_stream(cfg)
-            self.logger.info("Created NOTIFICATION stream")
-
-        # publisher
+        
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        
         self.email_send_publisher = EmailSendPublisher(self.messaging_client, self.logger)
+        
+        self.logger.info("Messaging client and publisher initialized")
 
     # ------------------------------------------------------------------ DB
     async def _init_database(self) -> None:

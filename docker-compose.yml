@@ -431,7 +431,6 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       APP_ENV: ${APP_ENV:-prod}
       ENABLE_METRICS: ${ENABLE_METRICS}
-      ENABLE_TRACING: ${ENABLE_TRACING}
     ports:
       - "8002:8000"
     networks:

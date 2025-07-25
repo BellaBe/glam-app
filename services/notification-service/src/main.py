@@ -50,7 +50,7 @@ def create_application() -> FastAPI:
     setup_middleware(
         app,
         service_name=config.service_name,
-        enable_metrics=True
+        enable_metrics=config.monitoring_metrics_enabled
     )
     
     # Include routers

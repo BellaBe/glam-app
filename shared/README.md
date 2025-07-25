@@ -272,7 +272,7 @@ poetry run pdoc shared --html
 
 ### Logging Features
 - **Structured Logging**: JSON in production, console in development
-- **Request Context**: Automatic request_id, correlation_id, trace_id
+- **Request Context**: Automatic request_id, correlation_id
 - **File Rotation**: Automatic log rotation in production
 - **Environment-Aware**: Different formats per environment
 

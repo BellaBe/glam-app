@@ -11,7 +11,6 @@ their own domain-specific metrics.
 
 import time
 import re
-from typing import Dict, Any, Optional, Callable
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response

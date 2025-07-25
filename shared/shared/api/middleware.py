@@ -18,10 +18,8 @@ from fastapi.exceptions import RequestValidationError, HTTPException
 from ..errors import GlamBaseError
 from ..metrics import PrometheusMiddleware, metrics_endpoint
 
-from .models import ErrorDetail
 from .responses import error_response
 from .correlation import get_correlation_id, set_correlation_context
-from .tracing import TracingMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +160,6 @@ def setup_middleware(
     app: FastAPI,
     *,
     service_name: str,
-    enable_tracing: bool = True,
     enable_metrics: bool = True,
     metrics_path: str = "/metrics",
 ):
@@ -192,9 +189,6 @@ def setup_middleware(
             include_in_schema=False,
             tags=["monitoring"]
         )
-
-    if enable_tracing:
-        app.add_middleware(TracingMiddleware)
 
     # Add API middleware for standardized responses
     app.add_middleware(APIMiddleware, service_name=service_name)

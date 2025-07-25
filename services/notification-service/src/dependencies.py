@@ -72,3 +72,5 @@ def _notification_service(lc: LifecycleDep) -> NotificationService:
 
 TemplateServiceDep     = Annotated[TemplateService,     Depends(_template_service)]
 NotificationServiceDep = Annotated[NotificationService, Depends(_notification_service)]
+
+
