@@ -774,7 +774,7 @@ src/
 │   │           }
 │   │           
 │   │           return await self.publish_event_response(
-│   │               event_type="evt.credits.account.created",
+│   │               subject="evt.credits.account.created",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id,
 │   │               idempotency_key=f"account_created_{merchant_id}"
@@ -809,7 +809,7 @@ src/
 │   │               payload.update(metadata)
 │   │           
 │   │           return await self.publish_event_response(
-│   │               event_type="evt.credits.recharged",
+│   │               subject="evt.credits.recharged",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id,
 │   │               idempotency_key=f"recharge_{merchant_id}_{reference_id}"
@@ -831,7 +831,7 @@ src/
 │   │           }
 │   │           
 │   │           return await self.publish_event_response(
-│   │               event_type="evt.credits.low_balance_reached",
+│   │               subject="evt.credits.low_balance_reached",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id
 │   │           )
@@ -848,7 +848,7 @@ src/
 │   │           }
 │   │           
 │   │           return await self.publish_event_response(
-│   │               event_type="evt.credits.balance_exhausted",
+│   │               subject="evt.credits.balance_exhausted",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id
 │   │           )
@@ -870,7 +870,7 @@ src/
 │   │           }
 │   │           
 │   │           return await self.publish_event_response(
-│   │               event_type="evt.credits.plugin_status_changed",
+│   │               subject="evt.credits.plugin_status_changed",
 │   │               payload=payload,
 │   │           )
 │   │   ```
@@ -886,7 +886,7 @@ src/
 │       class OrderUpdatedSubscriber(DomainEventSubscriber):
 │           
 │           @property
-│           def event_type(self) -> str:
+│           def subject(self) -> str:
 │               return CreditEvents.ORDER_UPDATED
 │           
 │           @property
@@ -913,7 +913,7 @@ src/
 │       class TrialCreditsSubscriber(DomainEventSubscriber):
 │           
 │           @property
-│           def event_type(self) -> str:
+│           def subject(self) -> str:
 │               return CreditEvents.ACCOUNT_CREATED
 │           
 │           @property
@@ -943,7 +943,7 @@ src/
 │       class SubscriptionSubscriber(DomainEventSubscriber):
 │           
 │           @property
-│           def event_type(self) -> str:
+│           def subject(self) -> str:
 │               return CreditEvents.SUBSCRIPTION_RENEWED
 │           
 │           @property
@@ -973,7 +973,7 @@ src/
 │       class MerchantCreatedSubscriber(DomainEventSubscriber):
 │           
 │           @property
-│           def event_type(self) -> str:
+│           def subject(self) -> str:
 │               return CreditEvents.MERCHANT_CREATED
 │           
 │           @property
@@ -3645,7 +3645,7 @@ src/
     events_published_total = Counter(
         "credits_events_published_total",
         "Total events published",
-        ["event_type"]
+        ["subject"]
     )
     
     
@@ -3680,9 +3680,9 @@ src/
         plugin_status_distribution.labels(status=status).set(count)
     
     
-    def increment_event_published(event_type: str):
+    def increment_event_published(subject: str):
         """Increment events published counter"""
-        events_published_total.labels(event_type=event_type).inc()
+        events_published_total.labels(subject=subject).inc()
     ```
     
 tests/
@@ -4441,7 +4441,7 @@ PLUGIN_STATUS_CACHE_TTL=15
 - `credits_balance_total{merchant_id}` - Current balances
 - `credits_transactions_total{type,reference_type}` - Transaction counts
 - `credits_plugin_status_checks_total{status}` - Plugin status checks
-- `credits_events_published_total{event_type}` - Published events
+- `credits_events_published_total{subject}` - Published events
 
 ### Health Checks
 - Database connectivity

@@ -3,7 +3,7 @@
 # ================================================================================================
 from typing import Annotated
 from fastapi import Depends
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from shared.messaging.jetstream_client import JetStreamWrapper
 from .lifecycle import ServiceLifecycle
 from .services.catalog_analysis_service import CatalogAnalysisService
 from .events.publishers import CatalogAnalysisEventPublisher

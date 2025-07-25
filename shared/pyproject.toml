@@ -16,6 +16,7 @@ alembic = "^1.16.2"
 pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
+uuid7 = "^0.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

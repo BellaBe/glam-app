@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 
-class ItemOut(BaseModel):
+class CatalogItemOut(BaseModel):
     """Output DTO for catalog item"""
     id: UUID
     shop_id: str
@@ -42,9 +42,39 @@ class ItemOut(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
-class ItemWithAnalysisOut(ItemOut):
+class ItemWithAnalysisOut(CatalogItemOut):
     """Item with analysis results"""
     analysis: Optional[Dict[str, Any]] = None
+
+
+class CatalogItemIn(BaseModel):
+    """Input DTO for creating items"""
+    shop_id: str
+    product_id: str
+    variant_id: str
+    image_id: Optional[str] = None
+    product_title: Optional[str] = None
+    product_description: Optional[str] = None
+    product_vendor: Optional[str] = None
+    product_type: Optional[str] = None
+    product_tags: Optional[list[str]] = None
+    variant_title: Optional[str] = None
+    variant_sku: Optional[str] = None
+    variant_price: Optional[float] = None
+    variant_inventory: int = 0
+    variant_options: Optional[str] = None
+    image_url: Optional[str] = None
+    gender: str = "unisex"
+    shopify_created_at: Optional[datetime] = None
+    shopify_updated_at: Optional[datetime] = None
+
+class CatalogItemPatch(BaseModel):
+    """Patch DTO for updating items"""
+    sync_status: Optional[str] = None
+    analysis_status: Optional[str] = None
+    cached_image_path: Optional[str] = None
+    synced_at: Optional[datetime] = None
+    requeued_at: Optional[datetime] = None
 
 class ProductSearchParams(BaseModel):
     """Search parameters for products"""

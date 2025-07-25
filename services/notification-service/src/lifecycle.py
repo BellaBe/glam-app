@@ -1,81 +1,64 @@
-# services/notification_service/src/lifecycle.py
-"""
-Process-wide lifecycle manager for the Notification Service.
-
-• Connects to NATS / JetStream and ensures NOTIFICATION stream exists
-• Opens async SQLAlchemy engine and auto-creates tables
-• Builds repositories (DB-backed) + their services
-• Instantiates NotificationService with all dependencies
-• Starts JetStream subscribers as background tasks
-• Cleans everything up on shutdown
-"""
-
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional, cast
+from typing import List, Optional
 
 from nats.js.api import StreamConfig, RetentionPolicy, StorageType
 
 from shared.utils.logger import ServiceLogger
 from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from shared.messaging.jetstream_client import JetStreamClient
 
 from .config import ServiceConfig
 from .services.email_service import EmailService
 from .services.notification_service import NotificationService
-from .services.template_service   import TemplateService
-
-# repositories --------------------------------------------------------------
+from .services.template_service import TemplateService
 from .repositories.notification_repository import NotificationRepository
-
-
-# models ----------------------------------------------------------------
 from .models.notification import Notification
 
-# events / subs -------------------------------------------------------------
-from .events.publishers import NotificationEventPublisher
-from .events.subscribers   import SendEmailSubscriber, SendBulkEmailSubscriber
-
-# domain mappers --------------------------------------------------------
+# messaging
+from .events.publishers   import EmailSendPublisher
+from .events.listeners import SendEmailListener, SendBulkEmailListener
 from .mappers.notification_mapper import NotificationMapper
 
 
 class ServiceLifecycle:
     """Owns singletons that must exist exactly once per process."""
 
+    # ------------------------------------------------------------------ ctor
     def __init__(self, config: ServiceConfig, logger: ServiceLogger) -> None:
-        self.config = config
-        self.logger = logger
+        self.config  = config
+        self.logger  = logger
 
-        # external connections
-        self.messaging_wrapper: Optional[JetStreamWrapper]        = None
-        self.db_manager:        Optional[DatabaseSessionManager]  = None
+        # shared connections
+        self.messaging_client: Optional[JetStreamClient] = None
+        self.db_manager:      Optional[DatabaseSessionManager] = None
 
-        # repositories
+        # messaging helpers
+        self.email_send_publisher: Optional[EmailSendPublisher] = None
+        self._listeners:  list = []
+
+        # repositories & services
         self.notification_repo: Optional[NotificationRepository] = None
+        self.email_service:      Optional[EmailService]         = None
+        self.template_service:   Optional[TemplateService]      = None
+        self.notification_service: Optional[NotificationService] = None
 
-        # utils / domain services
-        self.email_service:       Optional[EmailService]              = None
-        self.template_service:    Optional[TemplateService]           = None
-        self.notification_service:Optional[NotificationService]     = None
-        self.notification_mapper: Optional[NotificationMapper] = None
-
-        # bookkeeping
+        # housekeeping
         self._tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
 
-    # ─────────────────────────── FastAPI lifespan hooks ────────────────────
+    # ============================================================= lifespan
     async def startup(self) -> None:
         try:
             await self._init_messaging()
             await self._init_database()
             self._init_repositories()
             self._init_local_services()
-            await self._init_subscribers()
+            await self._init_listeners()
             self.logger.info("%s started successfully", self.config.service_name)
         except Exception:
-            self.logger.critical("Service failed to start")
+            self.logger.critical("Service failed to start", exc_info=True)
             await self.shutdown()
             raise
 
@@ -87,29 +70,33 @@ class ServiceLifecycle:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
-        if self.messaging_wrapper:
-            await self.messaging_wrapper.close()
+        for lst in self._listeners:
+            await lst.stop()
+
+        if self.messaging_client:
+            await self.messaging_client.close()
         if self.db_manager:
             await self.db_manager.close()
 
         self.logger.info("%s shutdown complete", self.config.service_name)
 
-    # ───────────────────────────── init helpers ────────────────────────────
+    # ====================================================== init helpers
     async def _init_messaging(self) -> None:
-        self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
+        self.messaging_client = JetStreamClient(self.logger)
+        await self.messaging_client.connect([self.config.infrastructure_nats_url])
         self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
 
-        js = self.messaging_wrapper.js
+        # create NOTIFICATION stream (private, optional)
+        js = self.messaging_client.js
         cfg = StreamConfig(
-            name      = "NOTIFICATION",
-            subjects  = ["cmd.notification.*", "evt.notification.*"],
-            retention = RetentionPolicy.LIMITS,
-            max_age   = 7 * 24 * 60 * 60,
-            max_msgs  = 1_000_000,
-            max_bytes = 1_024 ** 3,
-            storage   = StorageType.FILE,
-            duplicate_window = 60,
+            name="NOTIFICATION",
+            subjects=["cmd.notification.*", "evt.notification.*"],
+            retention=RetentionPolicy.LIMITS,
+            max_age=7 * 24 * 60 * 60,
+            max_msgs=1_000_000,
+            max_bytes=1_024 ** 3,
+            storage=StorageType.FILE,
+            duplicate_window=60,
         )
         try:
             await js.stream_info("NOTIFICATION")
@@ -117,12 +104,14 @@ class ServiceLifecycle:
             await js.add_stream(cfg)
             self.logger.info("Created NOTIFICATION stream")
 
+        # publisher
+        self.email_send_publisher = EmailSendPublisher(self.messaging_client, self.logger)
+
+    # ------------------------------------------------------------------ DB
     async def _init_database(self) -> None:
         if not (self.config.db_enabled and self.config.database_config):
             self.logger.warning("DB disabled; repositories will not be initialised")
             return
-        
-        print("Database URL:", self.config.database_config.database_url)
 
         self.db_manager = DatabaseSessionManager(
             database_url=self.config.database_config.database_url,
@@ -138,27 +127,17 @@ class ServiceLifecycle:
         async with self.db_manager.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    # ---------------------------------------------------------------- repos
     def _init_repositories(self) -> None:
-        """Create repository singletons (requires DB)."""
         if not self.db_manager:
             return
+        self.notification_repo = NotificationRepository(
+            Notification,
+            self.db_manager.session_factory,
+        )
 
-        session_factory = self.db_manager.session_factory
-        self.notification_repo = NotificationRepository(Notification, session_factory)
-
+    # ---------------------------------------------------------- local services
     def _init_local_services(self) -> None:
-
-        # self.email_service = EmailService(
-        #     {
-        #         "primary_provider":  self.config.email_primary_provider,
-        #         "fallback_provider": self.config.email_fallback_provider,
-        #         "sendgrid_config":   self.config.sendgrid_config.model_dump(),
-        #         "ses_config":        self.config.ses_config.model_dump(),
-        #         "smtp_config":       self.config.smtp_config.model_dump(),
-        #     },
-        #     self.logger,
-        # )
-        
         self.email_service = EmailService(
             {
                 "primary_provider":  self.config.email_primary_provider,
@@ -169,47 +148,44 @@ class ServiceLifecycle:
             },
             self.logger,
         )
-        
-        self.template_service = TemplateService(
-            config=self.config,
-            logger= self.logger,
-        )
-    
 
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper is not initialized")
-        
-        publisher = cast(
-            NotificationEventPublisher,
-            self.messaging_wrapper.create_publisher(NotificationEventPublisher),
-        )
+        self.template_service = TemplateService(self.config, self.logger)
 
-        if not self.notification_repo:
-            raise RuntimeError("Notification repository is not initialized")
-        
+        if not (self.messaging_client and self.email_send_publisher and self.notification_repo):
+            raise RuntimeError("Messaging or DB not initialised")
+
         self.notification_service = NotificationService(
-            config                  = self.config,
-            publisher               = publisher,
-            email_service           = self.email_service,
-            template_service        = self.template_service,
-            notification_repository = self.notification_repo,
-            notification_mapper     = NotificationMapper(),
-            logger                  = self.logger,
+            config=self.config,
+            email_service=self.email_service,
+            template_service=self.template_service,
+            notification_repository=self.notification_repo,
+            notification_mapper=NotificationMapper(),
+            logger=self.logger,
         )
 
-    async def _init_subscribers(self) -> None:
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper not initialized")
-        
-        # ⚠️ Register deps BEFORE launching subscribers – they may receive a
-        # message immediately after pull_subscribe().
-        self.messaging_wrapper.register_dependency("notification_service", self.notification_service)
-        self.messaging_wrapper.register_dependency("logger", self.logger)
-        
-        # Start subscribers - wrapper provides dependencies
-        await self.messaging_wrapper.start_subscriber(SendEmailSubscriber)
-        await self.messaging_wrapper.start_subscriber(SendBulkEmailSubscriber)
-    # ──────────────────────────── convenience tools ───────────────────────
+    # -------------------------------------------------------------- listeners
+    async def _init_listeners(self) -> None:
+        if not (self.messaging_client and self.notification_service and self.email_send_publisher):
+            raise RuntimeError("Messaging or service layer not ready")
+
+        email_listener = SendEmailListener(
+            js_client=self.messaging_client,
+            publisher=self.email_send_publisher,
+            svc=self.notification_service,
+            logger=self.logger,
+        )
+        bulk_listener = SendBulkEmailListener(
+            js_client=self.messaging_client,
+            publisher=self.email_send_publisher,
+            svc=self.notification_service,
+            logger=self.logger,
+        )
+
+        await email_listener.start()
+        await bulk_listener.start()
+        self._listeners.extend([email_listener, bulk_listener])
+
+    # ================================================= convenience helpers
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)
         self._tasks.append(t)

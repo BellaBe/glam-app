@@ -671,7 +671,7 @@ src/
 │   │           # Create event context
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=NotificationEvents.NOTIFICATION_EMAIL_SENT,
+│   │               subject=NotificationEvents.NOTIFICATION_EMAIL_SENT,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override or "default-service-name",
@@ -694,7 +694,7 @@ src/
 │   │           )
 │   │   
 │   │           # Log event publication
-│   │           self.logger.info(f"Publishing {context.event_type}", extra=context.to_dict())
+│   │           self.logger.info(f"Publishing {context.subject}", extra=context.to_dict())
 │   │   
 │   │           return await self.publish_event_response(
 │   │               NotificationEvents.NOTIFICATION_EMAIL_SENT,
@@ -720,7 +720,7 @@ src/
 │   │           # Create event context
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=NotificationEvents.NOTIFICATION_EMAIL_FAILED,
+│   │               subject=NotificationEvents.NOTIFICATION_EMAIL_FAILED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override or "default-service-name",
@@ -746,7 +746,7 @@ src/
 │   │   
 │   │           # Log event publication
 │   │           self.logger.warning(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={**context.to_dict(), "error": error, "error_code": error_code},
 │   │           )
 │   │   
@@ -774,7 +774,7 @@ src/
 │   │           # Create event context
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED,
+│   │               subject=NotificationEvents.NOTIFICATION_BULK_SEND_COMPLETED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override or "default-service-name",
@@ -803,7 +803,7 @@ src/
 │   │   
 │   │           # Log event publication
 │   │           self.logger.info(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={
 │   │                   **context.to_dict(),
 │   │                   "total_sent": total_sent,
@@ -838,7 +838,7 @@ src/
 │           """Single email send subscriber"""
 │           
 │           @property
-│           def event_type(self) -> str:
+│           def subject(self) -> str:
 │               return NotificationCommands.NOTIFICATION_SEND_EMAIL  # ✅ Correct override
 │       
 │           @property
@@ -859,7 +859,7 @@ src/
 │           """Bulk email send subscriber"""
 │       
 │           @property
-│           def event_type(self)-> str:
+│           def subject(self)-> str:
 │               return NotificationCommands.NOTIFICATION_SEND_BULK
 │           
 │           @property

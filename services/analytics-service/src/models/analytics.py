@@ -2,7 +2,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Integer, Boolean, Date, DateTime, Numeric, JSON, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from uuid import UUID, uuid4
-from datetime import datetime, date
+from datetime import datetime, date as dt_date
 from decimal import Decimal
 from typing import Optional, Any, Dict, List
 from shared.database.base import Base, TimestampedMixin, MerchantMixin
@@ -16,7 +16,7 @@ class UsageAnalytics(Base, TimestampedMixin, MerchantMixin):
     __tablename__ = "usage_analytics"
     
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    date: Mapped[date] = mapped_column(Date, nullable=False)
+    date: Mapped[dt_date] = mapped_column(Date, nullable=False)
     
     # Feature usage breakdown (JSON)
     feature_usage: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)

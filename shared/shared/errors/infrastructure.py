@@ -10,9 +10,9 @@ from .base import InfrastructureError
 
 class DatabaseError(InfrastructureError):
     """Database operation failed."""
-    
+
     code = "DATABASE_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -23,7 +23,7 @@ class DatabaseError(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, service="database", **kwargs)
-        
+
         if operation:
             self.details["operation"] = operation
         if table:
@@ -34,9 +34,9 @@ class DatabaseError(InfrastructureError):
 
 class RedisError(InfrastructureError):
     """Redis operation failed."""
-    
+
     code = "REDIS_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -46,7 +46,7 @@ class RedisError(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, service="redis", **kwargs)
-        
+
         if operation:
             self.details["operation"] = operation
         if key:
@@ -55,9 +55,9 @@ class RedisError(InfrastructureError):
 
 class S3Error(InfrastructureError):
     """S3 operation failed."""
-    
+
     code = "S3_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -69,7 +69,7 @@ class S3Error(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, service="s3", **kwargs)
-        
+
         if operation:
             self.details["operation"] = operation
         if bucket:
@@ -82,9 +82,9 @@ class S3Error(InfrastructureError):
 
 class UpstreamServiceError(InfrastructureError):
     """Upstream service call failed."""
-    
+
     code = "UPSTREAM_SERVICE_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -96,7 +96,7 @@ class UpstreamServiceError(InfrastructureError):
         **kwargs
     ):
         super().__init__(message, service=upstream_service, **kwargs)
-        
+
         if upstream_status:
             self.details["upstream_status"] = upstream_status
         if upstream_error:
@@ -107,10 +107,10 @@ class UpstreamServiceError(InfrastructureError):
 
 class CircuitOpenError(InfrastructureError):
     """Circuit breaker is open."""
-    
+
     code = "CIRCUIT_OPEN"
     status = 503
-    
+
     def __init__(
         self,
         message: str,
@@ -126,7 +126,7 @@ class CircuitOpenError(InfrastructureError):
             retryable=False,  # Don't retry when circuit is open
             **kwargs
         )
-        
+
         if failure_count:
             self.details["failure_count"] = failure_count
         if open_until:
@@ -135,9 +135,9 @@ class CircuitOpenError(InfrastructureError):
 
 class MessageBusError(InfrastructureError):
     """Message bus operation failed."""
-    
+
     code = "MESSAGE_BUS_ERROR"
-    
+
     def __init__(
         self,
         message: str,
@@ -145,16 +145,16 @@ class MessageBusError(InfrastructureError):
         operation: Optional[str] = None,
         stream: Optional[str] = None,
         subject: Optional[str] = None,
-        event_type: Optional[str] = None,
+        subject: Optional[str] = None,
         **kwargs
     ):
         super().__init__(message, service="nats", **kwargs)
-        
+
         if operation:
             self.details["operation"] = operation
         if stream:
             self.details["stream"] = stream
         if subject:
             self.details["subject"] = subject
-        if event_type:
-            self.details["event_type"] = event_type
+        if subject:
+            self.details["subject"] = subject

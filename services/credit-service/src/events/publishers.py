@@ -2,7 +2,6 @@
 """Event publishers for separated credit services."""
 
 
-
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from uuid import UUID
@@ -18,9 +17,10 @@ from shared.events.base_publisher import DomainEventPublisher
 
 class CreditEventPublisher(DomainEventPublisher):
     """Publisher for credit domain events"""
+
     domain_stream = Streams.CREDIT
     service_name_override = "credit-service"
-    
+
     def __init__(self, client, js, logger=None):
         super().__init__(client, js, logger)
         self.context_manager = EventContextManager(logger or self.logger)
@@ -30,21 +30,20 @@ class CreditEventPublisher(DomainEventPublisher):
         self,
         merchant_id: UUID,
         initial_balance: int,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
     ) -> str:
         """Publish credit account created event"""
         payload = {
             "merchant_id": str(merchant_id),
-            "initial_balance": float(initial_balance)
+            "initial_balance": float(initial_balance),
         }
-        
+
         return await self.publish_event_response(
-            event_type="evt.credits.account.created",
+            subject="evt.credits.account.created",
             payload=payload,
             correlation_id=correlation_id,
-            idempotency_key=f"account_created_{merchant_id}"
+            idempotency_key=f"account_created_{merchant_id}",
         )
-
 
     # Transaction Events
     async def publish_credits_updated(
@@ -57,7 +56,7 @@ class CreditEventPublisher(DomainEventPublisher):
         reference_id: str,
         transaction_id: str,
         correlation_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Publish credits recharged event"""
         payload = {
@@ -67,55 +66,49 @@ class CreditEventPublisher(DomainEventPublisher):
             "source": source,
             "reference_type": reference_type,
             "reference_id": reference_id,
-            "transaction_id": transaction_id
+            "transaction_id": transaction_id,
         }
-        
+
         if metadata:
             payload.update(metadata)
-        
+
         return await self.publish_event_response(
-            event_type="evt.credits.recharged",
+            subject="evt.credits.recharged",
             payload=payload,
             correlation_id=correlation_id,
-            idempotency_key=f"recharge_{merchant_id}_{reference_id}"
+            idempotency_key=f"recharge_{merchant_id}_{reference_id}",
         )
-
 
     async def publish_low_balance_reached(
         self,
         merchant_id: UUID,
         balance: int,
         threshold: int,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
     ) -> str:
         """Publish low balance reached event"""
         payload = {
             "merchant_id": str(merchant_id),
             "balance": float(balance),
-            "threshold": float(threshold)
+            "threshold": float(threshold),
         }
-        
+
         return await self.publish_event_response(
-            event_type="evt.credits.low_balance_reached",
+            subject="evt.credits.low_balance_reached",
             payload=payload,
-            correlation_id=correlation_id
+            correlation_id=correlation_id,
         )
 
-
     async def publish_balance_exhausted(
-        self,
-        merchant_id: UUID,
-        correlation_id: Optional[str] = None
+        self, merchant_id: UUID, correlation_id: Optional[str] = None
     ) -> str:
         """Publish balance exhausted event"""
-        payload = {
-            "merchant_id": str(merchant_id)
-        }
-        
+        payload = {"merchant_id": str(merchant_id)}
+
         return await self.publish_event_response(
-            event_type="evt.credits.balance_exhausted",
+            subject="evt.credits.balance_exhausted",
             payload=payload,
-            correlation_id=correlation_id
+            correlation_id=correlation_id,
         )
 
     async def publish_plugin_status_changed(
@@ -131,10 +124,10 @@ class CreditEventPublisher(DomainEventPublisher):
             "previous_status": previous_status,
             "current_status": current_status,
             "reason": reason,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         return await self.publish_event_response(
-            event_type="evt.credits.plugin_status_changed",
+            subject="evt.credits.plugin_status_changed",
             payload=payload,
         )

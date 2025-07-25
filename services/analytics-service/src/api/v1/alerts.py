@@ -2,7 +2,6 @@ from uuid import UUID
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Path, Query, Body, status, HTTPException
 from shared.api import ApiResponse, success_response, RequestContextDep
-from ...services.alert_service import AlertService
 from ...dependencies import AlertServiceDep
 from ...schemas.analytics import (
     AlertRuleIn, AlertRulePatch, AlertRuleOut, AlertHistoryOut

@@ -37,7 +37,7 @@ The service maintains the **exact same output format** as the original API imple
 **Subject**: `evt.catalog.item.analysis.requested`
 ```json
 {
-  "event_type": "evt.catalog.item.analysis.requested",
+  "subject": "evt.catalog.item.analysis.requested",
   "payload": {
     "shop_id": "70931710194",
     "product_id": "8526062977266",
@@ -52,7 +52,7 @@ The service maintains the **exact same output format** as the original API imple
 **Success**: `evt.catalog.item.analysis.completed`
 ```json
 {
-  "event_type": "evt.catalog.item.analysis.completed", 
+  "subject": "evt.catalog.item.analysis.completed", 
   "payload": {
     "status": "success",
     "colours": [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
@@ -68,7 +68,7 @@ The service maintains the **exact same output format** as the original API imple
 **Failure**: `evt.catalog.item.analysis.failed`
 ```json
 {
-  "event_type": "evt.catalog.item.analysis.failed",
+  "subject": "evt.catalog.item.analysis.failed",
   "payload": {
     "status": "error",
     "error": "Product image not found",

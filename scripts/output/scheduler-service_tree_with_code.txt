@@ -173,7 +173,7 @@ src/
 │   │           """Publish schedule created event"""
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=SchedulerEvents.SCHEDULE_CREATED,
+│   │               subject=SchedulerEvents.SCHEDULE_CREATED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override,
@@ -195,7 +195,7 @@ src/
 │   │           )
 │   │           
 │   │           self.logger.info(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={
 │   │                   **context.to_dict(),
 │   │                   "schedule_name": name,
@@ -222,7 +222,7 @@ src/
 │   │           """Publish schedule updated event"""
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=SchedulerEvents.SCHEDULE_UPDATED,
+│   │               subject=SchedulerEvents.SCHEDULE_UPDATED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override,
@@ -354,7 +354,7 @@ src/
 │   │           """Publish execution started event"""
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=SchedulerEvents.EXECUTION_STARTED,
+│   │               subject=SchedulerEvents.EXECUTION_STARTED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override,
@@ -377,7 +377,7 @@ src/
 │   │           )
 │   │           
 │   │           self.logger.info(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={
 │   │                   **context.to_dict(),
 │   │                   "schedule_name": schedule_name,
@@ -405,7 +405,7 @@ src/
 │   │           """Publish execution completed event"""
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=SchedulerEvents.EXECUTION_COMPLETED,
+│   │               subject=SchedulerEvents.EXECUTION_COMPLETED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override,
@@ -428,7 +428,7 @@ src/
 │   │           )
 │   │           
 │   │           self.logger.info(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={
 │   │                   **context.to_dict(),
 │   │                   "status": status,
@@ -458,7 +458,7 @@ src/
 │   │           """Publish execution failed event"""
 │   │           context = EventContext(
 │   │               event_id=str(UUID()),
-│   │               event_type=SchedulerEvents.EXECUTION_FAILED,
+│   │               subject=SchedulerEvents.EXECUTION_FAILED,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=self.service_name_override,
@@ -483,7 +483,7 @@ src/
 │   │           )
 │   │           
 │   │           self.logger.error(
-│   │               f"Publishing {context.event_type}",
+│   │               f"Publishing {context.subject}",
 │   │               extra={
 │   │                   **context.to_dict(),
 │   │                   "error": error_message,
@@ -559,7 +559,7 @@ src/
 │       class CreateScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule creation commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_CREATE
+│           subject = SchedulerCommands.SCHEDULE_CREATE
 │           queue_group = "scheduler-service-create"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -598,7 +598,7 @@ src/
 │                   
 │               except ValidationError as e:
 │                   self.logger.error(
-│                       f"Invalid payload for {self.event_type}",
+│                       f"Invalid payload for {self.subject}",
 │                       extra={
 │                           **context.to_dict(),
 │                           "validation_errors": e.errors()
@@ -619,7 +619,7 @@ src/
 │       class UpdateScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule update commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_UPDATE
+│           subject = SchedulerCommands.SCHEDULE_UPDATE
 │           queue_group = "scheduler-service-update"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -665,7 +665,7 @@ src/
 │       class DeleteScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule deletion commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_DELETE
+│           subject = SchedulerCommands.SCHEDULE_DELETE
 │           queue_group = "scheduler-service-delete"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -712,7 +712,7 @@ src/
 │       class PauseScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule pause commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_PAUSE
+│           subject = SchedulerCommands.SCHEDULE_PAUSE
 │           queue_group = "scheduler-service-pause"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -759,7 +759,7 @@ src/
 │       class ResumeScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule resume commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_RESUME
+│           subject = SchedulerCommands.SCHEDULE_RESUME
 │           queue_group = "scheduler-service-resume"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -804,7 +804,7 @@ src/
 │       class TriggerScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule trigger commands"""
 │           
-│           event_type = SchedulerCommands.SCHEDULE_TRIGGER
+│           subject = SchedulerCommands.SCHEDULE_TRIGGER
 │           queue_group = "scheduler-service-trigger"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
@@ -851,7 +851,7 @@ src/
 │       class ExecuteImmediateSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for immediate execution commands"""
 │           
-│           event_type = SchedulerCommands.EXECUTE_IMMEDIATE
+│           subject = SchedulerCommands.EXECUTE_IMMEDIATE
 │           queue_group = "scheduler-service-immediate"
 │           
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:

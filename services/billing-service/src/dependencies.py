@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends, Request, HTTPException
 import redis.asyncio as redis
 
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from shared.messaging.jetstream_client import JetStreamWrapper
 from .lifecycle import ServiceLifecycle
 from .config import BillingServiceConfig
 

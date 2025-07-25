@@ -534,7 +534,7 @@ src/
 │   │       """Subscribe to webhook events from other services"""
 │   │       
 │   │       @property
-│   │       def event_type(self) -> str:
+│   │       def subject(self) -> str:
 │   │           return WebhookEvents.SUBSCRIPTION_UPDATED
 │   │       
 │   │       @property
@@ -556,7 +556,7 @@ src/
 │   │           logger.info(
 │   │               "Processing subscription payment webhook",
 │   │               extra={
-│   │                   "event_type": self.event_type,
+│   │                   "subject": self.subject,
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
@@ -578,8 +578,8 @@ src/
 │   │           return WebhookEvents.PURCHASE_UPDATED
 │   │   
 │   │       @property
-│   │       def event_type(self) -> str:
-│   │           """The expected event_type for validation"""
+│   │       def subject(self) -> str:
+│   │           """The expected subject for validation"""
 │   │           return WebhookEvents.PURCHASE_UPDATED
 │   │   
 │   │       @property
@@ -598,7 +598,7 @@ src/
 │   │           logger.info(
 │   │               "Processing purchase payment webhook",
 │   │               extra={
-│   │                   "event_type": self.event_type,
+│   │                   "subject": self.subject,
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
@@ -615,8 +615,8 @@ src/
 │   │       """Subscribe to app uninstallation events"""
 │   │       
 │   │       @property
-│   │       def event_type(self) -> str:
-│   │           """The expected event_type for validation"""
+│   │       def subject(self) -> str:
+│   │           """The expected subject for validation"""
 │   │           return WebhookEvents.APP_UNINSTALLED
 │   │       @property
 │   │       def subject(self) -> str:

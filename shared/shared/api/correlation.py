@@ -14,29 +14,28 @@ import uuid
 
 # Context variable for async operations
 _correlation_context: ContextVar[Optional[str]] = ContextVar(
-    "correlation_id",
-    default=None
+    "correlation_id", default=None
 )
 
 
 def get_correlation_id(request: Request) -> str:
     """
     Get or generate correlation ID for the current request.
-    
+
     Priority:
     1. Request state (set by middleware)
-    2. X-Correlation-ID header (from upstream service)  
+    2. X-Correlation-ID header (from upstream service)
     3. Generate new one (originating request)
     """
     # Check request state first
     if hasattr(request.state, "correlation_id"):
         return request.state.correlation_id
-    
+
     # Check headers from upstream service
     correlation_id = request.headers.get("X-Correlation-ID")
     if correlation_id:
         return correlation_id
-    
+
     # Generate new one
     return f"corr_{uuid.uuid4().hex[:12]}"
 
@@ -57,10 +56,11 @@ def get_correlation_context() -> Optional[str]:
 
 # Essential integrations only
 
+
 def add_correlation_header(headers: dict) -> dict:
     """
     Add correlation ID to outgoing HTTP headers.
-    
+
     Usage:
         headers = add_correlation_header({"Content-Type": "application/json"})
         response = await client.get(url, headers=headers)
@@ -74,9 +74,9 @@ def add_correlation_header(headers: dict) -> dict:
 def add_correlation_to_event(event_data: dict) -> dict:
     """
     Add correlation ID to message bus events.
-    
+
     Usage:
-        event_data = {"event_type": "ORDER_CREATED", "data": {...}}
+        event_data = {"subject": "ORDER_CREATED", "data": {...}}
         event_with_correlation = add_correlation_to_event(event_data)
     """
     correlation_id = get_correlation_context()

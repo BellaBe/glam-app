@@ -63,6 +63,7 @@ class RequestContext(BaseModel):
     """Essential request context for logging/auditing."""
     
     request_id: str
+    trace_id: str
     correlation_id: str
     method: str
     path: str
@@ -73,6 +74,7 @@ class RequestContext(BaseModel):
         return cls(
             request_id=get_request_id(request),
             correlation_id=get_correlation_id(request),
+            trace_id=request.state.trace_id,
             method=request.method,
             path=str(request.url.path)
         )

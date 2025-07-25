@@ -2,9 +2,7 @@
 """Refactored notification service with improved separation of concerns"""
 
 from typing import Optional
-
 import time
-from dataclasses import dataclass
 from uuid import UUID
 
 from shared.utils.logger import ServiceLogger
@@ -16,7 +14,6 @@ from .template_service import TemplateService
 from ..config import ServiceConfig
 from ..repositories.notification_repository import NotificationRepository
 from ..exceptions import TemplateNotFoundError
-from ..events.publishers import NotificationEventPublisher
 from ..providers.base import EmailMessage, EmailResult
 from ..models.notification import Notification
 from ..mappers.notification_mapper import NotificationMapper
@@ -34,7 +31,6 @@ class NotificationService:
     def __init__(
         self,
         config: ServiceConfig,
-        publisher: NotificationEventPublisher,
         email_service: EmailService,
         template_service: TemplateService,
         notification_mapper: NotificationMapper,
@@ -42,7 +38,6 @@ class NotificationService:
         logger: ServiceLogger,
     ):
         self.config = config
-        self.publisher = publisher
         self.email_service = email_service
         self.template_service = template_service
         self.notification_repo = notification_repository
@@ -93,13 +88,19 @@ class NotificationService:
         This method is a simplified entry point for sending notifications.
         It handles preference checks, rate limiting, template rendering, and email delivery.
         """
+        
+        #TODO: Adjust schemsa
+        
+        unsubscribe_token = ""
+        dynamic_content = {}
+        
 
         # Extract notification details
         notification_type = notification_create.notification_type
         merchant_id = notification_create.merchant_id
         merchant_domain = notification_create.merchant_domain
-        unsubscribe_token = notification_create.unsubscribe_token
-        dynamic_content = notification_create.dynamic_content or {}
+        unsubscribe_token = unsubscribe_token
+        dynamic_content = dynamic_content
         extra_metadata = notification_create.extra_metadata or {}
 
         self.logger.info(
@@ -148,7 +149,7 @@ class NotificationService:
             template_type=notification_type, duration=time.time() - template_start
         )
 
-        new_notification = self.mapper.create_to_model(
+        new_notification = self.mapper.to_model(
             notification_create, subject=subject, content=html_body
         )
 
@@ -227,22 +228,6 @@ class NotificationService:
                 },
             )
 
-            # Publish success event
-            await self.publisher.publish_email_sent(
-                notification_id=UUID(str(notification.id)),
-                merchant_id=UUID(str(notification.merchant_id)),
-                notification_type=notification.type,
-                provider=provider_response.provider,
-                provider_message_id=(
-                    provider_response.provider_message_id
-                    if provider_response.provider_message_id
-                    else "No response received"
-                ),
-                correlation_id=(notification.extra_metadata or {}).get(
-                    "correlation_id", None
-                ),
-            )
-
         except Exception as e:
             # Record failure
             increment_notification_sent(
@@ -267,22 +252,6 @@ class NotificationService:
                     ),
                 },
             )
-
-            # Publish failure event
-            await self.publisher.publish_email_failed(
-                notification_id=UUID(str(notification.id)),
-                merchant_id=UUID(str(notification.merchant_id)),
-                notification_type=notification.type,
-                error=str(e),
-                error_code=getattr(e, "code", "UNKNOWN_ERROR"),
-                retry_count=1,
-                will_retry=is_retryable_error(e),
-                correlation_id=(notification.extra_metadata or {}).get(
-                    "correlation_id", None
-                ),
-            )
-
-            raise
 
         finally:
             # Record total duration
@@ -312,6 +281,38 @@ class NotificationService:
         # Extract original data and retry
         return await self.send_notification(notification=notification)
 
+    async def send_bulk_emails(
+        self,
+        notifications: list[NotificationCreate],
+        batch_size: Optional[int] = None,   
+        delay_seconds: Optional[float] = None,
+    ) -> list[UUID]:
+        """
+        Bulk send notifications with configurable batch size and delay
+
+        Parameters:
+            notifications (list[NotificationCreate]): List of notification details
+            batch_size (Optional[int]): Number of notifications to send in each batch
+            delay_seconds (Optional[float]): Delay between batches
+
+        Returns:
+            list[UUID]: List of notification IDs that were sent
+        """
+
+        if not notifications:
+            self.logger.warning("No notifications to send")
+            return []
+
+        if not batch_size:
+            batch_size = self.bulk_config["default_batch_size"]
+
+        if not delay_seconds:
+            delay_seconds = self.bulk_config["batch_delay_seconds"]
+
+        sent_ids = []
+        #TODO: Implement bulk email sending logic
+        return sent_ids
+    
     async def list_notifications(
         self,
         offset,

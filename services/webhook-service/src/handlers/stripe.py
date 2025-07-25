@@ -11,7 +11,7 @@ class StripeWebhookHandler(WebhookHandler):
     """Handler for Stripe webhooks"""
 
     # Event type to domain event mapping
-    EVENT_TYPE_MAP = {
+    subject_MAP = {
         # Payment events
         "payment_intent.succeeded": "evt.webhook.payment.succeeded",
         "payment_intent.failed": "evt.webhook.payment.failed",
@@ -30,9 +30,9 @@ class StripeWebhookHandler(WebhookHandler):
         """Parse Stripe webhook"""
 
         # Extract event type
-        event_type = body.get("type", "unknown")
-        if topic and topic != event_type:
-            self.logger.warning(f"Topic mismatch: path={topic}, body={event_type}")
+        subject = body.get("type", "unknown")
+        if topic and topic != subject:
+            self.logger.warning(f"Topic mismatch: path={topic}, body={subject}")
 
         # Extract data
         data = body.get("data", {}).get("object", {})
@@ -43,7 +43,7 @@ class StripeWebhookHandler(WebhookHandler):
         merchant_domain = metadata.get("merchant_domain")
 
         # Generate idempotency key
-        idempotency_key = self.get_idempotency_key(body, event_type, headers)
+        idempotency_key = self.get_idempotency_key(body, subject, headers)
 
         # Build metadata
         webhook_metadata = {
@@ -54,7 +54,7 @@ class StripeWebhookHandler(WebhookHandler):
         }
 
         return WebhookData(
-            topic=event_type,
+            topic=subject,
             merchant_id=merchant_id,
             merchant_domain=merchant_domain,
             idempotency_key=idempotency_key,
@@ -80,8 +80,8 @@ class StripeWebhookHandler(WebhookHandler):
     def map_to_domain_event(self, webhook_data: WebhookData) -> Optional[DomainEvent]:
         """Map Stripe webhook to domain event"""
 
-        event_type = self.EVENT_TYPE_MAP.get(webhook_data.topic)
-        if not event_type:
+        subject = self.subject_MAP.get(webhook_data.topic)
+        if not subject:
             self.logger.debug(
                 f"No domain event mapping for Stripe event: {webhook_data.topic}"
             )
@@ -95,11 +95,11 @@ class StripeWebhookHandler(WebhookHandler):
             webhook_data.merchant_domain,
         )
 
-        return DomainEvent(event_type=event_type, payload=payload)
+        return DomainEvent(subject=subject, payload=payload)
 
     def _build_event_payload(
         self,
-        event_type: str,
+        subject: str,
         stripe_data: Dict[str, Any],
         merchant_id: Optional[str],
         merchant_domain: Optional[str],
@@ -114,7 +114,7 @@ class StripeWebhookHandler(WebhookHandler):
         }
 
         # Payment events
-        if event_type.startswith("payment_intent."):
+        if subject.startswith("payment_intent."):
             return {
                 **base_payload,
                 "payment_intent_id": stripe_data.get("id"),
@@ -125,7 +125,7 @@ class StripeWebhookHandler(WebhookHandler):
             }
 
         # Subscription events
-        elif event_type.startswith("customer.subscription."):
+        elif subject.startswith("customer.subscription."):
             return {
                 **base_payload,
                 "subscription_id": stripe_data.get("id"),
@@ -139,7 +139,7 @@ class StripeWebhookHandler(WebhookHandler):
             }
 
         # Customer events
-        elif event_type.startswith("customer."):
+        elif subject.startswith("customer."):
             return {
                 **base_payload,
                 "customer_id": stripe_data.get("id"),

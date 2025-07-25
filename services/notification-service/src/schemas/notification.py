@@ -11,17 +11,16 @@ from ..models.notification import NotificationStatus, NotificationProvider
 from .common import ShopInfo, DateRangeFilter, SortOrder
 
 
-# Request Schemas
-
-
-class NotificationCreate(ShopInfo):
+class NotificationCreate(BaseModel):
     """Create a new notification request."""
-
+    merchant_id: UUID
+    merchant_domain: str
+    recipient_email: EmailStr
     notification_type: str = Field(..., min_length=1, max_length=50)
     extra_metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator(
-        "merchant_id", "merchant_domain", "shop_email", "unsubscribe_token"
+        "merchant_id", "merchant_domain", "recipient_email", "unsubscribe_token"
     )
     def validate_content_source(cls, v):
         """Ensure required fields are provided."""

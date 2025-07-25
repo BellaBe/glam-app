@@ -122,10 +122,10 @@ class AnalyticsService:
             }
         )
     
-    async def process_ai_usage(self, payload: Dict[str, Any], event_type: str, correlation_id: str):
+    async def process_ai_usage(self, payload: Dict[str, Any], subject: str, correlation_id: str):
         """Process AI feature usage event"""
         merchant_id = UUID(payload["merchant_id"])
-        feature_name = self._extract_feature_from_event(event_type)
+        feature_name = self._extract_feature_from_event(subject)
         
         # Update feature-specific metrics
         today = date.today()
@@ -139,7 +139,7 @@ class AnalyticsService:
             feature_usage[feature_name]["requests"] += 1
             
             # Track success/failure based on event type
-            if "failed" in event_type:
+            if "failed" in subject:
                 feature_usage[feature_name]["failures"] += 1
             else:
                 feature_usage[feature_name]["success"] += 1
@@ -155,19 +155,19 @@ class AnalyticsService:
             usage_analytics.feature_usage = feature_usage
             await self.usage_repo.save(usage_analytics)
     
-    async def process_merchant_lifecycle(self, payload: Dict[str, Any], event_type: str, correlation_id: str):
+    async def process_merchant_lifecycle(self, payload: Dict[str, Any], subject: str, correlation_id: str):
         """Process merchant lifecycle event"""
         merchant_id = UUID(payload["merchant_id"])
         
         # Handle trial-related events
-        if "trial" in event_type.lower():
-            await self._process_trial_event(merchant_id, payload, event_type, correlation_id)
+        if "trial" in subject.lower():
+            await self._process_trial_event(merchant_id, payload, subject, correlation_id)
         
         # Handle conversion events
-        if "converted" in event_type.lower() or "subscription" in event_type.lower():
+        if "converted" in subject.lower() or "subscription" in subject.lower():
             await self._process_conversion_event(merchant_id, payload, correlation_id)
     
-    async def process_shopify_event(self, payload: Dict[str, Any], event_type: str, correlation_id: str):
+    async def process_shopify_event(self, payload: Dict[str, Any], subject: str, correlation_id: str):
         """Process Shopify integration event"""
         merchant_id = UUID(payload["merchant_id"])
         shop_id = payload.get("shop_id", "")
@@ -186,29 +186,29 @@ class AnalyticsService:
             )
         
         # Update based on event type
-        if "webhook" in event_type:
-            if "failed" in event_type:
+        if "webhook" in subject:
+            if "failed" in subject:
                 shopify_analytics.webhook_events_failed += 1
             else:
                 shopify_analytics.webhook_events_processed += 1
-        elif "api" in event_type:
-            if "failed" in event_type:
+        elif "api" in subject:
+            if "failed" in subject:
                 shopify_analytics.api_calls_failed += 1
             else:
                 shopify_analytics.api_calls_made += 1
-        elif "rate_limit" in event_type:
+        elif "rate_limit" in subject:
             shopify_analytics.api_rate_limit_hits += 1
         
         await self.shopify_repo.save(shopify_analytics)
     
-    async def process_auth_event(self, payload: Dict[str, Any], event_type: str, correlation_id: str):
+    async def process_auth_event(self, payload: Dict[str, Any], subject: str, correlation_id: str):
         """Process authentication event for session tracking"""
         merchant_id = UUID(payload["merchant_id"])
         
         # Update engagement metrics based on auth events
-        if "session_created" in event_type:
+        if "session_created" in subject:
             await self._update_session_metrics(merchant_id, payload)
-        elif "session_ended" in event_type:
+        elif "session_ended" in subject:
             await self._update_session_duration(merchant_id, payload)
     
     # ========== Analytics Queries ==========
@@ -416,13 +416,13 @@ class AnalyticsService:
     
     # ========== Helper Methods ==========
     
-    def _extract_feature_from_event(self, event_type: str) -> str:
+    def _extract_feature_from_event(self, subject: str) -> str:
         """Extract feature name from event type"""
-        if "selfie" in event_type:
+        if "selfie" in subject:
             return "selfie"
-        elif "match" in event_type:
+        elif "match" in subject:
             return "match"
-        elif "sort" in event_type:
+        elif "sort" in subject:
             return "sort"
         else:
             return "unknown"
@@ -474,7 +474,7 @@ class AnalyticsService:
                 "correlation_id": correlation_id
             })
     
-    async def _process_trial_event(self, merchant_id: UUID, payload: Dict[str, Any], event_type: str, correlation_id: str):
+    async def _process_trial_event(self, merchant_id: UUID, payload: Dict[str, Any], subject: str, correlation_id: str):
         """Process trial-related events"""
         # Implementation would create/update trial analytics
         pass

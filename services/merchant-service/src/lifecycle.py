@@ -4,7 +4,7 @@ from typing import Optional, List
 import asyncio
 import redis.asyncio as redis
 from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from shared.messaging.jetstream_client import JetStreamWrapper
 from shared.utils.logger import ServiceLogger
 from .config import MerchantServiceConfig
 from .repositories import MerchantRepository

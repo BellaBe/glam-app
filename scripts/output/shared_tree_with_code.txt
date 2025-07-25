@@ -58,7 +58,13 @@ shared/
 │   │       add_correlation_header,
 │   │       add_correlation_to_event,
 │   │       extract_correlation_from_event,
+│   │       
 │   │   )
+│   │   from .tracing import (
+│   │       set_trace_context,
+│   │       get_trace_context,
+│   │       TracingMiddleware,
+│   │   )   
 │   │   
 │   │   __all__ = [
 │   │       # Models
@@ -87,6 +93,10 @@ shared/
 │   │       "add_correlation_header",
 │   │       "add_correlation_to_event",
 │   │       "extract_correlation_from_event",
+│   │       # Tracing
+│   │       "set_trace_context",
+│   │       "get_trace_context",
+│   │       "TracingMiddleware",
 │   │       
 │   │       # Middleware
 │   │       "APIMiddleware",
@@ -113,29 +123,28 @@ shared/
 │   │   
 │   │   # Context variable for async operations
 │   │   _correlation_context: ContextVar[Optional[str]] = ContextVar(
-│   │       "correlation_id",
-│   │       default=None
+│   │       "correlation_id", default=None
 │   │   )
 │   │   
 │   │   
 │   │   def get_correlation_id(request: Request) -> str:
 │   │       """
 │   │       Get or generate correlation ID for the current request.
-│   │       
+│   │   
 │   │       Priority:
 │   │       1. Request state (set by middleware)
-│   │       2. X-Correlation-ID header (from upstream service)  
+│   │       2. X-Correlation-ID header (from upstream service)
 │   │       3. Generate new one (originating request)
 │   │       """
 │   │       # Check request state first
 │   │       if hasattr(request.state, "correlation_id"):
 │   │           return request.state.correlation_id
-│   │       
+│   │   
 │   │       # Check headers from upstream service
 │   │       correlation_id = request.headers.get("X-Correlation-ID")
 │   │       if correlation_id:
 │   │           return correlation_id
-│   │       
+│   │   
 │   │       # Generate new one
 │   │       return f"corr_{uuid.uuid4().hex[:12]}"
 │   │   
@@ -156,10 +165,11 @@ shared/
 │   │   
 │   │   # Essential integrations only
 │   │   
+│   │   
 │   │   def add_correlation_header(headers: dict) -> dict:
 │   │       """
 │   │       Add correlation ID to outgoing HTTP headers.
-│   │       
+│   │   
 │   │       Usage:
 │   │           headers = add_correlation_header({"Content-Type": "application/json"})
 │   │           response = await client.get(url, headers=headers)
@@ -173,9 +183,9 @@ shared/
 │   │   def add_correlation_to_event(event_data: dict) -> dict:
 │   │       """
 │   │       Add correlation ID to message bus events.
-│   │       
+│   │   
 │   │       Usage:
-│   │           event_data = {"event_type": "ORDER_CREATED", "data": {...}}
+│   │           event_data = {"subject": "ORDER_CREATED", "data": {...}}
 │   │           event_with_correlation = add_correlation_to_event(event_data)
 │   │       """
 │   │       correlation_id = get_correlation_context()
@@ -259,6 +269,7 @@ shared/
 │   │       """Essential request context for logging/auditing."""
 │   │       
 │   │       request_id: str
+│   │       trace_id: str
 │   │       correlation_id: str
 │   │       method: str
 │   │       path: str
@@ -269,6 +280,7 @@ shared/
 │   │           return cls(
 │   │               request_id=get_request_id(request),
 │   │               correlation_id=get_correlation_id(request),
+│   │               trace_id=request.state.trace_id,
 │   │               method=request.method,
 │   │               path=str(request.url.path)
 │   │           )
@@ -350,6 +362,7 @@ shared/
 │   │   from .models import ErrorDetail
 │   │   from .responses import error_response
 │   │   from .correlation import get_correlation_id, set_correlation_context
+│   │   from .tracing import TracingMiddleware
 │   │   
 │   │   logger = logging.getLogger(__name__)
 │   │   
@@ -490,6 +503,7 @@ shared/
 │   │       app: FastAPI,
 │   │       *,
 │   │       service_name: str,
+│   │       enable_tracing: bool = True,
 │   │       enable_metrics: bool = True,
 │   │       metrics_path: str = "/metrics",
 │   │   ):
@@ -519,7 +533,10 @@ shared/
 │   │               include_in_schema=False,
 │   │               tags=["monitoring"]
 │   │           )
-│   │       
+│   │   
+│   │       if enable_tracing:
+│   │           app.add_middleware(TracingMiddleware)
+│   │   
 │   │       # Add API middleware for standardized responses
 │   │       app.add_middleware(APIMiddleware, service_name=service_name)
 │   │   ```
@@ -644,95 +661,156 @@ shared/
 │   │       )
 │   │   ```
 │   │   
-│   └── responses.py
+│   ├── responses.py
+│   │   
+│   │   ```py
+│   │   # -------------------------------
+│   │   # shared/api/responses.py
+│   │   # -------------------------------
+│   │   
+│   │   """Response helper functions."""
+│   │   
+│   │   from typing import Optional, Dict, Any, List, Tuple
+│   │   import uuid
+│   │   from .models import ApiResponse, Meta, ErrorDetail, Pagination, Links, T
+│   │   
+│   │   
+│   │   def create_response(
+│   │       data: Optional[T] = None,
+│   │       error: Optional[ErrorDetail] = None,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       pagination: Optional[Pagination] = None,
+│   │       links: Optional[Links] = None
+│   │   ) -> ApiResponse[T]:
+│   │       """Create a unified API response."""
+│   │       if request_id is None:
+│   │           request_id = f"req_{uuid.uuid4().hex[:12]}"
+│   │       
+│   │       meta = Meta(request_id=request_id, correlation_id=correlation_id)
+│   │       
+│   │       return ApiResponse(
+│   │           data=data,
+│   │           error=error,
+│   │           meta=meta,
+│   │           pagination=pagination,
+│   │           links=links
+│   │       )
+│   │   
+│   │   
+│   │   def success_response(
+│   │       data: T,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       links: Optional[Links] = None
+│   │   ) -> ApiResponse[T]:
+│   │       """Create a success response."""
+│   │       return create_response(
+│   │           data=data,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id,
+│   │           links=links
+│   │       )
+│   │   
+│   │   
+│   │   def error_response(
+│   │       code: str,
+│   │       message: str,
+│   │       details: Optional[Dict[str, Any]] = None,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None
+│   │   ) -> ApiResponse[None]:
+│   │       """Create an error response."""
+│   │       error = ErrorDetail(code=code, message=message, details=details)
+│   │       return create_response(
+│   │           error=error,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id
+│   │       )
+│   │   
+│   │   
+│   │   def paginated_response(
+│   │       data: List[T],
+│   │       page: int,
+│   │       limit: int,
+│   │       total: int,
+│   │       base_url: str,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       **query_params
+│   │   ) -> ApiResponse[List[T]]:
+│   │       """Create a paginated response."""
+│   │       pagination = Pagination.create(page, limit, total)
+│   │       links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
+│   │       
+│   │       return create_response(
+│   │           data=data,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id,
+│   │           pagination=pagination,
+│   │           links=links
+│   │       )
+│   │   ```
+│   │   
+│   └── tracing.py
 │       
 │       ```py
-│       # -------------------------------
-│       # shared/api/responses.py
-│       # -------------------------------
+│       # shared/api/tracing.py
+│       from typing import Optional
+│       from fastapi import Request
+│       from contextvars import ContextVar
+│       from uuid7 import uuid7
+│       from starlette.middleware.base import BaseHTTPMiddleware
+│       from .correlation import set_correlation_context
 │       
-│       """Response helper functions."""
+│       _trace_ctx: ContextVar[Optional[str]] = ContextVar("trace_id", default=None)
+│                                       
 │       
-│       from typing import Optional, Dict, Any, List, Tuple
-│       import uuid
-│       from .models import ApiResponse, Meta, ErrorDetail, Pagination, Links, T
+│       def set_trace_context(trace_id: Optional[str]) -> None:
+│           _trace_ctx.set(trace_id)
 │       
+│       def get_trace_context() -> Optional[str]:
+│           return _trace_ctx.get()
 │       
-│       def create_response(
-│           data: Optional[T] = None,
-│           error: Optional[ErrorDetail] = None,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           pagination: Optional[Pagination] = None,
-│           links: Optional[Links] = None
-│       ) -> ApiResponse[T]:
-│           """Create a unified API response."""
-│           if request_id is None:
-│               request_id = f"req_{uuid.uuid4().hex[:12]}"
+│       class TracingMiddleware(BaseHTTPMiddleware):
+│           """Middleware to handle trace_id and correlation_id for all requests"""
 │           
-│           meta = Meta(request_id=request_id, correlation_id=correlation_id)
+│           async def dispatch(self, request: Request, call_next):
+│               # 🆕 Extract or generate trace_id from W3C traceparent
+│               trace_id = self._extract_trace_id(request) or str(uuid7())
+│               
+│               # Extract or generate correlation_id
+│               correlation_id = request.headers.get("x-correlation-id") or trace_id
+│               
+│               # Set context for this request
+│               set_trace_context(trace_id)
+│               set_correlation_context(correlation_id)
+│               
+│               # Add to request state
+│               request.state.trace_id = trace_id
+│               request.state.correlation_id = correlation_id
+│               
+│               # Process request
+│               response = await call_next(request)
+│               
+│               # Add headers to response
+│               response.headers["x-trace-id"] = trace_id
+│               response.headers["x-correlation-id"] = correlation_id
+│               
+│               return response
 │           
-│           return ApiResponse(
-│               data=data,
-│               error=error,
-│               meta=meta,
-│               pagination=pagination,
-│               links=links
-│           )
+│           def _extract_trace_id(self, request: Request) -> Optional[str]:
+│               """Extract trace ID from W3C traceparent header"""
+│               traceparent = request.headers.get("traceparent")
+│               if traceparent:
+│                   # W3C traceparent format: version-trace_id-parent_id-flags
+│                   parts = traceparent.split("-")
+│                   if len(parts) >= 2:
+│                       return parts[1]  # Return trace_id part
+│               return None
 │       
 │       
-│       def success_response(
-│           data: T,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           links: Optional[Links] = None
-│       ) -> ApiResponse[T]:
-│           """Create a success response."""
-│           return create_response(
-│               data=data,
-│               request_id=request_id,
-│               correlation_id=correlation_id,
-│               links=links
-│           )
 │       
-│       
-│       def error_response(
-│           code: str,
-│           message: str,
-│           details: Optional[Dict[str, Any]] = None,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None
-│       ) -> ApiResponse[None]:
-│           """Create an error response."""
-│           error = ErrorDetail(code=code, message=message, details=details)
-│           return create_response(
-│               error=error,
-│               request_id=request_id,
-│               correlation_id=correlation_id
-│           )
-│       
-│       
-│       def paginated_response(
-│           data: List[T],
-│           page: int,
-│           limit: int,
-│           total: int,
-│           base_url: str,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           **query_params
-│       ) -> ApiResponse[List[T]]:
-│           """Create a paginated response."""
-│           pagination = Pagination.create(page, limit, total)
-│           links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
-│           
-│           return create_response(
-│               data=data,
-│               request_id=request_id,
-│               correlation_id=correlation_id,
-│               pagination=pagination,
-│               links=links
-│           )
 │       ```
 │       
 ├── config/
@@ -757,7 +835,7 @@ shared/
 │           _REPO_ROOT = _REPO_ROOT.parent
 │       
 │       _CONFIG_DIR = _REPO_ROOT / "config"                     # ./config
-│       _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.aml
+│       _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yml
 │       _SVC_CFG_DIR = _CONFIG_DIR / "services"                 # ./config/services
 │       _ENV_FILE = _REPO_ROOT / ".env"                         # optional
 │       
@@ -906,7 +984,6 @@ shared/
 │   │       
 │   │       # Configuration
 │   │       "DatabaseConfig",
-│   │       "TestDatabaseConfig",
 │   │       "create_database_config",
 │   │       
 │   │       # Migrations
@@ -923,14 +1000,22 @@ shared/
 │   │   from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 │   │   from sqlalchemy.ext.asyncio import AsyncAttrs
 │   │   from sqlalchemy.dialects.postgresql import UUID as PGUUID
-│   │   from sqlalchemy import DateTime, String
-│   │   from datetime import datetime, timezone
+│   │   from sqlalchemy import DateTime, String, func, Index, MetaData
+│   │   from datetime import datetime
 │   │   from uuid import UUID
 │   │   
 │   │   
 │   │   class Base(AsyncAttrs, DeclarativeBase):
-│   │       """Base class for all database models across microservices"""
-│   │       pass
+│   │       __abstract__ = True            # <- prevents accidental table mapping
+│   │   
+│   │       # optional: naming convention for Alembic
+│   │       metadata = MetaData(naming_convention={
+│   │           "ix": "ix_%(column_0_label)s",
+│   │           "uq": "uq_%(table_name)s_%(column_0_name)s",
+│   │           "ck": "ck_%(table_name)s_%(constraint_name)s",
+│   │           "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+│   │           "pk": "pk_%(table_name)s"
+│   │       })
 │   │   
 │   │   class MerchantMixin:
 │   │       """Mixin to add merchant_id to any model"""
@@ -944,21 +1029,14 @@ shared/
 │   │           nullable=False, 
 │   │           index=True
 │   │       )
+│   │       __table_args__ = (
+│   │       Index("idx_merchant_id_domain", "merchant_id", "merchant_domain"),)
 │   │   
 │   │   
 │   │   class TimestampedMixin:
 │   │       """Mixin to add created_at and updated_at to any model"""
-│   │       created_at: Mapped[datetime] = mapped_column(
-│   │           DateTime(timezone=True),
-│   │           default=lambda: datetime.now(timezone.utc),
-│   │           nullable=False
-│   │       )
-│   │       updated_at: Mapped[datetime] = mapped_column(
-│   │           DateTime(timezone=True),
-│   │           default=lambda: datetime.now(timezone.utc),
-│   │           onupdate=lambda: datetime.now(timezone.utc),
-│   │           nullable=False
-│   │       )
+│   │       created_at = mapped_column( DateTime(timezone=True), server_default=func.now(), nullable=False, index=True )
+│   │       updated_at = mapped_column( DateTime(timezone=True), server_default=func.now(), server_onupdate=func.now(), nullable=False )
 │   │   
 │   │   
 │   │   class SoftDeleteMixin:
@@ -1251,7 +1329,9 @@ shared/
 │   │   
 │   │   ```py
 │   │   # glam-app/shared/database/repository.py
+│   │   from sqlalchemy import select
 │   │   from typing import TypeVar, Generic, Type, AsyncIterator
+│   │   from uuid import UUID
 │   │   from sqlalchemy.ext.asyncio import async_sessionmaker
 │   │   from sqlalchemy.ext.asyncio import AsyncSession
 │   │   from .base import Base
@@ -1273,6 +1353,71 @@ shared/
 │   │       async def _session(self) -> AsyncIterator[AsyncSession]:
 │   │           async with self.session_factory() as session:
 │   │               yield session
+│   │   
+│   │       async def save(self, instance: T) -> T | None:
+│   │           """Save an instance to the database"""
+│   │           async for session in self._session():
+│   │               session.add(instance)
+│   │               await session.commit()
+│   │               return instance
+│   │       
+│   │       async def update(self, instance: T) -> T | None:
+│   │           """Update an existing instance"""
+│   │           async for session in self._session():
+│   │               await session.merge(instance)
+│   │               await session.commit()
+│   │               return instance
+│   │           
+│   │       async def delete(self, instance: T) -> None:
+│   │           """Delete an instance from the database"""
+│   │           async for session in self._session():
+│   │               await session.delete(instance)
+│   │               await session.commit()
+│   │       
+│   │       async def delete_by_id(self, id: str | UUID) -> None:
+│   │           """Delete an instance by its ID"""
+│   │           async for session in self._session():
+│   │               instance = await session.get(self.model, id)
+│   │               if instance:
+│   │                   await session.delete(instance)
+│   │                   await session.commit()
+│   │           
+│   │       async def find_by_id(self, id: str | UUID) -> T | None:
+│   │           """Find an instance by its ID"""
+│   │           async for session in self._session():
+│   │               result = await session.get(self.model, id)
+│   │               return result
+│   │           
+│   │       async def find_all(
+│   │           self,
+│   │           * ,
+│   │           limit: int | None = None,
+│   │           offset: int | None = None,
+│   │           **filters
+│   │       ) -> list[T] | None:
+│   │           """
+│   │           Return a list of model instances.
+│   │           Optional keyword filters map column names to values (exact match).
+│   │           You can also page results with limit/offset.
+│   │           """
+│   │           async for session in self._session():
+│   │               stmt = select(self.model)
+│   │   
+│   │               # Apply column == value filters
+│   │               for col, val in filters.items():
+│   │                   try:
+│   │                       stmt = stmt.where(getattr(self.model, col) == val)
+│   │                   except AttributeError:
+│   │                       raise ValueError(f"{col!r} is not a valid column on {self.model.__name__}")
+│   │   
+│   │               # Pagination
+│   │               if offset is not None:
+│   │                   stmt = stmt.offset(offset)
+│   │               if limit is not None:
+│   │                   stmt = stmt.limit(limit)
+│   │   
+│   │               result = await session.execute(stmt)
+│   │               return list(result.scalars().all())
 │   │   ```
 │   │   
 │   └── session.py
@@ -2073,9 +2218,9 @@ shared/
 │   │   
 │   │   class DatabaseError(InfrastructureError):
 │   │       """Database operation failed."""
-│   │       
+│   │   
 │   │       code = "DATABASE_ERROR"
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2086,7 +2231,7 @@ shared/
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(message, service="database", **kwargs)
-│   │           
+│   │   
 │   │           if operation:
 │   │               self.details["operation"] = operation
 │   │           if table:
@@ -2097,9 +2242,9 @@ shared/
 │   │   
 │   │   class RedisError(InfrastructureError):
 │   │       """Redis operation failed."""
-│   │       
+│   │   
 │   │       code = "REDIS_ERROR"
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2109,7 +2254,7 @@ shared/
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(message, service="redis", **kwargs)
-│   │           
+│   │   
 │   │           if operation:
 │   │               self.details["operation"] = operation
 │   │           if key:
@@ -2118,9 +2263,9 @@ shared/
 │   │   
 │   │   class S3Error(InfrastructureError):
 │   │       """S3 operation failed."""
-│   │       
+│   │   
 │   │       code = "S3_ERROR"
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2132,7 +2277,7 @@ shared/
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(message, service="s3", **kwargs)
-│   │           
+│   │   
 │   │           if operation:
 │   │               self.details["operation"] = operation
 │   │           if bucket:
@@ -2145,9 +2290,9 @@ shared/
 │   │   
 │   │   class UpstreamServiceError(InfrastructureError):
 │   │       """Upstream service call failed."""
-│   │       
+│   │   
 │   │       code = "UPSTREAM_SERVICE_ERROR"
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2159,7 +2304,7 @@ shared/
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(message, service=upstream_service, **kwargs)
-│   │           
+│   │   
 │   │           if upstream_status:
 │   │               self.details["upstream_status"] = upstream_status
 │   │           if upstream_error:
@@ -2170,10 +2315,10 @@ shared/
 │   │   
 │   │   class CircuitOpenError(InfrastructureError):
 │   │       """Circuit breaker is open."""
-│   │       
+│   │   
 │   │       code = "CIRCUIT_OPEN"
 │   │       status = 503
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2189,7 +2334,7 @@ shared/
 │   │               retryable=False,  # Don't retry when circuit is open
 │   │               **kwargs
 │   │           )
-│   │           
+│   │   
 │   │           if failure_count:
 │   │               self.details["failure_count"] = failure_count
 │   │           if open_until:
@@ -2198,9 +2343,9 @@ shared/
 │   │   
 │   │   class MessageBusError(InfrastructureError):
 │   │       """Message bus operation failed."""
-│   │       
+│   │   
 │   │       code = "MESSAGE_BUS_ERROR"
-│   │       
+│   │   
 │   │       def __init__(
 │   │           self,
 │   │           message: str,
@@ -2208,19 +2353,19 @@ shared/
 │   │           operation: Optional[str] = None,
 │   │           stream: Optional[str] = None,
 │   │           subject: Optional[str] = None,
-│   │           event_type: Optional[str] = None,
+│   │           subject: Optional[str] = None,
 │   │           **kwargs
 │   │       ):
 │   │           super().__init__(message, service="nats", **kwargs)
-│   │           
+│   │   
 │   │           if operation:
 │   │               self.details["operation"] = operation
 │   │           if stream:
 │   │               self.details["stream"] = stream
 │   │           if subject:
 │   │               self.details["subject"] = subject
-│   │           if event_type:
-│   │               self.details["event_type"] = event_type
+│   │           if subject:
+│   │               self.details["subject"] = subject
 │   │   ```
 │   │   
 │   ├── notification.py
@@ -3015,7 +3160,7 @@ shared/
 │   │   │   
 │   │   │       # Create event context
 │   │   │       context = EventContext.create(
-│   │   │           event_type="cmd.notification.send_email",
+│   │   │           subject="cmd.notification.send_email",
 │   │   │           source_service=(
 │   │   │               metadata.get("source_service", "unknown") if metadata else "unknown"
 │   │   │           ),
@@ -3060,7 +3205,7 @@ shared/
 │   │   │   
 │   │   │       # Create event context
 │   │   │       context = EventContext.create(
-│   │   │           event_type="cmd.notification.bulk_send",
+│   │   │           subject="cmd.notification.bulk_send",
 │   │   │           source_service=(
 │   │   │               metadata.get("source_service", "unknown") if metadata else "unknown"
 │   │   │           ),
@@ -3533,6 +3678,7 @@ shared/
 │   │           failed_at: datetime
 │   │       ```
 │   │       
+│   ├── webhook/
 │   ├── __init__.py
 │   │   
 │   │   ```py
@@ -3567,28 +3713,25 @@ shared/
 │   │       SERVICE_STREAM_MAP,
 │   │       get_stream_subjects,
 │   │       get_stream_for_service,
-│   │       get_stream_from_event_type,
+│   │       get_stream_from_subject,
 │   │   )
 │   │   
 │   │   __all__ = [
 │   │       # Base types
 │   │       "Streams",
 │   │       "EventWrapper",
-│   │       
 │   │       # Context management
 │   │       "EventContext",
-│   │       "EventPayload", 
+│   │       "EventPayload",
 │   │       "EventContextManager",
-│   │       
 │   │       # Publishers/Subscribers
 │   │       "DomainEventPublisher",
 │   │       "DomainEventSubscriber",
-│   │       
 │   │       # Mappers
 │   │       "SERVICE_STREAM_MAP",
 │   │       "get_stream_subjects",
 │   │       "get_stream_for_service",
-│   │       "get_stream_from_event_type",
+│   │       "get_stream_from_subject",
 │   │   ]
 │   │   ```
 │   │   
@@ -3610,90 +3753,86 @@ shared/
 │   │   
 │   │   class Streams(str, Enum):
 │   │       """JetStream streams organized by domain"""
-│   │       
+│   │   
 │   │       # Core Business Domains
-│   │       CATALOG = "CATALOG"               # Catalog management
-│   │       MERCHANT = "MERCHANT"             # Merchant management
-│   │       BILLING = "BILLING"               # Billing management
-│   │       CREDIT = "CREDIT"                 # Credit management
-│   │       
-│   │       # User & Identity
-│   │       AUTH = "AUTH"                     # Authentication & authorization
-│   │       PROFILE = "PROFILE"               # Merchant users profiles
-│   │       
+│   │       CATALOG = "CATALOG"  # Catalog management
+│   │       MERCHANT = "MERCHANT"  # Merchant management
+│   │       BILLING = "BILLING"  # Billing management
+│   │       CREDIT = "CREDIT"  # Credit management
+│   │   
+│   │       PROFILE = "PROFILE"  # Merchant users profiles
+│   │   
 │   │       # Platform Services
-│   │       NOTIFICATION = "NOTIFICATION"     # Notification delivery
-│   │       ANALYTICS = "ANALYTICS"           # Analytics and reporting
-│   │       WEBHOOKS = "WEBHOOKS"            # Webhook delivery
-│   │       SCHEDULER = "SCHEDULER"           # Scheduled jobs
-│   │       RATE_LIMIT = "RATE_LIMIT"        # Rate limiting events
-│   │       
+│   │       NOTIFICATION = "NOTIFICATION"  # Notification delivery
+│   │       ANALYTICS = "ANALYTICS"  # Analytics and reporting
+│   │       WEBHOOKS = "WEBHOOKS"  # Webhook delivery
+│   │       SCHEDULER = "SCHEDULER"  # Scheduled jobs
+│   │   
 │   │       # AI Services
-│   │       AI_PROCESSING = "AI_PROCESSING"   # AI/ML processing tasks
+│   │       AI_PROCESSING = "AI_PROCESSING"  # AI/ML processing tasks
 │   │   
 │   │   
 │   │   class EventWrapper(BaseModel, Generic[TData]):
 │   │       """Base wrapper for all events with context support"""
+│   │   
 │   │       subject: str
 │   │       idempotency_key: Optional[str] = None
-│   │       
+│   │   
 │   │       # Context fields
 │   │       event_id: Optional[str] = None
+│   │       trace_id: Optional[str] = None
 │   │       correlation_id: Optional[str] = None
 │   │       timestamp: Optional[datetime] = None
 │   │       metadata: Optional[Dict[str, Any]] = None
-│   │       
+│   │   
 │   │       # Data field is now generic
 │   │       data: TData
-│   │       
+│   │   
 │   │       class Config:
-│   │           json_encoders = {
-│   │               UUID: str,
-│   │               datetime: lambda v: v.isoformat()
-│   │           }
+│   │           json_encoders = {UUID: str, datetime: lambda v: v.isoformat()}
 │   │   
 │   │       @classmethod
 │   │       def from_context(
-│   │           cls,
-│   │           context: EventContext,
-│   │           data: TData,
-│   │           subject: Optional[str] = None
+│   │           cls, context: EventContext, data: TData, subject: Optional[str] = None
 │   │       ) -> "EventWrapper[TData]":
 │   │           """Create EventWrapper from EventContext and data"""
 │   │           if not subject:
-│   │               subject = context.event_type
-│   │               
+│   │               subject = context.subject
+│   │   
 │   │           return cls(
 │   │               subject=subject,
 │   │               idempotency_key=context.idempotency_key,
 │   │               event_id=context.event_id,
+│   │               trace_id=context.trace_id,
 │   │               correlation_id=context.correlation_id,
 │   │               timestamp=context.timestamp,
 │   │               metadata=context.metadata,
-│   │               data=data
+│   │               data=data,
 │   │           )
-│   │       
+│   │   
 │   │       def to_event_dict(self) -> Dict[str, Any]:
 │   │           """Convert to event dictionary for publishing"""
 │   │           return {
-│   │               'event_id': self.event_id,
-│   │               'event_type': self.subject,
-│   │               'correlation_id': self.correlation_id,
-│   │               'idempotency_key': self.idempotency_key,
-│   │               'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-│   │               'metadata': self.metadata or {},
-│   │               'payload': self.data.model_dump() if isinstance(self.data, BaseModel) else {}
+│   │               "event_id": self.event_id,
+│   │               "trace_id": self.trace_id,
+│   │               "subject": self.subject,
+│   │               "correlation_id": self.correlation_id,
+│   │               "idempotency_key": self.idempotency_key,
+│   │               "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+│   │               "metadata": self.metadata or {},
+│   │               "payload": (
+│   │                   self.data.model_dump() if isinstance(self.data, BaseModel) else {}
+│   │               ),
 │   │           }
 │   │   ```
 │   │   
 │   ├── base_publisher.py
 │   │   
 │   │   ```py
-│   │   
 │   │   from typing import Dict, Any, Optional
 │   │   
 │   │   from .base import Streams
-│   │   from .mappers import get_stream_from_event_type, get_stream_subjects
+│   │   from .mappers import get_stream_from_subject, get_stream_subjects
 │   │   from shared.messaging.publisher import JetStreamEventPublisher
 │   │   
 │   │   
@@ -3704,7 +3843,7 @@ shared/
 │   │       2. Validates events belong to the correct stream
 │   │       3. Provides domain-specific helpers
 │   │       """
-│   │       
+│   │   
 │   │       # Concrete classes just set these two properties
 │   │       domain_stream: Optional[Streams] = None
 │   │       service_name_override: Optional[str] = None
@@ -3715,99 +3854,94 @@ shared/
 │   │           if not self.domain_stream:
 │   │               raise NotImplementedError("domain_stream must be set")
 │   │           return self.domain_stream.value
-│   │       
+│   │   
 │   │       @property
 │   │       def subjects(self) -> list[str]:
 │   │           """Auto-determined from domain_stream"""
 │   │           if not self.domain_stream:
 │   │               raise NotImplementedError("domain_stream must be set")
 │   │           return get_stream_subjects(self.domain_stream)
-│   │       
+│   │   
 │   │       @property
 │   │       def service_name(self) -> str:
 │   │           """Uses override or defaults"""
 │   │           return self.service_name_override or "unknown-service"
-│   │       
-│   │       def _validate_event_type(self, event_type: str):
+│   │   
+│   │       def _validate_subject(self, subject: str):
 │   │           """
-│   │           Ensures you can't accidentally publish a billing event 
+│   │           Ensures you can't accidentally publish a billing event
 │   │           from the catalog service
 │   │           """
 │   │           try:
 │   │               # Try to infer stream from event type
-│   │               inferred_stream = get_stream_from_event_type(event_type)
+│   │               inferred_stream = get_stream_from_subject(subject)
 │   │               if inferred_stream != self.domain_stream:
 │   │                   raise ValueError(
-│   │                       f"Event {event_type} belongs to {inferred_stream}, "
+│   │                       f"Event {subject} belongs to {inferred_stream}, "
 │   │                       f"not {self.domain_stream}"
 │   │                   )
 │   │           except ValueError:
 │   │               # For events not following standard pattern, check prefix matches subjects
-│   │               if not any(event_type.startswith(subj.replace('*', '')) 
-│   │                       for subj in self.subjects):
+│   │               if not any(
+│   │                   subject.startswith(subj.replace("*", "")) for subj in self.subjects
+│   │               ):
 │   │                   raise ValueError(
-│   │                       f"Event {event_type} doesn't match any subject pattern "
+│   │                       f"Event {subject} doesn't match any subject pattern "
 │   │                       f"for stream {self.domain_stream}"
 │   │                   )
-│   │       
+│   │   
 │   │       async def publish_event(
 │   │           self,
-│   │           event_type: str,
+│   │           subject: str,
 │   │           payload: Dict[str, Any],
 │   │           subject: Optional[str] = None,
 │   │           correlation_id: Optional[str] = None,
 │   │           idempotency_key: Optional[str] = None,
-│   │           metadata: Optional[Dict[str, Any]] = None
+│   │           metadata: Optional[Dict[str, Any]] = None,
 │   │       ) -> str:
 │   │           """Override with same signature, adds validation"""
-│   │           self._validate_event_type(event_type)
-│   │           
+│   │           self._validate_subject(subject)
+│   │   
 │   │           # Call parent with all parameters
 │   │           return await super().publish_event(
-│   │               event_type=event_type,
+│   │               subject=subject,
 │   │               payload=payload,
 │   │               subject=subject,
 │   │               correlation_id=correlation_id,
 │   │               idempotency_key=idempotency_key,
-│   │               metadata=metadata
+│   │               metadata=metadata,
 │   │           )
-│   │       
+│   │   
 │   │       async def publish_command(
-│   │           self, 
-│   │           command_type: str, 
-│   │           payload: Dict[str, Any], 
-│   │           **kwargs
+│   │           self, command_type: str, payload: Dict[str, Any], **kwargs
 │   │       ) -> str:
 │   │           """Override to add validation"""
 │   │           # Ensure command format
-│   │           if not command_type.startswith('cmd.'):
-│   │               command_type = f'cmd.{command_type}'
-│   │           
-│   │           self._validate_event_type(command_type)
-│   │           
+│   │           if not command_type.startswith("cmd."):
+│   │               command_type = f"cmd.{command_type}"
+│   │   
+│   │           self._validate_subject(command_type)
+│   │   
 │   │           return await super().publish_command(command_type, payload, **kwargs)
-│   │       
+│   │   
 │   │       async def publish_event_response(
-│   │           self, 
-│   │           event_type: str, 
-│   │           payload: Dict[str, Any], 
-│   │           **kwargs
+│   │           self, subject: str, payload: Dict[str, Any], **kwargs
 │   │       ) -> str:
 │   │           """Override to add validation"""
 │   │           # Ensure event format
-│   │           if not event_type.startswith('evt.'):
-│   │               event_type = f'evt.{event_type}'
-│   │           
-│   │           self._validate_event_type(event_type)
-│   │           
-│   │           return await super().publish_event_response(event_type, payload, **kwargs)
+│   │           if not subject.startswith("evt."):
+│   │               subject = f"evt.{subject}"
+│   │   
+│   │           self._validate_subject(subject)
+│   │   
+│   │           return await super().publish_event_response(subject, payload, **kwargs)
 │   │   ```
 │   │   
 │   ├── base_subscriber.py
 │   │   
 │   │   ```py
 │   │   # File: shared/shared/events/base_subscriber.py
-│   │   from .mappers import get_stream_from_event_type
+│   │   from .mappers import get_stream_from_subject
 │   │   from shared.messaging.subscriber import JetStreamEventSubscriber
 │   │   
 │   │   
@@ -3818,21 +3952,21 @@ shared/
 │   │       2. Provides helpers for cross-domain subscriptions
 │   │       3. Validates event structure
 │   │       """
-│   │       
+│   │   
 │   │       @property
 │   │       def stream_name(self) -> str:
 │   │           """Auto-determine stream from event type"""
 │   │           try:
-│   │               stream = get_stream_from_event_type(self.event_type)
+│   │               stream = get_stream_from_subject(self.subject)
 │   │               return stream.value
 │   │           except ValueError:
 │   │               # For events not following standard pattern, must override
 │   │               return self._stream_name_override()
-│   │       
+│   │   
 │   │       def _stream_name_override(self) -> str:
 │   │           """Override when subscribing to events not following standard pattern"""
 │   │           raise NotImplementedError(
-│   │               f"Event {self.event_type} doesn't follow standard pattern, "
+│   │               f"Event {self.subject} doesn't follow standard pattern, "
 │   │               f"must override _stream_name_override"
 │   │           )
 │   │   ```
@@ -3843,219 +3977,210 @@ shared/
 │   │   # shared/events/context.py
 │   │   """
 │   │   Standardized event context management for all services.
-│   │   
-│   │   Provides consistent context handling for event-driven architecture.
 │   │   """
-│   │   
+│   │   from uuid7 import uuid7
+│   │   from uuid import uuid4
 │   │   from typing import Dict, Any, Optional, TypeVar, Generic
 │   │   from dataclasses import dataclass
 │   │   from datetime import datetime, timezone
-│   │   from uuid import uuid4
 │   │   
 │   │   from ..api.correlation import set_correlation_context, get_correlation_context
+│   │   from shared.api.tracing import set_trace_context, get_trace_context
 │   │   
-│   │   T = TypeVar('T')
-│   │   
+│   │   T = TypeVar("T")
 │   │   
 │   │   @dataclass
 │   │   class EventContext:
 │   │       """Standard context for all events across the platform"""
+│   │   
 │   │       event_id: str
-│   │       event_type: str
+│   │       trace_id: str
+│   │       subject: str
 │   │       correlation_id: Optional[str]
 │   │       timestamp: datetime
 │   │       source_service: str
 │   │       idempotency_key: Optional[str] = None
-│   │       version: str = "1.0"
 │   │       metadata: Optional[Dict[str, Any]] = None
-│   │       
+│   │   
 │   │       def __post_init__(self):
 │   │           if self.metadata is None:
 │   │               self.metadata = {}
-│   │       
+│   │   
 │   │       @classmethod
 │   │       def from_event(cls, event: Dict[str, Any]) -> "EventContext":
 │   │           """Extract context from incoming event"""
 │   │           return cls(
-│   │               event_id=event.get('event_id', ''),
-│   │               event_type=event.get('event_type', ''),
-│   │               correlation_id=event.get('correlation_id'),
+│   │               event_id=event.get("event_id", ""),
+│   │               trace_id=event.get("trace_id", ""),
+│   │               subject=event.get("subject", ""),
+│   │               correlation_id=event.get("correlation_id"),
 │   │               timestamp=datetime.fromisoformat(
-│   │                   event.get('timestamp', datetime.now(timezone.utc).isoformat())
+│   │                   event.get("timestamp", datetime.now(timezone.utc).isoformat())
 │   │               ),
-│   │               source_service=event.get('metadata', {}).get('source_service', 'unknown'),
-│   │               idempotency_key=event.get('idempotency_key'),
-│   │               version=event.get('metadata', {}).get('version', '1.0'),
-│   │               metadata=event.get('metadata', {})
+│   │               source_service=event.get("metadata", {}).get("source_service", "unknown"),
+│   │               idempotency_key=event.get("idempotency_key"),
+│   │               metadata=event.get("metadata", {}),
 │   │           )
-│   │       
+│   │   
 │   │       @classmethod
 │   │       def create(
 │   │           cls,
-│   │           event_type: str,
+│   │           *,
+│   │           subject: str,
 │   │           source_service: str,
 │   │           correlation_id: Optional[str] = None,
 │   │           idempotency_key: Optional[str] = None,
-│   │           metadata: Optional[Dict[str, Any]] = None
+│   │           metadata: Optional[Dict[str, Any]] = None,
+│   │           trace_id: Optional[str] = None,
 │   │       ) -> "EventContext":
 │   │           """Create new event context"""
-│   │           # Use existing correlation if available
 │   │           if not correlation_id:
 │   │               correlation_id = get_correlation_context()
-│   │               
+│   │           if not trace_id:
+│   │               trace_id = get_trace_context() or correlation_id or str(uuid7())
 │   │           return cls(
-│   │               event_id=f"evt_{uuid4().hex[:12]}",
-│   │               event_type=event_type,
+│   │               event_id=str(uuid4()),
+│   │               trace_id=trace_id,
+│   │               subject=subject,
 │   │               correlation_id=correlation_id,
 │   │               timestamp=datetime.now(timezone.utc),
 │   │               source_service=source_service,
 │   │               idempotency_key=idempotency_key,
-│   │               version="1.0",
-│   │               metadata=metadata or {}
+│   │               metadata=metadata or {},
 │   │           )
-│   │       
+│   │   
 │   │       def to_dict(self) -> Dict[str, Any]:
 │   │           """Convert context to dictionary for logging or serialization"""
 │   │           return {
-│   │               'event_id': self.event_id,
-│   │               'event_type': self.event_type,
-│   │               'correlation_id': self.correlation_id,
-│   │               'timestamp': self.timestamp.isoformat(),
-│   │               'source_service': self.source_service,
-│   │               'idempotency_key': self.idempotency_key,
-│   │               'version': self.version,
-│   │               **(self.metadata or {})
+│   │               "event_id": self.event_id,
+│   │               "trace_id": self.trace_id,
+│   │               "subject": self.subject,
+│   │               "correlation_id": self.correlation_id,
+│   │               "timestamp": self.timestamp.isoformat(),
+│   │               "source_service": self.source_service,
+│   │               "idempotency_key": self.idempotency_key,
+│   │               "metadata": self.metadata,  # keep nested
 │   │           }
-│   │       
+│   │   
 │   │       def apply_correlation(self):
-│   │           """Apply correlation context to async context"""
+│   │           """Apply correlation and trace context to async context"""
 │   │           if self.correlation_id:
 │   │               set_correlation_context(self.correlation_id)
-│   │       
+│   │           if self.trace_id:
+│   │               set_trace_context(self.trace_id)
+│   │   
 │   │       def create_response_context(
 │   │           self,
-│   │           response_event_type: str,
+│   │           response_subject: str,
 │   │           response_service: str,
 │   │           idempotency_key: Optional[str] = None,
-│   │           additional_metadata: Optional[Dict[str, Any]] = None
+│   │           additional_metadata: Optional[Dict[str, Any]] = None,
 │   │       ) -> "EventContext":
 │   │           """Create context for response events, preserving correlation chain"""
 │   │           metadata = {
-│   │               'triggered_by': self.event_id,
-│   │               'original_source': self.source_service,
-│   │               **(additional_metadata or {})
+│   │               "triggered_by": self.event_id,
+│   │               "original_source": self.source_service,
+│   │               **(additional_metadata or {}),
 │   │           }
-│   │           
+│   │   
 │   │           return EventContext.create(
-│   │               event_type=response_event_type,
+│   │               subject=response_subject,
 │   │               source_service=response_service,
-│   │               correlation_id=self.correlation_id,  # Preserve correlation
+│   │               correlation_id=self.correlation_id,
+│   │               trace_id=self.trace_id,
 │   │               idempotency_key=idempotency_key,
-│   │               metadata=metadata
+│   │               metadata=metadata,
 │   │           )
 │   │   
 │   │   
 │   │   @dataclass
 │   │   class EventPayload(Generic[T]):
 │   │       """Wrapper for typed event payloads with context"""
+│   │   
 │   │       context: EventContext
 │   │       data: T
-│   │       
+│   │   
 │   │       @property
 │   │       def correlation_id(self) -> Optional[str]:
 │   │           return self.context.correlation_id
-│   │       
+│   │   
 │   │       def to_event_dict(self) -> Dict[str, Any]:
 │   │           """Convert to event dictionary for publishing"""
 │   │           return {
-│   │               'event_id': self.context.event_id,
-│   │               'event_type': self.context.event_type,
-│   │               'correlation_id': self.context.correlation_id,
-│   │               'idempotency_key': self.context.idempotency_key,
-│   │               'timestamp': self.context.timestamp.isoformat(),
-│   │               'metadata': {
-│   │                   'source_service': self.context.source_service,
-│   │                   'version': self.context.version,
-│   │                   **(self.context.metadata or {})
+│   │               "event_id": self.context.event_id,
+│   │               "subject": self.context.subject,
+│   │               "correlation_id": self.context.correlation_id,
+│   │               "idempotency_key": self.context.idempotency_key,
+│   │               "timestamp": self.context.timestamp.isoformat(),
+│   │               "metadata": {
+│   │                   "source_service": self.context.source_service,
+│   │                   **(self.context.metadata or {}),
 │   │               },
-│   │               'payload': self.data if isinstance(self.data, dict) else {}
+│   │               "payload": self.data if isinstance(self.data, dict) else {},
 │   │           }
 │   │   
 │   │   
 │   │   class EventContextManager:
 │   │       """
 │   │       Manages event context throughout processing lifecycle.
-│   │       
 │   │       This can be used by any service that processes events.
 │   │       """
-│   │       
+│   │   
 │   │       def __init__(self, logger=None):
 │   │           self.logger = logger
-│   │       
+│   │   
 │   │       def extract_context(self, event: Dict[str, Any]) -> EventContext:
 │   │           """Extract and validate event context"""
 │   │           context = EventContext.from_event(event)
-│   │           
+│   │   
 │   │           # Validate required fields
 │   │           if not context.event_id and self.logger:
-│   │               self.logger.warning("Event missing event_id", extra={'event': event})
-│   │           
-│   │           if not context.event_type:
-│   │               raise ValueError("Event missing required event_type")
-│   │           
+│   │               self.logger.warning("Event missing event_id", extra={"event": event})
+│   │   
+│   │           if not context.subject:
+│   │               raise ValueError("Event missing required subject")
+│   │   
 │   │           # Apply correlation context
 │   │           context.apply_correlation()
-│   │           
+│   │   
 │   │           # Log event reception
 │   │           if self.logger:
 │   │               self.logger.info(
-│   │                   f"Processing {context.event_type} event",
-│   │                   extra=context.to_dict()
+│   │                   f"Processing {context.subject} event", extra=context.to_dict()
 │   │               )
-│   │           
+│   │   
 │   │           return context
-│   │       
+│   │   
 │   │       def log_event_completion(
 │   │           self,
 │   │           context: EventContext,
 │   │           success: bool,
 │   │           duration_ms: float,
 │   │           error: Optional[Exception] = None,
-│   │           additional_data: Optional[Dict[str, Any]] = None
+│   │           additional_data: Optional[Dict[str, Any]] = None,
 │   │       ):
 │   │           """Log event processing completion"""
 │   │           if not self.logger:
 │   │               return
-│   │               
+│   │   
 │   │           log_data = {
 │   │               **context.to_dict(),
-│   │               'success': success,
-│   │               'duration_ms': duration_ms,
-│   │               **(additional_data or {})
+│   │               "success": success,
+│   │               "duration_ms": duration_ms,
+│   │               **(additional_data or {}),
 │   │           }
-│   │           
+│   │   
 │   │           if success:
-│   │               self.logger.info(
-│   │                   f"Completed processing {context.event_type}",
-│   │                   extra=log_data
-│   │               )
+│   │               self.logger.info(f"Completed processing {context.subject}", extra=log_data)
 │   │           else:
 │   │               self.logger.error(
-│   │                   f"Failed to process {context.event_type}: {error}",
+│   │                   f"Failed to process {context.subject}: {error}",
 │   │                   extra={
 │   │                       **log_data,
-│   │                       'error_type': type(error).__name__ if error else 'Unknown'
+│   │                       "error_type": type(error).__name__ if error else "Unknown",
 │   │                   },
-│   │                   exc_info=error
+│   │                   exc_info=error,
 │   │               )
-│   │   
-│   │   
-│   │   # Backwards compatibility imports
-│   │   __all__ = [
-│   │       'EventContext',
-│   │       'EventPayload',
-│   │       'EventContextManager'
-│   │   ]
 │   │   ```
 │   │   
 │   └── mappers.py
@@ -4068,19 +4193,15 @@ shared/
 │       # Simple service to stream mapping
 │       SERVICE_STREAM_MAP = {
 │           "analytics-service": Streams.ANALYTICS,
-│           "auth-service": Streams.AUTH,
 │           "billing-service": Streams.BILLING,
 │           "catalog-ai-service": Streams.AI_PROCESSING,
 │           "catalog-connector": Streams.CATALOG,
-│           "catalog-image-cache": Streams.CATALOG,
-│           "catalog-job-processor": Streams.CATALOG,
 │           "catalog-service": Streams.CATALOG,
 │           "credit-service": Streams.CREDIT,
 │           "merchant-service": Streams.MERCHANT,
 │           "notification-service": Streams.NOTIFICATION,
 │           "profile-ai-selfie": Streams.AI_PROCESSING,
 │           "profile-service": Streams.PROFILE,
-│           "rate-limit-service": Streams.RATE_LIMIT,
 │           "scheduler-service": Streams.SCHEDULER,
 │           "webhook-service": Streams.WEBHOOKS,
 │       }
@@ -4089,10 +4210,7 @@ shared/
 │       def get_stream_subjects(stream: Streams) -> List[str]:
 │           """Get all subjects for a stream"""
 │           stream_prefix = stream.value.lower()
-│           return [
-│               f"cmd.{stream_prefix}.*",
-│               f"evt.{stream_prefix}.*"
-│           ]
+│           return [f"cmd.{stream_prefix}.*", f"evt.{stream_prefix}.*"]
 │       
 │       
 │       def get_stream_for_service(service_name: str) -> Streams:
@@ -4102,18 +4220,18 @@ shared/
 │           return SERVICE_STREAM_MAP[service_name]
 │       
 │       
-│       def get_stream_from_event_type(event_type: str) -> Streams:
+│       def get_stream_from_subject(subject: str) -> Streams:
 │           """
 │           Infer stream from event type.
 │           Event types follow pattern: cmd.domain.* or evt.domain.*
 │           """
-│           parts = event_type.split(".")
+│           parts = subject.split(".")
 │           if len(parts) >= 2 and parts[0] in ["cmd", "evt"]:
 │               domain = parts[1].upper()
 │               if hasattr(Streams, domain):
 │                   return Streams[domain]
-│           
-│           raise ValueError(f"Cannot infer stream from event type: {event_type}")
+│       
+│           raise ValueError(f"Cannot infer stream from event type: {subject}")
 │       ```
 │       
 ├── mappers/
@@ -4133,59 +4251,109 @@ shared/
 │   │   ]
 │   │   ```
 │   │   
-│   └── base.py
+│   ├── base.py
+│   │   
+│   │   ```py
+│   │   # File: shared/shared/mappers/base.py
+│   │   from __future__ import annotations
+│   │   
+│   │   from typing import TypeVar, Generic, List, Dict, Any, Optional
+│   │   from abc import ABC, abstractmethod
+│   │   from pydantic import BaseModel
+│   │   
+│   │   # Type variables
+│   │   ModelT = TypeVar("ModelT")
+│   │   CreateT = TypeVar("CreateT", bound=BaseModel)
+│   │   UpdateT = TypeVar("UpdateT", bound=BaseModel)
+│   │   ResponseT = TypeVar("ResponseT", bound=BaseModel)
+│   │   
+│   │   class BaseMapper(Generic[ModelT, CreateT, UpdateT, ResponseT], ABC):
+│   │       """
+│   │       Universal mapper for all entities with optional update support.
+│   │       
+│   │       Required methods (always implement):
+│   │       - create_to_model: Convert create schema to model
+│   │       - model_to_response: Convert model to basic response
+│   │       
+│   │       Optional methods (implement only if your entity needs them):
+│   │       - update_to_dict: For updatable entities  
+│   │       - model_to_detail_response: For entities with detailed views
+│   │       """
+│   │       __slots__ = ()  # Memory optimization
+│   │       
+│   │       @abstractmethod
+│   │       def create_to_model(self, create_schema: CreateT, **kwargs) -> ModelT:
+│   │           """Convert create schema to model instance."""
+│   │           pass
+│   │       
+│   │       @abstractmethod
+│   │       def model_to_response(self, model: ModelT) -> ResponseT:
+│   │           """Convert model instance to basic response schema."""
+│   │           pass
+│   │       
+│   │       @abstractmethod
+│   │       def models_to_responses(self, models: List[ModelT]) -> List[ResponseT]:
+│   │           """Convert list of models to list of response schemas."""
+│   │           return [self.model_to_response(model) for model in models]
+│   │       
+│   │       @abstractmethod
+│   │       def update_to_dict(self, update_schema: UpdateT) -> Dict[str, Any]:
+│   │           """
+│   │           Optional: Convert update schema to dict for partial updates.
+│   │           Only implement this method if your entity supports updates.
+│   │           """
+│   │           return {
+│   │               k: v for k, v in update_schema.model_dump(exclude_none=True).items()
+│   │           }
+│   │   ```
+│   │   
+│   └── crud_mapper.py
 │       
 │       ```py
-│       # File: shared/shared/mappers/base.py
+│       # mappers/generic.py
 │       from __future__ import annotations
+│       from typing import TypeVar, Generic, List
+│       from pydantic import BaseModel, TypeAdapter
+│       from sqlalchemy.orm import DeclarativeBase
+│       from sqlalchemy import inspect
 │       
-│       from typing import TypeVar, Generic, List, Dict, Any, Optional
-│       from abc import ABC, abstractmethod
-│       from pydantic import BaseModel
+│       ModelT = TypeVar('ModelT', bound=DeclarativeBase)
+│       InT    = TypeVar('InT',    bound=BaseModel)
+│       PatchT = TypeVar('PatchT', bound=BaseModel | None)
+│       OutT   = TypeVar('OutT',   bound=BaseModel)
 │       
-│       # Type variables
-│       ModelT = TypeVar("ModelT")
-│       CreateT = TypeVar("CreateT", bound=BaseModel)
-│       UpdateT = TypeVar("UpdateT", bound=BaseModel)
-│       ResponseT = TypeVar("ResponseT", bound=BaseModel)
+│       class CRUDMapper(Generic[ModelT, InT, PatchT, OutT]):
+│           """Bidirectional bridge between SQLAlchemy models and Pydantic DTOs."""
 │       
-│       class BaseMapper(Generic[ModelT, CreateT, UpdateT, ResponseT], ABC):
-│           """
-│           Universal mapper for all entities with optional update support.
-│           
-│           Required methods (always implement):
-│           - create_to_model: Convert create schema to model
-│           - model_to_response: Convert model to basic response
-│           
-│           Optional methods (implement only if your entity needs them):
-│           - update_to_dict: For updatable entities  
-│           - model_to_detail_response: For entities with detailed views
-│           """
-│           __slots__ = ()  # Memory optimization
-│           
-│           @abstractmethod
-│           def create_to_model(self, create_schema: CreateT, **kwargs) -> ModelT:
-│               """Convert create schema to model instance."""
-│               pass
-│           
-│           @abstractmethod
-│           def model_to_response(self, model: ModelT) -> ResponseT:
-│               """Convert model instance to basic response schema."""
-│               pass
-│           
-│           def models_to_responses(self, models: List[ModelT]) -> List[ResponseT]:
-│               """Convert list of models to list of response schemas."""
-│               return [self.model_to_response(model) for model in models]
-│           
-│           
-│           def update_to_dict(self, update_schema: UpdateT) -> Dict[str, Any]:
-│               """
-│               Optional: Convert update schema to dict for partial updates.
-│               Only implement this method if your entity supports updates.
-│               """
-│               return {
-│                   k: v for k, v in update_schema.model_dump(exclude_none=True).items()
-│               }
+│           model_cls: type[ModelT]
+│           out_schema: type[OutT]
+│       
+│           # ---------- CREATE ---------- #
+│           def to_model(self, dto: InT, **extra) -> ModelT:
+│               return self.model_cls(**dto.model_dump(), **extra)
+│       
+│           # ---------- PATCH ---------- #
+│           def patch_model(self, obj: ModelT, patch: PatchT) -> None:
+│               if patch is None:
+│                   return
+│               for field, value in patch.model_dump(exclude_unset=True).items():
+│                   setattr(obj, field, value)
+│               
+│       
+│           # ---------- READ ---------- #
+│           def to_out(self, obj: ModelT) -> OutT:
+│               # from_attributes=True must be set on OutT
+│               return self.out_schema.model_validate(obj)
+│       
+│           def list_to_out(self, objs: List[ModelT]) -> List[OutT]:
+│               # faster validation for big lists
+│               ta = TypeAdapter(List[self.out_schema])  # type: ignore[arg-type]
+│               return ta.validate_python(objs)
+│       
+│           # ---------- HELPER ---------- #
+│           @staticmethod
+│           def is_dirty(obj: ModelT) -> bool:
+│               return bool(inspect(obj).attrs.modified)
 │       ```
 │       
 ├── messaging/
@@ -4421,6 +4589,8 @@ shared/
 │   │   from nats.js import JetStreamContext
 │   │   from nats.js.api import StreamConfig, RetentionPolicy, StorageType
 │   │   
+│   │   from shared.api.tracing import get_trace_context
+│   │   
 │   │   
 │   │   class JetStreamEventPublisher(ABC):
 │   │       """
@@ -4451,7 +4621,9 @@ shared/
 │   │           """The version of the service."""
 │   │           return "1.0.0"
 │   │   
-│   │       def __init__(self, client: Client, js: JetStreamContext, logger: Optional[Any] = None):
+│   │       def __init__(
+│   │           self, client: Client, js: JetStreamContext, logger: Optional[Any] = None
+│   │       ):
 │   │           self.client = client
 │   │           self.js = js
 │   │           self._stream_created = False
@@ -4460,8 +4632,9 @@ shared/
 │   │       def _get_default_logger(self):
 │   │           """Get a default logger if none provided"""
 │   │           import logging
+│   │   
 │   │           return logging.getLogger(self.__class__.__name__)
-│   │       
+│   │   
 │   │       async def ensure_stream(self) -> None:
 │   │           """Ensure the stream exists with default configuration."""
 │   │           if self._stream_created:
@@ -4491,12 +4664,13 @@ shared/
 │   │   
 │   │       async def publish_event(
 │   │           self,
-│   │           event_type: str,
+│   │           subject: str,
 │   │           payload: Dict[str, Any],
 │   │           subject: Optional[str] = None,
 │   │           correlation_id: Optional[str] = None,
+│   │           trace_id: Optional[str] = None,
 │   │           idempotency_key: Optional[str] = None,
-│   │           metadata: Optional[Dict[str, Any]] = None
+│   │           metadata: Optional[Dict[str, Any]] = None,
 │   │       ) -> str:
 │   │           """Publish a structured event."""
 │   │           await self.ensure_stream()
@@ -4508,67 +4682,77 @@ shared/
 │   │           if not idempotency_key:
 │   │               idempotency_key = event_id
 │   │   
+│   │           trace_id = trace_id or (get_trace_context() or correlation_id)
+│   │   
 │   │           # Build event
 │   │           event = {
 │   │               "event_id": event_id,
-│   │               "event_type": event_type,
+│   │               "subject": subject,
 │   │               "correlation_id": correlation_id,
 │   │               "idempotency_key": idempotency_key,
 │   │               "timestamp": datetime.now(timezone.utc).isoformat(),
 │   │               "metadata": {
 │   │                   "source_service": self.service_name,
 │   │                   "version": self.service_version,
-│   │                   **(metadata or {})
+│   │                   **(metadata or {}),
 │   │               },
-│   │               "payload": payload
+│   │               "payload": payload,
 │   │           }
 │   │   
 │   │           # Publish
-│   │           subject = subject or event_type
+│   │           subject = subject or subject
 │   │           headers = {"Nats-Msg-Id": idempotency_key}
-│   │           
+│   │   
 │   │           try:
 │   │               ack = await self.js.publish(
-│   │                   subject,
-│   │                   json.dumps(event).encode("utf-8"),
-│   │                   headers=headers
+│   │                   subject, json.dumps(event).encode("utf-8"), headers=headers
 │   │               )
 │   │               if self.logger:
-│   │                   self.logger.debug(f"Published {event_type} to {subject} (seq: {ack.seq})")
-│   │                   
+│   │                   self.logger.debug(f"Published {subject} to {subject} (seq: {ack.seq})")
+│   │   
 │   │               if ack.duplicate:
 │   │                   self.logger.info(
 │   │                       f"Duplicate message detected and ignored",
-│   │                       extra={"idempotency_key": idempotency_key}
+│   │                       extra={"idempotency_key": idempotency_key},
 │   │                   )
 │   │               return event_id
-│   │           
+│   │   
 │   │           except Exception as e:
 │   │               if self.logger:
-│   │                   self.logger.critical(f"Failed to publish to {subject}: {e}", exc_info=True)
+│   │                   self.logger.critical(
+│   │                       f"Failed to publish to {subject}: {e}", exc_info=True
+│   │                   )
 │   │               raise
 │   │   
-│   │       async def publish_command(self, command_type: str, payload: Dict[str, Any], **kwargs) -> str:
+│   │       async def publish_command(
+│   │           self, command_type: str, payload: Dict[str, Any], **kwargs
+│   │       ) -> str:
 │   │           """Publish a command event."""
-│   │           if not command_type.startswith('cmd.'):
-│   │               command_type = f'cmd.{command_type}'
-│   │           
-│   │           idempotency_key = kwargs.pop('idempotency_key', None)
+│   │           if not command_type.startswith("cmd."):
+│   │               command_type = f"cmd.{command_type}"
 │   │   
-│   │           return await self.publish_event(event_type=command_type, payload=payload, idempotency_key=idempotency_key, **kwargs)
+│   │           idempotency_key = kwargs.pop("idempotency_key", None)
 │   │   
-│   │       
-│   │       async def publish_event_response(self, event_type: str, payload: Dict[str, Any], **kwargs) -> str:
+│   │           return await self.publish_event(
+│   │               subject=command_type,
+│   │               payload=payload,
+│   │               idempotency_key=idempotency_key,
+│   │               **kwargs,
+│   │           )
+│   │   
+│   │       async def publish_event_response(
+│   │           self, subject: str, payload: Dict[str, Any], **kwargs
+│   │       ) -> str:
 │   │           """Publish an event response."""
-│   │           if not event_type.startswith('evt.'):
-│   │               event_type = f'evt.{event_type}'
-│   │               
+│   │           if not subject.startswith("evt."):
+│   │               subject = f"evt.{subject}"
+│   │   
 │   │           # Ensure idempotency key is set
-│   │           idempotency_key = kwargs.pop('idempotency_key', None)
-│   │           
-│   │           return await self.publish_event(event_type=event_type, payload=payload, idempotency_key=idempotency_key, **kwargs)
+│   │           idempotency_key = kwargs.pop("idempotency_key", None)
 │   │   
-│   │   
+│   │           return await self.publish_event(
+│   │               subject=subject, payload=payload, idempotency_key=idempotency_key, **kwargs
+│   │           )
 │   │   ```
 │   │   
 │   └── subscriber.py
@@ -4587,6 +4771,7 @@ shared/
 │       
 │       if TYPE_CHECKING:
 │           from .jetstream_wrapper import JetStreamWrapper
+│       
 │       
 │       class JetStreamEventSubscriber(ABC):
 │           """
@@ -4614,36 +4799,39 @@ shared/
 │       
 │           @property
 │           @abstractmethod
-│           def event_type(self) -> str:
-│               """The expected event_type for validation."""
+│           def subject(self) -> str:
+│               """The expected subject for validation."""
 │               pass
 │       
 │           def __init__(
-│               self, 
-│               client: Client, 
-│               js: JetStreamContext, 
+│               self,
+│               client: Client,
+│               js: JetStreamContext,
 │               logger: Optional[Any] = None,
-│               wrapper: Optional['JetStreamWrapper'] = None
+│               wrapper: Optional["JetStreamWrapper"] = None,
 │           ):
 │               """Constructor with optional wrapper for dependency access"""
 │               self.client = client
 │               self.js = js
 │               self.logger = logger or self._get_default_logger()
 │               self._subscription = None
-│               
+│       
 │               # Access to service dependencies via wrapper
 │               self._wrapper = wrapper
-│               
+│       
 │               # Debug initialization
 │               self.logger.debug(f"Initialized {self.__class__.__name__}")
 │               self.logger.debug(f"JetStream context: {self.js is not None}")
-│               self.logger.debug(f"NATS client connected: {self.client.is_connected if self.client else False}")
+│               self.logger.debug(
+│                   f"NATS client connected: {self.client.is_connected if self.client else False}"
+│               )
 │       
 │           def _get_default_logger(self):
 │               """Get a default logger if none provided"""
 │               import logging
+│       
 │               return logging.getLogger(self.__class__.__name__)
-│           
+│       
 │           def get_dependency(self, key: DepKeys) -> Any:
 │               """Get a service dependency with type-constrained keys"""
 │               if not self._wrapper:
@@ -4652,25 +4840,30 @@ shared/
 │                       "This usually means the subscriber was created manually instead of via JetStreamWrapper."
 │                   )
 │               return self._wrapper.dependencies.get(key)
-│           
+│       
 │           def dep(self, key: DepKeys) -> Any:
 │               """Shorter alias for get_dependency"""
 │               return self.get_dependency(key)
 │       
 │           @abstractmethod
-│           async def on_event(self, event: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> None:
+│           async def on_event(
+│               self, event: Dict[str, Any], headers: Optional[Dict[str, str]] = None
+│           ) -> None:
 │               """Process the validated event - access dependencies via self.get_dependency()"""
 │               pass
 │       
 │           async def on_error(self, error: Exception, event: Dict[str, Any]) -> bool:
 │               """Handle processing errors with safety net for dependency access"""
 │               try:
-│                   self.logger.error(f"Error processing {self.event_type}: {error}")
+│                   self.logger.error(f"Error processing {self.subject}: {error}")
 │               except Exception as log_error:
 │                   # Fallback if even logging fails - avoid print() in production
 │                   try:
 │                       import sys
-│                       sys.stderr.write(f"Critical error in subscriber {self.__class__.__name__}: {error}\n")
+│       
+│                       sys.stderr.write(
+│                           f"Critical error in subscriber {self.__class__.__name__}: {error}\n"
+│                       )
 │                       sys.stderr.write(f"Additionally, logging failed: {log_error}\n")
 │                       sys.stderr.flush()
 │                   except Exception:
@@ -4698,46 +4891,46 @@ shared/
 │               except:
 │                   await self.js.add_consumer(self.stream_name, config=consumer_config)
 │                   self.logger.info(f"Created new consumer: {self.durable_name}")
-│               
+│       
 │               # Subscribe
 │               try:
 │                   self._subscription = await self.js.pull_subscribe(
-│                       self.subject, 
-│                       durable=self.durable_name, 
-│                       stream=self.stream_name
+│                       self.subject, durable=self.durable_name, stream=self.stream_name
 │                   )
-│                   
+│       
 │                   if self._subscription is None:
 │                       raise Exception("Failed to create subscription")
-│                       
+│       
 │                   self.logger.info(f"Listening on {self.stream_name}/{self.subject}")
-│                   
+│       
 │                   error_count = 0
 │                   max_errors = 5
-│                   
+│       
 │                   # Process messages with exponential backoff
 │                   while True:
 │                       try:
 │                           messages = await self._subscription.fetch(batch=10, timeout=1)
 │                           error_count = 0  # Reset on success
-│                           
+│       
 │                           for msg in messages:
 │                               await self._process_message(msg)
-│                               
+│       
 │                       except asyncio.TimeoutError:
 │                           continue  # Normal - no messages
 │                       except Exception as e:
 │                           error_count += 1
-│                           
+│       
 │                           if error_count > max_errors:
 │                               self.logger.error("Too many errors, stopping subscriber")
 │                               break
-│                           
+│       
 │                           # Exponential backoff with jitter
-│                           backoff = min(60, 2 ** error_count)
-│                           self.logger.warning(f"Error #{error_count}, backing off {backoff}s: {e}")
+│                           backoff = min(60, 2**error_count)
+│                           self.logger.warning(
+│                               f"Error #{error_count}, backing off {backoff}s: {e}"
+│                           )
 │                           await asyncio.sleep(backoff)
-│                           
+│       
 │               except Exception as e:
 │                   self.logger.error(f"Failed to create subscription: {e}")
 │                   raise
@@ -4754,16 +4947,16 @@ shared/
 │                       return
 │       
 │                   # Validate structure
-│                   required = ["event_id", "event_type", "timestamp", "payload"]
+│                   required = ["event_id", "subject", "timestamp", "payload"]
 │                   if missing := [f for f in required if f not in data]:
 │                       self.logger.error(f"Missing fields: {missing}")
 │                       await msg.ack()
 │                       return
 │       
 │                   # Validate event type
-│                   if self.event_type and data.get("event_type") != self.event_type:
+│                   if self.subject and data.get("subject") != self.subject:
 │                       self.logger.warning(
-│                           f"Wrong event type: expected {self.event_type}, got {data.get('event_type')}"
+│                           f"Wrong event type: expected {self.subject}, got {data.get('subject')}"
 │                       )
 │                       await msg.ack()
 │                       return
@@ -5280,6 +5473,7 @@ alembic = "^1.16.2"
 pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
+uuid7 = "^0.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -5287,6 +5481,358 @@ build-backend = "poetry.core.masonry.api"
 ```
 
 README.md
+
+```md
+# GLAM Shared Package
+
+Shared utilities and infrastructure components for GLAM microservices platform.
+
+## Features
+
+- **Standardized API Responses**: Consistent response format across all services
+- **Database Integration**: SQLAlchemy models, repository pattern, and session management  
+- **Event-Driven Architecture**: Publishers, subscribers, and event context management
+- **Error Handling**: Comprehensive error hierarchy with automatic mapping
+- **Distributed Tracing**: Correlation IDs and trace context propagation
+- **Metrics & Monitoring**: Prometheus metrics with automatic HTTP tracking
+- **Structured Logging**: Service-aware logging with request context
+- **Configuration Management**: YAML configuration with environment overrides
+- **NATS Messaging**: JetStream integration with dependency injection
+
+## Quick Start
+
+### Installation
+
+```bash
+# Add to your service
+cd your-service/
+poetry add ../shared
+
+# Or if published to registry
+poetry add glam-shared
+```
+
+### Basic Service Setup
+
+```python
+# src/main.py
+from fastapi import FastAPI
+from shared.api import setup_middleware, create_health_router
+from shared.utils.logger import create_logger
+
+# Create logger and app
+logger = create_logger("your-service")
+app = FastAPI(title="Your Service")
+
+# Setup essential middleware
+setup_middleware(app, service_name="your-service")
+
+# Add health endpoint
+app.include_router(create_health_router("your-service"), prefix="/api/v1")
+```
+
+### Configuration
+
+```yaml
+# config/services/your-service.yml
+database:
+  host: "localhost"
+  port: 5432
+  name: "your_service_db"
+  user: "postgres"
+  password: "password"
+
+nats:
+  servers: ["nats://localhost:4222"]
+```
+
+## Core Components
+
+### API Module
+- **Middleware**: Automatic request/response handling, tracing, metrics
+- **Dependencies**: Pagination, request context, correlation IDs
+- **Responses**: Standardized success, error, and paginated responses
+- **Health Checks**: Built-in health endpoints
+
+### Database Module
+- **Base Models**: Async SQLAlchemy with automatic mixins
+- **Repository Pattern**: Generic CRUD operations with extensibility
+- **Session Management**: Async session handling with proper cleanup
+- **Migrations**: Alembic integration utilities
+
+### Event System
+- **Publishers**: Domain-specific event publishing with validation
+- **Subscribers**: Event processing with dependency injection
+- **Context Management**: Correlation and trace propagation
+- **Pre-built Events**: Common event types (notifications, billing, etc.)
+
+### Error Handling
+- **Error Hierarchy**: Structured domain and infrastructure errors
+- **Automatic Mapping**: Convert external exceptions to domain errors
+- **Service-Specific**: Ready-to-use errors for common domains
+- **API Integration**: Automatic error response formatting
+
+### Messaging (NATS)
+- **JetStream Wrapper**: Simplified publisher/subscriber setup
+- **Dependency Injection**: Service dependencies for event handlers
+- **Stream Management**: Automatic stream creation and configuration
+- **Health Monitoring**: Connection health checks
+
+## Available Mixins & Base Classes
+
+### Database Mixins
+```python
+# Automatic timestamps
+class TimestampedMixin:
+    created_at: Mapped[datetime]  # Auto-set
+    updated_at: Mapped[datetime]  # Auto-updated
+
+# Multi-tenant support  
+class MerchantMixin:
+    merchant_id: Mapped[UUID]      # Indexed
+    merchant_domain: Mapped[str]   # Indexed
+
+# Soft delete support
+class SoftDeleteMixin:
+    deleted_at: Mapped[datetime | None]
+    is_deleted: Mapped[bool]       # Indexed
+```
+
+### Repository Base
+```python
+class Repository(Generic[T]):
+    # Available methods (all async)
+    async def save(self, instance: T) -> T
+    async def find_by_id(self, id: UUID) -> T | None  
+    async def find_all(self, **filters) -> list[T]
+    async def delete_by_id(self, id: UUID) -> None
+    # Override for custom queries
+```
+
+### Event Base Classes
+```python
+class DomainEventPublisher:
+    # Set these properties
+    domain_stream: Streams = Streams.YOUR_DOMAIN
+    service_name_override: str = "your-service"
+    
+    # Available methods
+    async def publish_event(subject: str, payload: dict) -> str
+    async def publish_command(command_type: str, payload: dict) -> str
+
+class DomainEventSubscriber:
+    # Must implement
+    async def on_event(self, event: dict, headers: dict) -> None
+    
+    # Available methods  
+    def get_dependency(self, key: str) -> Any
+```
+
+## Error Types
+
+### Common Domain Errors (Ready to Use)
+- `NotFoundError` - Resource not found (404)
+- `ValidationError` - Invalid input (422)
+- `ConflictError` - Resource conflicts (409)
+- `UnauthorizedError` - Authentication required (401)
+- `ForbiddenError` - Insufficient permissions (403)
+
+### Infrastructure Errors (Ready to Use)
+- `DatabaseError` - Database operation failed
+- `UpstreamServiceError` - External service failure
+- `MessageBusError` - NATS/messaging failure
+- `S3Error` - Storage operation failed
+
+### Service-Specific Collections
+```python
+# Import pre-built error collections
+from shared.errors import (
+    # Catalog errors
+    SyncInProgressError, ItemNotFoundError,
+    
+    # Profile errors  
+    ProfileNotFoundError, ProfileAlreadyExistsError,
+    
+    # Notification errors
+    TemplateNotFoundError, EmailProviderError
+)
+```
+
+## Event Streams
+
+Each service publishes to designated streams:
+
+```python
+# Available streams
+Streams.CATALOG      # catalog-service, catalog-connector
+Streams.MERCHANT     # merchant-service
+Streams.BILLING      # billing-service  
+Streams.CREDIT       # credit-service
+Streams.PROFILE      # profile-service
+Streams.NOTIFICATION # notification-service
+Streams.AI_PROCESSING # AI services
+Streams.WEBHOOKS     # webhook-service
+Streams.SCHEDULER    # scheduler-service
+Streams.ANALYTICS    # analytics-service
+```
+
+## Configuration
+
+### Environment Variables
+
+All services support these patterns:
+
+```bash
+# Database
+{SERVICE}_DB_HOST=localhost
+{SERVICE}_DB_PORT=5432
+{SERVICE}_DB_NAME=service_db
+{SERVICE}_DB_USER=postgres
+{SERVICE}_DB_PASSWORD=password
+
+# Messaging  
+{SERVICE}_NATS_SERVERS=nats://localhost:4222
+
+# Logging
+{SERVICE}_LOG_LEVEL=INFO
+APP_ENV=dev  # dev, staging, prod
+```
+
+### YAML Configuration
+```yaml
+# config/services/your-service.yml
+service:
+  name: "your-service"
+  port: 8080
+
+database:
+  host: "localhost"
+  port: 5432
+  name: "your_service_db"
+
+nats:
+  servers: ["nats://localhost:4222"]
+```
+
+## Development
+
+### Testing
+```bash
+# Run tests
+poetry run pytest
+
+# With coverage
+poetry run pytest --cov=shared
+```
+
+### Code Quality
+```bash
+# Format code
+poetry run black .
+poetry run isort .
+
+# Type checking  
+poetry run mypy shared/
+
+# Linting
+poetry run ruff check shared/
+```
+
+### Documentation
+```bash
+# Generate API docs
+poetry run pdoc shared --html
+```
+
+## Monitoring & Observability
+
+### Built-in Metrics (Automatic)
+- `http_requests_total` - Request counts by service/endpoint/status
+- `http_request_duration_seconds` - Request timing histograms  
+- `http_requests_in_progress` - Active request gauge
+
+### Health Checks (Automatic)
+- `GET /api/v1/health` - Service health with timestamp
+- `GET /metrics` - Prometheus metrics endpoint
+
+### Logging Features
+- **Structured Logging**: JSON in production, console in development
+- **Request Context**: Automatic request_id, correlation_id, trace_id
+- **File Rotation**: Automatic log rotation in production
+- **Environment-Aware**: Different formats per environment
+
+## Architecture Patterns
+
+The shared package enforces consistent patterns across services:
+
+- **Event-Driven Design**: All inter-service communication through events
+- **Repository Pattern**: Standardized data access with extensibility
+- **Dependency Injection**: Clean service dependencies via messaging wrapper
+- **Domain Errors**: Business logic errors separate from infrastructure
+- **Request Tracing**: End-to-end request tracking with correlation IDs
+- **Multi-Tenancy**: Built-in merchant isolation and indexing
+
+## Usage Examples
+
+### Complete Service Setup
+```python
+from shared.api import setup_middleware
+from shared.database import create_database_config, DatabaseSessionManager
+from shared.messaging import JetStreamWrapper
+
+# Database setup
+db_config = create_database_config("YOUR_SERVICE_")
+db_manager = DatabaseSessionManager(db_config.database_url)
+await db_manager.init()
+
+# Messaging setup  
+messaging = JetStreamWrapper(logger)
+await messaging.connect(["nats://localhost:4222"])
+publisher = messaging.create_publisher(YourPublisher)
+
+# Middleware setup
+setup_middleware(app, service_name="your-service")
+```
+
+### Event Publishing
+```python
+# Publish with automatic correlation
+await publisher.publish_event(
+    subject="evt.item.created",
+    payload={"item_id": str(item.id)},
+    correlation_id=get_correlation_context(),
+    idempotency_key=generate_idempotency_key("INTERNAL", "ITEM_CREATED", item.id)
+)
+```
+
+### Error Handling
+```python
+from shared.errors import NotFoundError, ValidationError
+
+# Use specific error types
+if not item:
+    raise NotFoundError(
+        f"Item {item_id} not found",
+        resource="item",
+        resource_id=str(item_id)
+    )
+```
+
+## Dependencies
+
+- **FastAPI** - Web framework integration
+- **SQLAlchemy** - Async database ORM
+- **Pydantic** - Data validation and serialization
+- **NATS.py** - JetStream messaging
+- **Prometheus Client** - Metrics collection
+- **Alembic** - Database migrations
+- **PyYAML** - Configuration management
+
+## License
+
+Copyright © 2025 GlamYouUp. All rights reserved.
+```
+
 
 ================================================================================
 Output includes file contents

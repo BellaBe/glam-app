@@ -134,7 +134,7 @@ GET /analytics/metrics/custom  # Analytics-specific metrics
 ```
 
 ### Key Metrics
-- `analytics_events_processed_total{event_type, status}`
+- `analytics_events_processed_total{subject, status}`
 - `analytics_predictions_total{model_type}`
 - `analytics_alerts_triggered_total{alert_type}`
 - `analytics_model_accuracy_score{model_type}`

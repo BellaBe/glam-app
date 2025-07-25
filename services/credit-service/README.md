@@ -138,7 +138,7 @@ PLUGIN_STATUS_CACHE_TTL=15
 - `credits_balance_total{merchant_id}` - Current balances
 - `credits_transactions_total{type,reference_type}` - Transaction counts
 - `credits_plugin_status_checks_total{status}` - Plugin status checks
-- `credits_events_published_total{event_type}` - Published events
+- `credits_events_published_total{subject}` - Published events
 
 ### Health Checks
 - Database connectivity

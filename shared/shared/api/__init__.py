@@ -48,7 +48,13 @@ from .correlation import (
     add_correlation_header,
     add_correlation_to_event,
     extract_correlation_from_event,
+    
 )
+from .tracing import (
+    set_trace_context,
+    get_trace_context,
+    TracingMiddleware,
+)   
 
 __all__ = [
     # Models
@@ -77,6 +83,10 @@ __all__ = [
     "add_correlation_header",
     "add_correlation_to_event",
     "extract_correlation_from_event",
+    # Tracing
+    "set_trace_context",
+    "get_trace_context",
+    "TracingMiddleware",
     
     # Middleware
     "APIMiddleware",

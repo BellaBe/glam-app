@@ -16,7 +16,7 @@ from nats.js.api import StreamConfig, RetentionPolicy, StorageType
 
 from shared.utils.logger import ServiceLogger
 from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging.jetstream_wrapper import JetStreamWrapper
+from shared.messaging.jetstream_client import JetStreamWrapper
 
 from .config import WebhookServiceConfig
 from .services.webhook_service import WebhookService

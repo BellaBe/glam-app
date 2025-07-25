@@ -93,8 +93,8 @@ class ShopifyWebhookHandler(WebhookHandler):
     def map_to_domain_event(self, webhook_data: WebhookData) -> Optional[DomainEvent]:
         """Map Shopify webhook to domain event"""
 
-        event_type = self.TOPIC_EVENT_MAP.get(webhook_data.topic)
-        if not event_type:
+        subject = self.TOPIC_EVENT_MAP.get(webhook_data.topic)
+        if not subject:
             self.logger.debug(
                 f"No domain event mapping for topic: {webhook_data.topic}"
             )
@@ -108,7 +108,7 @@ class ShopifyWebhookHandler(WebhookHandler):
             webhook_data.merchant_domain,
         )
 
-        return DomainEvent(event_type=event_type, payload=payload)
+        return DomainEvent(subject=subject, payload=payload)
 
     def _build_event_payload(
         self,
