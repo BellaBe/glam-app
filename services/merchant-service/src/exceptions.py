@@ -1,52 +1,25 @@
-# services/merchant-service/src/exceptions.py
-"""Merchant service exceptions using shared error classes."""
-
-# Re-export shared exceptions for consistency
-from shared.errors import (
-    # Base exceptions
-    DomainError,
-    ValidationError,
-    NotFoundError,
-    ConflictError,
-    UnauthorizedError,
-    ForbiddenError,
+from shared.utils.exceptions import (
+    NotFoundError, ValidationError, ConflictError,
+    DomainError
 )
 
-# Merchant-specific exception aliases
-class MerchantError(DomainError):
-    """Base merchant service error"""
-    pass
-
 class MerchantNotFoundError(NotFoundError):
-    """Merchant not found error"""
-    pass
+    """Raised when merchant is not found"""
+    def __init__(self, message: str = "Merchant not found"):
+        super().__init__(message=message, resource="merchant")
 
-class MerchantAlreadyExistsError(ConflictError):
-    """Merchant already exists error"""
-    pass
+class InvalidDomainError(ValidationError):
+    """Raised when shop domain is invalid"""
+    def __init__(self, message: str = "Invalid shop domain format"):
+        super().__init__(message=message, field="shop_domain")
 
-class InvalidStatusTransitionError(ValidationError):
-    """Invalid status transition error"""
-    pass
+class ConsentViolationError(ConflictError):
+    """Raised when trying to violate consent rules"""
+    def __init__(self, message: str = "Cannot unset required consent"):
+        super().__init__(message=message, conflicting_resource="consent")
 
-class OnboardingStepError(ValidationError):
-    """Invalid onboarding step error"""
-    pass
+class InvalidStatusTransitionError(DomainError):
+    """Raised when status transition is invalid"""
+    def __init__(self, message: str):
+        super().__init__(message=message, code="INVALID_STATUS_TRANSITION")
 
-
-__all__ = [
-    # Base exceptions
-    "DomainError",
-    "ValidationError", 
-    "NotFoundError",
-    "ConflictError",
-    "UnauthorizedError",
-    "ForbiddenError",
-    
-    # Merchant-specific
-    "MerchantError",
-    "MerchantNotFoundError",
-    "MerchantAlreadyExistsError", 
-    "InvalidStatusTransitionError",
-    "OnboardingStepError",
-]

@@ -38,6 +38,13 @@ tmp/
 temp/
 .env
 .envrc
+*.env
+**/.env
+**/.env.*
+**/.env.local
+**/.envrc
+!**/.env.example
+!**/.env.*.example
 .DS_Store
 .AppleDouble
 .LSOverride

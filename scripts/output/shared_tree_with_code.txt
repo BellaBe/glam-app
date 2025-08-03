@@ -26,7 +26,6 @@ shared/
 │   │       Pagination,
 │   │       Links,
 │   │       ErrorDetail,
-│   │       T,  # Generic type
 │   │   )
 │   │   
 │   │   from .responses import (
@@ -40,8 +39,7 @@ shared/
 │   │   from .dependencies import (
 │   │       # FastAPI dependencies
 │   │       PaginationDep,
-│   │       RequestContextDep,
-│   │       CorrelationIdDep,  # Re-exported from correlation
+│   │       RequestContextDep, 
 │   │   )
 │   │   
 │   │   from .middleware import (
@@ -57,14 +55,8 @@ shared/
 │   │       get_correlation_context,
 │   │       add_correlation_header,
 │   │       add_correlation_to_event,
-│   │       extract_correlation_from_event,
-│   │       
+│   │       extract_correlation_from_event, 
 │   │   )
-│   │   from .tracing import (
-│   │       set_trace_context,
-│   │       get_trace_context,
-│   │       TracingMiddleware,
-│   │   )   
 │   │   
 │   │   __all__ = [
 │   │       # Models
@@ -73,7 +65,6 @@ shared/
 │   │       "Pagination",
 │   │       "Links",
 │   │       "ErrorDetail",
-│   │       "T",
 │   │       
 │   │       # Response helpers
 │   │       "create_response",
@@ -84,7 +75,6 @@ shared/
 │   │       # Dependencies
 │   │       "PaginationDep",
 │   │       "RequestContextDep",
-│   │       "CorrelationIdDep",
 │   │       
 │   │       # Correlation
 │   │       "get_correlation_id",
@@ -93,10 +83,6 @@ shared/
 │   │       "add_correlation_header",
 │   │       "add_correlation_to_event",
 │   │       "extract_correlation_from_event",
-│   │       # Tracing
-│   │       "set_trace_context",
-│   │       "get_trace_context",
-│   │       "TracingMiddleware",
 │   │       
 │   │       # Middleware
 │   │       "APIMiddleware",
@@ -212,7 +198,7 @@ shared/
 │   │   Simplified to focus on commonly used dependencies.
 │   │   """
 │   │   
-│   │   from typing import Annotated
+│   │   from typing import Annotated, Optional
 │   │   from fastapi import Query, Request, Depends
 │   │   from pydantic import BaseModel, Field
 │   │   from .correlation import get_correlation_id
@@ -257,8 +243,19 @@ shared/
 │   │           )
 │   │       return request.state.request_id
 │   │   
+│   │   def get_client_ip(request: Request) -> str:
+│   │       """
+│   │       Extract client IP address.
+│   │       Only add if needed for rate limiting or security.
+│   │       """
+│   │       forwarded_for = request.headers.get("X-Forwarded-For")
+│   │       if forwarded_for:
+│   │           return forwarded_for.split(",")[0].strip()
+│   │       return request.client.host if request.client else "unknown"
+│   │   
 │   │   
 │   │   # Type aliases for clean dependency injection
+│   │   ClientIpDep = Annotated[str, Depends(get_client_ip)]
 │   │   RequestIdDep = Annotated[str, Depends(get_request_id)]
 │   │   PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
 │   │   CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]  # Re-export for convenience
@@ -272,6 +269,7 @@ shared/
 │   │       correlation_id: str
 │   │       method: str
 │   │       path: str
+│   │       ip_client: Optional[str] = None  # Optional client IP for rate limiting/security
 │   │       
 │   │       @classmethod
 │   │       def from_request(cls, request: Request) -> "RequestContext":
@@ -280,7 +278,8 @@ shared/
 │   │               request_id=get_request_id(request),
 │   │               correlation_id=get_correlation_id(request),
 │   │               method=request.method,
-│   │               path=str(request.url.path)
+│   │               path=str(request.url.path),
+│   │               ip_client=get_client_ip(request)  # Optional: Add client IP if needed
 │   │           )
 │   │   
 │   │   
@@ -291,18 +290,6 @@ shared/
 │   │   
 │   │   RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
 │   │   
-│   │   def get_client_ip(request: Request) -> str:
-│   │       """
-│   │       Extract client IP address.
-│   │       Only add if needed for rate limiting or security.
-│   │       """
-│   │       forwarded_for = request.headers.get("X-Forwarded-For")
-│   │       if forwarded_for:
-│   │           return forwarded_for.split(",")[0].strip()
-│   │       return request.client.host if request.client else "unknown"
-│   │   
-│   │   
-│   │   ClientIpDep = Annotated[str, Depends(get_client_ip)]
 │   │   ```
 │   │   
 │   ├── health.py
@@ -354,7 +341,7 @@ shared/
 │   │   from starlette.middleware.base import BaseHTTPMiddleware
 │   │   from fastapi.exceptions import RequestValidationError, HTTPException
 │   │   
-│   │   from ..errors import GlamBaseError
+│   │   from shared.utils.exceptions import GlamBaseError
 │   │   from ..metrics import PrometheusMiddleware, metrics_endpoint
 │   │   
 │   │   from .responses import error_response
@@ -744,2471 +731,7 @@ shared/
 │           )
 │       ```
 │       
-├── config/
-│   ├── __init__.py
-│   └── loader.py
-│       
-│       ```py
-│       from __future__ import annotations
-│       from pathlib import Path
-│       from typing import Any, Dict
-│       
-│       import os
-│       import yaml
-│       from dotenv import load_dotenv
-│       
-│       
-│       _REPO_ROOT = Path(__file__).resolve()    
-│       
-│       while _REPO_ROOT.name != "glam-app":
-│           if _REPO_ROOT.parent == _REPO_ROOT:
-│               raise RuntimeError("Unable to locate glam-app root directory")
-│           _REPO_ROOT = _REPO_ROOT.parent
-│       
-│       _CONFIG_DIR = _REPO_ROOT / "config"                     # ./config
-│       _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"            # ./config/shared.yml
-│       _SVC_CFG_DIR = _CONFIG_DIR / "services"                 # ./config/services
-│       _ENV_FILE = _REPO_ROOT / ".env"                         # optional
-│       
-│       
-│       # Check if files exist
-│       print(f"\nFile existence check:")
-│       print(f"  .env exists: {_ENV_FILE.exists()}")
-│       print(f"  shared.yml exists: {_SHARED_CONFIG.exists()}")
-│       print(f"  config/services/ exists: {_SVC_CFG_DIR.exists()}")
-│       
-│       # Load .env once so os.environ is ready (local runs)
-│       if _ENV_FILE.exists():
-│           load_dotenv(_ENV_FILE)
-│       
-│       
-│       def _load_yaml_file(path: Path) -> Dict[str, Any]:
-│           """Load a YAML file and return dict"""
-│           if not path.is_file():
-│               return {}
-│           with path.open() as f:
-│               return yaml.safe_load(f) or {}
-│       
-│       
-│       def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-│           """Deep merge two dictionaries, override takes precedence"""
-│           result = base.copy()
-│           
-│           for key, value in override.items():
-│               if (key in result and 
-│                   isinstance(result[key], dict) and 
-│                   isinstance(value, dict)):
-│                   result[key] = _deep_merge(result[key], value)
-│               else:
-│                   result[key] = value
-│           
-│           return result
-│       
-│       
-│       def merged_config(service: str, *, env_prefix: str) -> Dict[str, Any]:
-│           """
-│           Load configuration in order of precedence:
-│           1. config/shared.yml              -> baseline shared config
-│           2. config/services/{service}.yml  -> service-specific config  
-│           3. Environment variables           -> runtime overrides
-│           
-│           YAML                      -> baseline
-│           (prefixed) env variables  -> override keys in YAML
-│           RESULT                    -> dict ready for Pydantic
-│           """
-│           
-│           # 1. Load shared configuration (baseline)
-│           cfg = _load_yaml_file(_SHARED_CONFIG)
-│           
-│           # 2. Load service-specific configuration and merge
-│           service_config_path = _SVC_CFG_DIR / f"{service}.yml"
-│           if not service_config_path.is_file():
-│               raise FileNotFoundError(f"Service config not found: {service_config_path}")
-│           
-│           service_config = _load_yaml_file(service_config_path)
-│           cfg = _deep_merge(cfg, service_config)
-│           
-│           # 3. Apply environment variable overrides
-│           prefix = f"{env_prefix.upper()}_"
-│           for key, val in os.environ.items():
-│               if key.startswith(prefix):
-│                   yaml_key = key[len(prefix):].lower()
-│                   
-│                   # Handle nested keys with double underscore
-│                   if "__" in yaml_key:
-│                       parts = yaml_key.split("__")
-│                       current = cfg
-│                       
-│                       # Navigate/create nested structure
-│                       for part in parts[:-1]:
-│                           if part not in current:
-│                               current[part] = {}
-│                           current = current[part]
-│                       
-│                       # Set the final value
-│                       current[parts[-1]] = val
-│                   else:
-│                       cfg[yaml_key] = val
-│           
-│           return cfg
-│       
-│       def flatten_config(data: dict, parent_key: str = '', sep: str = '.') -> dict:
-│           """Flatten nested dict for Pydantic validation_alias to work"""
-│           items = []
-│           for k, v in data.items():
-│               new_key = f"{parent_key}{sep}{k}" if parent_key else k
-│               if isinstance(v, dict):
-│                   items.extend(flatten_config(v, new_key, sep=sep).items())
-│               else:
-│                   items.append((new_key, v))
-│           return dict(items)
-│       ```
-│       
-├── database/
-│   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/database/__init__.py
-│   │   """
-│   │   Shared database utilities for GLAM microservices.
-│   │   
-│   │   This package provides:
-│   │   - Base SQLAlchemy models and mixins
-│   │   - Async session management
-│   │   - Generic repository pattern
-│   │   - FastAPI dependencies
-│   │   - Alembic migration utilities
-│   │   - Database configuration
-│   │   """
-│   │   
-│   │   from .base import Base, TimestampedMixin, SoftDeleteMixin
-│   │   from .session import DatabaseSessionManager
-│   │   from .repository import Repository
-│   │   from .dependencies import (
-│   │       DBSessionDep,
-│   │       get_db_session,
-│   │       set_database_manager,
-│   │       get_database_manager,
-│   │       get_database_health,
-│   │   )
-│   │   from .config import DatabaseConfig, create_database_config
-│   │   from .migrations import MigrationManager, create_alembic_env_template
-│   │   
-│   │   __all__ = [
-│   │       # Base classes
-│   │       "Base",
-│   │       "TimestampedMixin",
-│   │       "SoftDeleteMixin",
-│   │       
-│   │       # Session management
-│   │       "DatabaseSessionManager",
-│   │       
-│   │       # Repository pattern
-│   │       "Repository",
-│   │       
-│   │       # FastAPI dependencies
-│   │       "DBSessionDep",
-│   │       "get_db_session",
-│   │       "set_database_manager",
-│   │       "get_database_manager",
-│   │       "get_database_health",
-│   │       
-│   │       # Configuration
-│   │       "DatabaseConfig",
-│   │       "create_database_config",
-│   │       
-│   │       # Migrations
-│   │       "MigrationManager",
-│   │       "create_alembic_env_template",
-│   │   ]
-│   │   ```
-│   │   
-│   ├── base.py
-│   │   
-│   │   ```py
-│   │   
-│   │   # glam-app/shared/database/base.py
-│   │   from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-│   │   from sqlalchemy.ext.asyncio import AsyncAttrs
-│   │   from sqlalchemy.dialects.postgresql import UUID as PGUUID
-│   │   from sqlalchemy import DateTime, String, func, Index, MetaData
-│   │   from datetime import datetime
-│   │   from uuid import UUID
-│   │   
-│   │   
-│   │   class Base(AsyncAttrs, DeclarativeBase):
-│   │       __abstract__ = True            # <- prevents accidental table mapping
-│   │   
-│   │       # optional: naming convention for Alembic
-│   │       metadata = MetaData(naming_convention={
-│   │           "ix": "ix_%(column_0_label)s",
-│   │           "uq": "uq_%(table_name)s_%(column_0_name)s",
-│   │           "ck": "ck_%(table_name)s_%(constraint_name)s",
-│   │           "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-│   │           "pk": "pk_%(table_name)s"
-│   │       })
-│   │   
-│   │   class MerchantMixin:
-│   │       """Mixin to add merchant_id to any model"""
-│   │       merchant_id: Mapped[UUID] = mapped_column(
-│   │           PGUUID(as_uuid=True), 
-│   │           nullable=False, 
-│   │           index=True
-│   │       )
-│   │       merchant_domain: Mapped[str] = mapped_column(
-│   │           String(255), 
-│   │           nullable=False, 
-│   │           index=True
-│   │       )
-│   │       __table_args__ = (
-│   │       Index("idx_merchant_id_domain", "merchant_id", "merchant_domain"),)
-│   │   
-│   │   
-│   │   class TimestampedMixin:
-│   │       """Mixin to add created_at and updated_at to any model"""
-│   │       created_at = mapped_column( DateTime(timezone=True), server_default=func.now(), nullable=False, index=True )
-│   │       updated_at = mapped_column( DateTime(timezone=True), server_default=func.now(), server_onupdate=func.now(), nullable=False )
-│   │   
-│   │   
-│   │   class SoftDeleteMixin:
-│   │       """Mixin to add soft delete functionality"""
-│   │       deleted_at: Mapped[datetime | None] = mapped_column(
-│   │           DateTime(timezone=True),
-│   │           default=None)
-│   │       is_deleted: Mapped[bool] = mapped_column(default=False, index=True)
-│   │   ```
-│   │   
-│   ├── config.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/database/config.py
-│   │   from __future__ import annotations
-│   │   from pydantic_settings import BaseSettings, SettingsConfigDict
-│   │   from pydantic import Field
-│   │   from typing import Any, Dict
-│   │   
-│   │   
-│   │   class DatabaseConfig(BaseSettings):
-│   │       # ── connection ─────────────────────────────────────────────
-│   │       DB_HOST: str
-│   │       DB_PORT: int = 5432
-│   │       DB_PORT_EXTERNAL: int | None = None
-│   │       DB_NAME: str
-│   │       DB_USER: str
-│   │       DB_PASSWORD: str
-│   │       DB_ENABLED: bool = True
-│   │   
-│   │       # ── pool / driver ──────────────────────────────────────────
-│   │       DB_POOL_SIZE: int = 5
-│   │       DB_MAX_OVERFLOW: int = 10
-│   │       DB_POOL_PRE_PING: bool = True
-│   │       DB_POOL_RECYCLE: int = 3600
-│   │       DB_ASYNC_DRIVER: str = "asyncpg"
-│   │       DB_ECHO: bool = False
-│   │   
-│   │       # defaults: `.env` at repo root, strict case match
-│   │       model_config = SettingsConfigDict(
-│   │           env_file=".env",
-│   │           env_file_encoding="utf-8",
-│   │           case_sensitive=True,          # "CREDIT_DB_HOST" must match exactly
-│   │           populate_by_name=True,
-│   │       )
-│   │   
-│   │       # ── helpers ────────────────────────────────────────────────
-│   │       def model_post_init(self, _ctx: Any) -> None:
-│   │           if self.DB_PORT is None:
-│   │               if self.DB_HOST in {"localhost", "127.0.0.1", "host.docker.internal"}:
-│   │                   self.DB_PORT = self.DB_PORT_EXTERNAL or 5432
-│   │               else:
-│   │                   self.DB_PORT = 5432
-│   │   
-│   │       @property
-│   │       def effective_port(self) -> int:
-│   │           """Return host-side port when talking to localhost, else the container port."""
-│   │           if self.DB_HOST in {"localhost", "127.0.0.1", "host.docker.internal"}:
-│   │               return self.DB_PORT_EXTERNAL or self.DB_PORT
-│   │           return self.DB_PORT
-│   │       
-│   │       @property
-│   │       def database_url(self) -> str:
-│   │           return (
-│   │               f"postgresql+{self.DB_ASYNC_DRIVER}://"
-│   │               f"{self.DB_USER}:{self.DB_PASSWORD}@"
-│   │               f"{self.DB_HOST}:{self.effective_port}/{self.DB_NAME}"
-│   │           )
-│   │   
-│   │       def engine_kwargs(self) -> Dict[str, Any]:
-│   │           return dict(
-│   │               echo=self.DB_ECHO,
-│   │               pool_size=self.DB_POOL_SIZE,
-│   │               max_overflow=self.DB_MAX_OVERFLOW,
-│   │               pool_pre_ping=self.DB_POOL_PRE_PING,
-│   │               pool_recycle=self.DB_POOL_RECYCLE,
-│   │           )
-│   │   
-│   │   
-│   │   def create_database_config(prefix: str) -> DatabaseConfig:
-│   │       """Factory that applies the per-service prefix (CREDIT_, NOTIFICATION_, …)."""
-│   │       class Prefixed(DatabaseConfig):
-│   │           model_config = SettingsConfigDict(
-│   │               env_prefix=prefix,         # CREDIT_DB_HOST, etc.
-│   │               env_file=".env",
-│   │               case_sensitive=True,
-│   │               populate_by_name=True,
-│   │           )
-│   │       return Prefixed() # type: ignore[call-arg]
-│   │   ```
-│   │   
-│   ├── dependencies.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/database/dependencies.py
-│   │   from typing import Annotated, AsyncGenerator
-│   │   from fastapi import Depends
-│   │   from sqlalchemy.ext.asyncio import AsyncSession
-│   │   from .session import DatabaseSessionManager
-│   │   
-│   │   # Global database manager instance - each service will set this
-│   │   from typing import Optional
-│   │   
-│   │   _db_manager: Optional[DatabaseSessionManager] = None
-│   │   
-│   │   
-│   │   def set_database_manager(manager: DatabaseSessionManager):
-│   │       """Set the global database manager for the service"""
-│   │       global _db_manager
-│   │       _db_manager = manager
-│   │   
-│   │   
-│   │   def get_database_manager() -> DatabaseSessionManager:
-│   │       """Get the current database manager"""
-│   │       if _db_manager is None:
-│   │           raise RuntimeError(
-│   │               "Database manager not initialized. "
-│   │               "Call set_database_manager() during app startup."
-│   │           )
-│   │       return _db_manager
-│   │   
-│   │   
-│   │   async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-│   │       """FastAPI dependency to get a database session"""
-│   │       manager = get_database_manager()
-│   │       async with manager.session() as session:
-│   │           yield session
-│   │           
-│   │   async def get_database_health() -> bool:
-│   │       """Check if the database is healthy"""
-│   │       manager = get_database_manager()
-│   │       try:
-│   │           async with manager.session() as session:
-│   │               # Perform a simple query to check connectivity
-│   │               from sqlalchemy.sql import text
-│   │               await session.execute(text("SELECT 1"))
-│   │           return True
-│   │       except Exception as e:
-│   │           # Log the error or handle it as needed
-│   │           print(f"Database health check failed: {e}")
-│   │           return False
-│   │   
-│   │   
-│   │   # Type alias for dependency injection
-│   │   DBSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
-│   │   ```
-│   │   
-│   ├── migrations.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/database/migrations.py
-│   │   import os
-│   │   from pathlib import Path
-│   │   from alembic import command
-│   │   from alembic.config import Config
-│   │   from sqlalchemy import text
-│   │   from sqlalchemy.ext.asyncio import AsyncEngine
-│   │   import logging
-│   │   
-│   │   logger = logging.getLogger(__name__)
-│   │   
-│   │   
-│   │   class MigrationManager:
-│   │       """Manages Alembic migrations for a microservice"""
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           service_name: str,
-│   │           alembic_ini_path: str,
-│   │           migrations_path: str,
-│   │           database_url: str
-│   │       ):
-│   │           self.service_name = service_name
-│   │           self.alembic_ini_path = Path(alembic_ini_path)
-│   │           self.migrations_path = Path(migrations_path)
-│   │           self.database_url = database_url
-│   │           
-│   │           # Verify paths exist
-│   │           if not self.alembic_ini_path.exists():
-│   │               raise FileNotFoundError(f"Alembic config not found: {alembic_ini_path}")
-│   │           
-│   │           # Create migrations directory if it doesn't exist
-│   │           self.migrations_path.mkdir(parents=True, exist_ok=True)
-│   │       
-│   │       def get_alembic_config(self) -> Config:
-│   │           """Get Alembic configuration"""
-│   │           config = Config(str(self.alembic_ini_path))
-│   │           config.set_main_option("sqlalchemy.url", self.database_url)
-│   │           config.set_main_option("script_location", str(self.migrations_path))
-│   │           return config
-│   │       
-│   │       def init_alembic(self):
-│   │           """Initialize Alembic for the service (run once)"""
-│   │           config = self.get_alembic_config()
-│   │           command.init(config, str(self.migrations_path))
-│   │           logger.info(f"Initialized Alembic for {self.service_name}")
-│   │       
-│   │       def create_migration(self, message: str):
-│   │           """Create a new migration"""
-│   │           config = self.get_alembic_config()
-│   │           command.revision(config, message=message, autogenerate=True)
-│   │           logger.info(f"Created migration: {message}")
-│   │       
-│   │       def upgrade(self, revision: str = "head"):
-│   │           """Apply migrations up to a specific revision"""
-│   │           config = self.get_alembic_config()
-│   │           command.upgrade(config, revision)
-│   │           logger.info(f"Upgraded database to {revision}")
-│   │       
-│   │       def downgrade(self, revision: str):
-│   │           """Downgrade to a specific revision"""
-│   │           config = self.get_alembic_config()
-│   │           command.downgrade(config, revision)
-│   │           logger.info(f"Downgraded database to {revision}")
-│   │       
-│   │       def get_current_revision(self) -> str:
-│   │           """Get the current migration revision"""
-│   │           config = self.get_alembic_config()
-│   │           # This would require more implementation
-│   │           return "Not implemented"
-│   │       
-│   │       async def ensure_schema_exists(self, engine: AsyncEngine, schema_name: str):
-│   │           """Ensure a database schema exists (PostgreSQL specific)"""
-│   │           async with engine.connect() as conn:
-│   │               await conn.execute(
-│   │                   text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
-│   │               )
-│   │               await conn.commit()
-│   │           logger.info(f"Ensured schema exists: {schema_name}")
-│   │   
-│   │   
-│   │   def create_alembic_env_template(service_name: str, base_module: str) -> str:
-│   │       """Generate env.py template for a service"""
-│   │       return f'''"""Alembic environment script for {service_name}"""
-│   │   from logging.config import fileConfig
-│   │   from sqlalchemy import engine_from_config, pool
-│   │   from alembic import context
-│   │   
-│   │   # Import your service's Base metadata
-│   │   from {base_module} import Base
-│   │   
-│   │   config = context.config
-│   │   
-│   │   if config.config_file_name is not None:
-│   │       fileConfig(config.config_file_name)
-│   │   
-│   │   target_metadata = Base.metadata
-│   │   
-│   │   
-│   │   def run_migrations_offline() -> None:
-│   │       """Run migrations in 'offline' mode."""
-│   │       url = config.get_main_option("sqlalchemy.url")
-│   │       context.configure(
-│   │           url=url,
-│   │           target_metadata=target_metadata,
-│   │           literal_binds=True,
-│   │           dialect_opts={{"paramstyle": "named"}},
-│   │       )
-│   │   
-│   │       with context.begin_transaction():
-│   │           context.run_migrations()
-│   │   
-│   │   
-│   │   def run_migrations_online() -> None:
-│   │       """Run migrations in 'online' mode."""
-│   │       connectable = engine_from_config(
-│   │           config.get_section(config.config_ini_section),
-│   │           prefix="sqlalchemy.",
-│   │           poolclass=pool.NullPool,
-│   │       )
-│   │   
-│   │       with connectable.connect() as connection:
-│   │           context.configure(
-│   │               connection=connection,
-│   │               target_metadata=target_metadata
-│   │           )
-│   │   
-│   │           with context.begin_transaction():
-│   │               context.run_migrations()
-│   │   
-│   │   
-│   │   if context.is_offline_mode():
-│   │       run_migrations_offline()
-│   │   else:
-│   │       run_migrations_online()
-│   │   '''
-│   │   ```
-│   │   
-│   ├── repository.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/database/repository.py
-│   │   from sqlalchemy import select
-│   │   from typing import TypeVar, Generic, Type, AsyncIterator
-│   │   from uuid import UUID
-│   │   from sqlalchemy.ext.asyncio import async_sessionmaker
-│   │   from sqlalchemy.ext.asyncio import AsyncSession
-│   │   from .base import Base
-│   │   
-│   │   T = TypeVar("T", bound=Base)
-│   │   
-│   │   
-│   │   class Repository(Generic[T]):
-│   │       """
-│   │       Generic repository providing basic CRUD operations.
-│   │       Services can extend this for specific domain needs.
-│   │       """
-│   │       
-│   │       def __init__(self, model: Type[T], session_factory: async_sessionmaker[AsyncSession]):
-│   │           self.model = model
-│   │           self.session_factory = session_factory
-│   │   
-│   │       # helper used by child methods
-│   │       async def _session(self) -> AsyncIterator[AsyncSession]:
-│   │           async with self.session_factory() as session:
-│   │               yield session
-│   │   
-│   │       async def save(self, instance: T) -> T | None:
-│   │           """Save an instance to the database"""
-│   │           async for session in self._session():
-│   │               session.add(instance)
-│   │               await session.commit()
-│   │               return instance
-│   │       
-│   │       async def update(self, instance: T) -> T | None:
-│   │           """Update an existing instance"""
-│   │           async for session in self._session():
-│   │               await session.merge(instance)
-│   │               await session.commit()
-│   │               return instance
-│   │           
-│   │       async def delete(self, instance: T) -> None:
-│   │           """Delete an instance from the database"""
-│   │           async for session in self._session():
-│   │               await session.delete(instance)
-│   │               await session.commit()
-│   │       
-│   │       async def delete_by_id(self, id: str | UUID) -> None:
-│   │           """Delete an instance by its ID"""
-│   │           async for session in self._session():
-│   │               instance = await session.get(self.model, id)
-│   │               if instance:
-│   │                   await session.delete(instance)
-│   │                   await session.commit()
-│   │           
-│   │       async def find_by_id(self, id: str | UUID) -> T | None:
-│   │           """Find an instance by its ID"""
-│   │           async for session in self._session():
-│   │               result = await session.get(self.model, id)
-│   │               return result
-│   │           
-│   │       async def find_all(
-│   │           self,
-│   │           * ,
-│   │           limit: int | None = None,
-│   │           offset: int | None = None,
-│   │           **filters
-│   │       ) -> list[T] | None:
-│   │           """
-│   │           Return a list of model instances.
-│   │           Optional keyword filters map column names to values (exact match).
-│   │           You can also page results with limit/offset.
-│   │           """
-│   │           async for session in self._session():
-│   │               stmt = select(self.model)
-│   │   
-│   │               # Apply column == value filters
-│   │               for col, val in filters.items():
-│   │                   try:
-│   │                       stmt = stmt.where(getattr(self.model, col) == val)
-│   │                   except AttributeError:
-│   │                       raise ValueError(f"{col!r} is not a valid column on {self.model.__name__}")
-│   │   
-│   │               # Pagination
-│   │               if offset is not None:
-│   │                   stmt = stmt.offset(offset)
-│   │               if limit is not None:
-│   │                   stmt = stmt.limit(limit)
-│   │   
-│   │               result = await session.execute(stmt)
-│   │               return list(result.scalars().all())
-│   │   ```
-│   │   
-│   └── session.py
-│       
-│       ```py
-│       # glam-app/shared/database/session.py
-│       from sqlalchemy.ext.asyncio import (
-│           create_async_engine,
-│           AsyncSession,
-│           async_sessionmaker,
-│           AsyncEngine
-│       )
-│       from contextlib import asynccontextmanager
-│       from typing import AsyncGenerator, Optional
-│       import logging
-│       
-│       logger = logging.getLogger(__name__)
-│       
-│       
-│       class DatabaseSessionManager:
-│           """
-│           Manages database connections and sessions for a microservice.
-│           Each service creates its own instance with its specific configuration.
-│           """
-│           
-│           def __init__(
-│               self,
-│               database_url: str,
-│               echo: bool = False,
-│               pool_size: int = 5,
-│               max_overflow: int = 10,
-│               pool_pre_ping: bool = True,
-│               pool_recycle: int = 3600
-│           ):
-│               self.database_url = database_url
-│               self._engine: Optional[AsyncEngine] = None
-│               self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
-│               
-│               # Engine configuration
-│               self.engine_config = {
-│                   "echo": echo,
-│                   "pool_size": pool_size,
-│                   "max_overflow": max_overflow,
-│                   "pool_pre_ping": pool_pre_ping,
-│                   "pool_recycle": pool_recycle,
-│               }
-│           
-│           async def init(self):
-│               """Initialize the database engine and session factory"""
-│               if self._engine is not None:
-│                   raise RuntimeError("Database session manager already initialized")
-│               
-│               self._engine = create_async_engine(
-│                   self.database_url,
-│                   **self.engine_config
-│               )
-│               
-│               self._session_factory = async_sessionmaker(
-│                   bind=self._engine,
-│                   class_=AsyncSession,
-│                   autocommit=False,
-│                   autoflush=False,
-│                   expire_on_commit=False
-│               )
-│               
-│               logger.info(f"Database engine initialized with URL: {self.database_url}")
-│           
-│           async def close(self):
-│               """Close the database engine"""
-│               if self._engine is None:
-│                   raise RuntimeError("Database session manager not initialized")
-│               
-│               await self._engine.dispose()
-│               self._engine = None
-│               self._session_factory = None
-│               logger.info("Database engine closed")
-│           
-│           @asynccontextmanager
-│           async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-│               if self._session_factory is None:
-│                   raise RuntimeError("Database session manager not initialized")
-│               
-│               async with self._session_factory() as session:
-│                   try:
-│                       yield session
-│                       await session.commit()
-│                   except Exception:
-│                       await session.rollback()
-│                       raise
-│                   finally:
-│                       await session.close()
-│           
-│           @property
-│           def engine(self) -> AsyncEngine:
-│               """Get the underlying SQLAlchemy engine"""
-│               if self._engine is None:
-│                   raise RuntimeError("Database session manager not initialized")
-│               return self._engine
-│           
-│           @property
-│           def session_factory(self) -> async_sessionmaker[AsyncSession]:
-│               """Get the session factory"""
-│               if self._session_factory is None:
-│                   raise RuntimeError("Database session manager not initialized")
-│               return self._session_factory
-│       ```
-│       
-├── errors/
-│   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/__init__.py
-│   │   # -------------------------------
-│   │   
-│   │   """
-│   │   Shared error handling module for glam-app microservices.
-│   │   
-│   │   This module provides a consistent error hierarchy and handling patterns
-│   │   across all services, following the three-tier model:
-│   │   - BaseError (root)
-│   │   - InfrastructureError (external failures)
-│   │   - DomainError (business logic failures)
-│   │   """
-│   │   
-│   │   from .base import (
-│   │       GlamBaseError,
-│   │       InfrastructureError,
-│   │       DomainError,
-│   │       ValidationError,
-│   │       NotFoundError,
-│   │       ConflictError,
-│   │       UnauthorizedError,
-│   │       ForbiddenError,
-│   │       RateLimitedError,
-│   │       ServiceUnavailableError,
-│   │       RequestTimeoutError,
-│   │       InternalError,
-│   │   )
-│   │   
-│   │   from .catalog import (
-│   │       SyncInProgressError,
-│   │       SyncNotFoundError,
-│   │       SyncNotResumableError,
-│   │       SyncNotCancellableError,
-│   │       ItemNotFoundError,
-│   │       ParentSyncNotFoundError,
-│   │   )
-│   │   
-│   │   from .profile import (
-│   │       ProfileNotFoundError,
-│   │       ProfileAlreadyExistsError,
-│   │       ProfileCreationFailedError,
-│   │   )
-│   │   
-│   │   from .analysis import (
-│   │       AnalysisInProgressError,
-│   │       AnalysisNotFoundError,
-│   │       AnalysisNotCancellableError,
-│   │       NoCurrentAnalysisError,
-│   │   )
-│   │   
-│   │   from .selfie import (
-│   │       SelfieNotFoundError,
-│   │       InvalidImageFormatError,
-│   │       ImageTooLargeError,
-│   │       ImageTooSmallError,
-│   │       NoFaceDetectedError,
-│   │       MultipleFacesDetectedError,
-│   │       PoorImageQualityError,
-│   │   )
-│   │   
-│   │   from .notification import (
-│   │       NotificationNotFoundError,
-│   │       TemplateNotFoundError,
-│   │       TemplateRenderError,
-│   │       InvalidRecipientError,
-│   │       PreferencesNotFoundError,
-│   │       EmailProviderError,
-│   │       UnsubscribedError,
-│   │   )
-│   │   
-│   │   from .infrastructure import (
-│   │       DatabaseError,
-│   │       RedisError,
-│   │       S3Error,
-│   │       UpstreamServiceError,
-│   │       CircuitOpenError,
-│   │       MessageBusError,
-│   │   )
-│   │   
-│   │   
-│   │   from .utils import (
-│   │       wrap_external_error,
-│   │       classify_http_error,
-│   │       is_retryable_error,
-│   │   )
-│   │   
-│   │   __all__ = [
-│   │       # Base errors
-│   │       "GlamBaseError",
-│   │       "InfrastructureError",
-│   │       "DomainError",
-│   │       # Common domain errors
-│   │       "ValidationError",
-│   │       "NotFoundError",
-│   │       "ConflictError",
-│   │       "UnauthorizedError",
-│   │       "ForbiddenError",
-│   │       "RateLimitedError",
-│   │       "ServiceUnavailableError",
-│   │       "InternalError",
-│   │       # Catalog errors
-│   │       "SyncInProgressError",
-│   │       "SyncNotFoundError",
-│   │       "SyncNotResumableError",
-│   │       "SyncNotCancellableError",
-│   │       "ItemNotFoundError",
-│   │       "ParentSyncNotFoundError",
-│   │       # Profile errors
-│   │       "ProfileNotFoundError",
-│   │       "ProfileAlreadyExistsError",
-│   │       "ProfileCreationFailedError",
-│   │       # Analysis errors
-│   │       "AnalysisInProgressError",
-│   │       "AnalysisNotFoundError",
-│   │       "AnalysisNotCancellableError",
-│   │       "NoCurrentAnalysisError",
-│   │       # Selfie errors
-│   │       "SelfieNotFoundError",
-│   │       "InvalidImageFormatError",
-│   │       "ImageTooLargeError",
-│   │       "ImageTooSmallError",
-│   │       "NoFaceDetectedError",
-│   │       "MultipleFacesDetectedError",
-│   │       "PoorImageQualityError",
-│   │       # Notification errors
-│   │       "NotificationNotFoundError",
-│   │       "TemplateNotFoundError",
-│   │       "TemplateRenderError",
-│   │       "InvalidRecipientError",
-│   │       "PreferencesNotFoundError",
-│   │       "EmailProviderError",
-│   │       "UnsubscribedError",
-│   │       # Infrastructure errors
-│   │       "DatabaseError",
-│   │       "RedisError",
-│   │       "S3Error",
-│   │       "UpstreamServiceError",
-│   │       "CircuitOpenError",
-│   │       "MessageBusError",
-│   │       # Handlers and utilities
-│   │       "wrap_external_error",
-│   │       "classify_http_error",
-│   │       "is_retryable_error",
-│   │   ]
-│   │   ```
-│   │   
-│   ├── analysis.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/analysis.py
-│   │   # -------------------------------
-│   │   
-│   │   """Analysis service specific errors."""
-│   │   
-│   │   from typing import Optional
-│   │   from .base import ConflictError, NotFoundError
-│   │   
-│   │   
-│   │   class AnalysisInProgressError(ConflictError):
-│   │       """Another analysis is already in progress."""
-│   │       
-│   │       code = "ANALYSIS_IN_PROGRESS"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Another analysis is already in progress",
-│   │           *,
-│   │           current_analysis_id: Optional[str] = None,
-│   │           user_id: Optional[str] = None,
-│   │           started_at: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if current_analysis_id:
-│   │               self.details["current_analysis_id"] = current_analysis_id
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │           if started_at:
-│   │               self.details["started_at"] = started_at
-│   │   
-│   │   
-│   │   class AnalysisNotFoundError(NotFoundError):
-│   │       """Analysis not found."""
-│   │       
-│   │       code = "ANALYSIS_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           analysis_id: Optional[str] = None,
-│   │           user_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="analysis", resource_id=analysis_id, **kwargs)
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │   
-│   │   
-│   │   class AnalysisNotCancellableError(ConflictError):
-│   │       """Analysis cannot be cancelled in its current state."""
-│   │       
-│   │       code = "ANALYSIS_NOT_CANCELLABLE"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           analysis_id: Optional[str] = None,
-│   │           current_status: Optional[str] = None,
-│   │           reason: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if analysis_id:
-│   │               self.details["analysis_id"] = analysis_id
-│   │           if current_status:
-│   │               self.details["current_status"] = current_status
-│   │           if reason:
-│   │               self.details["reason"] = reason
-│   │   
-│   │   
-│   │   class NoCurrentAnalysisError(NotFoundError):
-│   │       """No completed analysis available."""
-│   │       
-│   │       code = "NO_CURRENT_ANALYSIS"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "No completed analysis available",
-│   │           *,
-│   │           user_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="current_analysis", **kwargs)
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │   ```
-│   │   
-│   ├── base.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/base.py
-│   │   # -------------------------------
-│   │   
-│   │   """
-│   │   Base error classes for the glam-app error hierarchy.
-│   │   
-│   │   This module defines the fundamental error types that all other
-│   │   errors inherit from, following a three-tier model:
-│   │   1. GlamBaseError - Root of all application errors
-│   │   2. InfrastructureError - External system failures
-│   │   3. DomainError - Business logic violations
-│   │   """
-│   │   
-│   │   from typing import Any, Dict, Optional
-│   │   
-│   │   
-│   │   class GlamBaseError(Exception):
-│   │       """
-│   │       Base class for all glam-app errors.
-│   │   
-│   │       Attributes:
-│   │           code: Stable error code for clients (e.g., "VALIDATION_ERROR")
-│   │           status: HTTP status code (default 500)
-│   │           message: Human-readable error message
-│   │           details: Additional error context
-│   │           __cause__: Original exception if wrapped
-│   │       """
-│   │   
-│   │       code: str = "INTERNAL_ERROR"
-│   │       status: int = 500
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           code: Optional[str] = None,
-│   │           status: Optional[int] = None,
-│   │           details: Optional[Dict[str, Any]] = None,
-│   │           cause: Optional[Exception] = None
-│   │       ):
-│   │           super().__init__(message)
-│   │   
-│   │           if code is not None:
-│   │               self.code = code
-│   │           if status is not None:
-│   │               self.status = status
-│   │   
-│   │           self.message = message
-│   │           self.details = details or {}
-│   │   
-│   │           # Preserve the original exception chain
-│   │           if cause is not None:
-│   │               self.__cause__ = cause
-│   │   
-│   │       def to_dict(self) -> Dict[str, Any]:
-│   │           """Convert error to dictionary for JSON serialization."""
-│   │           result: Dict[str, Any] = {
-│   │               "code": self.code,
-│   │               "message": self.message,
-│   │           }
-│   │   
-│   │           if self.details:
-│   │               result["details"] = self.details
-│   │   
-│   │           return result
-│   │   
-│   │   
-│   │   class InfrastructureError(GlamBaseError):
-│   │       """
-│   │       Infrastructure/external system errors.
-│   │   
-│   │       These are failures in external dependencies like databases,
-│   │       APIs, message queues, etc. They may be retryable.
-│   │       """
-│   │   
-│   │       code = "INFRASTRUCTURE_ERROR"
-│   │       status = 503  # Service Unavailable
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           service: Optional[str] = None,
-│   │           retryable: bool = True,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if service:
-│   │               self.details["service"] = service
-│   │   
-│   │           self.details["retryable"] = retryable
-│   │           self.retryable = retryable
-│   │   
-│   │   
-│   │   class DomainError(GlamBaseError):
-│   │       """
-│   │       Domain/business logic errors.
-│   │   
-│   │       These represent violations of business rules or invalid
-│   │       operations within the application domain.
-│   │       """
-│   │   
-│   │       code = "DOMAIN_ERROR"
-│   │       status = 400  # Bad Request
-│   │   
-│   │   
-│   │   # Common domain errors used across services
-│   │   
-│   │   
-│   │   class ValidationError(DomainError):
-│   │       """Invalid request data or parameters."""
-│   │   
-│   │       code = "VALIDATION_ERROR"
-│   │       status = 422  # Unprocessable Entity
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           field: Optional[str] = None,
-│   │           value: Optional[Any] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if field:
-│   │               self.details["field"] = field
-│   │           if value is not None:
-│   │               self.details["value"] = str(value)
-│   │   
-│   │   
-│   │   class NotFoundError(DomainError):
-│   │       """Requested resource not found."""
-│   │   
-│   │       code = "NOT_FOUND"
-│   │       status = 404
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           resource: Optional[str] = None,
-│   │           resource_id: Optional[Any] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if resource:
-│   │               self.details["resource"] = resource
-│   │           if resource_id is not None:
-│   │               self.details["resource_id"] = str(resource_id)
-│   │   
-│   │   
-│   │   class ConflictError(DomainError):
-│   │       """Operation conflicts with current state."""
-│   │   
-│   │       code = "CONFLICT"
-│   │       status = 409
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           conflicting_resource: Optional[str] = None,
-│   │           current_state: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if conflicting_resource:
-│   │               self.details["conflicting_resource"] = conflicting_resource
-│   │           if current_state:
-│   │               self.details["current_state"] = current_state
-│   │   
-│   │   
-│   │   class UnauthorizedError(DomainError):
-│   │       """Authentication required or failed."""
-│   │   
-│   │       code = "UNAUTHORIZED"
-│   │       status = 401
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Authentication required",
-│   │           *,
-│   │           auth_type: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if auth_type:
-│   │               self.details["auth_type"] = auth_type
-│   │   
-│   │   
-│   │   class ForbiddenError(DomainError):
-│   │       """Authenticated but insufficient permissions."""
-│   │   
-│   │       code = "FORBIDDEN"
-│   │       status = 403
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Insufficient permissions",
-│   │           *,
-│   │           required_permission: Optional[str] = None,
-│   │           resource: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if required_permission:
-│   │               self.details["required_permission"] = required_permission
-│   │           if resource:
-│   │               self.details["resource"] = resource
-│   │   
-│   │   
-│   │   class RateLimitedError(DomainError):
-│   │       """Too many requests."""
-│   │   
-│   │       code = "RATE_LIMITED"
-│   │       status = 429
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Rate limit exceeded",
-│   │           *,
-│   │           limit: Optional[int] = None,
-│   │           window: Optional[str] = None,
-│   │           retry_after: Optional[int] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if limit:
-│   │               self.details["limit"] = limit
-│   │           if window:
-│   │               self.details["window"] = window
-│   │           if retry_after:
-│   │               self.details["retry_after"] = retry_after
-│   │   
-│   │   
-│   │   class ServiceUnavailableError(InfrastructureError):
-│   │       """Service temporarily unavailable."""
-│   │   
-│   │       code = "SERVICE_UNAVAILABLE"
-│   │       status = 503
-│   │   
-│   │   
-│   │   class RequestTimeoutError(InfrastructureError):
-│   │       """Operation timed out."""
-│   │   
-│   │       code = "TIMEOUT"
-│   │       status = 504
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           timeout_seconds: Optional[float] = None,
-│   │           operation: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if timeout_seconds:
-│   │               self.details["timeout_seconds"] = timeout_seconds
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │   
-│   │   
-│   │   class InternalError(GlamBaseError):
-│   │       """Unexpected internal server error."""
-│   │   
-│   │       code = "INTERNAL_ERROR"
-│   │       status = 500
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "An unexpected error occurred",
-│   │           *,
-│   │           error_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           # Never expose internal details in production
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if error_id:
-│   │               self.details["error_id"] = error_id
-│   │   ```
-│   │   
-│   ├── catalog.py
-│   │   
-│   │   ```py
-│   │   
-│   │   # -------------------------------
-│   │   # shared/errors/catalog.py
-│   │   # -------------------------------
-│   │   
-│   │   """Catalog service specific errors."""
-│   │   
-│   │   from typing import Optional
-│   │   from .base import ConflictError, NotFoundError
-│   │   
-│   │   
-│   │   class SyncInProgressError(ConflictError):
-│   │       """Another sync operation is already running."""
-│   │       
-│   │       code = "SYNC_IN_PROGRESS"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Another sync is already in progress",
-│   │           *,
-│   │           current_sync_id: Optional[str] = None,
-│   │           merchant_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if current_sync_id:
-│   │               self.details["current_sync_id"] = current_sync_id
-│   │           if merchant_id:
-│   │               self.details["merchant_id"] = merchant_id
-│   │   
-│   │   
-│   │   class SyncNotFoundError(NotFoundError):
-│   │       """Sync operation not found."""
-│   │       
-│   │       code = "SYNC_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           sync_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="sync", resource_id=sync_id, **kwargs)
-│   │   
-│   │   
-│   │   class SyncNotResumableError(ConflictError):
-│   │       """Sync cannot be resumed in its current state."""
-│   │       
-│   │       code = "SYNC_NOT_RESUMABLE"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           sync_id: Optional[str] = None,
-│   │           sync_status: Optional[str] = None,
-│   │           reason: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if sync_id:
-│   │               self.details["sync_id"] = sync_id
-│   │           if sync_status:
-│   │               self.details["sync_status"] = sync_status
-│   │           if reason:
-│   │               self.details["reason"] = reason
-│   │   
-│   │   
-│   │   class SyncNotCancellableError(ConflictError):
-│   │       """Sync cannot be cancelled in its current state."""
-│   │       
-│   │       code = "SYNC_NOT_CANCELLABLE"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           sync_id: Optional[str] = None,
-│   │           sync_status: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if sync_id:
-│   │               self.details["sync_id"] = sync_id
-│   │           if sync_status:
-│   │               self.details["sync_status"] = sync_status
-│   │   
-│   │   
-│   │   class ItemNotFoundError(NotFoundError):
-│   │       """Item not found in catalog."""
-│   │       
-│   │       code = "ITEM_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           item_id: Optional[str] = None,
-│   │           merchant_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="item", resource_id=item_id, **kwargs)
-│   │           
-│   │           if merchant_id:
-│   │               self.details["merchant_id"] = merchant_id
-│   │   
-│   │   
-│   │   class ParentSyncNotFoundError(NotFoundError):
-│   │       """Parent sync operation not found for resume."""
-│   │       
-│   │       code = "PARENT_SYNC_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           parent_sync_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(
-│   │               message,
-│   │               resource="parent_sync",
-│   │               resource_id=parent_sync_id,
-│   │               **kwargs
-│   │           )
-│   │   ```
-│   │   
-│   ├── infrastructure.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/infrastructure.py
-│   │   # -------------------------------
-│   │   
-│   │   """Infrastructure-specific error classes."""
-│   │   
-│   │   from typing import Optional
-│   │   from .base import InfrastructureError
-│   │   
-│   │   
-│   │   class DatabaseError(InfrastructureError):
-│   │       """Database operation failed."""
-│   │   
-│   │       code = "DATABASE_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           operation: Optional[str] = None,
-│   │           table: Optional[str] = None,
-│   │           error_code: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service="database", **kwargs)
-│   │   
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │           if table:
-│   │               self.details["table"] = table
-│   │           if error_code:
-│   │               self.details["error_code"] = error_code
-│   │   
-│   │   
-│   │   class RedisError(InfrastructureError):
-│   │       """Redis operation failed."""
-│   │   
-│   │       code = "REDIS_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           operation: Optional[str] = None,
-│   │           key: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service="redis", **kwargs)
-│   │   
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │           if key:
-│   │               self.details["key"] = key
-│   │   
-│   │   
-│   │   class S3Error(InfrastructureError):
-│   │       """S3 operation failed."""
-│   │   
-│   │       code = "S3_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           operation: Optional[str] = None,
-│   │           bucket: Optional[str] = None,
-│   │           key: Optional[str] = None,
-│   │           error_code: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service="s3", **kwargs)
-│   │   
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │           if bucket:
-│   │               self.details["bucket"] = bucket
-│   │           if key:
-│   │               self.details["key"] = key
-│   │           if error_code:
-│   │               self.details["error_code"] = error_code
-│   │   
-│   │   
-│   │   class UpstreamServiceError(InfrastructureError):
-│   │       """Upstream service call failed."""
-│   │   
-│   │       code = "UPSTREAM_SERVICE_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           upstream_service: Optional[str] = None,
-│   │           upstream_status: Optional[int] = None,
-│   │           upstream_error: Optional[str] = None,
-│   │           endpoint: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service=upstream_service, **kwargs)
-│   │   
-│   │           if upstream_status:
-│   │               self.details["upstream_status"] = upstream_status
-│   │           if upstream_error:
-│   │               self.details["upstream_error"] = upstream_error
-│   │           if endpoint:
-│   │               self.details["endpoint"] = endpoint
-│   │   
-│   │   
-│   │   class CircuitOpenError(InfrastructureError):
-│   │       """Circuit breaker is open."""
-│   │   
-│   │       code = "CIRCUIT_OPEN"
-│   │       status = 503
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           service_name: Optional[str] = None,
-│   │           failure_count: Optional[int] = None,
-│   │           open_until: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(
-│   │               message,
-│   │               service=service_name,
-│   │               retryable=False,  # Don't retry when circuit is open
-│   │               **kwargs
-│   │           )
-│   │   
-│   │           if failure_count:
-│   │               self.details["failure_count"] = failure_count
-│   │           if open_until:
-│   │               self.details["open_until"] = open_until
-│   │   
-│   │   
-│   │   class MessageBusError(InfrastructureError):
-│   │       """Message bus operation failed."""
-│   │   
-│   │       code = "MESSAGE_BUS_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           operation: Optional[str] = None,
-│   │           stream: Optional[str] = None,
-│   │           subject: Optional[str] = None,
-│   │           subject: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service="nats", **kwargs)
-│   │   
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │           if stream:
-│   │               self.details["stream"] = stream
-│   │           if subject:
-│   │               self.details["subject"] = subject
-│   │           if subject:
-│   │               self.details["subject"] = subject
-│   │   ```
-│   │   
-│   ├── notification.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/errors/notification.py
-│   │   # -------------------------------
-│   │   
-│   │   from uuid import UUID
-│   │   
-│   │   """Notification service specific errors."""
-│   │   
-│   │   from typing import Optional
-│   │   from .base import NotFoundError, ValidationError, InfrastructureError, ConflictError
-│   │   
-│   │   
-│   │   class NotificationNotFoundError(NotFoundError):
-│   │       """Notification not found."""
-│   │   
-│   │       code = "NOTIFICATION_NOT_FOUND"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           notification_id: Optional[UUID] = None,
-│   │           merchant_id: Optional[UUID] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(
-│   │               message, resource="notification", resource_id=notification_id, **kwargs
-│   │           )
-│   │   
-│   │           if merchant_id:
-│   │               self.details["merchant_id"] = merchant_id
-│   │   
-│   │   
-│   │   class TemplateNotFoundError(NotFoundError):
-│   │       """Email template not found."""
-│   │   
-│   │       code = "TEMPLATE_NOT_FOUND"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           template_name: Optional[str] = None,
-│   │           template_type: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(
-│   │               message, resource="template", resource_id=template_name, **kwargs
-│   │           )
-│   │   
-│   │           if template_type:
-│   │               self.details["template_type"] = template_type
-│   │   
-│   │   
-│   │   class TemplateRenderError(ValidationError):
-│   │       """Failed to render email template."""
-│   │   
-│   │       code = "TEMPLATE_RENDER_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           template_name: Optional[str] = None,
-│   │           missing_variables: Optional[list] = None,
-│   │           render_error: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if template_name:
-│   │               self.details["template_name"] = template_name
-│   │           if missing_variables:
-│   │               self.details["missing_variables"] = missing_variables
-│   │           if render_error:
-│   │               self.details["render_error"] = render_error
-│   │   
-│   │   
-│   │   class InvalidRecipientError(ValidationError):
-│   │       """Invalid recipient email address."""
-│   │   
-│   │       code = "INVALID_RECIPIENT"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           recipient: Optional[str] = None,
-│   │           reason: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, field="recipient", value=recipient, **kwargs)
-│   │   
-│   │           if reason:
-│   │               self.details["reason"] = reason
-│   │   
-│   │   
-│   │   class PreferencesNotFoundError(NotFoundError):
-│   │       """Notification preferences not found."""
-│   │   
-│   │       code = "PREFERENCES_NOT_FOUND"
-│   │   
-│   │       def __init__(self, message: str, *, user_id: Optional[str] = None, **kwargs):
-│   │           super().__init__(
-│   │               message, resource="notification_preferences", resource_id=user_id, **kwargs
-│   │           )
-│   │   
-│   │   
-│   │   class EmailProviderError(InfrastructureError):
-│   │       """Email provider API error."""
-│   │   
-│   │       code = "EMAIL_PROVIDER_ERROR"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           provider: Optional[str] = None,
-│   │           provider_error_code: Optional[str] = None,
-│   │           provider_message: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, service=provider, **kwargs)
-│   │   
-│   │           if provider_error_code:
-│   │               self.details["provider_error_code"] = provider_error_code
-│   │           if provider_message:
-│   │               self.details["provider_message"] = provider_message
-│   │   
-│   │   
-│   │   class UnsubscribedError(ConflictError):
-│   │       """Recipient has unsubscribed."""
-│   │   
-│   │       code = "UNSUBSCRIBED"
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Recipient has unsubscribed from notifications",
-│   │           *,
-│   │           user_id: Optional[str] = None,
-│   │           notification_type: Optional[str] = None,
-│   │           unsubscribed_at: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │           if notification_type:
-│   │               self.details["notification_type"] = notification_type
-│   │           if unsubscribed_at:
-│   │               self.details["unsubscribed_at"] = unsubscribed_at
-│   │   ```
-│   │   
-│   ├── profile.py
-│   │   
-│   │   ```py
-│   │   
-│   │   # -------------------------------
-│   │   # shared/errors/profile.py
-│   │   # -------------------------------
-│   │   
-│   │   """Profile service specific errors."""
-│   │   
-│   │   from typing import Optional
-│   │   from .base import NotFoundError, ConflictError, DomainError
-│   │   
-│   │   
-│   │   class ProfileNotFoundError(NotFoundError):
-│   │       """User profile not found."""
-│   │       
-│   │       code = "PROFILE_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           user_id: Optional[str] = None,
-│   │           profile_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="profile", **kwargs)
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │           if profile_id:
-│   │               self.details["profile_id"] = profile_id
-│   │   
-│   │   
-│   │   class ProfileAlreadyExistsError(ConflictError):
-│   │       """Profile already exists for this user."""
-│   │       
-│   │       code = "PROFILE_ALREADY_EXISTS"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           user_id: Optional[str] = None,
-│   │           existing_profile_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(
-│   │               message,
-│   │               conflicting_resource="profile",
-│   │               **kwargs
-│   │           )
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │           if existing_profile_id:
-│   │               self.details["existing_profile_id"] = existing_profile_id
-│   │   
-│   │   
-│   │   class ProfileCreationFailedError(DomainError):
-│   │       """Failed to create profile."""
-│   │       
-│   │       code = "PROFILE_CREATION_FAILED"
-│   │       status = 422
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           user_id: Optional[str] = None,
-│   │           reason: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │           if reason:
-│   │               self.details["reason"] = reason
-│   │   ```
-│   │   
-│   ├── selfie.py
-│   │   
-│   │   ```py
-│   │   
-│   │   # -------------------------------
-│   │   # shared/errors/selfie.py
-│   │   # -------------------------------
-│   │   
-│   │   """Selfie service specific errors."""
-│   │   
-│   │   from typing import Optional, List
-│   │   from .base import NotFoundError, ValidationError
-│   │   
-│   │   
-│   │   class SelfieNotFoundError(NotFoundError):
-│   │       """Selfie not found."""
-│   │       
-│   │       code = "SELFIE_NOT_FOUND"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           selfie_id: Optional[str] = None,
-│   │           user_id: Optional[str] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, resource="selfie", resource_id=selfie_id, **kwargs)
-│   │           
-│   │           if user_id:
-│   │               self.details["user_id"] = user_id
-│   │   
-│   │   
-│   │   class InvalidImageFormatError(ValidationError):
-│   │       """Image format not supported."""
-│   │       
-│   │       code = "INVALID_IMAGE_FORMAT"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           provided_format: Optional[str] = None,
-│   │           supported_formats: Optional[List[str]] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if provided_format:
-│   │               self.details["provided_format"] = provided_format
-│   │           if supported_formats:
-│   │               self.details["supported_formats"] = supported_formats
-│   │   
-│   │   
-│   │   class ImageTooLargeError(ValidationError):
-│   │       """Image exceeds size limit."""
-│   │       
-│   │       code = "IMAGE_TOO_LARGE"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           size_bytes: Optional[int] = None,
-│   │           max_size_bytes: Optional[int] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if size_bytes:
-│   │               self.details["size_bytes"] = size_bytes
-│   │           if max_size_bytes:
-│   │               self.details["max_size_bytes"] = max_size_bytes
-│   │   
-│   │   
-│   │   class ImageTooSmallError(ValidationError):
-│   │       """Image below minimum dimensions."""
-│   │       
-│   │       code = "IMAGE_TOO_SMALL"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           width: Optional[int] = None,
-│   │           height: Optional[int] = None,
-│   │           min_width: Optional[int] = None,
-│   │           min_height: Optional[int] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if width:
-│   │               self.details["width"] = width
-│   │           if height:
-│   │               self.details["height"] = height
-│   │           if min_width:
-│   │               self.details["min_width"] = min_width
-│   │           if min_height:
-│   │               self.details["min_height"] = min_height
-│   │   
-│   │   
-│   │   class NoFaceDetectedError(ValidationError):
-│   │       """No face detected in image."""
-│   │       
-│   │       code = "NO_FACE_DETECTED"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "No face detected in the image",
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │   
-│   │   class MultipleFacesDetectedError(ValidationError):
-│   │       """Multiple faces detected."""
-│   │       
-│   │       code = "MULTIPLE_FACES_DETECTED"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Multiple faces detected in the image",
-│   │           *,
-│   │           face_count: Optional[int] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if face_count:
-│   │               self.details["face_count"] = face_count
-│   │   
-│   │   
-│   │   class PoorImageQualityError(ValidationError):
-│   │       """Image quality too low for analysis."""
-│   │       
-│   │       code = "POOR_IMAGE_QUALITY"
-│   │       
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Image quality too low for analysis",
-│   │           *,
-│   │           quality_score: Optional[float] = None,
-│   │           min_quality_score: Optional[float] = None,
-│   │           quality_issues: Optional[List[str]] = None,
-│   │           **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │           
-│   │           if quality_score is not None:
-│   │               self.details["quality_score"] = quality_score
-│   │           if min_quality_score is not None:
-│   │               self.details["min_quality_score"] = min_quality_score
-│   │           if quality_issues:
-│   │               self.details["quality_issues"] = quality_issues
-│   │   ```
-│   │   
-│   └── utils.py
-│       
-│       ```py
-│       # -------------------------------
-│       # shared/errors/utils.py
-│       # -------------------------------
-│       
-│       """
-│       Utility functions for error handling and classification.
-│       
-│       This module provides helpers for wrapping external errors,
-│       classifying HTTP errors, and determining retry behavior.
-│       """
-│       
-│       from typing import Type, Callable, TypeVar
-│       import httpx
-│       import asyncio
-│       from functools import wraps
-│       
-│       from .base import (
-│           GlamBaseError,
-│           InfrastructureError,
-│           RequestTimeoutError,
-│           ServiceUnavailableError,
-│           RateLimitedError,
-│       )
-│       from .infrastructure import UpstreamServiceError
-│       
-│       T = TypeVar("T")
-│       
-│       
-│       def wrap_external_error(
-│           error_class: Type[GlamBaseError], message: str, *, cause: Exception, **kwargs
-│       ) -> GlamBaseError:
-│           """
-│           Wrap an external exception in a domain-specific error.
-│       
-│           This preserves the original exception chain while providing
-│           a clean domain error for upper layers.
-│       
-│           Args:
-│               error_class: The error class to wrap with
-│               message: Human-readable error message
-│               cause: The original exception
-│               **kwargs: Additional arguments for the error class
-│       
-│           Returns:
-│               Instance of error_class with proper cause chain
-│           """
-│           return error_class(message, cause=cause, **kwargs)
-│       
-│       
-│       def classify_http_error(
-│           exc: httpx.HTTPError, *, service_name: str = "upstream"
-│       ) -> InfrastructureError | RateLimitedError:
-│           """
-│           Classify HTTP errors into appropriate infrastructure errors.
-│       
-│           Args:
-│               exc: The HTTP exception to classify
-│               service_name: Name of the upstream service
-│       
-│           Returns:
-│               Appropriate InfrastructureError subclass
-│           """
-│           if isinstance(exc, httpx.TimeoutException):
-│               return RequestTimeoutError(
-│                   f"Request to {service_name} timed out", cause=exc, operation="http_request"
-│               )
-│       
-│           if isinstance(exc, httpx.HTTPStatusError):
-│               status = exc.response.status_code
-│       
-│               if status == 429:
-│                   # Extract retry-after if available
-│                   retry_after = exc.response.headers.get("Retry-After")
-│                   return RateLimitedError(
-│                       f"Rate limited by {service_name}",
-│                       cause=exc,
-│                       retry_after=int(retry_after) if retry_after else None,
-│                   )
-│       
-│               if status == 503:
-│                   return ServiceUnavailableError(
-│                       f"{service_name} is temporarily unavailable", cause=exc
-│                   )
-│       
-│               if 500 <= status < 600:
-│                   return UpstreamServiceError(
-│                       f"{service_name} returned {status}",
-│                       cause=exc,
-│                       upstream_service=service_name,
-│                       upstream_status=status,
-│                       endpoint=str(exc.request.url),
-│                   )
-│       
-│               # 4xx errors - usually client errors, not retryable
-│               return UpstreamServiceError(
-│                   f"{service_name} rejected request: {status}",
-│                   cause=exc,
-│                   upstream_service=service_name,
-│                   upstream_status=status,
-│                   endpoint=str(exc.request.url),
-│                   retryable=False,
-│               )
-│       
-│           # Generic connection errors
-│           return InfrastructureError(
-│               f"Failed to connect to {service_name}", cause=exc, service=service_name
-│           )
-│       
-│       
-│       def is_retryable_error(exc: Exception) -> bool:
-│           """
-│           Determine if an error should be retried.
-│       
-│           Args:
-│               exc: The exception to check
-│       
-│           Returns:
-│               True if the error is retryable
-│           """
-│           if isinstance(exc, InfrastructureError):
-│               return exc.retryable
-│       
-│           # Specific exceptions that are retryable
-│           retryable_types = (
-│               asyncio.TimeoutError,
-│               ConnectionError,
-│               RequestTimeoutError,
-│           )
-│       
-│           return isinstance(exc, retryable_types)
-│       
-│       
-│       def with_error_mapping(
-│           mappings: dict[Type[Exception], Type[GlamBaseError]],
-│           *,
-│           default_error: Type[GlamBaseError] = InfrastructureError,
-│           default_message: str = "Operation failed",
-│       ):
-│           """
-│           Decorator to automatically map exceptions to domain errors.
-│       
-│           Example:
-│               @with_error_mapping({
-│                   FileNotFoundError: NotFoundError,
-│                   PermissionError: ForbiddenError,
-│               })
-│               async def read_file(path: str):
-│                   ...
-│       
-│           Args:
-│               mappings: Dict mapping exception types to error classes
-│               default_error: Error class for unmapped exceptions
-│               default_message: Default message for unmapped errors
-│           """
-│       
-│           def decorator(func: Callable[..., T]) -> Callable[..., T]:
-│               @wraps(func)
-│               async def async_wrapper(*args, **kwargs):
-│                   try:
-│                       result = func(*args, **kwargs)
-│                       if asyncio.iscoroutine(result):
-│                           return await result
-│                       return result
-│                   except Exception as exc:
-│                       # Check if we have a mapping for this exception
-│                       for exc_type, error_class in mappings.items():
-│                           if isinstance(exc, exc_type):
-│                               raise error_class(
-│                                   str(exc) or default_message, cause=exc
-│                               ) from exc
-│       
-│                       # No mapping found - use default
-│                       if isinstance(exc, GlamBaseError):
-│                           # Already our error type - let it bubble
-│                           raise
-│       
-│                       raise default_error(str(exc) or default_message, cause=exc) from exc
-│       
-│               @wraps(func)
-│               def sync_wrapper(*args, **kwargs):
-│                   try:
-│                       return func(*args, **kwargs)
-│                   except Exception as exc:
-│                       # Same logic as async version
-│                       for exc_type, error_class in mappings.items():
-│                           if isinstance(exc, exc_type):
-│                               raise error_class(
-│                                   str(exc) or default_message, cause=exc
-│                               ) from exc
-│       
-│                       if isinstance(exc, GlamBaseError):
-│                           raise
-│       
-│                       raise default_error(str(exc) or default_message, cause=exc) from exc
-│       
-│               # Return appropriate wrapper based on function type
-│               if asyncio.iscoroutinefunction(func):
-│                   return async_wrapper  # type: ignore
-│               else:
-│                   return sync_wrapper
-│       
-│           return decorator
-│       ```
-│       
-├── mappers/
-│   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   # shared/mappers/__init__.py
-│   │   
-│   │   """Shared mapper infrastructure for all services."""
-│   │   
-│   │   from .base import (
-│   │       BaseMapper,
-│   │   )
-│   │   
-│   │   __all__ = [
-│   │       "BaseMapper",
-│   │   ]
-│   │   ```
-│   │   
-│   └── crud_mapper.py
-│       
-│       ```py
-│       # mappers/generic.py
-│       from __future__ import annotations
-│       from typing import TypeVar, Generic, List
-│       from pydantic import BaseModel, TypeAdapter
-│       from sqlalchemy.orm import DeclarativeBase
-│       from sqlalchemy import inspect
-│       
-│       ModelT = TypeVar('ModelT', bound=DeclarativeBase)
-│       InT    = TypeVar('InT',    bound=BaseModel)
-│       PatchT = TypeVar('PatchT', bound=BaseModel | None)
-│       OutT   = TypeVar('OutT',   bound=BaseModel)
-│       
-│       class CRUDMapper(Generic[ModelT, InT, PatchT, OutT]):
-│           """Bidirectional bridge between SQLAlchemy models and Pydantic DTOs."""
-│       
-│           model_cls: type[ModelT]
-│           out_schema: type[OutT]
-│       
-│           # ---------- CREATE ---------- #
-│           def to_model(self, dto: InT, **extra) -> ModelT:
-│               return self.model_cls(**dto.model_dump(), **extra)
-│       
-│           # ---------- PATCH ---------- #
-│           def patch_model(self, obj: ModelT, patch: PatchT) -> None:
-│               if patch is None:
-│                   return
-│               for field, value in patch.model_dump(exclude_unset=True).items():
-│                   setattr(obj, field, value)
-│               
-│       
-│           # ---------- READ ---------- #
-│           def to_out(self, obj: ModelT) -> OutT:
-│               # from_attributes=True must be set on OutT
-│               return self.out_schema.model_validate(obj)
-│       
-│           def list_to_out(self, objs: List[ModelT]) -> List[OutT]:
-│               # faster validation for big lists
-│               ta = TypeAdapter(List[self.out_schema])  # type: ignore[arg-type]
-│               return ta.validate_python(objs)
-│       
-│           # ---------- HELPER ---------- #
-│           @staticmethod
-│           def is_dirty(obj: ModelT) -> bool:
-│               return bool(inspect(obj).attrs.modified)
-│       ```
-│       
 ├── messaging/
-│   ├── payloads/
-│   │   ├── __init__.py
-│   │   │   
-│   │   │   ```py
-│   │   │   # shared/messaging/payloads/__init__.py
-│   │   │   
-│   │   │   from .catalog import (
-│   │   │       SyncRequestedPayload,
-│   │   │       ProductsStoredPayload,
-│   │   │       SyncCompletedPayload,
-│   │   │   )
-│   │   │   
-│   │   │   from .common import (
-│   │   │       ExternalSource,
-│   │   │       MerchantCreatedPayload,
-│   │   │       WebhookReceivedPayload,
-│   │   │   )
-│   │   │   
-│   │   │   from .credit import (
-│   │   │       CreditDeductionRequestedPayload,
-│   │   │       CreditDeductedPayload,
-│   │   │   )
-│   │   │   
-│   │   │   from .notification import (
-│   │   │       EmailSendRequested,
-│   │   │       EmailSendComplete,
-│   │   │       EmailSendFailed,
-│   │   │       EmailSendBulkRequested,
-│   │   │       EmailSendBulkComplete,
-│   │   │       EmailSendBulkFailed, 
-│   │   │   )
-│   │   │   
-│   │   │   __all__ = [
-│   │   │       "SyncRequestedPayload",
-│   │   │       "ProductsStoredPayload",    
-│   │   │       "SyncCompletedPayload",
-│   │   │       "ExternalSource",
-│   │   │       "MerchantCreatedPayload",
-│   │   │       "WebhookReceivedPayload",
-│   │   │       "CreditDeductionRequestedPayload",
-│   │   │       "CreditDeductedPayload",    
-│   │   │       "EmailSendRequested",
-│   │   │       "EmailSendComplete",
-│   │   │       "EmailSendFailed",
-│   │   │       "EmailSendBulkRequested",   
-│   │   │       "EmailSendBulkComplete",
-│   │   │       "EmailSendBulkFailed",
-│   │   │   ]
-│   │   │   ```
-│   │   │   
-│   │   ├── catalog.py
-│   │   │   
-│   │   │   ```py
-│   │   │   # shared/messaging/payloads/catalog.py
-│   │   │   
-│   │   │   from pydantic import BaseModel, Field
-│   │   │   from typing import Optional, Dict, Any
-│   │   │   from uuid import UUID
-│   │   │   from datetime import datetime, timezone
-│   │   │   from enum import Enum
-│   │   │   
-│   │   │   
-│   │   │   class SyncType(str, Enum):
-│   │   │       FULL="full"
-│   │   │       INCREMENTAL="incremental"
-│   │   │       
-│   │   │       
-│   │   │   class SyncRequestedPayload(BaseModel):
-│   │   │       """Request to sync catalog"""
-│   │   │       merchant_id: UUID
-│   │   │       sync_type: SyncType
-│   │   │       requested_by: str
-│   │   │       platform: str = Field(default="shopify")
-│   │   │       config: Optional[Dict[str, Any]] = Field(default_factory=dict)
-│   │   │   
-│   │   │   
-│   │   │   class ProductsStoredPayload(BaseModel):
-│   │   │       """Products stored in catalog"""
-│   │   │       merchant_id: UUID
-│   │   │       sync_id: UUID
-│   │   │       products_stored: int = Field(..., ge=0)
-│   │   │       products_updated: int = Field(..., ge=0)
-│   │   │       storage_duration_seconds: float = Field(..., ge=0)
-│   │   │       platform: str
-│   │   │   
-│   │   │   
-│   │   │   class SyncCompletedPayload(BaseModel):
-│   │   │       """Catalog sync completed"""
-│   │   │       merchant_id: UUID
-│   │   │       sync_id: UUID
-│   │   │       total_products: int = Field(..., ge=0)
-│   │   │       sync_duration_seconds: float = Field(..., ge=0)
-│   │   │       completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │   │   ```
-│   │   │   
-│   │   ├── common.py
-│   │   │   
-│   │   │   ```py
-│   │   │   # shared/messaging/payloads/common.py
-│   │   │   
-│   │   │   from pydantic import BaseModel, Field, EmailStr
-│   │   │   from typing import Dict, Any
-│   │   │   from uuid import UUID
-│   │   │   from datetime import datetime, timezone
-│   │   │   from enum import Enum
-│   │   │   
-│   │   │   class ExternalSource(str, Enum):
-│   │   │       SHOPIFY="shopify"
-│   │   │       STRIPE="stripe"
-│   │   │   
-│   │   │   class MerchantCreatedPayload(BaseModel):
-│   │   │       """Merchant created event payload"""
-│   │   │       merchant_id: UUID
-│   │   │       merchant_domain: str
-│   │   │       business_name: str
-│   │   │       contact_email: EmailStr
-│   │   │       created_by: str
-│   │   │       created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │   │       
-│   │   │       
-│   │   │   class WebhookReceivedPayload(BaseModel):
-│   │   │       """Webhook received - published by webhook service, consumed by others"""
-│   │   │       webhook_id: UUID
-│   │   │       merchant_id: UUID
-│   │   │       source: ExternalSource
-│   │   │       event_type: str
-│   │   │       payload: Dict[str, Any]
-│   │   │       received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │   │       verified: bool = True
-│   │   │   ```
-│   │   │   
-│   │   ├── credit.py
-│   │   │   
-│   │   │   ```py
-│   │   │   # shared/messaging/payloads/credit.py
-│   │   │   
-│   │   │   from pydantic import BaseModel, Field
-│   │   │   from uuid import UUID
-│   │   │   
-│   │   │   
-│   │   │   class CreditDeductionRequestedPayload(BaseModel):
-│   │   │       """Request to deduct credits"""
-│   │   │       merchant_id: UUID
-│   │   │       credits_to_deduct: int = Field(..., gt=0)
-│   │   │       operation_type: str
-│   │   │       operation_id: UUID
-│   │   │       requested_by: str
-│   │   │   
-│   │   │   
-│   │   │   class CreditDeductedPayload(BaseModel):
-│   │   │       """Credits deducted successfully"""
-│   │   │       merchant_id: UUID
-│   │   │       credits_deducted: int = Field(..., gt=0)
-│   │   │       previous_balance: int = Field(..., ge=0)
-│   │   │       new_balance: int = Field(..., ge=0)
-│   │   │       operation_type: str
-│   │   │       operation_id: UUID
-│   │   │   ```
-│   │   │   
-│   │   └── notification.py
-│   │       
-│   │       ```py
-│   │       # shared/events/payloads/notification.py
-│   │       
-│   │       from pydantic import BaseModel, Field, EmailStr
-│   │       from typing import Optional, Dict, Any
-│   │       from uuid import UUID
-│   │       from datetime import datetime, timezone
-│   │       from enum import Enum
-│   │       
-│   │       
-│   │       class EmailPriority(str, Enum):
-│   │           LOW = "low"
-│   │           NORMAL = "normal" 
-│   │           HIGH = "high"
-│   │           URGENT = "urgent"
-│   │       
-│   │       
-│   │       class EmailSendRequested(BaseModel):
-│   │           """Payload for email send requested event"""
-│   │           merchant_id: UUID
-│   │           merchant_domain: str = Field(..., min_length=1, max_length=100)
-│   │           email_type: str = Field(..., min_length=1, max_length=100)
-│   │           recipient_email: EmailStr
-│   │           extra_metadata: Optional[Dict[str, Any]] = None
-│   │       
-│   │       class EmailSendBulkRequested(BaseModel):
-│   │           """Payload for bulk email send requested event"""
-│   │           merchant_id: UUID
-│   │           email_type: str = Field(..., min_length=1, max_length=100)
-│   │           recipient_emails: list[EmailStr]
-│   │           template_context: Dict[str, Any] = Field(default_factory=dict)
-│   │           priority: EmailPriority = EmailPriority.NORMAL
-│   │           requested_by: str = Field(..., min_length=1)
-│   │           send_at: Optional[datetime] = None
-│   │           bulk_job_id: Optional[str] = None
-│   │       
-│   │       
-│   │       class EmailSendComplete(BaseModel):
-│   │           """Payload for email sent event"""
-│   │           notification_id: UUID
-│   │           merchant_id: UUID
-│   │           email_type: str
-│   │           recipient_email: EmailStr
-│   │           provider: str
-│   │           provider_message_id: Optional[str] = None
-│   │           sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │       
-│   │       
-│   │       class EmailSendFailed(BaseModel):
-│   │           """Payload for email failed event"""
-│   │           notification_id: Optional[UUID] = None
-│   │           merchant_id: UUID
-│   │           template_name: str
-│   │           recipient_email: EmailStr
-│   │           error_message: str
-│   │           error_code: str
-│   │           retry_count: int = Field(default=0, ge=0)
-│   │           will_retry: bool = False
-│   │           
-│   │       class EmailSendBulkComplete(BaseModel):
-│   │           """Payload for bulk email completion event"""
-│   │           merchant_id: UUID
-│   │           email_type: str
-│   │           total_sent: int
-│   │           total_failed: int
-│   │           sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │           details: Optional[Dict[str, Any]] = None
-│   │           
-│   │       class EmailSendBulkFailed(BaseModel):
-│   │           """Payload for bulk email failed event"""
-│   │           merchant_id: UUID
-│   │           email_type: str
-│   │           error_message: str
-│   │           error_code: str
-│   │           retry_count: int = Field(default=0, ge=0)
-│   │           will_retry: bool = False
-│   │           failed_recipients: Optional[list[EmailStr]] = None
-│   │       ```
-│   │       
 │   ├── __init__.py
 │   │   
 │   │   ```py
@@ -3216,70 +739,61 @@ shared/
 │   │   """Shared messaging module for publisher, subscriber, event context, stream client, subject, and payloads."""
 │   │   
 │   │   from .publisher import Publisher
-│   │   from .listener import Listener
-│   │   from .event_context import (
-│   │       get_correlation_id,
-│   │       set_correlation_id,
-│   │       get_source_service,
-│   │       set_source_service,
-│   │       clear_context,
-│   │   )   
+│   │   from .listener import Listener 
 │   │   
 │   │   from .jetstream_client import JetStreamClient
 │   │   from .stream_config import StreamConfig
 │   │   from .subjects import Subjects
+│   │   from .common_payloads import (
+│   │       MerchantCreatedPayload,
+│   │       WebhookReceivedPayload,
+│   │   )
 │   │   
 │   │   __all__ = [
 │   │       "Publisher",
 │   │       "Listener",
-│   │       "get_correlation_id",
-│   │       "set_correlation_id",
-│   │       "get_source_service",
-│   │       "set_source_service",
-│   │       "clear_context",
 │   │       "JetStreamClient",
 │   │       "StreamConfig",
 │   │       "Subjects",
+│   │       "MerchantCreatedPayload",
+│   │       "WebhookReceivedPayload",
 │   │   ]
 │   │   ```
 │   │   
-│   ├── event_context.py
+│   ├── common_payloads.py
 │   │   
 │   │   ```py
-│   │   # shared/messaging/event_context.py
+│   │   # shared/messaging/payloads/common.py
 │   │   
-│   │   from contextvars import ContextVar
-│   │   from typing import Optional
+│   │   from pydantic import BaseModel, Field, EmailStr
+│   │   from typing import Dict, Any
+│   │   from uuid import UUID
+│   │   from datetime import datetime, timezone
+│   │   from enum import Enum
 │   │   
-│   │   # Context variables for correlation tracking
-│   │   _correlation_context: ContextVar[Optional[str]] = ContextVar('correlation_id', default=None)
-│   │   _source_service_context: ContextVar[Optional[str]] = ContextVar('source_service', default=None)
+│   │   class ExternalSource(str, Enum):
+│   │       SHOPIFY="shopify"
+│   │       STRIPE="stripe"
 │   │   
-│   │   
-│   │   def get_correlation_id() -> Optional[str]:
-│   │       """Get current correlation ID from async context"""
-│   │       return _correlation_context.get()
-│   │   
-│   │   
-│   │   def set_correlation_id(correlation_id: str) -> None:
-│   │       """Set correlation ID in async context"""
-│   │       _correlation_context.set(correlation_id)
-│   │   
-│   │   
-│   │   def get_source_service() -> Optional[str]:
-│   │       """Get current source service from async context"""
-│   │       return _source_service_context.get()
-│   │   
-│   │   
-│   │   def set_source_service(source_service: str) -> None:
-│   │       """Set source service in async context"""
-│   │       _source_service_context.set(source_service)
-│   │   
-│   │   
-│   │   def clear_context() -> None:
-│   │       """Clear all context variables"""
-│   │       _correlation_context.set(None)
-│   │       _source_service_context.set(None)
+│   │   class MerchantCreatedPayload(BaseModel):
+│   │       """Merchant created event payload"""
+│   │       merchant_id: UUID
+│   │       merchant_domain: str
+│   │       business_name: str
+│   │       contact_email: EmailStr
+│   │       created_by: str
+│   │       created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+│   │       
+│   │       
+│   │   class WebhookReceivedPayload(BaseModel):
+│   │       """Webhook received - published by webhook service, consumed by others"""
+│   │       webhook_id: UUID
+│   │       merchant_id: UUID
+│   │       source: ExternalSource
+│   │       event_type: str
+│   │       payload: Dict[str, Any]
+│   │       received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+│   │       verified: bool = True
 │   │   ```
 │   │   
 │   ├── jetstream_client.py
@@ -3673,7 +1187,7 @@ shared/
 │   │   STREAM_CONFIGS = [
 │   │       StreamConfig(
 │   │           name=Streams.EVENTS,
-│   │           subjects=["evt.*"],
+│   │           subjects=["evt.*", "cmd.*"],
 │   │           max_age_hours=24,
 │   │           max_msgs=1000000,
 │   │       ),
@@ -3853,7 +1367,380 @@ shared/
 │       
 ├── utils/
 │   ├── __init__.py
-│   ├── idempotency_key_generator.py
+│   ├── config_loader.py
+│   │   
+│   │   ```py
+│   │   # shared/config/loader.py
+│   │   from __future__ import annotations
+│   │   from pathlib import Path
+│   │   from typing import Any, Dict, Iterable
+│   │   import os
+│   │   import yaml
+│   │   from dotenv import dotenv_values
+│   │   
+│   │   # repo root
+│   │   _REPO_ROOT = Path(__file__).resolve()
+│   │   while _REPO_ROOT.name != "glam-app":
+│   │       if _REPO_ROOT.parent == _REPO_ROOT:
+│   │           raise RuntimeError("Unable to locate glam-app root directory")
+│   │       _REPO_ROOT = _REPO_ROOT.parent
+│   │   
+│   │   _CONFIG_DIR = _REPO_ROOT / "config"
+│   │   _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"
+│   │   _SVC_CFG_DIR = _CONFIG_DIR / "services"
+│   │   _SERVICES_DIR = _REPO_ROOT / "services"
+│   │   
+│   │   def _load_yaml(path: Path) -> Dict[str, Any]:
+│   │       if not path.is_file():
+│   │           return {}
+│   │       with path.open() as f:
+│   │           return yaml.safe_load(f) or {}
+│   │   
+│   │   def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+│   │       out = a.copy()
+│   │       for k, v in b.items():
+│   │           if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+│   │               out[k] = _deep_merge(out[k], v)
+│   │           else:
+│   │               out[k] = v
+│   │       return out
+│   │   
+│   │   def _load_service_dotenv(service: str) -> None:
+│   │       """Load services/{service}/.env for local runs only. Never override existing env."""
+│   │       if os.path.exists("/.dockerenv") or os.getenv("DISABLE_DOTENV") == "1":
+│   │           return
+│   │       p = _SERVICES_DIR / service / ".env"
+│   │       if not p.is_file():
+│   │           return
+│   │       for k, v in (dotenv_values(p) or {}).items():
+│   │           if v is not None and k not in os.environ:
+│   │               os.environ[k] = v
+│   │   
+│   │   def merged_config(
+│   │       service: str,
+│   │       *,
+│   │       passthrough_env: Iterable[str] = ("DATABASE_URL",),
+│   │   ) -> Dict[str, Any]:
+│   │       """shared.yml < service.yml, plus selected raw env keys (no prefixes)."""
+│   │       _load_service_dotenv(service)
+│   │   
+│   │       cfg = _deep_merge(
+│   │           _load_yaml(_SHARED_CONFIG),
+│   │           _load_yaml(_SVC_CFG_DIR / f"{service}.yml"),
+│   │       )
+│   │   
+│   │       for k in passthrough_env:
+│   │           if k in os.environ and k not in cfg:
+│   │               cfg[k] = os.environ[k]
+│   │       return cfg
+│   │   
+│   │   def flatten_config(data: dict, parent_key: str = "", sep: str = ".") -> dict:
+│   │       items: list[tuple[str, Any]] = []
+│   │       for k, v in data.items():
+│   │           nk = f"{parent_key}{sep}{k}" if parent_key else k
+│   │           if isinstance(v, dict):
+│   │               items.extend(flatten_config(v, nk, sep=sep).items())
+│   │           else:
+│   │               items.append((nk, v))
+│   │       return dict(items)
+│   │   ```
+│   │   
+│   ├── exceptions.py
+│   │   
+│   │   ```py
+│   │   # -------------------------------
+│   │   # shared/errors/base.py
+│   │   # -------------------------------
+│   │   
+│   │   """
+│   │   Base error classes for the glam-app error hierarchy.
+│   │   
+│   │   This module defines the fundamental error types that all other
+│   │   errors inherit from, following a three-tier model:
+│   │   1. GlamBaseError - Root of all application errors
+│   │   2. InfrastructureError - External system failures
+│   │   3. DomainError - Business logic violations
+│   │   """
+│   │   
+│   │   from typing import Any, Dict, Optional
+│   │   
+│   │   
+│   │   class GlamBaseError(Exception):
+│   │       """
+│   │       Base class for all glam-app errors.
+│   │   
+│   │       Attributes:
+│   │           code: Stable error code for clients (e.g., "VALIDATION_ERROR")
+│   │           status: HTTP status code (default 500)
+│   │           message: Human-readable error message
+│   │           details: Additional error context
+│   │           __cause__: Original exception if wrapped
+│   │       """
+│   │   
+│   │       code: str = "INTERNAL_ERROR"
+│   │       status: int = 500
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           code: Optional[str] = None,
+│   │           status: Optional[int] = None,
+│   │           details: Optional[Dict[str, Any]] = None,
+│   │           cause: Optional[Exception] = None
+│   │       ):
+│   │           super().__init__(message)
+│   │   
+│   │           if code is not None:
+│   │               self.code = code
+│   │           if status is not None:
+│   │               self.status = status
+│   │   
+│   │           self.message = message
+│   │           self.details = details or {}
+│   │   
+│   │           # Preserve the original exception chain
+│   │           if cause is not None:
+│   │               self.__cause__ = cause
+│   │   
+│   │       def to_dict(self) -> Dict[str, Any]:
+│   │           """Convert error to dictionary for JSON serialization."""
+│   │           result: Dict[str, Any] = {
+│   │               "code": self.code,
+│   │               "message": self.message,
+│   │           }
+│   │   
+│   │           if self.details:
+│   │               result["details"] = self.details
+│   │   
+│   │           return result
+│   │   
+│   │   
+│   │   class InfrastructureError(GlamBaseError):
+│   │       """
+│   │       Infrastructure/external system errors.
+│   │   
+│   │       These are failures in external dependencies like databases,
+│   │       APIs, message queues, etc. They may be retryable.
+│   │       """
+│   │   
+│   │       code = "INFRASTRUCTURE_ERROR"
+│   │       status = 503  # Service Unavailable
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           service: Optional[str] = None,
+│   │           retryable: bool = True,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if service:
+│   │               self.details["service"] = service
+│   │   
+│   │           self.details["retryable"] = retryable
+│   │           self.retryable = retryable
+│   │   
+│   │   
+│   │   class DomainError(GlamBaseError):
+│   │       """
+│   │       Domain/business logic errors.
+│   │   
+│   │       These represent violations of business rules or invalid
+│   │       operations within the application domain.
+│   │       """
+│   │   
+│   │       code = "DOMAIN_ERROR"
+│   │       status = 400  # Bad Request
+│   │   
+│   │   
+│   │   # Common domain errors used across services
+│   │   
+│   │   
+│   │   class ValidationError(DomainError):
+│   │       """Invalid request data or parameters."""
+│   │   
+│   │       code = "VALIDATION_ERROR"
+│   │       status = 422  # Unprocessable Entity
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           field: Optional[str] = None,
+│   │           value: Optional[Any] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if field:
+│   │               self.details["field"] = field
+│   │           if value is not None:
+│   │               self.details["value"] = str(value)
+│   │   
+│   │   
+│   │   class NotFoundError(DomainError):
+│   │       """Requested resource not found."""
+│   │   
+│   │       code = "NOT_FOUND"
+│   │       status = 404
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           resource: Optional[str] = None,
+│   │           resource_id: Optional[Any] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if resource:
+│   │               self.details["resource"] = resource
+│   │           if resource_id is not None:
+│   │               self.details["resource_id"] = str(resource_id)
+│   │   
+│   │   
+│   │   class ConflictError(DomainError):
+│   │       """Operation conflicts with current state."""
+│   │   
+│   │       code = "CONFLICT"
+│   │       status = 409
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           conflicting_resource: Optional[str] = None,
+│   │           current_state: Optional[str] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if conflicting_resource:
+│   │               self.details["conflicting_resource"] = conflicting_resource
+│   │           if current_state:
+│   │               self.details["current_state"] = current_state
+│   │   
+│   │   
+│   │   class UnauthorizedError(DomainError):
+│   │       """Authentication required or failed."""
+│   │   
+│   │       code = "UNAUTHORIZED"
+│   │       status = 401
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str = "Authentication required",
+│   │           *,
+│   │           auth_type: Optional[str] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if auth_type:
+│   │               self.details["auth_type"] = auth_type
+│   │   
+│   │   
+│   │   class ForbiddenError(DomainError):
+│   │       """Authenticated but insufficient permissions."""
+│   │   
+│   │       code = "FORBIDDEN"
+│   │       status = 403
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str = "Insufficient permissions",
+│   │           *,
+│   │           required_permission: Optional[str] = None,
+│   │           resource: Optional[str] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if required_permission:
+│   │               self.details["required_permission"] = required_permission
+│   │           if resource:
+│   │               self.details["resource"] = resource
+│   │   
+│   │   
+│   │   class RateLimitedError(DomainError):
+│   │       """Too many requests."""
+│   │   
+│   │       code = "RATE_LIMITED"
+│   │       status = 429
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str = "Rate limit exceeded",
+│   │           *,
+│   │           limit: Optional[int] = None,
+│   │           window: Optional[str] = None,
+│   │           retry_after: Optional[int] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if limit:
+│   │               self.details["limit"] = limit
+│   │           if window:
+│   │               self.details["window"] = window
+│   │           if retry_after:
+│   │               self.details["retry_after"] = retry_after
+│   │   
+│   │   
+│   │   class ServiceUnavailableError(InfrastructureError):
+│   │       """Service temporarily unavailable."""
+│   │   
+│   │       code = "SERVICE_UNAVAILABLE"
+│   │       status = 503
+│   │   
+│   │   
+│   │   class RequestTimeoutError(InfrastructureError):
+│   │       """Operation timed out."""
+│   │   
+│   │       code = "TIMEOUT"
+│   │       status = 504
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           timeout_seconds: Optional[float] = None,
+│   │           operation: Optional[str] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if timeout_seconds:
+│   │               self.details["timeout_seconds"] = timeout_seconds
+│   │           if operation:
+│   │               self.details["operation"] = operation
+│   │   
+│   │   
+│   │   class InternalError(GlamBaseError):
+│   │       """Unexpected internal server error."""
+│   │   
+│   │       code = "INTERNAL_ERROR"
+│   │       status = 500
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str = "An unexpected error occurred",
+│   │           *,
+│   │           error_id: Optional[str] = None,
+│   │           **kwargs
+│   │       ):
+│   │           # Never expose internal details in production
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if error_id:
+│   │               self.details["error_id"] = error_id
+│   │   ```
+│   │   
+│   ├── idempotency_key.py
 │   │   
 │   │   ```py
 │   │   # shared/utils/idempotency.py
@@ -3896,264 +1783,636 @@ shared/
 │   │       return '_'.join(parts)
 │   │   ```
 │   │   
-│   └── logger.py
+│   ├── logger.py
+│   │   
+│   │   ```py
+│   │   # shared/utils/logger.py
+│   │   import logging
+│   │   import logging.handlers
+│   │   import os
+│   │   import json
+│   │   from datetime import datetime
+│   │   from typing import Dict, Any
+│   │   from pathlib import Path
+│   │   from contextvars import ContextVar
+│   │   
+│   │   
+│   │   # Context variable for request-scoped data
+│   │   request_context: ContextVar[Dict[str, Any]] = ContextVar('request_context', default={})
+│   │   
+│   │   
+│   │   class ServiceLogger:
+│   │       """
+│   │       Service-specific logger that automatically includes service name and request context.
+│   │       """
+│   │       
+│   │       def __init__(self, service_name: str):
+│   │           self.service_name = service_name
+│   │           self._setup_logging()
+│   │           self._logger = logging.getLogger(service_name)
+│   │       
+│   │       def _setup_logging(self):
+│   │           """Configure logging for this service"""
+│   │           env = os.getenv("APP_ENV", "dev").lower()
+│   │           log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+│   │           print(f"Setting up logger for {self.service_name} in {env} environment with level {log_level}")
+│   │           
+│   │           # Create logs directory
+│   │           Path("logs").mkdir(exist_ok=True)
+│   │           
+│   │           # Configure formatters based on environment
+│   │           if env == "prod":
+│   │               formatter = JsonFormatter(self.service_name)
+│   │           else:
+│   │               formatter = ConsoleFormatter(self.service_name)
+│   │           
+│   │           # Set up handlers
+│   │           console_handler = logging.StreamHandler()
+│   │           console_handler.setFormatter(formatter)
+│   │           console_handler.setLevel(log_level)
+│   │           
+│   │           # Configure the service logger
+│   │           logger = logging.getLogger(self.service_name)
+│   │           logger.setLevel(log_level)
+│   │           logger.addHandler(console_handler)
+│   │           
+│   │           # Add file handler for production
+│   │           if env == "prod":
+│   │               file_handler = logging.handlers.RotatingFileHandler(
+│   │                   f"logs/{self.service_name}.log",
+│   │                   maxBytes=10485760,  # 10MB
+│   │                   backupCount=5,
+│   │                   encoding='utf8'
+│   │               )
+│   │               file_handler.setFormatter(formatter)
+│   │               file_handler.setLevel(logging.INFO)
+│   │               logger.addHandler(file_handler)
+│   │           
+│   │           # Prevent propagation to avoid duplicate logs
+│   │           logger.propagate = False
+│   │       
+│   │       def set_request_context(self, **kwargs):
+│   │           """Set request-scoped context (e.g., request_id, user_id)"""
+│   │           ctx = request_context.get()
+│   │           ctx.update(kwargs)
+│   │           request_context.set(ctx)
+│   │       
+│   │       def clear_request_context(self):
+│   │           """Clear request context"""
+│   │           request_context.set({})
+│   │       
+│   │       def _log(self, level: int, msg: str, *args, **kwargs):
+│   │           """Internal log method that adds context"""
+│   │           # Get request context
+│   │           ctx = request_context.get()
+│   │           
+│   │           # Add context to extra
+│   │           extra = kwargs.get('extra', {})
+│   │           extra.update(ctx)
+│   │           kwargs['extra'] = extra
+│   │           
+│   │           self._logger.log(level, msg, *args, **kwargs)
+│   │       
+│   │       def debug(self, msg: str, *args, **kwargs):
+│   │           self._log(logging.DEBUG, msg, *args, **kwargs)
+│   │       
+│   │       def info(self, msg: str, *args, **kwargs):
+│   │           self._log(logging.INFO, msg, *args, **kwargs)
+│   │       
+│   │       def warning(self, msg: str, *args, **kwargs):
+│   │           self._log(logging.WARNING, msg, *args, **kwargs)
+│   │       
+│   │       def error(self, msg: str, *args, **kwargs):
+│   │           self._log(logging.ERROR, msg, *args, **kwargs)
+│   │       
+│   │       def critical(self, msg: str, *args, **kwargs):
+│   │           self._log(logging.CRITICAL, msg, *args, **kwargs)
+│   │   
+│   │   
+│   │   class ConsoleFormatter(logging.Formatter):
+│   │       """Console formatter that includes service name and request context"""
+│   │       
+│   │       def __init__(self, service_name: str):
+│   │           self.service_name = service_name
+│   │           super().__init__()
+│   │       
+│   │       def format(self, record):
+│   │           # Build context string from extra fields
+│   │           context_parts = []
+│   │           request_id = getattr(record, 'request_id', None)
+│   │           if request_id is not None:
+│   │               context_parts.append(f"request_id={request_id}")
+│   │           user_id = getattr(record, 'user_id', None)
+│   │           if user_id is not None:
+│   │               context_parts.append(f"user_id={user_id}")
+│   │           
+│   │           # Add any other extra fields
+│   │           for key in record.__dict__:
+│   │               if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
+│   │                             'levelname', 'levelno', 'lineno', 'module', 'msecs',
+│   │                             'pathname', 'process', 'processName', 'relativeCreated',
+│   │                             'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
+│   │                             'message', 'getMessage', 'request_id', 'user_id']:
+│   │                   context_parts.append(f"{key}={getattr(record, key)}")
+│   │           
+│   │           # Format: 2024-01-15 10:30:45 - funding-service - INFO - [request_id=123] Processing order
+│   │           timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
+│   │           
+│   │           message = f"{timestamp} - {self.service_name} - {record.levelname}"
+│   │           if context_parts:
+│   │               message += f" - [{' '.join(context_parts)}]"
+│   │           message += f" - {record.getMessage()}"
+│   │           
+│   │           if record.exc_info:
+│   │               message += '\n' + self.formatException(record.exc_info)
+│   │           
+│   │           return message
+│   │   
+│   │   
+│   │   class JsonFormatter(logging.Formatter):
+│   │       """JSON formatter for production"""
+│   │       
+│   │       def __init__(self, service_name: str):
+│   │           self.service_name = service_name
+│   │           super().__init__()
+│   │       
+│   │       def format(self, record):
+│   │           log_data = {
+│   │               "timestamp": datetime.utcnow().isoformat(),
+│   │               "service": self.service_name,
+│   │               "level": record.levelname,
+│   │               "message": record.getMessage(),
+│   │               "environment": os.getenv("APP_ENV", "dev"),
+│   │           }
+│   │           
+│   │           # Add request context from extra
+│   │           request_id = getattr(record, 'request_id', None)
+│   │           if request_id is not None:
+│   │               log_data['request_id'] = request_id
+│   │           user_id = getattr(record, 'user_id', None)
+│   │           if user_id is not None:
+│   │               log_data['user_id'] = user_id
+│   │           
+│   │           # Add any other extra fields
+│   │           for key in record.__dict__:
+│   │               if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
+│   │                             'levelname', 'levelno', 'lineno', 'module', 'msecs',
+│   │                             'pathname', 'process', 'processName', 'relativeCreated',
+│   │                             'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
+│   │                             'message', 'getMessage', 'request_id', 'user_id']:
+│   │                   log_data[key] = getattr(record, key)
+│   │           
+│   │           # Add exception if present
+│   │           if record.exc_info:
+│   │               log_data['exception'] = self.formatException(record.exc_info)
+│   │           
+│   │           return json.dumps(log_data)
+│   │   
+│   │   
+│   │   # Factory function to create service logger
+│   │   def create_logger(service_name: str) -> ServiceLogger:
+│   │       """
+│   │       Create a logger for a specific service.
+│   │       
+│   │       Args:
+│   │           service_name: Name of the service
+│   │           
+│   │       Returns:
+│   │           ServiceLogger instance
+│   │       """
+│   │       return ServiceLogger(service_name)
+│   │   
+│   │   
+│   │   # ============ USAGE ============
+│   │   
+│   │   """
+│   │   USAGE:
+│   │   
+│   │   1. In your service initialization (main.py or app.py):
+│   │   ```python
+│   │   from shared.utils.logger import create_logger
+│   │   
+│   │   # Create service-specific logger
+│   │   logger = create_logger("funding-service")
+│   │   ```
+│   │   
+│   │   2. Basic logging:
+│   │   ```python
+│   │   logger.info("Service started")
+│   │   logger.error("Connection failed", extra={"host": "localhost", "port": 5432})
+│   │   ```
+│   │   
+│   │   3. In FastAPI middleware or request handler:
+│   │   ```python
+│   │   @app.middleware("http")
+│   │   async def add_request_context(request: Request, call_next):
+│   │       # Set request context for all logs in this request
+│   │       logger.set_request_context(
+│   │           request_id=request.headers.get("X-Request-ID", str(uuid.uuid4())),
+│   │           method=request.method,
+│   │           path=request.url.path
+│   │       )
+│   │       
+│   │       logger.info("Request started")
+│   │       response = await call_next(request)
+│   │       logger.info("Request completed", extra={"status_code": response.status_code})
+│   │       
+│   │       # Clear context after request
+│   │       logger.clear_request_context()
+│   │       return response
+│   │   ```
+│   │   
+│   │   4. In any route or service method:
+│   │   ```python
+│   │   @app.post("/api/orders")
+│   │   async def create_order(order: Order, user_id: str = Depends(get_current_user)):
+│   │       # Add user context
+│   │       logger.set_request_context(user_id=user_id)
+│   │       
+│   │       logger.info("Creating order", extra={"order_id": order.id})
+│   │       # ... business logic ...
+│   │       logger.info("Order created successfully")
+│   │   ```
+│   │   
+│   │   5. Output examples:
+│   │   
+│   │   Development:
+│   │   2024-01-15 10:30:45 - funding-service - INFO - [request_id=abc123 user_id=456] - Creating order
+│   │   
+│   │   Production (JSON):
+│   │   {"timestamp": "2024-01-15T10:30:45.123Z", "service": "funding-service", "level": "INFO", "message": "Creating order", "request_id": "abc123", "user_id": "456", "order_id": "789"}
+│   │   """
+│   │   ```
+│   │   
+│   └── query_helpers.py
 │       
 │       ```py
-│       # shared/utils/logger.py
-│       import logging
-│       import logging.handlers
-│       import os
-│       import json
-│       from datetime import datetime
-│       from typing import Dict, Any
-│       from pathlib import Path
-│       from contextvars import ContextVar
+│       # shared/database/helpers.py
+│       """Common query helpers for Prisma operations."""
+│       from typing import Dict, Any, Optional, List, Union
+│       from enum import Enum
+│       from uuid import UUID
 │       
 │       
-│       # Context variable for request-scoped data
-│       request_context: ContextVar[Dict[str, Any]] = ContextVar('request_context', default={})
-│       
-│       
-│       class ServiceLogger:
+│       def shop_filter(
+│           shop_id: Optional[Union[str, UUID]] = None,
+│           shop_domain: Optional[str] = None,
+│           field_prefix: Optional[str] = None
+│       ) -> Dict[str, Any]:
 │           """
-│           Service-specific logger that automatically includes service name and request context.
-│           """
-│           
-│           def __init__(self, service_name: str):
-│               self.service_name = service_name
-│               self._setup_logging()
-│               self._logger = logging.getLogger(service_name)
-│           
-│           def _setup_logging(self):
-│               """Configure logging for this service"""
-│               env = os.getenv("APP_ENV", "dev").lower()
-│               log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-│               print(f"Setting up logger for {self.service_name} in {env} environment with level {log_level}")
-│               
-│               # Create logs directory
-│               Path("logs").mkdir(exist_ok=True)
-│               
-│               # Configure formatters based on environment
-│               if env == "prod":
-│                   formatter = JsonFormatter(self.service_name)
-│               else:
-│                   formatter = ConsoleFormatter(self.service_name)
-│               
-│               # Set up handlers
-│               console_handler = logging.StreamHandler()
-│               console_handler.setFormatter(formatter)
-│               console_handler.setLevel(log_level)
-│               
-│               # Configure the service logger
-│               logger = logging.getLogger(self.service_name)
-│               logger.setLevel(log_level)
-│               logger.addHandler(console_handler)
-│               
-│               # Add file handler for production
-│               if env == "prod":
-│                   file_handler = logging.handlers.RotatingFileHandler(
-│                       f"logs/{self.service_name}.log",
-│                       maxBytes=10485760,  # 10MB
-│                       backupCount=5,
-│                       encoding='utf8'
-│                   )
-│                   file_handler.setFormatter(formatter)
-│                   file_handler.setLevel(logging.INFO)
-│                   logger.addHandler(file_handler)
-│               
-│               # Prevent propagation to avoid duplicate logs
-│               logger.propagate = False
-│           
-│           def set_request_context(self, **kwargs):
-│               """Set request-scoped context (e.g., request_id, user_id)"""
-│               ctx = request_context.get()
-│               ctx.update(kwargs)
-│               request_context.set(ctx)
-│           
-│           def clear_request_context(self):
-│               """Clear request context"""
-│               request_context.set({})
-│           
-│           def _log(self, level: int, msg: str, *args, **kwargs):
-│               """Internal log method that adds context"""
-│               # Get request context
-│               ctx = request_context.get()
-│               
-│               # Add context to extra
-│               extra = kwargs.get('extra', {})
-│               extra.update(ctx)
-│               kwargs['extra'] = extra
-│               
-│               self._logger.log(level, msg, *args, **kwargs)
-│           
-│           def debug(self, msg: str, *args, **kwargs):
-│               self._log(logging.DEBUG, msg, *args, **kwargs)
-│           
-│           def info(self, msg: str, *args, **kwargs):
-│               self._log(logging.INFO, msg, *args, **kwargs)
-│           
-│           def warning(self, msg: str, *args, **kwargs):
-│               self._log(logging.WARNING, msg, *args, **kwargs)
-│           
-│           def error(self, msg: str, *args, **kwargs):
-│               self._log(logging.ERROR, msg, *args, **kwargs)
-│           
-│           def critical(self, msg: str, *args, **kwargs):
-│               self._log(logging.CRITICAL, msg, *args, **kwargs)
-│       
-│       
-│       class ConsoleFormatter(logging.Formatter):
-│           """Console formatter that includes service name and request context"""
-│           
-│           def __init__(self, service_name: str):
-│               self.service_name = service_name
-│               super().__init__()
-│           
-│           def format(self, record):
-│               # Build context string from extra fields
-│               context_parts = []
-│               request_id = getattr(record, 'request_id', None)
-│               if request_id is not None:
-│                   context_parts.append(f"request_id={request_id}")
-│               user_id = getattr(record, 'user_id', None)
-│               if user_id is not None:
-│                   context_parts.append(f"user_id={user_id}")
-│               
-│               # Add any other extra fields
-│               for key in record.__dict__:
-│                   if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
-│                                 'levelname', 'levelno', 'lineno', 'module', 'msecs',
-│                                 'pathname', 'process', 'processName', 'relativeCreated',
-│                                 'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
-│                                 'message', 'getMessage', 'request_id', 'user_id']:
-│                       context_parts.append(f"{key}={getattr(record, key)}")
-│               
-│               # Format: 2024-01-15 10:30:45 - funding-service - INFO - [request_id=123] Processing order
-│               timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
-│               
-│               message = f"{timestamp} - {self.service_name} - {record.levelname}"
-│               if context_parts:
-│                   message += f" - [{' '.join(context_parts)}]"
-│               message += f" - {record.getMessage()}"
-│               
-│               if record.exc_info:
-│                   message += '\n' + self.formatException(record.exc_info)
-│               
-│               return message
-│       
-│       
-│       class JsonFormatter(logging.Formatter):
-│           """JSON formatter for production"""
-│           
-│           def __init__(self, service_name: str):
-│               self.service_name = service_name
-│               super().__init__()
-│           
-│           def format(self, record):
-│               log_data = {
-│                   "timestamp": datetime.utcnow().isoformat(),
-│                   "service": self.service_name,
-│                   "level": record.levelname,
-│                   "message": record.getMessage(),
-│                   "environment": os.getenv("APP_ENV", "dev"),
-│               }
-│               
-│               # Add request context from extra
-│               request_id = getattr(record, 'request_id', None)
-│               if request_id is not None:
-│                   log_data['request_id'] = request_id
-│               user_id = getattr(record, 'user_id', None)
-│               if user_id is not None:
-│                   log_data['user_id'] = user_id
-│               
-│               # Add any other extra fields
-│               for key in record.__dict__:
-│                   if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
-│                                 'levelname', 'levelno', 'lineno', 'module', 'msecs',
-│                                 'pathname', 'process', 'processName', 'relativeCreated',
-│                                 'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
-│                                 'message', 'getMessage', 'request_id', 'user_id']:
-│                       log_data[key] = getattr(record, key)
-│               
-│               # Add exception if present
-│               if record.exc_info:
-│                   log_data['exception'] = self.formatException(record.exc_info)
-│               
-│               return json.dumps(log_data)
-│       
-│       
-│       # Factory function to create service logger
-│       def create_logger(service_name: str) -> ServiceLogger:
-│           """
-│           Create a logger for a specific service.
+│           Generate filter for shop/merchant queries.
 │           
 │           Args:
-│               service_name: Name of the service
+│               shop_id: Shop/merchant UUID
+│               shop_domain: Shop domain (e.g., "example.myshopify.com")
+│               field_prefix: Field prefix for nested relations (e.g., "merchant" -> "merchantId")
 │               
 │           Returns:
-│               ServiceLogger instance
+│               Filter dictionary for Prisma where clause
+│               
+│           Example:
+│               # Filter by shop_id
+│               products = await db.product.find_many(
+│                   where=shop_filter(shop_id="123e4567-e89b-12d3-a456-426614174000")
+│               )
+│               
+│               # Filter by domain
+│               products = await db.product.find_many(
+│                   where=shop_filter(shop_domain="example.myshopify.com")
+│               )
+│               
+│               # Filter nested relation
+│               orders = await db.order.find_many(
+│                   where=shop_filter(
+│                       shop_id=shop_id,
+│                       field_prefix="merchant"
+│                   )
+│               )
+│               # This generates: {"merchantId": shop_id}
 │           """
-│           return ServiceLogger(service_name)
+│           if not shop_id and not shop_domain:
+│               return {}
+│           
+│           # Determine field names
+│           id_field = f"{field_prefix}Id" if field_prefix else "shopId"
+│           domain_field = f"{field_prefix}Domain" if field_prefix else "shopDomain"
+│           
+│           # Alternative common field names
+│           if field_prefix:
+│               # Already has prefix, use it as is
+│               pass
+│           else:
+│               # Try to auto-detect common field names
+│               # You can customize this based on your schema conventions
+│               id_field_alternatives = ["shopId", "merchantId"]
+│               domain_field_alternatives = ["shopDomain", "merchantDomain"]
+│           
+│           filters = {}
+│           
+│           if shop_id:
+│               filters[id_field] = str(shop_id)
+│           
+│           if shop_domain:
+│               filters[domain_field] = shop_domain
+│           
+│           # If both are provided, use AND logic
+│           if shop_id and shop_domain:
+│               return {"AND": [
+│                   {id_field: str(shop_id)},
+│                   {domain_field: shop_domain}
+│               ]}
+│           
+│           return filters
 │       
 │       
-│       # ============ USAGE ============
+│       def merchant_filter(
+│           merchant_id: Optional[Union[str, UUID]] = None,
+│           merchant_domain: Optional[str] = None
+│       ) -> Dict[str, Any]:
+│           """
+│           Alias for shop_filter using merchant terminology.
+│           
+│           Args:
+│               merchant_id: Merchant UUID
+│               merchant_domain: Merchant domain
+│               
+│           Returns:
+│               Filter dictionary with merchantId/merchantDomain fields
+│               
+│           Example:
+│               products = await db.product.find_many(
+│                   where=merchant_filter(merchant_id=merchant_id)
+│               )
+│           """
+│           filters = {}
+│           
+│           if merchant_id:
+│               filters["merchantId"] = str(merchant_id)
+│           
+│           if merchant_domain:
+│               filters["merchantDomain"] = merchant_domain
+│           
+│           if merchant_id and merchant_domain:
+│               return {"AND": [
+│                   {"merchantId": str(merchant_id)},
+│                   {"merchantDomain": merchant_domain}
+│               ]}
+│           
+│           return filters
 │       
+│       
+│       def soft_delete_filter(
+│           include_deleted: bool = False,
+│           table_alias: Optional[str] = None
+│       ) -> Dict[str, Any]:
+│           """
+│           Generate filter for soft-deleted records.
+│           
+│           Args:
+│               include_deleted: Whether to include soft-deleted records
+│               table_alias: Optional table alias for nested queries
+│               
+│           Returns:
+│               Filter dictionary for Prisma where clause
+│               
+│           Example:
+│               # Exclude soft-deleted records (default)
+│               products = await db.product.find_many(
+│                   where=soft_delete_filter()
+│               )
+│               
+│               # Include soft-deleted records
+│               all_products = await db.product.find_many(
+│                   where=soft_delete_filter(include_deleted=True)
+│               )
+│           """
+│           if include_deleted:
+│               return {}
+│           
+│           base_filter = {"isDeleted": False}
+│           
+│           if table_alias:
+│               return {table_alias: base_filter}
+│           
+│           return base_filter
+│       
+│       
+│       def pagination_args(
+│           page: int = 1,
+│           limit: int = 50,
+│           max_limit: int = 1000
+│       ) -> Dict[str, int]:
+│           """
+│           Generate pagination arguments for Prisma queries.
+│           
+│           Args:
+│               page: Page number (1-based)
+│               limit: Items per page
+│               max_limit: Maximum allowed items per page
+│               
+│           Returns:
+│               Dictionary with 'skip' and 'take' for Prisma
+│               
+│           Example:
+│               products = await db.product.find_many(
+│                   **pagination_args(page=2, limit=20)
+│               )
+│           """
+│           # Ensure valid page
+│           page = max(1, page)
+│           
+│           # Ensure limit is within bounds
+│           limit = min(max(1, limit), max_limit)
+│           
+│           return {
+│               "skip": (page - 1) * limit,
+│               "take": limit
+│           }
+│       
+│       
+│       class OrderDirection(str, Enum):
+│           """Order direction for sorting."""
+│           ASC = "asc"
+│           DESC = "desc"
+│       
+│       
+│       def parse_order_by(
+│           order_by: Optional[str] = None,
+│           allowed_fields: Optional[List[str]] = None,
+│           default_field: str = "createdAt",
+│           default_direction: OrderDirection = OrderDirection.DESC
+│       ) -> List[Dict[str, str]]:
+│           """
+│           Parse order_by string into Prisma orderBy format.
+│           
+│           Args:
+│               order_by: Comma-separated fields with optional direction (e.g., "name,-createdAt")
+│               allowed_fields: List of allowed field names (None allows all)
+│               default_field: Default field to sort by
+│               default_direction: Default sort direction
+│               
+│           Returns:
+│               List of orderBy dictionaries for Prisma
+│               
+│           Example:
+│               # Sort by name ascending, then createdAt descending
+│               products = await db.product.find_many(
+│                   order_by=parse_order_by("name,-createdAt")
+│               )
+│               
+│               # With field restrictions
+│               products = await db.product.find_many(
+│                   order_by=parse_order_by(
+│                       "name,-price",
+│                       allowed_fields=["name", "price", "createdAt"]
+│                   )
+│               )
+│           """
+│           if not order_by:
+│               return [{default_field: default_direction.value}]
+│           
+│           order_list = []
+│           
+│           for field_spec in order_by.split(","):
+│               field_spec = field_spec.strip()
+│               if not field_spec:
+│                   continue
+│                   
+│               # Check for descending prefix
+│               if field_spec.startswith("-"):
+│                   field = field_spec[1:]
+│                   direction = OrderDirection.DESC
+│               else:
+│                   field = field_spec
+│                   direction = OrderDirection.ASC
+│               
+│               # Validate field if restrictions are set
+│               if allowed_fields and field not in allowed_fields:
+│                   continue
+│                   
+│               order_list.append({field: direction.value})
+│           
+│           # Use default if no valid fields
+│           if not order_list:
+│               return [{default_field: default_direction.value}]
+│           
+│           return order_list
+│       
+│       
+│       # Optional: Add more helpers as needed
+│       def build_search_filter(
+│           search_term: Optional[str],
+│           search_fields: List[str],
+│           mode: str = "insensitive"
+│       ) -> Dict[str, Any]:
+│           """
+│           Build a search filter for multiple fields.
+│           
+│           Args:
+│               search_term: The search term
+│               search_fields: List of fields to search in
+│               mode: Prisma search mode ('insensitive' or 'default')
+│               
+│           Returns:
+│               OR filter for Prisma where clause
+│               
+│           Example:
+│               # Search in multiple fields
+│               products = await db.product.find_many(
+│                   where=build_search_filter(
+│                       "shirt",
+│                       ["name", "description", "sku"]
+│                   )
+│               )
+│           """
+│           if not search_term or not search_fields:
+│               return {}
+│           
+│           return {
+│               "OR": [
+│                   {field: {"contains": search_term, "mode": mode}}
+│                   for field in search_fields
+│               ]
+│           }
+│       
+│       
+│       def combine_filters(*filters: Dict[str, Any]) -> Dict[str, Any]:
+│           """
+│           Combine multiple filter dictionaries with AND logic.
+│           
+│           Args:
+│               *filters: Variable number of filter dictionaries
+│               
+│           Returns:
+│               Combined filter dictionary
+│               
+│           Example:
+│               products = await db.product.find_many(
+│                   where=combine_filters(
+│                       {"merchantId": merchant_id},
+│                       soft_delete_filter(),
+│                       build_search_filter(search, ["name", "sku"])
+│                   )
+│               )
+│           """
+│           # Remove empty filters
+│           valid_filters = [f for f in filters if f]
+│           
+│           if not valid_filters:
+│               return {}
+│           
+│           if len(valid_filters) == 1:
+│               return valid_filters[0]
+│           
+│           return {"AND": valid_filters}
+│       
+│       
+│       # ============ USAGE EXAMPLES ============
 │       """
-│       USAGE:
+│       Common usage patterns for filtering:
 │       
-│       1. In your service initialization (main.py or app.py):
+│       1. Filter products by shop:
 │       ```python
-│       from shared.utils.logger import create_logger
-│       
-│       # Create service-specific logger
-│       logger = create_logger("funding-service")
-│       ```
-│       
-│       2. Basic logging:
-│       ```python
-│       logger.info("Service started")
-│       logger.error("Connection failed", extra={"host": "localhost", "port": 5432})
-│       ```
-│       
-│       3. In FastAPI middleware or request handler:
-│       ```python
-│       @app.middleware("http")
-│       async def add_request_context(request: Request, call_next):
-│           # Set request context for all logs in this request
-│           logger.set_request_context(
-│               request_id=request.headers.get("X-Request-ID", str(uuid.uuid4())),
-│               method=request.method,
-│               path=request.url.path
+│       # Using shop_filter
+│       products = await db.product.find_many(
+│           where=combine_filters(
+│               shop_filter(shop_id=shop_id),
+│               soft_delete_filter()
 │           )
-│           
-│           logger.info("Request started")
-│           response = await call_next(request)
-│           logger.info("Request completed", extra={"status_code": response.status_code})
-│           
-│           # Clear context after request
-│           logger.clear_request_context()
-│           return response
+│       )
+│       
+│       # Using merchant_filter (same result, different field names)
+│       products = await db.product.find_many(
+│           where=combine_filters(
+│               merchant_filter(merchant_id=merchant_id),
+│               soft_delete_filter()
+│           )
+│       )
 │       ```
 │       
-│       4. In any route or service method:
+│       2. Filter with pagination and search:
 │       ```python
-│       @app.post("/api/orders")
-│       async def create_order(order: Order, user_id: str = Depends(get_current_user)):
-│           # Add user context
-│           logger.set_request_context(user_id=user_id)
-│           
-│           logger.info("Creating order", extra={"order_id": order.id})
-│           # ... business logic ...
-│           logger.info("Order created successfully")
+│       products = await db.product.find_many(
+│           where=combine_filters(
+│               merchant_filter(merchant_id=merchant_id, merchant_domain=domain),
+│               soft_delete_filter(),
+│               build_search_filter(search_term, ["name", "description", "sku"])
+│           ),
+│           order_by=parse_order_by("-updatedAt,name"),
+│           **pagination_args(page=2, limit=20)
+│       )
 │       ```
 │       
-│       5. Output examples:
-│       
-│       Development:
-│       2024-01-15 10:30:45 - funding-service - INFO - [request_id=abc123 user_id=456] - Creating order
-│       
-│       Production (JSON):
-│       {"timestamp": "2024-01-15T10:30:45.123Z", "service": "funding-service", "level": "INFO", "message": "Creating order", "request_id": "abc123", "user_id": "456", "order_id": "789"}
+│       3. Filter nested relations:
+│       ```python
+│       # If your schema has orders with a merchant relation
+│       orders = await db.order.find_many(
+│           where={
+│               "merchant": merchant_filter(merchant_id=merchant_id)
+│           },
+│           include={"merchant": True}
+│       )
+│       ```
 │       """
 │       ```
 │       
@@ -4177,13 +2436,12 @@ python = "^3.11"
 nats-py = "^2.6.0"
 pydantic = "^2.5.0"
 python-json-logger = "^2.0.7"
-redis = "^5.0.1"
 tenacity = "^8.2.3"
-alembic = "^1.16.2"
 pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
 uuid7 = "^0.1.0"
+prisma = "^0.15.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -4191,358 +2449,6 @@ build-backend = "poetry.core.masonry.api"
 ```
 
 README.md
-
-```md
-# GLAM Shared Package
-
-Shared utilities and infrastructure components for GLAM microservices platform.
-
-## Features
-
-- **Standardized API Responses**: Consistent response format across all services
-- **Database Integration**: SQLAlchemy models, repository pattern, and session management  
-- **Event-Driven Architecture**: Publishers, subscribers, and event context management
-- **Error Handling**: Comprehensive error hierarchy with automatic mapping
-- **Distributed Tracing**: Correlation IDs and trace context propagation
-- **Metrics & Monitoring**: Prometheus metrics with automatic HTTP tracking
-- **Structured Logging**: Service-aware logging with request context
-- **Configuration Management**: YAML configuration with environment overrides
-- **NATS Messaging**: JetStream integration with dependency injection
-
-## Quick Start
-
-### Installation
-
-```bash
-# Add to your service
-cd your-service/
-poetry add ../shared
-
-# Or if published to registry
-poetry add glam-shared
-```
-
-### Basic Service Setup
-
-```python
-# src/main.py
-from fastapi import FastAPI
-from shared.api import setup_middleware, create_health_router
-from shared.utils.logger import create_logger
-
-# Create logger and app
-logger = create_logger("your-service")
-app = FastAPI(title="Your Service")
-
-# Setup essential middleware
-setup_middleware(app, service_name="your-service")
-
-# Add health endpoint
-app.include_router(create_health_router("your-service"), prefix="/api/v1")
-```
-
-### Configuration
-
-```yaml
-# config/services/your-service.yml
-database:
-  host: "localhost"
-  port: 5432
-  name: "your_service_db"
-  user: "postgres"
-  password: "password"
-
-nats:
-  servers: ["nats://localhost:4222"]
-```
-
-## Core Components
-
-### API Module
-- **Middleware**: Automatic request/response handling, tracing, metrics
-- **Dependencies**: Pagination, request context, correlation IDs
-- **Responses**: Standardized success, error, and paginated responses
-- **Health Checks**: Built-in health endpoints
-
-### Database Module
-- **Base Models**: Async SQLAlchemy with automatic mixins
-- **Repository Pattern**: Generic CRUD operations with extensibility
-- **Session Management**: Async session handling with proper cleanup
-- **Migrations**: Alembic integration utilities
-
-### Event System
-- **Publishers**: Domain-specific event publishing with validation
-- **Subscribers**: Event processing with dependency injection
-- **Context Management**: Correlation and trace propagation
-- **Pre-built Events**: Common event types (notifications, billing, etc.)
-
-### Error Handling
-- **Error Hierarchy**: Structured domain and infrastructure errors
-- **Automatic Mapping**: Convert external exceptions to domain errors
-- **Service-Specific**: Ready-to-use errors for common domains
-- **API Integration**: Automatic error response formatting
-
-### Messaging (NATS)
-- **JetStream Wrapper**: Simplified publisher/subscriber setup
-- **Dependency Injection**: Service dependencies for event handlers
-- **Stream Management**: Automatic stream creation and configuration
-- **Health Monitoring**: Connection health checks
-
-## Available Mixins & Base Classes
-
-### Database Mixins
-```python
-# Automatic timestamps
-class TimestampedMixin:
-    created_at: Mapped[datetime]  # Auto-set
-    updated_at: Mapped[datetime]  # Auto-updated
-
-# Multi-tenant support  
-class MerchantMixin:
-    merchant_id: Mapped[UUID]      # Indexed
-    merchant_domain: Mapped[str]   # Indexed
-
-# Soft delete support
-class SoftDeleteMixin:
-    deleted_at: Mapped[datetime | None]
-    is_deleted: Mapped[bool]       # Indexed
-```
-
-### Repository Base
-```python
-class Repository(Generic[T]):
-    # Available methods (all async)
-    async def save(self, instance: T) -> T
-    async def find_by_id(self, id: UUID) -> T | None  
-    async def find_all(self, **filters) -> list[T]
-    async def delete_by_id(self, id: UUID) -> None
-    # Override for custom queries
-```
-
-### Event Base Classes
-```python
-class DomainEventPublisher:
-    # Set these properties
-    domain_stream: Streams = Streams.YOUR_DOMAIN
-    service_name_override: str = "your-service"
-    
-    # Available methods
-    async def publish_event(subject: str, payload: dict) -> str
-    async def publish_command(command_type: str, payload: dict) -> str
-
-class DomainEventSubscriber:
-    # Must implement
-    async def on_event(self, event: dict, headers: dict) -> None
-    
-    # Available methods  
-    def get_dependency(self, key: str) -> Any
-```
-
-## Error Types
-
-### Common Domain Errors (Ready to Use)
-- `NotFoundError` - Resource not found (404)
-- `ValidationError` - Invalid input (422)
-- `ConflictError` - Resource conflicts (409)
-- `UnauthorizedError` - Authentication required (401)
-- `ForbiddenError` - Insufficient permissions (403)
-
-### Infrastructure Errors (Ready to Use)
-- `DatabaseError` - Database operation failed
-- `UpstreamServiceError` - External service failure
-- `MessageBusError` - NATS/messaging failure
-- `S3Error` - Storage operation failed
-
-### Service-Specific Collections
-```python
-# Import pre-built error collections
-from shared.errors import (
-    # Catalog errors
-    SyncInProgressError, ItemNotFoundError,
-    
-    # Profile errors  
-    ProfileNotFoundError, ProfileAlreadyExistsError,
-    
-    # Notification errors
-    TemplateNotFoundError, EmailProviderError
-)
-```
-
-## Event Streams
-
-Each service publishes to designated streams:
-
-```python
-# Available streams
-Streams.CATALOG      # catalog-service, catalog-connector
-Streams.MERCHANT     # merchant-service
-Streams.BILLING      # billing-service  
-Streams.CREDIT       # credit-service
-Streams.PROFILE      # profile-service
-Streams.NOTIFICATION # notification-service
-Streams.AI_PROCESSING # AI services
-Streams.WEBHOOKS     # webhook-service
-Streams.SCHEDULER    # scheduler-service
-Streams.ANALYTICS    # analytics-service
-```
-
-## Configuration
-
-### Environment Variables
-
-All services support these patterns:
-
-```bash
-# Database
-{SERVICE}_DB_HOST=localhost
-{SERVICE}_DB_PORT=5432
-{SERVICE}_DB_NAME=service_db
-{SERVICE}_DB_USER=postgres
-{SERVICE}_DB_PASSWORD=password
-
-# Messaging  
-{SERVICE}_NATS_SERVERS=nats://localhost:4222
-
-# Logging
-{SERVICE}_LOG_LEVEL=INFO
-APP_ENV=dev  # dev, staging, prod
-```
-
-### YAML Configuration
-```yaml
-# config/services/your-service.yml
-service:
-  name: "your-service"
-  port: 8080
-
-database:
-  host: "localhost"
-  port: 5432
-  name: "your_service_db"
-
-nats:
-  servers: ["nats://localhost:4222"]
-```
-
-## Development
-
-### Testing
-```bash
-# Run tests
-poetry run pytest
-
-# With coverage
-poetry run pytest --cov=shared
-```
-
-### Code Quality
-```bash
-# Format code
-poetry run black .
-poetry run isort .
-
-# Type checking  
-poetry run mypy shared/
-
-# Linting
-poetry run ruff check shared/
-```
-
-### Documentation
-```bash
-# Generate API docs
-poetry run pdoc shared --html
-```
-
-## Monitoring & Observability
-
-### Built-in Metrics (Automatic)
-- `http_requests_total` - Request counts by service/endpoint/status
-- `http_request_duration_seconds` - Request timing histograms  
-- `http_requests_in_progress` - Active request gauge
-
-### Health Checks (Automatic)
-- `GET /api/v1/health` - Service health with timestamp
-- `GET /metrics` - Prometheus metrics endpoint
-
-### Logging Features
-- **Structured Logging**: JSON in production, console in development
-- **Request Context**: Automatic request_id, correlation_id
-- **File Rotation**: Automatic log rotation in production
-- **Environment-Aware**: Different formats per environment
-
-## Architecture Patterns
-
-The shared package enforces consistent patterns across services:
-
-- **Event-Driven Design**: All inter-service communication through events
-- **Repository Pattern**: Standardized data access with extensibility
-- **Dependency Injection**: Clean service dependencies via messaging wrapper
-- **Domain Errors**: Business logic errors separate from infrastructure
-- **Request Tracing**: End-to-end request tracking with correlation IDs
-- **Multi-Tenancy**: Built-in merchant isolation and indexing
-
-## Usage Examples
-
-### Complete Service Setup
-```python
-from shared.api import setup_middleware
-from shared.database import create_database_config, DatabaseSessionManager
-from shared.messaging import JetStreamWrapper
-
-# Database setup
-db_config = create_database_config("YOUR_SERVICE_")
-db_manager = DatabaseSessionManager(db_config.database_url)
-await db_manager.init()
-
-# Messaging setup  
-messaging = JetStreamWrapper(logger)
-await messaging.connect(["nats://localhost:4222"])
-publisher = messaging.create_publisher(YourPublisher)
-
-# Middleware setup
-setup_middleware(app, service_name="your-service")
-```
-
-### Event Publishing
-```python
-# Publish with automatic correlation
-await publisher.publish_event(
-    subject="evt.item.created",
-    payload={"item_id": str(item.id)},
-    correlation_id=get_correlation_context(),
-    idempotency_key=generate_idempotency_key("INTERNAL", "ITEM_CREATED", item.id)
-)
-```
-
-### Error Handling
-```python
-from shared.errors import NotFoundError, ValidationError
-
-# Use specific error types
-if not item:
-    raise NotFoundError(
-        f"Item {item_id} not found",
-        resource="item",
-        resource_id=str(item_id)
-    )
-```
-
-## Dependencies
-
-- **FastAPI** - Web framework integration
-- **SQLAlchemy** - Async database ORM
-- **Pydantic** - Data validation and serialization
-- **NATS.py** - JetStream messaging
-- **Prometheus Client** - Metrics collection
-- **Alembic** - Database migrations
-- **PyYAML** - Configuration management
-
-## License
-
-Copyright © 2025 GlamYouUp. All rights reserved.
-```
-
 
 ================================================================================
 Output includes file contents

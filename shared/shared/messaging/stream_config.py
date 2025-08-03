@@ -23,7 +23,7 @@ class StreamConfig:
 STREAM_CONFIGS = [
     StreamConfig(
         name=Streams.EVENTS,
-        subjects=["evt.*"],
+        subjects=["evt.*", "cmd.*"],
         max_age_hours=24,
         max_msgs=1000000,
     ),

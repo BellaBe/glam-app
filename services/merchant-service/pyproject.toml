@@ -2,7 +2,7 @@
 [tool.poetry]
 name = "merchant-service"
 version = "1.0.0"
-description = "Merchant identity and lifecycle status management service"
+description = "Merchant identity and consent management service"
 authors = ["GlamYouUp Team"]
 package-mode = false
 
@@ -12,16 +12,15 @@ fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.25.0"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
-sqlalchemy = "^2.0.23"
-asyncpg = "^0.29.0"
-alembic = "^1.13.0"
+email-validator = "^2.1.0"
+prisma = "^0.15.0"
 nats-py = "^2.6.0"
 redis = "^5.0.1"
 python-multipart = "^0.0.6"
 httpx = "^0.25.2"
 python-dotenv = "^1.0.0"
 prometheus-client = "^0.19.0"
-cryptography = "^41.0.0"
+uuid7 = "^0.1.0"
 shared = { path = "../../shared", develop = true }
 
 [tool.poetry.group.dev.dependencies]
@@ -47,7 +46,7 @@ pythonpath = ["src"]
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
-    "integration: Integration tests", 
+    "integration: Integration tests",
     "e2e: End-to-end tests"
 ]
 

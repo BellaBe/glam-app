@@ -1,0 +1,110 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+model Merchant {
+  id                   String    @id @default(cuid())
+  shop_domain          String    @unique
+  shop_gid             String    @unique
+  shop_name            String?
+  email                String?
+  timezone             String    @default("UTC")
+  currency             String    @default("USD")
+  platform             String    @default("shopify")
+  platform_api_version String?   @default("2024-01")
+  
+  // Lifecycle timestamps
+  installed_at         DateTime  @default(now())
+  uninstalled_at       DateTime?
+  last_auth_at         DateTime?
+  last_activity_at     DateTime?
+  
+  // OAuth metadata
+  app_version          String?
+  scopes               String?
+  
+  // Installation tracking
+  install_source       String?
+  uninstall_reason     String?
+  
+  // Status management
+  status               MerchantStatus @default(PENDING)
+  status_reason        String?
+  status_changed_at    DateTime?
+  previous_status      MerchantStatus?
+  
+  // Relations
+  settings             MerchantSettings?
+  consents             MerchantConsent[]
+  
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  @@index([shop_domain])
+  @@index([shop_gid])
+  @@index([status])
+  @@map("merchants")
+}
+
+model MerchantSettings {
+  merchant_id String   @id
+  merchant    Merchant @relation(fields: [merchant_id], references: [id], onDelete: Cascade)
+
+  // Consent flags
+  data_access Boolean  @default(false)
+  auto_sync   Boolean  @default(false)
+  tos         Boolean  @default(false)
+
+  // Metadata
+  version     Int      @default(1)
+  updated_by  String?
+  updated_at  DateTime @updatedAt
+  
+  @@map("merchant_settings")
+}
+
+model MerchantConsent {
+  id          String        @id @default(cuid())
+  merchant_id String
+  merchant    Merchant      @relation(fields: [merchant_id], references: [id], onDelete: Cascade)
+
+  type        ConsentType
+  accepted    Boolean
+  source      String?
+  ip          String?
+  user_agent  String?
+
+  occurred_at DateTime      @default(now())
+
+  @@index([merchant_id, occurred_at])
+  @@map("merchant_consents")
+}
+
+model IdempotencyKey {
+  key        String   @id
+  scope      String?
+  created_at DateTime @default(now())
+  
+  @@map("idempotency_keys")
+}
+
+enum ConsentType {
+  DATA_ACCESS
+  AUTO_SYNC
+  TOS
+}
+
+enum MerchantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+

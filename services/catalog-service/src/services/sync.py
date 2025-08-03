@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 import hashlib
 import redis.asyncio as redis
 from shared.utils.logger import ServiceLogger
-from ..repositories.sync_operation_repository import SyncOperationRepository
-from ..repositories.item_repository import ItemRepository
-from ..mappers.sync_operation_mapper import SyncOperationMapper
-from ..schemas.sync import SyncOperationIn, SyncOperationOut
+from ..repositories.sync_operation import SyncOperationRepository
+from ..repositories.catalog_item import CatalogItemRepository
+from ..mappers.sync_operation import SyncOperationMapper
+from ..schemas.sync_operation import SyncOperationIn, SyncOperationOut
 from ..models.enums import SyncOperationStatus, SyncType
 from ..exceptions import SyncOperationNotFoundError, SyncOperationAlreadyRunningError
 from ..events.publishers import CatalogEventPublisher
@@ -20,7 +20,7 @@ class SyncService:
     def __init__(
         self,
         sync_repo: SyncOperationRepository,
-        item_repo: ItemRepository,
+        item_repo: CatalogItemRepository,
         mapper: SyncOperationMapper,
         publisher: CatalogEventPublisher,
         redis_client: redis.Redis,

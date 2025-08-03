@@ -1,5 +1,3 @@
-# ================================================================
-# services/merchant-service/Dockerfile
 # ──────────────────────────────────────────────────────────────
 # 📦  Stage 1 ─ Builder
 # ──────────────────────────────────────────────────────────────
@@ -24,10 +22,14 @@ WORKDIR /app
 COPY services/merchant-service/pyproject.toml services/merchant-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
 
-# ---- 3️⃣  Copy service code
+# ---- 3️⃣  Copy Prisma schema and generate client
+COPY services/merchant-service/prisma ./prisma
+RUN prisma generate
+
+# ---- 4️⃣  Copy service code
 COPY services/merchant-service /app
 
-# ---- 4️⃣  Copy config
+# ---- 5️⃣  Copy config
 COPY config /app/config
 
 # ──────────────────────────────────────────────────────────────
@@ -41,6 +43,8 @@ COPY --from=builder /app /app
 COPY --from=builder /shared /shared
 
 ENV PYTHONPATH="/shared:/app"
+ENV DOCKER_CONTAINER=1
+
 WORKDIR /app
 
 # Create non-root user
@@ -49,4 +53,6 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations and start server
+CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
+

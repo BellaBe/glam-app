@@ -5,7 +5,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from pydantic import BaseModel, Field
-from shared.config.loader import merged_config, flatten_config
+from shared.utils.config_loader import merged_config, flatten_config
 
 class CatalogAnalysisConfig(BaseModel):
     """Service configuration from YAML + environment"""

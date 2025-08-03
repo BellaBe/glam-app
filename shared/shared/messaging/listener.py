@@ -10,7 +10,7 @@ from nats.js.errors import NotFoundError
 
 from shared.utils.logger import ServiceLogger
 from .jetstream_client import JetStreamClient
-from .event_context import set_correlation_id, set_source_service
+# from .event_context import set_correlation_id, set_source_service
 
 
 class Listener(ABC):
@@ -149,8 +149,8 @@ class Listener(ABC):
             return
 
         # Context vars
-        set_correlation_id(envelope.get("correlation_id"))
-        set_source_service(envelope.get("source_service"))
+        # set_correlation_id(envelope.get("correlation_id")) # TODO: figure out how to get correlation_id from context
+        # set_source_service(envelope.get("source_service"))
 
         # Business logic
         try:

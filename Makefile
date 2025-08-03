@@ -57,7 +57,7 @@ dev: ## Start all infrastructure including monitoring
 
 dev-core: ## Start only core services (no monitoring)
 	@echo "Starting core infrastructure only..."
-	docker compose -f $(LOCAL_COMPOSE) up -d nats redis mailhog minio minio-setup catalog-db notification-db profile-db catalog-job-processor-db
+	docker compose -f $(LOCAL_COMPOSE) up -d nats redis mailhog minio minio-setup catalog-db notification-db profile-db catalog-job-processor-db merchant-db
 
 dev-monitoring: ## Start only monitoring stack
 	@echo "Starting monitoring stack..."

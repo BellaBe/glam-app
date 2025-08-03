@@ -53,6 +53,25 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
+      
+  merchant-db:
+    image: postgres:15-alpine
+    container_name: merchant-db-local
+    restart: unless-stopped
+    env_file:
+      - services/merchant-service/.env
+    ports:
+      - "5438:5432"
+    volumes:
+      - merchant-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 10s
 
   # ----------------- Catalog Database -----------------
   catalog-db:
@@ -304,3 +323,4 @@ volumes:
   grafana-data:
   credit-db-local-data:
   webhook-db-local-data:
+  merchant-db-local-data:

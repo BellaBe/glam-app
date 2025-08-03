@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import List, Optional
 
-from nats.js.api import StreamConfig, RetentionPolicy, StorageType
-
 from shared.utils.logger import ServiceLogger
 from shared.database import DatabaseSessionManager, set_database_manager
 from shared.messaging.jetstream_client import JetStreamClient
@@ -23,38 +21,46 @@ from .mappers.notification_mapper import NotificationMapper
 
 
 class ServiceLifecycle:
-    """Owns singletons that must exist exactly once per process."""
+    """Manages the lifecycle of the notification service, including initialization and shutdown."""
 
     # ------------------------------------------------------------------ ctor
     def __init__(self, config: ServiceConfig, logger: ServiceLogger) -> None:
         self.config  = config
         self.logger  = logger
 
-        # shared connections
+        # External connections
         self.messaging_client: Optional[JetStreamClient] = None
         self.db_manager:      Optional[DatabaseSessionManager] = None
 
-        # messaging helpers
+        # Publisher
         self.email_send_publisher: Optional[EmailSendPublisher] = None
-        
+
+        # Listeners
         self._listeners:  list = []
 
-        # repositories & services
+        # Repositories
         self.notification_repo: Optional[NotificationRepository] = None
+        
+        # Mappers
+        self.notification_mapper: Optional[NotificationMapper] = None
+        
+        # Services
         self.email_service:      Optional[EmailService]         = None
         self.template_service:   Optional[TemplateService]      = None
         self.notification_service: Optional[NotificationService] = None
 
-        # housekeeping
+        # Tasks
         self._tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
 
     # ============================================================= lifespan
     async def startup(self) -> None:
         try:
+            self.logger.info("Starting service components...")
             await self._init_messaging()
             await self._init_database()
             self._init_repositories()
+            self._init_mappers()
             self._init_local_services()
             await self._init_listeners()
             self.logger.info("%s started successfully", self.config.service_name)
@@ -122,6 +128,13 @@ class ServiceLifecycle:
             self.db_manager.session_factory,
         )
 
+    
+    def _init_mappers(self) -> None:
+        """Initialize mappers"""
+        self.notification_mapper = NotificationMapper()
+        self.logger.info("Notification mappers initialized")
+        
+    
     # ---------------------------------------------------------- local services
     def _init_local_services(self) -> None:
         self.email_service = EmailService(
@@ -139,13 +152,16 @@ class ServiceLifecycle:
 
         if not (self.messaging_client and self.email_send_publisher and self.notification_repo):
             raise RuntimeError("Messaging or DB not initialised")
+        
+        if not self.notification_mapper:
+            raise RuntimeError("Notification mapper not initialized")
 
         self.notification_service = NotificationService(
             config=self.config,
             email_service=self.email_service,
             template_service=self.template_service,
             notification_repository=self.notification_repo,
-            notification_mapper=NotificationMapper(),
+            notification_mapper= self.notification_mapper,
             logger=self.logger,
         )
 

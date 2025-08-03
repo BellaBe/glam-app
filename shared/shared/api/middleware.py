@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException
 
-from ..errors import GlamBaseError
+from shared.utils.exceptions import GlamBaseError
 from ..metrics import PrometheusMiddleware, metrics_endpoint
 
 from .responses import error_response

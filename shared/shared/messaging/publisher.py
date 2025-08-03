@@ -7,7 +7,7 @@ from typing import Dict, Optional, TypeVar
 from uuid import uuid4
 
 from shared.utils.logger import ServiceLogger
-from .event_context import get_correlation_id
+from shared.api.correlation import get_correlation_id
 from .jetstream_client import JetStreamClient
 
 DataT = TypeVar("DataT")
@@ -53,7 +53,7 @@ class Publisher(ABC):
         await self._ensure_stream()
 
         event_id = str(uuid4())
-        correlation_id = correlation_id or get_correlation_id()
+        correlation_id = correlation_id #TODO: figure out how to get correlation_id from context
         
 
         envelope = {

@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from shared.config.loader import merged_config, flatten_config
+from shared.utils.config_loader import merged_config, flatten_config
 from shared.database import DatabaseConfig, create_database_config
 
 

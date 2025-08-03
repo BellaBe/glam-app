@@ -1,81 +1,70 @@
-# services/merchant-service/src/config.py
 import os
 from functools import lru_cache
-from pydantic import BaseModel, Field
-from shared.config.loader import merged_config, flatten_config
-from shared.database import create_database_config
+from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from shared.utils.config_loader import merged_config, flatten_config
 
-class MerchantServiceConfig(BaseModel):
+class ServiceConfig(BaseModel):
     """Service configuration from YAML + environment"""
-    # Service Identity (from shared + service YAML)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    
+    # Service Identity
     service_name: str = Field(..., alias="service.name")
     service_version: str = Field(..., alias="service.version")
-    environment: str
-    debug: bool
+    environment: str = Field(..., alias="environment")
+    debug: bool = Field(False, alias="service.debug")
     
     # API Configuration - BOTH PORTS
     api_host: str = Field(..., alias="api.host")
-    api_port: int = Field(..., alias="api.port")                    # Container port
-    api_external_port: int = Field(..., alias="api.external_port")  # Local dev port
-    api_cors_origins: list = Field(..., alias="api.cors_origins")
+    api_port: int = Field(..., alias="api.port")
+    api_external_port: int = Field(..., alias="api.external_port")
+    api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
     
-    # Infrastructure (from shared YAML)
-    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
-    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
+    # Infrastructure
+    nats_url: str = Field(..., alias="infrastructure.nats_url")
+    redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Database Configuration
-    db_enabled: bool = Field(..., alias="database.enabled")
-    
-    # Logging (from shared YAML)
+    # Logging
     logging_level: str = Field(..., alias="logging.level")
     logging_format: str = Field(..., alias="logging.format")
+    logging_file_path: str = Field(..., alias="logging.file_path")
     
-    # Features (service-specific)
-    cache_enabled: bool = Field(..., alias="features.cache_enabled", default=True)
-    max_retries: int = Field(..., alias="features.max_retries", default=3)
+    # Monitoring
+    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
+    monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
     
-    # Shopify Integration
-    shopify_api_version: str = Field(default="2024-01")
-    shopify_rate_limit_requests: int = Field(default=40)
-    shopify_rate_limit_window: int = Field(default=2)
+    # Rate limiting
+    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    # Security
-    jwt_secret_key: str = Field(default="your-secret-key")
-    jwt_algorithm: str = Field(default="HS256")
-    jwt_expiration_minutes: int = Field(default=60)
-    encryption_key: str = Field(default="your-encryption-key")
+    # Database
+    db_enabled: bool = Field(..., alias="database.enabled")
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     
-    @property
-    def database_config(self):
-        """Get database configuration with service prefix"""
-        return create_database_config("MERCHANT_")
+    # Authentication
+    backend_api_key: str = Field(..., alias="BACKEND_API_KEY")
     
     @property
-    def effective_port(self) -> int:
-        """Get effective port based on environment"""
-        # Check if running in container
-        in_container = any([
-            os.getenv("DOCKER_CONTAINER"),
-            os.getenv("HOSTNAME", "").startswith("merchant-service"),
-            os.path.exists("/.dockerenv")
-        ])
-        
-        if in_container:
-            return self.api_port
-        else:
-            return self.api_external_port
+    def effective_api_port(self) -> int:
+        in_container = os.path.exists("/.dockerenv")
+        return self.api_port if in_container else self.api_external_port
     
-    @property
-    def nats_servers(self) -> list[str]:
-        return [self.infrastructure_nats_url]
-    
-    @property
-    def is_production(self) -> bool:
-        return self.environment == "production"
+    @model_validator(mode="after")
+    def _require_db_url_when_enabled(self):
+        if self.db_enabled and not self.database_url:
+            raise ValueError("database.enabled=true requires DATABASE_URL")
+        return self
 
 @lru_cache
-def get_service_config() -> MerchantServiceConfig:
+def get_service_config() -> ServiceConfig:
     """Load and cache service configuration"""
-    cfg_dict = merged_config("merchant-service", env_prefix="MERCHANT")
+    cfg_dict = merged_config("merchant-service")
     flattened = flatten_config(cfg_dict)
-    return MerchantServiceConfig(**flattened)
+    
+    # Ensure raw environment variables survive
+    for key in ["DATABASE_URL", "BACKEND_API_KEY"]:
+        if key not in flattened and key in os.environ:
+            flattened[key] = os.environ[key]
+    
+    return ServiceConfig(**flattened)
+

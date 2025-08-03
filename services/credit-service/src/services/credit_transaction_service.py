@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 from shared.utils.logger import ServiceLogger
-from shared.utils.idempotency_key_generator import generate_idempotency_key
+from shared.utils.idempotency_key import generate_idempotency_key
 from shared.errors import DomainError, NotFoundError, ConflictError, ValidationError
 
 from ..models.credit_transaction import CreditTransaction, TransactionType, OperationType

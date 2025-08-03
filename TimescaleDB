@@ -1,6 +1,0 @@
-ANALYTICS_TIMESCALE_ENABLED=true
-
-# External services (if used by analytics)
-# Add any external API keys needed for enhanced analytics
-"""
-

@@ -1,214 +1,137 @@
-from __future__ import annotations
-
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from uuid import UUID
-
-from pydantic import BaseModel, ConfigDict, Field
-
-from ..models.enums import MerchantStatusEnum
-
-# ------------------------------------------------------------------ IN DTOs
-
-class MerchantIn(BaseModel):
-    shop_id: str
-    shop_domain: str
-    shop_name: str
-    shop_url: str | None = None
-    email: str
-    phone: str | None = None
-    timezone: str = "UTC"
-    country: str | None = None
-    currency: str = "USD"
-    language: str = "en"
-    shopify_access_token: str
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class MerchantPatch(BaseModel):
-    shop_name: str | None = None
-    phone: str | None = None
-    onboarding_completed: bool | None = None
-    onboarding_step: str | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-# ------------------------------------------------------------------ OUT DTOs
-
-class MerchantStatusOut(BaseModel):
-    status: MerchantStatusEnum
-    previous_status: MerchantStatusEnum | None
-    status_reason: str | None
-    changed_at: datetime
-    activated_at: datetime | None
-    suspended_at: datetime | None
-    deactivated_at: datetime | None
-    last_activity_at: datetime | None
-
-
-class MerchantConfigOut(BaseModel):
-    # Same fields as original MerchantConfigResponse
-    terms_accepted: bool
-    terms_accepted_at: datetime | None
-    privacy_accepted: bool
-    privacy_accepted_at: datetime | None
-    widget_enabled: bool
-    widget_position: str
-    widget_theme: str
-    widget_configuration: Dict[str, Any]
-    is_marketable: bool
-    custom_branding: Dict[str, Any]
-
-
-class MerchantOut(BaseModel):
-    id: UUID
-    shop_id: str
-    shop_domain: str
-    shop_name: str
-    shop_url: str | None
-    email: str
-    phone: str | None
-    timezone: str
-    country: str | None
-    currency: str
-    language: str
-    platform: str
-    onboarding_completed: bool
-    onboarding_step: str | None
-    created_at: datetime
-    updated_at: datetime
-    status: MerchantStatusOut | None
-    configuration: MerchantConfigOut | None
-
-    model_config = ConfigDict(from_attributes=True)
-    
-    
-# services/merchant-service/src/schemas/merchant.py
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any, List
-from ..models.enums import MerchantStatusEnum
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
+from typing import Optional, Dict, Any
+from prisma.enums import MerchantStatus, ConsentType
 
 # ---------- INPUT DTOs ----------
-class MerchantBootstrap(BaseModel):
-    """Bootstrap DTO for merchant creation from webhook"""
-    shop_id: str
-    shop_domain: str
-    shop_name: str
-    shop_url: Optional[str] = None
-    email: str
-    phone: Optional[str] = None
-    timezone: str = "UTC"
-    country: Optional[str] = None
-    currency: str = "USD"
-    language: str = "en"
-    shopify_access_token: str
+class MerchantSync(BaseModel):
+    """Input DTO for syncing merchant"""
+    shop_domain: str = Field(..., description="Shopify domain (e.g., example.myshopify.com)")
+    shop_gid: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
+    shop_name: Optional[str] = Field(None, description="Shop display name")
+    email: Optional[EmailStr] = Field(None, description="Primary contact email")
+    timezone: Optional[str] = Field("UTC", description="IANA timezone")
+    currency: Optional[str] = Field("USD", description="ISO currency code")
+    scopes: str = Field(..., description="Comma-separated OAuth scopes")
+    auth_at: datetime = Field(..., description="When OAuth was completed")
+    app_version: Optional[str] = Field(None, description="Our app version")
+    install_source: Optional[str] = Field(None, description="app_store | partner | direct")
+    platform_api_version: Optional[str] = Field("2024-01", description="Shopify API version")
+    
+    @field_validator('shop_domain')
+    def validate_shop_domain(cls, v):
+        if not v.lower().endswith('.myshopify.com'):
+            raise ValueError('Shop domain must end with .myshopify.com')
+        return v.lower()
     
     model_config = ConfigDict(extra="forbid")
 
-class InstallationRecordCreate(BaseModel):
-    """Create DTO for installation record"""
-    platform: str = "shopify"
-    install_channel: Optional[str] = None
-    installed_by: Optional[str] = None
-    installation_ip: Optional[str] = None
-    app_version: Optional[str] = None
-    platform_api_version: Optional[str] = None
-    permissions_granted: List = []
-    callbacks_configured: List = []
-    referral_code: Optional[str] = None
-    utm: Dict = {}
-    platform_metadata: Dict = {}
+class MerchantSettingsUpdate(BaseModel):
+    """Input DTO for updating merchant settings"""
+    data_access: Optional[bool] = None
+    auto_sync: Optional[bool] = None
+    tos: Optional[bool] = None
     
     model_config = ConfigDict(extra="forbid")
 
-class MerchantUpdate(BaseModel):
-    """Update DTO for merchant"""
-    shop_name: Optional[str] = None
-    shop_url: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    timezone: Optional[str] = None
-    country: Optional[str] = None
-    currency: Optional[str] = None
-    language: Optional[str] = None
-    
-    model_config = ConfigDict(extra="forbid")
-
-class MerchantConfigUpdate(BaseModel):
-    """Update DTO for merchant configuration"""
-    widget_enabled: Optional[bool] = None
-    widget_position: Optional[str] = None
-    widget_theme: Optional[str] = None
-    widget_configuration: Optional[Dict] = None
-    is_marketable: Optional[bool] = None
-    custom_css: Optional[str] = None
-    custom_branding: Optional[Dict] = None
-    
-    model_config = ConfigDict(extra="forbid")
-
-class ActivityRecord(BaseModel):
-    """Activity record DTO"""
-    activity_type: str
-    activity_name: str
-    activity_description: Optional[str] = None
-    activity_data: Dict = {}
-    session_id: Optional[str] = None
-    user_agent: Optional[str] = None
-    ip_address: Optional[str] = None
+class MerchantActivity(BaseModel):
+    """Input DTO for recording merchant activity"""
+    activity_type: str = Field(..., description="Type of activity (e.g., page_view, feature_use)")
+    activity_name: str = Field(..., description="Specific activity name")
+    activity_data: Optional[Dict[str, Any]] = Field(None, description="Additional activity data")
     
     model_config = ConfigDict(extra="forbid")
 
 # ---------- OUTPUT DTOs ----------
-class MerchantStatusResponse(BaseModel):
-    """Output DTO for merchant status"""
-    status: MerchantStatusEnum
-    previous_status: Optional[MerchantStatusEnum]
-    status_reason: Optional[str]
-    changed_at: datetime
-    activated_at: Optional[datetime]
-    suspended_at: Optional[datetime] 
-    deactivated_at: Optional[datetime]
-    last_activity_at: Optional[datetime]
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class MerchantConfigResponse(BaseModel):
-    """Output DTO for merchant configuration"""
-    terms_accepted: bool
-    terms_accepted_at: Optional[datetime]
-    privacy_accepted: bool
-    privacy_accepted_at: Optional[datetime]
-    widget_enabled: bool
-    widget_position: str
-    widget_theme: str
-    widget_configuration: Optional[Dict[str, Any]]
-    is_marketable: bool
-    custom_branding: Optional[Dict[str, Any]]
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class MerchantResponse(BaseModel):
+class MerchantOut(BaseModel):
     """Output DTO for merchant"""
-    id: UUID
-    shop_id: str
+    merchant_id: str
     shop_domain: str
-    shop_name: str
-    shop_url: Optional[str]
-    email: str
-    phone: Optional[str]
+    shop_gid: str
+    shop_name: Optional[str]
+    email: Optional[str]
     timezone: str
-    country: Optional[str]
     currency: str
-    language: str
-    platform: str
-    onboarding_completed: bool
-    onboarding_step: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-    status: MerchantStatusResponse
-    configuration: MerchantConfigResponse
+    installed_at: datetime
+    uninstalled_at: Optional[datetime]
+    last_auth_at: Optional[datetime]
+    last_activity_at: Optional[datetime]
+    status: MerchantStatus
+    status_reason: Optional[str]
+    settings_accepted: bool = False  # Derived field
     
     model_config = ConfigDict(from_attributes=True)
+
+class MerchantSettingsOut(BaseModel):
+    """Output DTO for merchant settings"""
+    data_access: bool
+    auto_sync: bool
+    tos: bool
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class MerchantSyncOut(BaseModel):
+    """Output DTO for merchant sync result"""
+    created: bool
+    merchant_id: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+# ---------- EVENT PAYLOADS ----------
+class MerchantCreatedPayload(BaseModel):
+    """Payload for evt.merchant.created"""
+    merchant_id: str
+    shop_gid: str
+    shop_domain: str
+    shop_name: Optional[str]
+    email: Optional[str]
+    timezone: str
+    currency: str
+    platform: str
+    installed_at: datetime
+    install_source: Optional[str]
+
+class MerchantSyncedPayload(BaseModel):
+    """Payload for evt.merchant.synced"""
+    merchant_id: str
+    shop_gid: str
+    shop_domain: str
+    first_install: bool
+    last_auth_at: datetime
+    scopes: str
+
+class MerchantSettingsUpdatedPayload(BaseModel):
+    """Payload for evt.merchant.settings.updated"""
+    merchant_id: str
+    shop_gid: str
+    shop_domain: str
+    changes: Dict[str, bool]
+    updated_at: datetime
+
+class MerchantStatusChangedPayload(BaseModel):
+    """Payload for evt.merchant.status.changed"""
+    merchant_id: str
+    shop_gid: str
+    old_status: MerchantStatus
+    new_status: MerchantStatus
+    reason: str
+    changed_at: datetime
+
+class MerchantUninstalledPayload(BaseModel):
+    """Payload for evt.merchant.uninstalled"""
+    merchant_id: str
+    shop_gid: str
+    shop_domain: str
+    uninstalled_at: datetime
+    uninstall_reason: Optional[str]
+
+class MerchantActivityRecordedPayload(BaseModel):
+    """Payload for evt.merchant.activity.recorded"""
+    merchant_id: str
+    shop_gid: str
+    activity_type: str
+    activity_name: str
+    activity_data: Optional[Dict[str, Any]]
+    timestamp: datetime
+

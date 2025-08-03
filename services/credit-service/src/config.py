@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pydantic import BaseModel, Field
-from shared.config.loader import merged_config, flatten_config
+from shared.utils.config_loader import merged_config, flatten_config
 from shared.database import DatabaseConfig, create_database_config
 import os
 
@@ -16,7 +16,6 @@ class CreditServiceConfig(BaseModel):
     api_host: str = Field(..., alias="api.host")
     api_port: int = Field(..., alias="api.port")                    # Internal/container port
     api_external_port: int = Field(..., alias="api.external_port")  # Local development port
-    api_cors_origins: list = Field(..., alias="api.cors_origins")
     
     # Infrastructure (from shared YAML)
     infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
@@ -28,6 +27,7 @@ class CreditServiceConfig(BaseModel):
     # Logging (from shared YAML)
     logging_level: str = Field(..., alias="logging.level")
     logging_format: str = Field(..., alias="logging.format")
+    logging_file_path: str = Field(..., alias="logging.file_path")
     
     # Rate Limiting (from shared YAML)
     rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")

@@ -33,6 +33,48 @@ services:
       retries: 5
       start_period: 10s
 
+  # ----------------- Merchant Service -----------------
+  merchant-db:
+    image: postgres:15-alpine
+    container_name: merchant-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - merchant-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  merchant-service:
+    build:
+      context: .
+      dockerfile: services/merchant-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: merchant-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      merchant-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@merchant-db:5432/${MERCHANT_DB_NAME}
+    networks:
+      - glam-net
+
   # ----------------- Catalog Service -----------------
   catalog-db:
     image: postgres:15-alpine

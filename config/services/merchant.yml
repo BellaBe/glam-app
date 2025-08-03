@@ -1,0 +1,30 @@
+service:
+  name: "merchant-service"
+  version: "1.0.0"
+api:
+  host: "localhost"
+  port: 8000
+  external_port: 8004
+  cors_origins: ["*"]
+database:
+  enabled: true
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+rate_limiting:
+  enabled: true
+  window_seconds: 60
+environment: development
+logging:
+  level: DEBUG
+  format: json
+  file_path: "/var/log/merchant-service.log"
+cache:
+  enabled: true
+  ttl_seconds: 300
+  max_connections: 50
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: false

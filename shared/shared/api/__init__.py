@@ -16,7 +16,6 @@ from .models import (
     Pagination,
     Links,
     ErrorDetail,
-    T,  # Generic type
 )
 
 from .responses import (
@@ -30,8 +29,7 @@ from .responses import (
 from .dependencies import (
     # FastAPI dependencies
     PaginationDep,
-    RequestContextDep,
-    CorrelationIdDep,  # Re-exported from correlation
+    RequestContextDep, 
 )
 
 from .middleware import (
@@ -47,14 +45,8 @@ from .correlation import (
     get_correlation_context,
     add_correlation_header,
     add_correlation_to_event,
-    extract_correlation_from_event,
-    
+    extract_correlation_from_event, 
 )
-from .tracing import (
-    set_trace_context,
-    get_trace_context,
-    TracingMiddleware,
-)   
 
 __all__ = [
     # Models
@@ -63,7 +55,6 @@ __all__ = [
     "Pagination",
     "Links",
     "ErrorDetail",
-    "T",
     
     # Response helpers
     "create_response",
@@ -74,7 +65,6 @@ __all__ = [
     # Dependencies
     "PaginationDep",
     "RequestContextDep",
-    "CorrelationIdDep",
     
     # Correlation
     "get_correlation_id",
@@ -83,10 +73,6 @@ __all__ = [
     "add_correlation_header",
     "add_correlation_to_event",
     "extract_correlation_from_event",
-    # Tracing
-    "set_trace_context",
-    "get_trace_context",
-    "TracingMiddleware",
     
     # Middleware
     "APIMiddleware",

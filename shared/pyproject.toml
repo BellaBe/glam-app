@@ -10,13 +10,12 @@ python = "^3.11"
 nats-py = "^2.6.0"
 pydantic = "^2.5.0"
 python-json-logger = "^2.0.7"
-redis = "^5.0.1"
 tenacity = "^8.2.3"
-alembic = "^1.16.2"
 pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
 uuid7 = "^0.1.0"
+prisma = "^0.15.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

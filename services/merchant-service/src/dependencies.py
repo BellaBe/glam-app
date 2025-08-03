@@ -1,50 +1,42 @@
-# services/merchant-service/src/dependencies.py
 from typing import Annotated
-from fastapi import Depends, Request, HTTPException
-from shared.api.dependencies import RequestIdDep, PaginationDep, CorrelationIdDep
-from shared.database.dependencies import DBSessionDep
+from fastapi import Depends, Request, HTTPException, status
+from shared.api.dependencies import (
+    RequestIdDep, PaginationDep, CorrelationIdDep, RequestContextDep
+)
 from .lifecycle import ServiceLifecycle
-from .services.merchant import MerchantService
-from .events.publishers import MerchantEventPublisher
+from .config import ServiceConfig
+from .services import MerchantService
 
-# Re-export shared dependencies
 __all__ = [
-    "DBSessionDep",
-    "CorrelationIdDep", 
+    "CorrelationIdDep",
     "PaginationDep",
     "RequestIdDep",
+    "RequestContextDep",
     "LifecycleDep",
     "ConfigDep",
     "MerchantServiceDep",
-    "PublisherDep"
 ]
 
 # Core dependencies
 def get_lifecycle(request: Request) -> ServiceLifecycle:
-    """Get service lifecycle from app state"""
-    return request.app.state.lifecycle
+    lc = getattr(request.app.state, "lifecycle", None)
+    if lc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
+    return lc
 
-def get_config(request: Request):
-    """Get service config from app state"""
-    return request.app.state.config
+def get_config(request: Request) -> ServiceConfig:
+    cfg = getattr(request.app.state, "config", None)
+    if cfg is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
+    return cfg
 
-# Type aliases for core dependencies
 LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
-ConfigDep = Annotated[object, Depends(get_config)]
+ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
 
-# Service dependencies
 def get_merchant_service(lifecycle: LifecycleDep) -> MerchantService:
-    """Get merchant service"""
-    if not lifecycle.merchant_service:
-        raise HTTPException(500, f"{MerchantService.__name__} not initialized")
-    return lifecycle.merchant_service
+    svc = lifecycle.merchant_service
+    if svc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "MerchantService not initialized")
+    return svc
 
-def get_publisher(lifecycle: LifecycleDep) -> MerchantEventPublisher:
-    """Get event publisher"""
-    if not lifecycle.event_publisher:
-        raise HTTPException(500, "EventPublisher not initialized")
-    return lifecycle.event_publisher
-
-# Type aliases
 MerchantServiceDep = Annotated[MerchantService, Depends(get_merchant_service)]
-PublisherDep = Annotated[MerchantEventPublisher, Depends(get_publisher)]

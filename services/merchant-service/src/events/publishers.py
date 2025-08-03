@@ -1,98 +1,151 @@
-# services/merchant-service/src/events/publishers.py
-from uuid import UUID
 from datetime import datetime
-from typing import Dict, Any, List, Optional
-from shared.events import DomainEventPublisher, Streams
+from typing import Optional, Dict, Any
+from shared.messaging.publisher import Publisher
+from shared.messaging.subjects import Subjects
+from shared.api.correlation import get_correlation_context
+from uuid import uuid4
+from prisma.enums import MerchantStatus
 
-class MerchantEventPublisher(DomainEventPublisher):
-    """Merchant domain event publisher"""
-    domain_stream = Streams.MERCHANT
-    service_name_override = "merchant-service"
+class MerchantEventPublisher(Publisher):
+    """Publisher for merchant domain events"""
+    
+    @property
+    def service_name(self) -> str:
+        return "merchant-service"
     
     async def publish_merchant_created(
         self,
-        merchant_id: UUID,
-        shop_id: str,
+        merchant_id: str,
+        shop_gid: str,
         shop_domain: str,
-        email: str,
+        shop_name: Optional[str],
+        email: Optional[str],
+        timezone: str,
+        currency: str,
         platform: str,
-        is_marketable: bool,
-        **extra
-    ):
-        """Publish merchant created event"""
-        await self.publish_event("evt.merchant.created", {
-            "merchant_id": merchant_id,
-            "shop_id": shop_id,
-            "shop_domain": shop_domain,
-            "email": email,
-            "platform": platform,
-            "is_marketable": is_marketable,
-            "created_at": datetime.utcnow(),
-            **extra
-        })
+        installed_at: datetime,
+        install_source: Optional[str]
+    ) -> str:
+        """Publish evt.merchant.created event"""
+        return await self.publish_event(
+            subject="evt.merchant.created.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "shop_domain": shop_domain,
+                "shop_name": shop_name,
+                "email": email,
+                "timezone": timezone,
+                "currency": currency,
+                "platform": platform,
+                "installed_at": installed_at.isoformat(),
+                "install_source": install_source
+            }
+        )
+    
+    async def publish_merchant_synced(
+        self,
+        merchant_id: str,
+        shop_gid: str,
+        shop_domain: str,
+        first_install: bool,
+        last_auth_at: datetime,
+        scopes: str
+    ) -> str:
+        """Publish evt.merchant.synced event"""
+        return await self.publish_event(
+            subject="evt.merchant.synced.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "shop_domain": shop_domain,
+                "first_install": first_install,
+                "last_auth_at": last_auth_at.isoformat(),
+                "scopes": scopes
+            }
+        )
+    
+    async def publish_settings_updated(
+        self,
+        merchant_id: str,
+        shop_gid: str,
+        shop_domain: str,
+        changes: Dict[str, bool],
+        updated_at: datetime
+    ) -> str:
+        """Publish evt.merchant.settings.updated event"""
+        return await self.publish_event(
+            subject="evt.merchant.settings.updated.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "shop_domain": shop_domain,
+                "changes": changes,
+                "updated_at": updated_at.isoformat()
+            }
+        )
     
     async def publish_status_changed(
         self,
-        merchant_id: UUID,
-        shop_id: str,
-        old_status: str,
-        new_status: str,
+        merchant_id: str,
+        shop_gid: str,
+        old_status: MerchantStatus,
+        new_status: MerchantStatus,
         reason: str,
-        changed_by: str
-    ):
-        """Publish status changed event"""
-        await self.publish_event("evt.merchant.status.changed", {
-            "merchant_id": merchant_id,
-            "shop_id": shop_id,
-            "old_status": old_status,
-            "new_status": new_status,
-            "reason": reason,
-            "changed_by": changed_by,
-            "changed_at": datetime.utcnow()
-        })
+        changed_at: datetime
+    ) -> str:
+        """Publish evt.merchant.status.changed event"""
+        return await self.publish_event(
+            subject="evt.merchant.status.changed.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "old_status": old_status.value,
+                "new_status": new_status.value,
+                "reason": reason,
+                "changed_at": changed_at.isoformat()
+            }
+        )
     
-    async def publish_config_updated(
+    async def publish_merchant_uninstalled(
         self,
-        merchant_id: UUID,
-        shop_id: str,
-        changed_fields: List[str],
-        previous_config: Dict[str, Any],
-        new_config: Dict[str, Any],
-        is_marketable: bool,
-        updated_by: str
-    ):
-        """Publish config updated event"""
-        await self.publish_event("evt.merchant.config.updated", {
-            "merchant_id": merchant_id,
-            "shop_id": shop_id,
-            "changed_fields": changed_fields,
-            "previous_config": previous_config,
-            "new_config": new_config,
-            "is_marketable": is_marketable,
-            "updated_by": updated_by,
-            "updated_at": datetime.utcnow()
-        })
+        merchant_id: str,
+        shop_gid: str,
+        shop_domain: str,
+        uninstalled_at: datetime,
+        uninstall_reason: Optional[str]
+    ) -> str:
+        """Publish evt.merchant.uninstalled event"""
+        return await self.publish_event(
+            subject="evt.merchant.uninstalled.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "shop_domain": shop_domain,
+                "uninstalled_at": uninstalled_at.isoformat(),
+                "uninstall_reason": uninstall_reason
+            }
+        )
     
     async def publish_activity_recorded(
         self,
-        merchant_id: UUID,
+        merchant_id: str,
+        shop_gid: str,
         activity_type: str,
         activity_name: str,
-        activity_description: Optional[str],
-        activity_data: Dict[str, Any],
-        session_id: Optional[str],
-        user_agent: Optional[str],
-        ip_address: Optional[str]
-    ):
-        """Publish activity recorded event"""
-        await self.publish_event("evt.merchant.activity.recorded", {
-            "merchant_id": merchant_id,
-            "activity_type": activity_type,
-            "activity_name": activity_name,
-            "activity_description": activity_description,
-            "activity_data": activity_data,
-            "session_id": session_id,
-            "timestamp": datetime.utcnow(),
-            "user_agent": user_agent,
-            "ip_address": ip_address
-        })
+        activity_data: Optional[Dict[str, Any]],
+        timestamp: datetime
+    ) -> str:
+        """Publish evt.merchant.activity.recorded event"""
+        return await self.publish_event(
+            subject="evt.merchant.activity.recorded.v1",
+            data={
+                "merchant_id": merchant_id,
+                "shop_gid": shop_gid,
+                "activity_type": activity_type,
+                "activity_name": activity_name,
+                "activity_data": activity_data,
+                "timestamp": timestamp.isoformat()
+            }
+        )
+
