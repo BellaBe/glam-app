@@ -1,392 +1,268 @@
-# services/billing-service/src/lifecycle.py
-from __future__ import annotations
-
+from typing import Optional, List
 import asyncio
-from typing import List, Optional, cast
 import redis.asyncio as redis
-from nats.js.api import StreamConfig, RetentionPolicy, StorageType
-
+from prisma import Prisma
+from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
-from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging.jetstream_client import JetStreamWrapper
-
-from .config import BillingServiceConfig
-from .repositories import (
-    SubscriptionRepository,
-    OneTimePurchaseRepository,
-    BillingPlanRepository,
-    TrialExtensionRepository,
+from .config import ServiceConfig
+from .repositories.billing_plan_repository import BillingPlanRepository
+from .repositories.merchant_billing_repository import MerchantBillingRepository
+from .repositories.merchant_trial_repository import MerchantTrialRepository
+from .repositories.one_time_purchase_repository import OneTimePurchaseRepository
+from .services.billing_service import BillingService
+from .services.webhook_service import WebhookProcessingService
+from .events.publishers import BillingEventPublisher
+from .events.listeners import (
+    AppSubscriptionUpdatedListener,
+    AppPurchaseUpdatedListener,
+    AppUninstalledListener
 )
-from .services import (
-    BillingService,
-    TrialService,
-    OneTimePurchaseService,
-)
-from .events import BillingEventPublisher
-from .clients.shopify import ShopifyBillingClient
-from .subscribers import (
-    WebhookEventSubscriber,
-    PurchaseWebhookSubscriber,
-    AppUninstalledSubscriber,
-)
-from .mappers import (
-    BillingPlanMapper,
-    SubscriptionMapper,
-    OneTimePurchaseMapper,
-    TrialExtensionMapper,
-)
-
-from .models import (
-    Subscription,
-    OneTimePurchase,
-    BillingPlan,
-    TrialExtension,
-)
-
-from .exceptions import BillingServiceError
-
-
-
 
 class ServiceLifecycle:
-    """Manages billing service lifecycle and dependencies"""
-
-    def __init__(self, config: BillingServiceConfig, logger: ServiceLogger):
+    """Manages service lifecycle and dependencies"""
+    
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         self.config = config
         self.logger = logger
-
+        
         # External connections
-        self.messaging_wrapper: Optional[JetStreamWrapper] = None
-        self.db_manager: Optional[DatabaseSessionManager] = None
-        self.redis_client: Optional[redis.Redis] = None
+        self.messaging_client: Optional[JetStreamClient] = None
+        self.prisma: Optional[Prisma] = None
+        self.redis: Optional[redis.Redis] = None
+        self._db_connected: bool = False
+        
+        # Publisher / listeners
+        self.event_publisher: Optional[BillingEventPublisher] = None
+        self._listeners: list = []
         
         # Repositories
-        self.subscription_repo: Optional[SubscriptionRepository] = None
-        self.purchase_repo: Optional[OneTimePurchaseRepository] = None
         self.plan_repo: Optional[BillingPlanRepository] = None
-        self.extension_repo: Optional[TrialExtensionRepository] = None
-        
-        # External services
-        self.shopify_client: Optional[ShopifyBillingClient] = None
+        self.billing_repo: Optional[MerchantBillingRepository] = None
+        self.trial_repo: Optional[MerchantTrialRepository] = None
+        self.purchase_repo: Optional[OneTimePurchaseRepository] = None
         
         # Services
         self.billing_service: Optional[BillingService] = None
-        self.trial_service: Optional[TrialService] = None
-        self.purchase_service: Optional[OneTimePurchaseService] = None
+        self.webhook_service: Optional[WebhookProcessingService] = None
         
-        # Mappers
-        self.plan_mapper: BillingPlanMapper = BillingPlanMapper()
-        self.subscription_mapper: SubscriptionMapper = SubscriptionMapper()
-        self.purchase_mapper: OneTimePurchaseMapper = OneTimePurchaseMapper()
-        self.extension_mapper: TrialExtensionMapper = TrialExtensionMapper()
-        
-        # Event handling
-        self.event_publisher: Optional[BillingEventPublisher] = None
-        
-        # bookkeeping
+        # Tasks
         self._tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
     
     async def startup(self) -> None:
-        """Start all service components"""
-        
         try:
             self.logger.info("Starting service components...")
-            
-            # 1. Initialize database
-            await self._init_database()
-            
-            # 2. Initialize Redis
-            await self._init_redis()
-
-            # 3. Initialize messaging
             await self._init_messaging()
-            
-            # 4. Initialize repositories
+            await self._init_redis()
+            await self._init_database()
             self._init_repositories()
-            
-            # 5. Initialize mappers
-            self._init_mappers()
-
-            # 6. Initialize services
-            self._init_local_services()
-            
-            # 7. Start subscribers
-            await self._init_subscribers()
-            
-            self.logger.info("All service components started successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to start service: {e}", exc_info=True)
+            self._init_services()
+            await self._init_listeners()
+            await self._init_scheduler()
+            self.logger.info("%s started successfully", self.config.service_name)
+        except Exception:
+            self.logger.critical("Service failed to start", exc_info=True)
             await self.shutdown()
             raise
     
     async def shutdown(self) -> None:
-        """Shutdown all service components"""
+        """Graceful shutdown of all components"""
+        self.logger.info("Shutting down %s", self.config.service_name)
         
-        self.logger.info("Shutting down service components...")
-        
-        # Stop background tasks
         for t in self._tasks:
             t.cancel()
+        
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         
-        # Close Redis
-        if self.redis_client:
+        for lst in self._listeners:
             try:
-                await self.redis_client.close()
-                self.logger.info("Redis connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing Redis: {e}")
+                await lst.stop()
+            except Exception:
+                self.logger.critical("Listener stop failed")
         
-        # Close messaging
-        if self.messaging_wrapper:
+        if self.messaging_client:
             try:
-                await self.messaging_wrapper.close()
-                self.logger.info("Messaging connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing messaging: {e}")
+                await self.messaging_client.close()
+            except Exception:
+                self.logger.critical("Messaging client close failed")
         
-        # Close database
-        if self.db_manager:
+        if self.redis:
             try:
-                await self.db_manager.close()
-                self.logger.info("Database connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing database: {e}")
+                await self.redis.close()
+            except Exception:
+                self.logger.critical("Redis close failed")
         
-        self.logger.info("Service shutdown complete")
-        """Graceful shutdown of all components"""
-        self.logger.info(f"Shutting down {self.config.service_name}")
+        if self.prisma and self._db_connected:
+            try:
+                await self.prisma.disconnect()
+            except Exception:
+                self.logger.critical("Prisma disconnect failed")
         
-        # Cancel background tasks
-        for task in self._tasks:
-            task.cancel()
-        
-        # Close connections
-        if self.messaging:
-            await self.messaging.close()
-        if self.db_manager:
-            await self.db_manager.close()
-        if self.redis_client:
-            await self.redis_client.close()
-        
-        self.logger.info(f"{self.config.service_name} shutdown complete")
-        
+        self.logger.info("%s shutdown complete", self.config.service_name)
+    
     async def _init_messaging(self) -> None:
-        self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
-        self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
-
-        js = self.messaging_wrapper.js
-        cfg = StreamConfig(
-            name      = "BILLING",
-            subjects  = ["cmd.billing.*", "evt.billing.*"],
-            retention = RetentionPolicy.LIMITS,
-            max_age   = 7 * 24 * 60 * 60,
-            max_msgs  = 1_000_000,
-            max_bytes = 1_024 ** 3,
-            storage   = StorageType.FILE,
-            duplicate_window = 60,
-        )
-        try:
-            await js.stream_info("BILLING")
-        except Exception:
-            await js.add_stream(cfg)
-            self.logger.info("Created BILLING stream")
-    
-  
-    async def _init_database(self) -> None:
-        if not (self.config.db_enabled and self.config.database_config):
-            self.logger.warning("DB disabled; repositories will not be initialised")
-            return
+        self.messaging_client = JetStreamClient(self.logger)
+        await self.messaging_client.connect([self.config.nats_url])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
         
-        print("Database URL:", self.config.database_config.database_url)
-
-        self.db_manager = DatabaseSessionManager(
-            database_url=self.config.database_config.database_url,
-            echo=self.config.database_config.DB_ECHO,
-            pool_size=self.config.database_config.DB_POOL_SIZE,
-            max_overflow=self.config.database_config.DB_MAX_OVERFLOW,
+        # Initialize publisher
+        self.event_publisher = BillingEventPublisher(
+            messaging=self.messaging_client,
+            logger=self.logger,
         )
-        await self.db_manager.init()
-        set_database_manager(self.db_manager)
-        self.logger.info("Connected to DB")
-
-        from shared.database.base import Base
-        async with self.db_manager.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            
+        self.logger.info("Messaging client and publisher initialized")
+    
     async def _init_redis(self) -> None:
-        """Initialize Redis connection"""
-        
-        self.logger.info("Setting up Redis...")
-        
-        if not self.config.infrastructure_redis_url:
-            self.logger.warning("INFRASTRUCTURE_REDIS_URL not configured, skipping Redis setup")
+        """Initialize Redis client"""
+        self.redis = await redis.from_url(
+            self.config.redis_url,
+            encoding="utf-8",
+            decode_responses=True
+        )
+        await self.redis.ping()
+        self.logger.info("Redis connected")
+    
+    async def _init_database(self) -> None:
+        """Initialize Prisma client if database is enabled."""
+        if not self.config.db_enabled:
+            self.logger.info("Database disabled; skipping Prisma initialization")
             return
         
-        self.redis_client = redis.from_url(
-            self.config.infrastructure_redis_url,
-            decode_responses=True,
-            retry_on_timeout=True,
-            health_check_interval=30
-        )
+        self.prisma = Prisma()
+        if not self.prisma:
+            raise RuntimeError("Prisma client not initialized")
         
-        # Test connection
-        await self.redis_client.ping()
-        
-        self.logger.info("Redis setup complete")
-    
+        try:
+            await self.prisma.connect()
+            self._db_connected = True
+            self.logger.info("Prisma connected")
+        except Exception as e:
+            self.logger.error("Prisma connect failed: %s", e, exc_info=True)
+            raise
     
     def _init_repositories(self) -> None:
-        """Initialize repositories"""
-        
-        if not self.db_manager:
-            self.logger.warning("DB manager not initialized, repositories will not be set up")
-            return
-        
-        self.logger.info("Setting up repositories...")
-        
-        session_factory = self.db_manager.session_factory
-        
-        self.subscription_repo = SubscriptionRepository(
-            model_class=Subscription,
-            session_factory=session_factory
-        )
-        self.purchase_repo = OneTimePurchaseRepository(
-            model_class=OneTimePurchase,
-            session_factory=session_factory
-        )
-        self.plan_repo = BillingPlanRepository(
-            model_class=BillingPlan,
-            session_factory=session_factory
-        )
-        self.extension_repo = TrialExtensionRepository(
-            model_class=TrialExtension,
-            session_factory=session_factory
-        )
-        self.logger.info("Repositories initialized successfully")
-        
-    def _init_mappers(self) -> None:
-        """Initialize mappers"""
-        
-        self.logger.info("Setting up mappers...")
-        
-        self.plan_mapper = BillingPlanMapper()
-        self.subscription_mapper = SubscriptionMapper()
-        self.purchase_mapper = OneTimePurchaseMapper()
-        self.extension_mapper = TrialExtensionMapper()
-        
-        self.logger.info("Mappers initialized successfully")
-        
-    async def _init_subscribers(self) -> None:
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper not initialized")
-
-        # ⚠️ Register deps BEFORE launching subscribers – they may receive a
-        # message immediately after pull_subscribe().
-        self.messaging_wrapper.register_dependency(
-            "subscription_repo", self.subscription_repo
-        )
-        self.messaging_wrapper.register_dependency(
-            "purchase_repo", self.purchase_repo
-        )
-        self.messaging_wrapper.register_dependency(
-            "plan_repo", self.plan_repo
-        )
-        self.messaging_wrapper.register_dependency(
-            "extension_repo", self.extension_repo
-        )
-        self.messaging_wrapper.register_dependency("logger", self.logger)
-        
-        # Start all subscribers with registered dependencies
-        subscribers = [
-            WebhookEventSubscriber,
-            PurchaseWebhookSubscriber,
-            AppUninstalledSubscriber,
-        ]
-        
-        for subscriber_class in subscribers:
-            await self.messaging_wrapper.start_subscriber(subscriber_class)
-        
-        
-    def _init_local_services(self) -> None:
-        """Initialize local services"""
-        
-        self.logger.info("Setting up local services...")
-        
-        self.shopify_client = ShopifyBillingClient(
-            api_key=self.config.shopify_api_key,
-            api_secret=self.config.shopify_api_secret,
-            app_url=self.config.shopify_app_url,
-            logger=self.logger
-        )
-        
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper is not initialized")
-        
-        self.event_publisher = cast(BillingEventPublisher, self.messaging_wrapper.create_publisher(BillingEventPublisher))
-        
-        if not self.event_publisher:
-            raise RuntimeError("Event publisher is not initialized")
-        
-        if not self.redis_client:
-            raise RuntimeError("Redis client is not initialized")
-
-        if not self.subscription_repo:
-            raise RuntimeError("Subscription repository is not initialized")
-        
-        if not self.plan_repo:
-            raise RuntimeError("Billing plan repository is not initialized")
-        
-        if not self.purchase_repo:
-            raise RuntimeError("One-time purchase repository is not initialized")
-        
-        if not self.extension_repo:
-            raise RuntimeError("Trial extension repository is not initialized")
-        
-        if not self.shopify_client:
-            raise RuntimeError("Shopify client is not initialized")
-
-        # Initialize services with dependencies
-        self.logger.info("Initializing local services...")
+        if self.config.db_enabled:
+            if not (self.prisma and self._db_connected):
+                raise RuntimeError("Prisma client not initialized/connected")
+            
+            self.plan_repo = BillingPlanRepository(self.prisma)
+            self.billing_repo = MerchantBillingRepository(self.prisma)
+            self.trial_repo = MerchantTrialRepository(self.prisma)
+            self.purchase_repo = OneTimePurchaseRepository(self.prisma)
+            
+            self.logger.info("Repositories initialized")
+        else:
+            raise RuntimeError("Database is required for billing service")
+    
+    def _init_services(self) -> None:
+        if not all([self.plan_repo, self.billing_repo, self.trial_repo, self.purchase_repo, self.redis]):
+            raise RuntimeError("Repositories not initialized")
         
         self.billing_service = BillingService(
-            subscription_repo=self.subscription_repo,
+            config=self.config,
             plan_repo=self.plan_repo,
-            shopify_client=self.shopify_client,
-            event_publisher=self.event_publisher,
-            redis_client=self.redis_client,
-            logger=self.logger,
-            config=self.config
-        )
-        
-        self.trial_service = TrialService(
-            extension_repo=self.extension_repo,
-            event_publisher=self.event_publisher,
-            logger=self.logger,
-            config=self.config
-        )
-        
-        self.purchase_service = OneTimePurchaseService(
+            billing_repo=self.billing_repo,
+            trial_repo=self.trial_repo,
             purchase_repo=self.purchase_repo,
-            event_publisher=self.event_publisher,
-            shopify_client=self.shopify_client,
+            redis_client=self.redis,
             logger=self.logger,
-            config=self.config
         )
         
-        self.logger.info("Local services initialized successfully")
+        self.webhook_service = WebhookProcessingService(
+            config=self.config,
+            billing_repo=self.billing_repo,
+            purchase_repo=self.purchase_repo,
+            billing_service=self.billing_service,
+            redis_client=self.redis,
+            logger=self.logger,
+        )
         
+        self.logger.info("Services initialized")
+    
+    async def _init_listeners(self) -> None:
+        if not all([self.messaging_client, self.webhook_service, self.event_publisher]):
+            raise RuntimeError("Required services not ready")
+        
+        # Subscription updated listener
+        subscription_listener = AppSubscriptionUpdatedListener(
+            js_client=self.messaging_client,
+            webhook_service=self.webhook_service,
+            publisher=self.event_publisher,
+            logger=self.logger,
+        )
+        await subscription_listener.start()
+        self._listeners.append(subscription_listener)
+        
+        # Purchase updated listener
+        purchase_listener = AppPurchaseUpdatedListener(
+            js_client=self.messaging_client,
+            webhook_service=self.webhook_service,
+            publisher=self.event_publisher,
+            logger=self.logger,
+        )
+        await purchase_listener.start()
+        self._listeners.append(purchase_listener)
+        
+        # App uninstalled listener
+        uninstalled_listener = AppUninstalledListener(
+            js_client=self.messaging_client,
+            webhook_service=self.webhook_service,
+            publisher=self.event_publisher,
+            logger=self.logger,
+        )
+        await uninstalled_listener.start()
+        self._listeners.append(uninstalled_listener)
+        
+        self.logger.info("Event listeners initialized")
+    
+    async def _init_scheduler(self) -> None:
+        """Initialize trial expiry scheduler"""
+        self.add_task(self._trial_expiry_loop())
+        self.logger.info("Trial expiry scheduler started")
+    
+    async def _trial_expiry_loop(self) -> None:
+        """Run trial expiry check every hour"""
+        while not self._shutdown_event.is_set():
+            try:
+                # Run expiry check
+                expired_domains = await self.billing_service.expire_trials()
+                
+                if expired_domains:
+                    self.logger.info(
+                        "Expired trials",
+                        extra={"count": len(expired_domains), "domains": expired_domains}
+                    )
+                    
+                    # Publish expired events
+                    from ..schemas.billing import TrialExpiredPayload
+                    for domain in expired_domains:
+                        payload = TrialExpiredPayload(
+                            shopDomain=domain,
+                            expiredAt=datetime.utcnow()
+                        )
+                        await self.event_publisher.trial_expired(payload)
+                
+                # Wait for 1 hour or shutdown
+                await asyncio.wait_for(
+                    self._shutdown_event.wait(),
+                    timeout=3600  # 1 hour
+                )
+            except asyncio.TimeoutError:
+                # Normal timeout, continue loop
+                pass
+            except Exception as e:
+                self.logger.error("Trial expiry loop error", exc_info=True)
+                await asyncio.sleep(60)  # Wait 1 minute before retry
+    
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)
         self._tasks.append(t)
         return t
-
+    
     async def wait_for_shutdown(self) -> None:
         await self._shutdown_event.wait()
-
+    
     def signal_shutdown(self) -> None:
         self._shutdown_event.set()
+

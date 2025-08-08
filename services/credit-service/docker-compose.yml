@@ -4,14 +4,15 @@ services:
   credit-service:
     build: .
     ports:
-      - "8015:8015"
-      - "9090:9090"  # Metrics
+      - "8115:8000"      # External development port -> Container port
+      - "9090:9090"      # Metrics
     environment:
-      - DATABASE_URL=postgresql+asyncpg://credit:password@postgres:5432/credit_db
+      - DATABASE_URL=postgresql://credit:password@postgres:5432/credit_db
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - LOG_LEVEL=INFO
       - DEBUG=false
+      - DOCKER_CONTAINER=1
     depends_on:
       postgres:
         condition: service_healthy
@@ -20,13 +21,13 @@ services:
       nats:
         condition: service_started
     volumes:
-      - ./src:/app/src
-      - ./alembic:/app/alembic
+      - ./src:/app/src  # Hot reload
+      - ./config:/app/config  # Mount config
     networks:
       - credit-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8015/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -39,10 +40,9 @@ services:
       POSTGRES_USER: credit
       POSTGRES_PASSWORD: password
     ports:
-      - "5433:5432"
+      - "5415:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - credit-network
     healthcheck:
@@ -54,7 +54,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "6315:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -64,13 +64,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: redis-server --appendonly yes
 
   nats:
     image: nats:2.10-alpine
     ports:
-      - "4223:4222"
-      - "8223:8222"  # HTTP monitoring
+      - "4215:4222"
+      - "8215:8222"  # HTTP monitoring
     command: [
       "nats-server",
       "--jetstream",
@@ -82,28 +81,12 @@ services:
     networks:
       - credit-network
 
-  # Optional: Prometheus for metrics
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9091:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    networks:
-      - credit-network
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-
 volumes:
   postgres_data:
   redis_data:
   nats_data:
-  prometheus_data:
 
 networks:
   credit-network:
     driver: bridge
+

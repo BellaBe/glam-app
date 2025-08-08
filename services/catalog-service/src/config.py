@@ -1,89 +1,76 @@
-# services/catalog-service/src/config.py
 import os
 from functools import lru_cache
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from shared.utils.config_loader import merged_config, flatten_config
-from shared.database import create_database_config
 
-class CatalogServiceConfig(BaseModel):
-    """Catalog service configuration from YAML + environment"""
+class ServiceConfig(BaseModel):
+    """Service configuration from YAML + environment"""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+    
     # Service Identity
     service_name: str = Field(..., alias="service.name")
     service_version: str = Field(..., alias="service.version")
-    environment: str
-    debug: bool
+    environment: str = Field(..., alias="environment")
+    debug: bool = Field(False, alias="service.debug")
     
-    # API Configuration
+    # API Configuration - BOTH PORTS
     api_host: str = Field(..., alias="api.host")
     api_port: int = Field(..., alias="api.port")
     api_external_port: int = Field(..., alias="api.external_port")
-    api_cors_origins: list = Field(..., alias="api.cors_origins")
+    api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
     
     # Infrastructure
-    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
-    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
-    
-    # Database
-    db_enabled: bool = Field(True, alias="database.enabled")
+    nats_url: str = Field(..., alias="infrastructure.nats_url")
+    redis_url: str = Field(..., alias="infrastructure.redis_url")
     
     # Logging
     logging_level: str = Field(..., alias="logging.level")
     logging_format: str = Field(..., alias="logging.format")
+    logging_file_path: str = Field(..., alias="logging.file_path")
     
-    # Catalog-specific features
-    cache_enabled: bool = Field(True, alias="features.cache_enabled")
-    max_retries: int = Field(3, alias="features.max_retries")
+    # Monitoring
+    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
+    monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
     
-    # Image caching
-    image_cache_dir: str = Field("/cache/images", alias="catalog.image_cache_dir")
-    image_cache_ttl_hours: int = Field(72, alias="catalog.image_cache_ttl_hours")
-    image_cache_max_size_gb: int = Field(100, alias="catalog.image_cache_max_size_gb")
-    image_cache_type: str = Field("local", alias="catalog.image_cache_type")
+    # Rate Limiting
+    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    # Analysis
-    analysis_timeout_sec: int = Field(300, alias="catalog.analysis_timeout_sec")
-    analysis_batch_size: int = Field(32, alias="catalog.analysis_batch_size")
+    # Database
+    db_enabled: bool = Field(..., alias="database.enabled")
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     
-    # Sync operations
-    sync_bulk_retry_max: int = Field(1, alias="catalog.sync_bulk_retry_max")
+    # API Authentication
+    app_api_key: str = Field(..., alias="APP_API_KEY")
     
-    # Recovery and reconciliation
-    startup_recovery_enabled: bool = Field(True, alias="catalog.startup_recovery_enabled")
-    reconciliation_interval_min: int = Field(10, alias="catalog.reconciliation_interval_min")
-    reconciliation_batch_size: int = Field(100, alias="catalog.reconciliation_batch_size")
-    
-    # Idempotency
-    enable_redis_idempotency: bool = Field(True, alias="catalog.enable_redis_idempotency")
-    idempotency_ttl_hours: int = Field(24, alias="catalog.idempotency_ttl_hours")
+    # Cache TTLs
+    cache_ttl_settings: int = Field(30, alias="cache.ttl_settings")  # 30 seconds
+    cache_ttl_entitlements: int = Field(30, alias="cache.ttl_entitlements")  # 30 seconds
     
     @property
-    def database_config(self):
-        """Get database configuration with CATALOG prefix"""
-        return create_database_config("CATALOG_")
-    
-    @property
-    def effective_port(self) -> int:
-        """Get effective port based on environment"""
-        in_container = any([
-            os.getenv("DOCKER_CONTAINER"),
-            os.getenv("HOSTNAME", "").startswith("catalog"),
-            os.path.exists("/.dockerenv")
-        ])
+    def effective_api_port(self) -> int:
+        in_container = os.path.exists("/.dockerenv")
         return self.api_port if in_container else self.api_external_port
     
-    @property
-    def nats_servers(self) -> list[str]:
-        return [self.infrastructure_nats_url]
-    
-    @property
-    def is_production(self) -> bool:
-        return self.environment == "production"
+    @model_validator(mode="after")
+    def _require_db_url_when_enabled(self):
+        if self.db_enabled and not self.database_url:
+            raise ValueError("database.enabled=true requires DATABASE_URL")
+        return self
 
 @lru_cache
-def get_catalog_config() -> CatalogServiceConfig:
-    """Load and cache catalog service configuration"""
-    cfg_dict = merged_config("catalog-service", env_prefix="CATALOG")
+def get_service_config() -> ServiceConfig:
+    """Load and cache service configuration"""
+    cfg_dict = merged_config("catalog-service")
     flattened = flatten_config(cfg_dict)
-    return CatalogServiceConfig(**flattened)
+    
+    # Ensure raw DATABASE_URL and APP_API_KEY survive
+    if "DATABASE_URL" not in flattened and "DATABASE_URL" in os.environ:
+        flattened["DATABASE_URL"] = os.environ["DATABASE_URL"]
+    if "APP_API_KEY" not in flattened and "APP_API_KEY" in os.environ:
+        flattened["APP_API_KEY"] = os.environ["APP_API_KEY"]
+    
+    return ServiceConfig(**flattened)
 
-config = get_catalog_config()
+# ================================================================

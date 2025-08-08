@@ -1,38 +1,58 @@
-# services/credit-service/Dockerfile
-FROM python:3.11-slim
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 1 ─ Builder
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
 
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 
-# Copy poetry files
-COPY pyproject.toml poetry.lock* poetry.toml ./
-
-# Install poetry and dependencies
+# Install Poetry
 RUN pip install poetry
 RUN poetry config virtualenvs.create false
+
+# ---- 1️⃣  Install shared package dependencies
+COPY shared /shared
+WORKDIR /shared
+RUN poetry install --no-dev
+
+# ---- 2️⃣  Install service dependencies  
+WORKDIR /app
+COPY services/credit-service/pyproject.toml services/credit-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
 
-# Copy source code
-COPY src/ ./src/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
+# ---- 3️⃣  Copy Prisma schema and generate client
+COPY services/credit-service/prisma ./prisma
+RUN prisma generate
+
+# ---- 4️⃣  Copy service code
+COPY services/credit-service /app
+
+# ---- 5️⃣  Copy config
+COPY config /app/config
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime  
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Copy everything from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+COPY --from=builder /shared /shared
+
+ENV PYTHONPATH="/shared:/app"
+ENV DOCKER_CONTAINER=1
+
+WORKDIR /app
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash appuser
-RUN chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port
-EXPOSE 8015
+EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8015/api/v1/health || exit 1
+# Run migrations and start server
+CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
 
-# Run application
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8015"]

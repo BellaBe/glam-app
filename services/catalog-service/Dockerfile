@@ -1,61 +1,59 @@
-# services/catalog-service/Dockerfile
-# -------------------
-# 🛠 Stage 1: Builder
-# -------------------
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 1 ─ Builder
+# ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
-RUN pip install --no-cache-dir poetry==1.7.1
-
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV POETRY_NO_INTERACTION=1
-
 WORKDIR /app
 
-ARG CACHE_BUSTER=1
+# Install system dependencies
+RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 
-# Install shared package
+# Install Poetry
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+
+# ---- 1️⃣  Install shared package dependencies
 COPY shared /shared
-RUN pip install --no-cache-dir -e /shared
+WORKDIR /shared
+RUN poetry install --no-dev
 
-ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
+# ---- 2️⃣  Install service dependencies  
+WORKDIR /app
+COPY services/catalog-service/pyproject.toml services/catalog-service/poetry.lock* ./
+RUN poetry install --no-dev --no-interaction --no-ansi
 
-# Install service dependencies
-COPY services/catalog-service/pyproject.toml services/catalog-service/poetry.lock /app/
+# ---- 3️⃣  Copy Prisma schema and generate client
+COPY services/catalog-service/prisma ./prisma
+RUN prisma generate
 
-RUN poetry install --no-root --no-ansi && rm -rf ~/.cache/pypoetry ~/.cache/pip
-
-# Copy service code
+# ---- 4️⃣  Copy service code
 COPY services/catalog-service /app
 
-# -------------------
-# 📦 Stage 2: Runtime
-# -------------------
+# ---- 5️⃣  Copy config
+COPY config /app/config
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime  
+# ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install --no-cache-dir poetry==1.7.1
-
-ENV POETRY_VIRTUALENVS_CREATE=false
-ENV POETRY_NO_INTERACTION=1
-
-WORKDIR /app
-
-ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
-
-# Copy from builder
+# Copy everything from builder
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 COPY --from=builder /shared /shared
 
-# Expose FastAPI port
+ENV PYTHONPATH="/shared:/app"
+ENV DOCKER_CONTAINER=1
+
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Run migrations and start server
+CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
 
-# Start Uvicorn server
-CMD ["poetry", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ================================================================

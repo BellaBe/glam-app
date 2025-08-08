@@ -1,352 +1,201 @@
-"""
-Service lifecycle management for credit service.
-
-Manages startup and shutdown of all service components following
-the same pattern as notification service.
-"""
-
-from __future__ import annotations
-
+from typing import Optional, List
 import asyncio
-from typing import Optional, List, cast
-
 import redis.asyncio as redis
-from nats.js.api import StreamConfig, RetentionPolicy, StorageType
-
+from prisma import Prisma
+from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
-from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging.jetstream_client import JetStreamWrapper
-
-from .config import CreditServiceConfig
-from .services.credit_service import CreditService
-from .services.balance_monitor_service import BalanceMonitorService
-from .services.plugin_status_service import PluginStatusService
-from .services.credit_transaction_service import CreditTransactionService
-
-# Repositories
+from .config import ServiceConfig
 from .repositories.credit_repository import CreditRepository
-from .repositories.credit_transaction_repository import CreditTransactionRepository
-
-# Models
-from .models.credit import Credit
-from .models.credit_transaction import CreditTransaction
-
-# Events
+from .services.credit_service import CreditService
 from .events.publishers import CreditEventPublisher
-from .events.subscribers import (
-    OrderUpdatedSubscriber,
-    TrialCreditsSubscriber,
-    SubscriptionSubscriber,
-    MerchantCreatedSubscriber,
-)
-
-# Mappers
-from .mappers.credit_mapper import CreditMapper
-from .mappers.credit_transaction_mapper import CreditTransactionMapper
-
+from .events.listeners import BillingCreditGrantListener, BillingTrialActivatedListener
 
 class ServiceLifecycle:
     """Manages service lifecycle and dependencies"""
     
-    def __init__(self, config: CreditServiceConfig, logger: ServiceLogger):
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         self.config = config
         self.logger = logger
         
         # External connections
-        self.messaging_wrapper: Optional[JetStreamWrapper] = None
-        self.db_manager: Optional[DatabaseSessionManager] = None
+        self.messaging_client: Optional[JetStreamClient] = None
         self.redis_client: Optional[redis.Redis] = None
+        self.prisma: Optional[Prisma] = None
+        self._db_connected: bool = False
         
+        # Publishers / listeners
+        self.event_publisher: Optional[CreditEventPublisher] = None
+        self._listeners: list = []
         
-        # Repositories
+        # Repositories / services
         self.credit_repo: Optional[CreditRepository] = None
-        self.credit_transaction_repo: Optional[CreditTransactionRepository] = None
-        
-        # Mappers
-        self.credit_mapper: Optional[CreditMapper] = None
-        self.credit_transaction_mapper: Optional[CreditTransactionMapper] = None
-        
-        # Services
         self.credit_service: Optional[CreditService] = None
-        self.balance_monitor_service: Optional[BalanceMonitorService] = None
-        self.plugin_status_service: Optional[PluginStatusService] = None
-        self.credit_transaction_service: Optional[CreditTransactionService] = None
         
-        
-        # bookkeeping
+        # Tasks
         self._tasks: List[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
-        
-
+    
     async def startup(self) -> None:
-        """Start all service components"""
-        
         try:
             self.logger.info("Starting service components...")
             
-            # 1. Initialize database
-            await self._init_database()
-            
-            # 2. Initialize Redis
-            await self._init_redis()
-
-            # 3. Initialize messaging
             await self._init_messaging()
-            
-            # 4. Initialize repositories
+            await self._init_cache()
+            await self._init_database()
             self._init_repositories()
-            
-            # 5. Initialize mappers
-            self._init_mappers()
-
-            # 6. Initialize services
             self._init_local_services()
+            await self._init_listeners()
             
-            # 7. Start subscribers
-            await self._init_subscribers()
-            
-            self.logger.info("All service components started successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to start service: {e}", exc_info=True)
+            self.logger.info("%s started successfully", self.config.service_name)
+        except Exception:
+            self.logger.critical("Service failed to start", exc_info=True)
             await self.shutdown()
             raise
     
     async def shutdown(self) -> None:
-        """Shutdown all service components"""
+        """Graceful shutdown of all components"""
+        self.logger.info("Shutting down %s", self.config.service_name)
         
-        self.logger.info("Shutting down service components...")
-        
-        # Stop background tasks
         for t in self._tasks:
             t.cancel()
+        
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         
-        # Close Redis
+        for lst in self._listeners:
+            try:
+                await lst.stop()
+            except Exception:
+                self.logger.error("Listener stop failed", exc_info=True)
+        
+        if self.messaging_client:
+            try:
+                await self.messaging_client.close()
+            except Exception:
+                self.logger.error("Messaging client close failed", exc_info=True)
+        
         if self.redis_client:
             try:
                 await self.redis_client.close()
-                self.logger.info("Redis connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing Redis: {e}")
+            except Exception:
+                self.logger.error("Redis close failed", exc_info=True)
         
-        # Close messaging
-        if self.messaging_wrapper:
+        if self.prisma and self._db_connected:
             try:
-                await self.messaging_wrapper.close()
-                self.logger.info("Messaging connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing messaging: {e}")
+                await self.prisma.disconnect()
+            except Exception:
+                self.logger.error("Prisma disconnect failed", exc_info=True)
         
-        # Close database
-        if self.db_manager:
-            try:
-                await self.db_manager.close()
-                self.logger.info("Database connection closed")
-            except Exception as e:
-                self.logger.warning(f"Error closing database: {e}")
-        
-        self.logger.info("Service shutdown complete")
+        self.logger.info("%s shutdown complete", self.config.service_name)
     
     async def _init_messaging(self) -> None:
-        self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
-        self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
-
-        js = self.messaging_wrapper.js
-        cfg = StreamConfig(
-            name      = "CREDIT",
-            subjects  = ["cmd.credit.*", "evt.credit.*"],
-            retention = RetentionPolicy.LIMITS,
-            max_age   = 7 * 24 * 60 * 60,
-            max_msgs  = 1_000_000,
-            max_bytes = 1_024 ** 3,
-            storage   = StorageType.FILE,
-            duplicate_window = 60,
+        self.messaging_client = JetStreamClient(self.logger)
+        await self.messaging_client.connect([self.config.nats_url])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        
+        # Initialize publisher
+        self.event_publisher = CreditEventPublisher(
+            messaging=self.messaging_client,
+            logger=self.logger
         )
-        try:
-            await js.stream_info("CREDIT")
-        except Exception:
-            await js.add_stream(cfg)
-            self.logger.info("Created CREDIT stream")
+        
+        self.logger.info("Messaging client and publisher initialized")
     
-  
-    async def _init_database(self) -> None:
-        if not (self.config.db_enabled and self.config.database_config):
-            self.logger.warning("DB disabled; repositories will not be initialised")
+    async def _init_cache(self) -> None:
+        """Initialize Redis cache if enabled"""
+        if not self.config.cache_enabled:
+            self.logger.info("Cache disabled; skipping Redis initialization")
             return
         
-        print("Database URL:", self.config.database_config.database_url)
-
-        self.db_manager = DatabaseSessionManager(
-            database_url=self.config.database_config.database_url,
-            echo=self.config.database_config.DB_ECHO,
-            pool_size=self.config.database_config.DB_POOL_SIZE,
-            max_overflow=self.config.database_config.DB_MAX_OVERFLOW,
-        )
-        await self.db_manager.init()
-        set_database_manager(self.db_manager)
-        self.logger.info("Connected to DB")
-
-        from shared.database.base import Base
-        async with self.db_manager.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        try:
+            self.redis_client = await redis.from_url(
+                self.config.redis_url,
+                decode_responses=True,
+                max_connections=self.config.cache_max_connections
+            )
+            await self.redis_client.ping()
+            self.logger.info("Redis cache initialized")
+        except Exception as e:
+            self.logger.warning(f"Redis initialization failed: {e}. Running without cache.")
+            self.redis_client = None
     
+    async def _init_database(self) -> None:
+        """Initialize Prisma client if database is enabled."""
+        if not self.config.db_enabled:
+            self.logger.info("Database disabled; skipping Prisma initialization")
+            return
+        
+        self.prisma = Prisma()
+        if not self.prisma:
+            raise RuntimeError("Prisma client not initialized")
+        
+        try:
+            await self.prisma.connect()
+            self._db_connected = True
+            self.logger.info("Prisma connected")
+        except Exception as e:
+            self.logger.error("Prisma connect failed: %s", e, exc_info=True)
+            raise
     
     def _init_repositories(self) -> None:
-        """Initialize repositories"""
-        
-        if not self.db_manager:
-            self.logger.warning("DB manager not initialized, repositories will not be set up")
-            return
-        
-        self.logger.info("Setting up repositories...")
-        
-        session_factory = self.db_manager.session_factory
-        
-        self.credit_repo = CreditRepository(
-            model_class=Credit,
-            session_factory=session_factory
-        )
-        self.credit_transaction_repo = CreditTransactionRepository(
-            model_class=CreditTransaction,
-            session_factory=session_factory
-        )
-        
-        self.logger.info("Repositories setup complete")
-    
-    async def _init_redis(self) -> None:
-        """Initialize Redis connection"""
-        
-        self.logger.info("Setting up Redis...")
-        
-        if not self.config.infrastructure_redis_url:
-            self.logger.warning("INFRASTRUCTURE_REDIS_URL not configured, skipping Redis setup")
-            return
-        
-        self.redis_client = redis.from_url(
-            self.config.infrastructure_redis_url,
-            decode_responses=True,
-            retry_on_timeout=True,
-            health_check_interval=30
-        )
-        
-        # Test connection
-        await self.redis_client.ping()
-        
-        self.logger.info("Redis setup complete")
-    
-   
-     
-    def _init_mappers(self) -> None:
-        """Initialize mappers"""
-        
-        self.logger.info("Setting up mappers...")
-        
-        self.credit_mapper = CreditMapper()
-        self.credit_transaction_mapper = CreditTransactionMapper()
-        
-        self.logger.info("Mappers setup complete")
-    
-    
+        if self.config.db_enabled:
+            if not (self.prisma and self._db_connected):
+                raise RuntimeError("Prisma client not initialized/connected")
+            
+            self.credit_repo = CreditRepository(self.prisma)
+            self.logger.info("Credit repository initialized")
+        else:
+            self.credit_repo = None
     
     def _init_local_services(self) -> None:
-        """Initialize business services"""
-        
-        self.logger.info("Setting up services...")
-        
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper is not initialized")
-        
-        event_publisher = cast(CreditEventPublisher, 
-            self.messaging_wrapper.create_publisher(CreditEventPublisher)
-        )
-        
-        
-        # Balance monitor service
-        self.balance_monitor_service = BalanceMonitorService(
-            config=self.config,
-            publisher=event_publisher,
-            logger=self.logger
-        )
-        
         if not self.credit_repo:
-            raise RuntimeError("Credit repository is not initialized")
+            raise RuntimeError("Credit repository not initialized")
         
-        if not self.credit_transaction_repo:
-            raise RuntimeError("Credit transaction repository is not initialized")
+        if not self.event_publisher:
+            raise RuntimeError("Event publisher not initialized")
         
-        if not self.redis_client:
-            raise RuntimeError("Redis client is not initialized")
-        
-        if not self.credit_mapper:
-            raise RuntimeError("CreditMapper is not initialized")
-        
-        # Plugin status service
-        self.plugin_status_service = PluginStatusService(
-            config=self.config,
-            credit_repo=self.credit_repo,
-            redis_client=self.redis_client,
-            logger=self.logger
-        )
-        
-        # Main credit service
         self.credit_service = CreditService(
             config=self.config,
-            credit_repo=self.credit_repo,
-            publisher=event_publisher,
-            balance_monitor=self.balance_monitor_service,
-            credit_mapper=self.credit_mapper,
-            logger=self.logger
+            repository=self.credit_repo,
+            publisher=self.event_publisher,
+            logger=self.logger,
+            redis_client=self.redis_client
         )
         
-        if not self.credit_service:
-            raise RuntimeError("CreditService initialization failed")
-        if not self.credit_transaction_repo:
-            raise RuntimeError("CreditTransactionRepository not initialized")
-        if not self.credit_transaction_mapper:
-            raise RuntimeError("CreditTransactionMapper not initialized")
-
-        self.credit_transaction_service = CreditTransactionService(
-            transaction_repo=self.credit_transaction_repo,
-            transaction_mapper=self.credit_transaction_mapper,
-            credit_service=self.credit_service,
+        self.logger.info("Credit service initialized")
+    
+    async def _init_listeners(self) -> None:
+        if not self.messaging_client or not self.credit_service:
+            raise RuntimeError("Messaging or service layer not ready")
+        
+        # Credit grant listener
+        grant_listener = BillingCreditGrantListener(
+            js_client=self.messaging_client,
+            service=self.credit_service,
             logger=self.logger
         )
+        await grant_listener.start()
+        self._listeners.append(grant_listener)
         
-        self.logger.info("Services setup complete")
-    
-    
-    
-    async def _init_subscribers(self) -> None:
-        if not self.messaging_wrapper:
-            raise RuntimeError("Messaging wrapper not initialized")
-
-        # ⚠️ Register deps BEFORE launching subscribers – they may receive a
-        # message immediately after pull_subscribe().
-        self.messaging_wrapper.register_dependency("credit_service", self.credit_service)
-        self.messaging_wrapper.register_dependency("credit_transaction_service", self.credit_transaction_service)
-        self.messaging_wrapper.register_dependency("logger", self.logger)
+        # Trial activation listener
+        trial_listener = BillingTrialActivatedListener(
+            js_client=self.messaging_client,
+            service=self.credit_service,
+            logger=self.logger
+        )
+        await trial_listener.start()
+        self._listeners.append(trial_listener)
         
-        # Start all subscribers with registered dependencies
-        subscribers = [
-            OrderUpdatedSubscriber,
-            TrialCreditsSubscriber, 
-            SubscriptionSubscriber,
-            MerchantCreatedSubscriber,
-        ]
-        
-        for subscriber_class in subscribers:
-            await self.messaging_wrapper.start_subscriber(subscriber_class)
-
+        self.logger.info("Event listeners started")
+    
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)
         self._tasks.append(t)
         return t
-
+    
     async def wait_for_shutdown(self) -> None:
         await self._shutdown_event.wait()
-
+    
     def signal_shutdown(self) -> None:
         self._shutdown_event.set()
+

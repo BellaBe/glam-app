@@ -1,0 +1,899 @@
+{% style %}
+  .gyu-recommend-modal {
+    display: block;
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+  }
+
+  .gyu-recommend-modal-content {
+    position: relative;
+    margin-left: auto;
+    background-color: #fefefe;
+    width: 600px;
+    height: 100%;
+    padding: 30px;
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+    overflow-y: scroll;
+    font-family: 'poppins'
+  }
+
+  .gyu-recommend-close {
+    color: #aaaaaa;
+    font-size: 28px;
+    top: 0px;
+    right: 10px;
+    font-weight: bold;
+    position: absolute;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .gyu-recommend-close:hover,
+  .gyu-recommend-close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .ai-analysis-modal {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ai-card {
+    border-radius: 20px;
+    box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 2px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
+    padding: 20px;
+  }
+
+  .rating-stars {
+    display: flex;
+    gap: 4px;
+  }
+
+  @media screen and (max-width: 749px) {
+    .gyu-recommend-modal-content {
+      width: 90%;
+    }
+  }
+
+  #aiAnalysisProduct {
+    display: flex;
+    justify-content: end;
+  }
+
+  .ai-custom-schema:after {
+    border-radius: {{ block.settings.button_radius }}px;
+  }
+
+  .loader-progress {
+    background-color: {{ block.settings.button_color }};
+  }
+
+  #goodsDescription {
+    height: 500px; 
+    overflow: hidden;
+  }
+
+  .analyze-variant-btn {
+    background-color: {{ block.settings.button_color }}; /* Green background color */
+    padding: 10px 50px; /* Adjust padding as needed */
+    border-radius: 10px; /* Rounded corners */
+    display: inline-block; /* Allows the container to wrap around its content */
+    font-family: 'poppins'; /* Choose your preferred font-family */
+    color: #fff; /* White text color */
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.4); /* Box shadow */
+    transition: box-shadow 0.3s ease; /* Transition effect */
+    width: fit-content;
+    margin: auto;
+    border-radius: {{ block.settings.button_radius }}px;
+    transform: rotate({{ block.settings.button_rotate }}deg);
+  }
+
+  .analyze-variant-text {
+    font-size: 2rem; /* Adjust font size as needed */
+    font-weight: bold; /* Bold font weight */
+    text-align: center; /* Center align text */
+    color: {{ block.settings.text_color }};
+  }
+
+  .img-variant-highlight {
+    border: 5px solid purple !important;
+  }
+
+  .ai-neon {
+    border:none;
+    transition:0.3s;
+    background-color:{{ block.settings.button_color | color_to_rgba: 0.3 }};
+    animation: glow 1s infinite ;
+    transition:0.5s;
+  }
+
+  .ai-neon:hover{
+    background-color:{{ block.settings.button_color }};
+    transition:0.5s;
+  }
+
+  @keyframes glow{
+    0%{
+    box-shadow: 5px 5px 20px rgb(93, 52, 168),-5px -5px 20px rgb(93, 52, 168);}
+    
+    50%{
+    box-shadow: 5px 5px 20px rgb(81, 224, 210),-5px -5px 20px rgb(81, 224, 210)
+    }
+    100%{
+    box-shadow: 5px 5px 20px rgb(93, 52, 168),-5px -5px 20px rgb(93, 52, 168)
+    }
+  }
+
+  .ai-hover {
+    position: relative;
+    text-align: center;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: 0.5s;
+  }
+
+  .ai-hover::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(
+      45deg,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad
+    );
+    background-size: 400%;
+    opacity: 0;
+    transition: 2.5s;
+    animation: eff 20s linear infinite;
+  }
+
+  .ai-hover:hover::before,
+  .ai-hover:hover::after {
+    opacity: 1;
+  }
+
+  .ai-hover::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      45deg,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad
+    );
+    background-size: 400%;
+    opacity: 0;
+    filter: blur(20px);
+    transition: 0.5s;
+    animation: eff 20s ease infinite;
+  }
+
+  @keyframes eff {
+    0% {
+      background-position: 0 0;
+    }
+    50% {
+      background-position: 400% 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  .ai-round::after {
+    content: '';
+    width: 30px; height: 30px;
+    border-radius: 100%!important;
+    border: 6px solid {{ block.settings.button_color }};
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: ring 1.5s infinite;
+  }
+
+  .ai-round {
+    display: inline-flex;
+    font-size: 16px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    letter-spacing: 1.3px;
+    font-weight: 500;
+    border: none;
+    border-radius: 1000px!important;
+    box-shadow: 12px 12px 24px {{ block.settings.button_color | color_to_rgba: 0.64 }};
+    transition: all 0.3s ease-in-out 0s;
+    cursor: pointer;
+    outline: none;
+    position: relative;
+    padding: 10px 20px;
+  }
+
+  .ai-round::before {
+    content: '';
+    min-width: calc(100% + 20px);
+    min-height: calc(100% + 20px);
+    border-radius: 1000px!important;
+    border: 6px solid {{ block.settings.button_color }};
+    box-shadow: 0 0 60px {{ block.settings.button_color | color_to_rgba: 0.64 }};
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: all .3s ease-in-out 0s;
+  }
+
+  .ai-light {
+    border-color: {{ block.settings.button_color }};
+    box-shadow: 0 0 40px 40px {{ block.settings.button_color }} inset, 0 0 0 0 {{ block.settings.button_color }};
+    transition: all 150ms ease-in-out;   
+    padding: 10px 20px;
+  }
+  .ai-light:hover {
+    box-shadow: 0 0 10px 0 {{ block.settings.button_color }} inset, 0 0 10px 4px {{ block.settings.button_color }};
+  }
+
+  .ai-pulse {
+    background: none!important;
+    border: 2px solid {{ block.settings.button_color }};
+    font: inherit;
+    line-height: 1;
+    margin: 0.5em;
+    padding: 1em 2em;
+  }
+
+  .ai-pulse:hover, 
+  .ai-pulse:focus {
+    animation: pulse 1s;
+    box-shadow: 0 0 0 2em transparent;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 {{ block.settings.button_color }}; }
+  }
+{% endstyle %}
+
+<div id="aiAnalysisProduct">
+  <button class="ai-custom-schema {{ block.settings.template }}" id="gyuAnalyzeBtn" onclick="gyuRecommend()" style="
+    background-color: {{ block.settings.button_color }};
+    color: {{ block.settings.text_color }};
+    border-radius: {{ block.settings.button_radius }}px;
+    transform: rotate({{ block.settings.button_rotate }}deg);
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    cursor: pointer;
+    position: relative;
+    font-family: 'poppins'
+  ">
+  {% if block.settings.button_icon != blank %}
+    {% if block.settings.button_icon_type == 'background' %}
+      <img 
+        src="{{ block.settings.button_icon | img_url }}" 
+        alt="Icon" 
+        style="position: absolute; 
+          width: 100%; 
+          height: 100%; 
+          z-index: -1; 
+          object-fit: cover;
+          object-position: center;
+          left: 0;
+          top: 0;">
+    {% else %}
+      {% if block.settings.button_icon_ratio == 'square' %}
+        <img src="{{ block.settings.button_icon | img_url: '24x24' }}" alt="Icon" style="vertical-align: middle; margin-right: 8px; width: 24px; height: 24px;">
+      {% else %}
+        <img src="{{ block.settings.button_icon | img_url: '24x24' }}" alt="Icon" style="vertical-align: middle; margin-right: 8px; height: 24px;">
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {{ block.settings.ctaText }}
+</button>
+</div>
+
+<script>
+
+  var analysisModal;
+
+  var gyuAnalyze = document.getElementById("gyuAnalyzeBtn");
+
+  var body = document.querySelector("main");
+
+  let gyuProducts = window.localStorage.getItem("gyuProducts");
+  const gyuRecommendselfieId = window.localStorage.getItem('selfieId');
+  const gyuRecommendselfieUrl = window.localStorage.getItem('selfieUrl');
+  const gyuRecommendshopId = {{ shop.id | json }};
+  const gyuRecommendproductId = {{ product.id | json }};
+  const currentProduct = {{ product | json }};
+  console.log({currentProduct});
+
+  function stars(starCount, elementId) {
+    var starsHTML = "";
+    if(elementId == "scoreOverall") {
+      for(var i=0; i<starCount; i++) {
+        starsHTML += `{% render 'icon-star-full' %}`;
+      }
+      for(var i=starCount; i<5; i++) {
+        starsHTML += `{% render 'icon-star-empty' %}`;
+      }
+    } else {
+      for(var i=0; i<starCount; i++) {
+        starsHTML += `{% render 'icon-green-star-full' %}`;
+      }
+      for(var i=starCount; i<5; i++) {
+        starsHTML += `{% render 'icon-green-star-empty' %}`;
+      }
+    }
+    document.getElementById(elementId).innerHTML = starsHTML;
+  }
+
+  function gyuRecommend() {
+    $('.scroll-trigger.animate--fade-in').attr('style', 'opacity: 1;');
+    var value = window.localStorage.getItem('gyuStatus');
+    if(value == "true") {
+      if (!gyuProducts || gyuProducts == "undefined" || gyuProducts == "null") {
+        startProgress(17);
+        let shopId = {{ shop.id | json }};
+        const formData = new FormData();
+        formData.append('selfie_id', gyuRecommendselfieId);
+        formData.append('shop_id', shopId);
+        formData.append('gyu_products', "[]");
+        $.ajax({
+          url: `${MAIN_SERVER_URL}/sort/analysis`,
+          cache: false,
+          contentType: false,
+          processData: false,
+          method: 'POST',
+          data: formData,
+          success: function (response) {
+            endProgress();
+            if (response.error == "billing failed") {
+              errorToast(errorHandleNotifications["billing failed"]);
+              return;
+            } else if (response.error == "timeout error") {
+              errorToast(errorHandleNotifications["timeout error"]);
+              return;
+            } else if (response.error == "ai response failed") {
+              errorToast(errorHandleNotifications["ai response failed"]);
+              return;
+            } else if (response.error == "request failed") {
+              errorToast(errorHandleNotifications["request failed"]);
+              return;
+            }
+            if (response.success == "no registered") {
+              errorToast(errorHandleNotifications["no registered"]);
+              return;
+            } else if (response.success == "no update") {
+              gyuProducts = JSON.parse(window.localStorage.getItem("gyuProducts"));
+            } else {
+              const strSortedProducts = JSON.stringify(response.sorted_products);
+              window.localStorage.setItem("gyuProducts", strSortedProducts);
+              if (!strSortedProducts || strSortedProducts == "undefined" || strSortedProducts == "null") {
+                errorToast(errorHandleNotifications["billing failed"]);
+                return;
+              }
+              gyuProducts = strSortedProducts;
+              postGyuProducts();
+            }            
+          },
+          error: function (jqXHR, textStatus, errorThrown) {
+            endProgress();
+            errorToast(errorHandleNotifications["unknown error"]);
+          }
+        });
+      } else {
+        postGyuProducts();
+      }      
+    } else {
+      warningToast(warningNotifications["missing selfie"]);
+      document.getElementById("gyuRegisterModal").style.display = 'block';
+      $('#iconBtnGroup').css('display', 'flex');
+      $('#textBtnGroup').css('display', 'none');
+      $('#sampleAvatar').css('display', 'block');
+      $('#sampleAvatar').css('border', '');
+      $('#captureVideo').css('display', 'none');
+      $('.label-image').css('display', 'none');
+      $('.image-body').css('gap', '0px');
+      $('#gyuComplete').css('display', 'none');
+      $('#customerImage').val('');
+    }
+  }
+
+  function postGyuProducts() {
+    const productImages = {{ product.images | json }};
+    const productFeaturedImage = {{ product.featured_image | json }};
+    const tempId = {{ product.featured_image.id | json }};
+    var imageId;
+
+    var images = document.getElementsByTagName('img');
+    var featuredImage;
+    for (var i = 0; i < images.length; i++) {
+      var img = images[i];
+      if (img.width > 300 && img.height > 300) {
+          featuredImage = img.src;
+          break; // Stop looping once the first image with the specified dimensions is found
+      }
+    }
+    const variants = {{product.variants | json}};
+    let variantId = 0;
+    for(var i = 0; i<variants.length; i++) {
+      if(variants[i].featured_image && featuredImage.includes(variants[i].featured_image.src) == true) {
+        imageId = variants[i].featured_image.id;
+        variantId = variants[i].id;
+        break;
+      } else {
+        imageId = tempId;
+        featuredImage = productFeaturedImage;
+      }
+    }
+    showRecommendData(featuredImage, variantId, imageId, 1);
+  }
+
+  function imageViewDraw(featuredImage, exceptVariant_id, firstRun) {
+    if (firstRun) {
+      let imageView = document.getElementById("tile-view-variants");
+      let relatedVariants = JSON.parse(gyuProducts).filter(variant => variant.product_id == currentProduct.id);
+      console.log({relatedVariants});
+      let relatedAvailableVariants = [];
+      let imageList = [];
+      for (const variant of relatedVariants) {
+        const variantObject = currentProduct.variants.find(variant0 => variant0.id == variant.variant_id);
+        if (variantObject && variantObject.featured_image) {
+          const variantImageObject = currentProduct.variants.find(variant0 => variant0.featured_image.id == variantObject.featured_image.id && variant0.available == true);
+          if (variantImageObject && !imageList.includes(variantObject.featured_image.src)) {
+            imageList.push(variantObject.featured_image.src);
+            relatedAvailableVariants.push(variantObject);
+          }
+        }
+      }
+      console.log({relatedAvailableVariants})
+      let colors = [];
+      if (relatedAvailableVariants && relatedAvailableVariants.length)
+        colors = generateGradientColors('#00ff00', '#ff0000', relatedAvailableVariants.length);
+      imageView.innerHTML = ``;
+      let index = 1;
+      for (const variant of relatedAvailableVariants) {
+        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length); 
+        {% comment %} imageView.innerHTML += `
+              <img 
+                src="${variantObject.featured_image.src}" 
+                onClick="clickedVariant('${variantObject.featured_image.src}', ${variant.variant_id}, ${variantObject.featured_image.id})" 
+                id="img-variant-${variantObject.id}" 
+                class="${(variantObject.id == exceptVariant_id || featuredImage.includes(variantObject.featured_image.src)) ? 'img-variant-highlight' : ''}"
+                style="width: 150px; height: 150px; cursor: pointer; border-bottom: 10px solid; border-image:linear-gradient(90deg, ${colors[index]} ${lengthPercent}%, transparent 0%, transparent 100%) 1 ;">
+            `; {% endcomment %}
+        imageView.innerHTML += `
+          <div style="position: relative">
+            <img 
+              src="${variant.featured_image.src}" 
+              onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})" 
+              id="img-variant-${variant.id}" 
+              class="${(variant.id == exceptVariant_id || featuredImage.includes(variant.featured_image.src)) ? 'img-variant-highlight' : ''}"
+              style="width: 150px; height: 150px; cursor: pointer;object-fit: contain;">
+            <svg class="animated_badge_svg" width="75" height="100" viewBox="0 0 75 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="
+              position: absolute;
+              right: -5px;
+              opacity: 0.9;
+              width: 50px;
+              height: 55px;
+              top: 0px;
+            ">
+              <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+              <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+              <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="url(#paint0_linear)"></path>
+              <mask id="mask0" mask-type="alpha" maskUnits="userSpaceOnUse" x="16" y="57" width="44" height="43">
+              <path d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+                <path d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="url(#paint1_linear)"></path>
+              </mask>
+              <g class="badge_ribbon" mask="url(#mask0)">
+                <rect x="30" y="60" width="15" height="40" fill="#d9c8d5"></rect>
+              </g>
+              <circle class="badge_circle" cx="37.5" cy="37.5" r="33.5" fill="#A16892" stroke="#d9c8d5" stroke-width="8"></circle>
+            </svg>
+            <span style="
+                position: absolute;
+                top: 8px;
+                right: -5px;
+                color: white;
+                width: 50px;
+                text-align: center;
+            ">${index}</span>
+          </div>
+        `;
+        index ++;
+      }
+
+      let listView = document.getElementById("list-view-variants");
+      imageList = [];
+      listView.innerHTML = ``;
+      index = 1;
+      console.log({relatedAvailableVariants});
+      for (const variant of relatedAvailableVariants) {
+        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length); 
+        listView.innerHTML += `
+          <div style="display: flex; width: 100%; align-items: center; gap: 20px">
+            <div style="position: relative">
+              <img 
+                src="${variant.featured_image.src}" 
+                onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})" 
+                id="img-list-variant-${variant.id}" 
+                class="${(variant.id == exceptVariant_id || featuredImage.includes(variant.featured_image.src)) ? 'img-variant-highlight' : ''}"
+                style="width: 120px; height: 120px; cursor: pointer;">
+              <svg class="animated_badge_svg" width="75" height="100" viewBox="0 0 75 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="
+                position: absolute;
+                right: -2px;
+                opacity: 0.9;
+                width: 30px;
+                height: 35px;
+                top: 0px;
+              ">
+                <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+                <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+                <path class="badge_ribbon" d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="url(#paint0_linear)"></path>
+                <mask id="mask0" mask-type="alpha" maskUnits="userSpaceOnUse" x="16" y="57" width="44" height="43">
+                <path d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="#A16892"></path>
+                  <path d="M16 86.7506V62C16 59.2386 18.2386 57 21 57H55C57.7614 57 60 59.2386 60 62V86.8112C60 88.7561 58.8722 90.5246 57.1087 91.3448L40.5616 99.0411C39.2517 99.6504 37.7424 99.6633 36.4223 99.0766L18.9693 91.3197C17.1637 90.5172 16 88.7266 16 86.7506Z" fill="url(#paint1_linear)"></path>
+                </mask>
+                <g class="badge_ribbon" mask="url(#mask0)">
+                  <rect x="30" y="60" width="15" height="40" fill="#d9c8d5"></rect>
+                </g>
+                <circle class="badge_circle" cx="37.5" cy="37.5" r="33.5" fill="#A16892" stroke="#d9c8d5" stroke-width="8"></circle>
+              </svg>
+              <span style="
+                  position: absolute;
+                  top: 0px;
+                  right: -3px;
+                  color: white;
+                  width: 30px;
+                  text-align: center;                  
+              ">${index}</span>
+            </div>
+            <div style="flex-grow: 1; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-weight: bold; font-size: 20px">
+              ${variant.title}
+            </div>
+          </div>
+        `;
+        index ++;
+      }
+
+      if (index) $('#view-category-wrapper').css('display', 'flex');
+    } else {
+      $('[id^="img-variant-"]').removeClass('img-variant-highlight');
+      $('[id^="img-list-variant-"]').removeClass('img-variant-highlight');
+      $(`#img-variant-${exceptVariant_id}`).addClass('img-variant-highlight');
+      $(`#img-list-variant-${exceptVariant_id}`).addClass('img-variant-highlight');
+    }   
+  }
+
+  function clickedVariant(featuredImage, variant_id, image_id, firstRun = 0) {
+    $('#analyzeVariant').css('display', 'block');
+    $('#goodsDescription').css('display', 'none');
+    $('#showMoreDescription').css('display', 'none');
+    $('#showLessDescription').css('display', 'none');
+    
+    var imgFeatured = document.getElementById("imgFeatured");
+    imgFeatured.innerHTML = `<img src="${featuredImage}" style="width: 300px; height: 300px; object-fit: contain;"/>`;
+
+    imageViewDraw(featuredImage, variant_id, firstRun);
+    
+    $('#analyzeVariant').off('click').on('click', function () {
+      showRecommendData(featuredImage, variant_id, image_id);
+    });
+  }
+
+  function changedViewCategory() {
+    const selectElement = document.getElementById('viewCategory');  
+    const listView = document.getElementById("list-view-variants");
+    const tileView = document.getElementById("tile-view-variants");
+    const selectedValue = selectElement.value;
+    if (selectedValue === 'tile') {
+      tileView.style.display = 'flex';
+      listView.style.display = 'none';
+    } else if (selectedValue === 'list') {
+      tileView.style.display = 'none';
+      listView.style.display = 'flex';
+    }
+  }
+
+  function showRecommendData(featuredImage, variant_id, image_id, firstRun = 0) {
+    let matchData = {
+      "selfie_id": gyuRecommendselfieId,
+      "selfie_url": gyuRecommendselfieUrl,
+      "shop_id": gyuRecommendshopId,
+      "product_id": gyuRecommendproductId,
+      "image_id": image_id
+    }
+
+    const formData = new FormData();
+    formData.append('matchData', JSON.stringify(matchData));
+    
+    if (firstRun) startProgress(10);
+    else startProgress(10, ".gyu-recommend-modal-content");
+
+    $.ajax({
+      url: `${MAIN_SERVER_URL}/match/analysis`,
+      cache: false,
+      contentType: false,
+      processData: false,
+      method: 'POST',
+      data: formData,
+      success: function(data) {
+        endProgress();
+        if (data.error == "billing failed") {          
+          errorToast(errorHandleNotifications["billing failed"]);
+        } else if(data.error == "timeout error") {
+          errorToast(errorHandleNotifications["timeout error"]);
+        } else if (data.error == "ai response failed") {
+          errorToast(errorHandleNotifications["ai response failed"]);
+        } else if (data.error == "request failed") {
+          errorToast(errorHandleNotifications["request failed"]);
+        } else if (data.error == "unknown error") {
+          errorToast(errorHandleNotifications["unknown error"]);
+        } else if(!data || data === undefined || data.score_color === undefined || data.score_color === null) {
+          errorToast(errorHandleNotifications["match error"]);
+        } else {
+          if (firstRun) {
+            body.innerHTML += `
+              <div id="gyuRecommendModal" class="gyu-recommend-modal">
+                <div class="gyu-recommend-modal-content">
+                  <p class="gyu-recommend-close" onclick="closeRecommend()">&times;</p>
+                  <div class="ai-analysis-modal">
+                    <p style="display: flex; justify-content: center; font-weight: bold; font-size: 20px; margin-top: 5px;">AI recommended variants</p>
+                    <div style="display: flex; justify-content: center" id="imgFeatured"></div>
+                    <div id="analyzeVariant" style="display: none; margin-top: 50px; cursor: pointer; margin-bottom: 200px" class="analyze-variant-btn {{ block.settings.template }}">
+                      <span class="analyze-variant-text">analyze</span>
+                    </div>
+                    <div id="goodsDescription" style="height: 500px; overflow: hidden;">
+                      <div id="goodMatch" style="display: none; margin-top: 20px;" class="match-logo-container">
+                        <span class="match-logo-text">Good Match</span>
+                      </div>                      
+                      <p id="mathDescription"></p>
+                      <p id="matchRecommendation"></p>
+                    </div>
+                    <p id="showMoreDescription" style="display:block; cursor: pointer; font-style: italic; color: #df301c; font-weight: bold;" onClick="moreView(1)">Show More +</p>
+                    <p id="showLessDescription" style="display:none; cursor: pointer; font-style: italic; color: #df301c; font-weight: bold;" onClick="moreView(-1)">Show less -</p>
+                    <div id="image-view">
+                      <div style="display: none; justify-content: end; margin-top: 20px; margin-bottom: 20px" id="view-category-wrapper">
+                        <select class="classic" id="viewCategory" onChange="changedViewCategory()">
+                          <option value="tile">Tile View</option>
+                          <option value="list">List View</option>
+                        </select>
+                      </div>
+                      <div id="tile-view-variants" style="display: flex; flex-wrap: wrap; gap: 30px"></div>
+                      <div id="list-view-variants" style="display: none; flex-direction: column; gap: 20px"></div>
+                    </div>                    
+                  </div>
+                </div>
+              </div>`;
+      
+            clickedVariant(featuredImage, variant_id, image_id, 1);
+            analysisModal = document.getElementById("gyuRecommendModal");
+            const contentDom = document.getElementsByClassName("gyu-recommend-modal-content");   
+            document.addEventListener("click", function(event) {
+              if (event.target !== contentDom && (contentDom && contentDom[0] && !contentDom[0].contains(event.target)) && event.target.id !== 'gyuAnalyzeBtn') {
+                analysisModal.remove();
+              }
+            }); 
+          }
+          $('#analyzeVariant').css('display', 'none');
+          $('#goodsDescription').css('display', 'block');
+          $('#goodsDescription').css('height', '500px');
+          $('#showMoreDescription').css('display', 'block');
+
+          var match_description = document.getElementById("mathDescription");
+          var match_recommendation = document.getElementById("matchRecommendation");
+          var goodMatch = document.getElementById("goodMatch");
+          
+          var matchScoreColor = data.score_color;
+          var matchScoreMorph = data.score_morph;
+          var matchScoreOverall = data.score_overall;
+          var matchRecommendation = data.recommendation;
+          var matchDescription = data.description;
+
+          match_description.innerHTML = matchDescription.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+          match_recommendation.innerHTML = matchRecommendation.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+          {% comment %} stars(parseInt(matchScoreOverall), 'scoreOverall');
+          stars(parseInt(matchScoreMorph), 'scoreMorph');
+          stars(parseInt(matchScoreColor), 'scoreColor'); {% endcomment %}
+          if (matchScoreMorph > 3.5)
+            goodMatch.style.display = 'block';
+          else
+            goodMatch.style.display = 'none';
+        }
+      },
+      error: function(data) {
+        errorToast(errorHandleNotifications["unknown error"]);
+        endProgress();
+      }
+    });
+  }
+
+  function closeRecommend() {
+    var aiRecommendModal = document.getElementById('gyuRecommendModal');
+    if (aiRecommendModal)
+      aiRecommendModal.parentNode.removeChild(aiRecommendModal);
+  }
+
+  function moreView(moreDirection) {
+    if (moreDirection == 1) {
+      $('#showMoreDescription').css('display', 'none');
+      $('#showLessDescription').css('display', 'block');
+      $('#goodsDescription').css('height', 'fit-content');
+    }
+    else {
+      $('#showMoreDescription').css('display', 'block');
+      $('#showLessDescription').css('display', 'none');
+      $('#goodsDescription').css('height', '500px');
+    }
+  }
+</script>
+
+{% schema %}
+{
+  "name": "GYU recommend",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "color",
+      "id": "button_color",
+      "default": "#A16892",
+      "label": "AI theme background color",
+      "info": "You can indicate the theme's background color"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "default": "#000",
+      "label": "AI theme text color",
+      "info": "You can indicate the theme's text color"
+    },
+    {
+      "type": "range",
+      "id": "button_radius",
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "unit": "px",
+      "default": 0,
+      "label": "AI theme button radius",
+      "info": "You can indicate the theme's button rounded"
+    },
+    {
+      "type": "range",
+      "id": "button_rotate",
+      "min": -10,
+      "max": 10,
+      "step": 1,
+      "unit": "deg",
+      "default": -2,
+      "label": "AI theme button rotate",
+      "info": "You can indicate the theme's button rotate"
+    },
+    {
+      "type": "select",
+      "id": "template",
+      "label": "AI theme button template",
+      "info": "You can indicate the theme's button template",
+      "options": [
+        {
+          "value": "ai-btn",
+          "label": "default"
+        },
+        {
+          "value": "ai-neon",
+          "label": "neon"
+        },
+        {
+          "value": "ai-hover",
+          "label": "hover"
+        },
+        {
+          "value": "ai-light",
+          "label": "light"
+        },
+        {
+          "value": "ai-pulse",
+          "label": "pulse"
+        }
+      ],
+      "default": "ai-btn"
+    },
+    {
+      "type": "text",
+      "id": "ctaText",
+      "label": "AI theme CTA text",
+      "info": "You can set the theme's CTA text",
+      "default": "Recommend Variants"
+    },
+    {
+      "type": "image_picker",
+      "id": "button_icon",
+      "label": "Button Image",
+      "info": "Upload an image to use as the button icon"
+    },
+    {
+      "type": "select",
+      "id": "button_icon_type",
+      "label": "Button Image Type",
+      "info": "You can choose the image type",
+      "options": [
+        {
+          "value": "icon",
+          "label": "icon"
+        },
+        {
+          "value": "background",
+          "label": "background"
+        }
+      ],
+      "default": "icon"
+    },
+    {
+      "type": "select",
+      "id": "button_icon_ratio",
+      "label": "Button Image Ratio",
+      "info": "You can choose the image ratio",
+      "options": [
+        {
+          "value": "square",
+          "label": "square"
+        },
+        {
+          "value": "original",
+          "label": "original"
+        }
+      ],
+      "default": "square"
+    }
+  ]
+}
+{% endschema %}

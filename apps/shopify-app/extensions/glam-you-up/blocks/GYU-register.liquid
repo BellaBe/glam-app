@@ -1,0 +1,713 @@
+{{ 'style.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'script.js' | asset_url }}" defer="defer"></script>
+<script src="{{ 'jquery-3.7.1.min.js' | asset_url }}" defer="defer"></script>
+
+{% style %}
+  .gyu-avatar {
+    max-width: 4.4rem;
+    max-height: 4.4rem;
+    cursor: pointer;
+    object-fit: cover;
+    border-radius: 10px;
+
+    /* -webkit-animation: glowing 1s ease-in-out infinite alternate;
+    -moz-animation: glowing 1s ease-in-out infinite alternate;
+    animation: glowing 1s ease-in-out infinite alternate; */
+  }
+  @-webkit-keyframes glowing {
+    from {
+      box-shadow: 0 0 10px #fff, 0 0 15px #fff, 0 0 20px #f0f, 0 0 25px #0ff, 0 0 30px #e60073, 0 0 35px #e60073,
+        0 0 40px #e60073;
+    }
+    to {
+      box-shadow: 0 0 15px #fff, 0 0 20px #ff4da6, 0 0 25px #ff4da6, 0 0 30px #ff4da6, 0 0 35px #ff4da6,
+        0 0 40px #ff4da6, 0 0 45px #ff4da6;
+    }
+  }
+
+  .header__icons .shopify-app-block {
+    overflow: visible !important;
+  }
+
+  .gyu-avatar:hover {
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  }
+
+  .gyu-avatar:active {
+    box-shadow: rgba(0, 0, 0, 0.05) 0px 0px 0px 1px;
+  }
+
+  .gyu-register-modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    padding-top: 200px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+  }
+
+  @media screen and (max-width: 750px) {
+    .gyu-register-modal {
+      padding-top: 50px;
+    }
+  }
+
+  .gyu-register-modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 30px;
+    border: 1px solid #888;
+    width: fit-content;
+    margin: 20px auto;
+    position: relative;
+    border-radius: 20px;
+    box-shadow: rgba(0, 0, 0, 0.25) 0px 0.0625em 0.0625em, rgba(0, 0, 0, 0.25) 0px 0.125em 0.5em,
+      rgba(255, 255, 255, 0.1) 0px 0px 0px 1px inset;
+    font-family: 'poppins';
+  }
+
+  .gyu-register {
+    max-width: 1000px;
+    position: relative;
+  }
+
+  @media screen and (max-width: 750px) {
+    .gyu-register {
+      max-width: 300px;
+    }
+  }
+
+  .register-first {
+    display: flex;
+    gap: 20px;
+  }
+
+  @media screen and (max-width: 750px) {
+    .register-first {
+      flex-direction: column;
+    }
+  }
+
+  .selfie {
+    box-shadow: rgba(0, 0, 0, 0.06) 0px 2px 4px 0px inset;
+    border: 1px solid #a16892;
+    border-radius: 20px;
+    width: 300px;
+    height: 300px;
+    object-fit: cover;
+    display: block;
+  }
+
+  #captureVideo,
+  #capturedSelfie {
+    display: none;
+  }
+
+  .register-btn-group {
+    margin-top: 10px;
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+  }
+
+  .register-btn-group:nth-of-type(2) {
+    display: none;
+  }
+
+  .register-recommend img {
+    border: 1px solid #a16892;
+    border-radius: 20px;
+    object-fit: cover;
+  }
+
+  .register-recommend h2,
+  .register-recommend p {
+    color: black;
+  }
+
+  .register-recommend > div {
+    display: flex;
+    gap: 20px;
+  }
+
+  @media screen and (max-width: 750px) {
+    .register-recommend > div {
+      flex-direction: column;
+      align-items: center;
+    }
+  }
+
+  #registerGyuResult {
+    display: none;
+  }
+
+  @media screen and (max-width: 750px) {
+    #registerGyuResult > div > div {
+      margin-right: auto;
+    }
+  }
+
+  .analysis-label-and-color {
+    display: flex;
+    margin-bottom: 15px;
+    align-items: center;
+  }
+
+  .analysis-label {
+    color: black;
+    width: 150px;
+  }
+
+  .analysis-color {
+    height: 40px;
+    width: 150px;
+    border-radius: 15px;
+  }
+
+  #gyuComplete {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+  }
+
+  @media screen and (max-width: 750px) {
+    #gyuComplete {
+      position: relative;
+      margin-top: 20px;
+      margin-left: auto;
+    }
+  }
+
+  .register-gyu-btn {
+    width: 140px;
+    appearance: none;
+    backface-visibility: hidden;
+    background-color: #a16892;
+    border-radius: 10px;
+    border-style: none;
+    box-shadow: none;
+    box-sizing: border-box;
+    color: #fff;
+    cursor: pointer;
+    /* display: inline-block; */
+    font-family: 'poppins';
+    font-size: 15px;
+    font-weight: 500;
+    height: 50px;
+    letter-spacing: normal;
+    line-height: 1.5;
+    outline: none;
+    overflow: hidden;
+    padding: 8px 12px;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    transform: translate3d(0, 0, 0);
+    transition: all 0.3s;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    vertical-align: top;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .register-gyu-btn:hover {
+    background-color: #835276;
+    box-shadow: rgba(0, 0, 0, 0.05) 0 5px 30px, rgba(0, 0, 0, 0.05) 0 1px 4px;
+    opacity: 1;
+    transform: translateY(0);
+    transition-duration: 0.35s;
+  }
+
+  .register-gyu-btn:hover:after {
+    opacity: 0.5;
+  }
+
+  .register-gyu-btn:active {
+    box-shadow: rgba(0, 0, 0, 0.1) 0 3px 6px 0, rgba(0, 0, 0, 0.1) 0 0 10px 0, rgba(0, 0, 0, 0.1) 0 1px 4px -1px;
+    transform: translateY(2px);
+    transition-duration: 0.35s;
+  }
+
+  .register-gyu-btn:active:after {
+    opacity: 1;
+  }
+
+  .gyu-register-close {
+    color: #aaaaaa;
+    font-size: 28px;
+    top: 0px;
+    right: 10px;
+    font-weight: bold;
+    position: absolute;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .gyu-register-close:hover,
+  .gyu-register-close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .label-image {
+    margin: 5px 5px;
+    color: black;
+    font-weight: 600;
+    font-size: 20px;
+  }
+{% endstyle %}
+
+<div class="gyu-image-circle" id="gyu_image_circle">
+  <img
+    src="{{ 'GYU-modified.png' | asset_url }}"
+    width="44px"
+    height="44px"
+    class="gyu-avatar"
+    id="gyuAvatar"
+  >
+</div>
+
+<div id="gyuRegisterModal" class="gyu-register-modal">
+  <div class="gyu-register-modal-content">
+    <p class="gyu-register-close">&times;</p>
+    <div class="gyu-register">
+      <div class="register-first">
+        <div class="register-image">
+          <div style="display: flex; flex-wrap: wrap" class="image-body">
+            <div>
+              <input
+                style="display:none;"
+                name="customer[image]"
+                id="customerImage"
+                type="file"
+              >
+              <p class="label-image">Shot taken</p>
+              <img src="{{ 'sample.png' | asset_url }}" width="300px" height="300px" class="selfie" id="sampleAvatar">  
+            </div>  
+            <div>        
+              <p class="label-image">Camera frame</p>
+              <video id="captureVideo" class="selfie" autoplay></video>
+              <canvas id="capturedSelfie" class="selfie"></canvas>
+            </div>
+          </div>
+          <div class="register-btn-group" id="iconBtnGroup">
+            <button class="register-gyu-btn" id="upload-selfie">{% render 'icon-folder' %} Upload</button>
+            <button class="register-gyu-btn" id="take-capture">{% render 'icon-camera' %} Camera</button>
+          </div>
+          <p style="color: red; display: none; margin: 5px;" id="cameraError">* Your camera is not working!</p>
+          <div class="register-btn-group" id="textBtnGroup">
+            <button class="register-gyu-btn" id="cancel-capture">Cancel</button>
+            <button class="register-gyu-btn" id="capture-selfie">Capture</button>
+          </div>
+          <div style="display: flex; justify-content: center;">
+            <button
+              class="register-gyu-btn"
+              style="width: 300px; margin-top:10px; display: none;"
+              id="analyzeBtn"
+            >
+              Analyze
+            </button>
+          </div>
+        </div>
+        <div class="register-recommend" id="registerGyuResult">
+          <h2 style="font-size: 20px">AI Analysis</h2>
+          <p id="registerDescription">
+            Utilize your self-portrait to discover the most suitable products tailored to your preferences. Utilize your
+            self-portrait to discover the most suitable products tailored to your preferences.
+          </p>
+          <p id="showMore" style="display:block; cursor: pointer; font-style: italic; color: #df301c; font-weight: bold;">Show More +</p>
+          <p id="showLess" style="display:none; cursor: pointer; font-style: italic; color: #df301c; font-weight: bold;">Show less -</p>
+          <p id="registerRecommendation" style="display: none;">
+            Utilize your self-portrait to discover the most suitable products tailored to your preferences. Utilize your
+            self-portrait to discover the most suitable products tailored to your preferences.
+          </p>
+          <div>
+            <img src="{{ 'sample.png' | asset_url }}" width="150px" height="150px" id="gyuAnalysisImage">
+            <div>
+              <div class="analysis-label-and-color">
+                <label class="analysis-label">Eye Color :</label>
+                <img src="{{ 'common-color.png' | asset_url }}" class="analysis-color" id="registerEyeColor" width="150" height="40">
+              </div>
+              <div class="analysis-label-and-color">
+                <label class="analysis-label">Skin Color :</label>
+                <img src="{{ 'common-color.png' | asset_url }}" class="analysis-color" id="registerSkinColor" width="150" height="40">
+              </div>
+              <div class="analysis-label-and-color">
+                <label class="analysis-label">Hair Color :</label>
+                <img src="{{ 'common-color.png' | asset_url }}" class="analysis-color" id="registerHairColor" width="150" height="40">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="register-gyu-btn" id="gyuComplete">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let capturedURL;
+  let imageStatus = 0;
+
+  let selfieId = '';
+  let selfieUrl = '';
+  let profileUrlImageMesh = '';
+  let profileFaceColor = '';
+  let profileHairColor = '';
+  let profileEyeColor = '';
+  let profileDescription = '';
+  let profileRecommendation = '';
+
+  function generateUniqueId() {
+    var array = new Uint8Array(16);
+    window.crypto.getRandomValues(array);
+
+    var hexString = '';
+    for (var i = 0; i < array.length; i++) {
+      var hex = array[i].toString(16);
+      hexString += (hex.length === 1 ? '0' : '') + hex;
+    }
+
+    return hexString;
+  }
+
+  function hideWebcamStream() {
+    return localStream.getTracks().forEach(track => track.stop());
+  }
+
+  function startWebcamRecorder() {
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then(function (stream) {
+        window.localStream = stream;
+        const video = document.getElementById('captureVideo');
+        video.srcObject = stream;
+        $('#sampleAvatar').attr('src', "{{ 'sample.png' | asset_url }}");
+        $('#captureVideo').css('display', 'block');
+        $('#iconBtnGroup').css('display', 'none');
+        $('#textBtnGroup').css('display', 'flex');
+        $('#sampleAvatar').css('border', 'solid 10px green');
+        $('.label-image').css('display', 'block');
+        $('.image-body').css('gap', '20px');  
+        $('#registerGyuResult').css('display', 'none');
+        $('#analyzeBtn').css('display', 'none');
+        $('#gyuComplete').css('display', 'none');
+      })
+      .catch(function (error) {
+        console.error('Error accessing the camera:');
+        $('#cameraError').css('display', 'block');
+      });
+  }
+
+  window.addEventListener('load', function() {
+    $(document).ready(function() {
+      const gyuStatus = window.localStorage.getItem("gyuStatus");
+      if (gyuStatus == "true") {
+        $('#registerGyuResult').css('display', 'block');
+        $('#sampleAvatar').attr('src', window.localStorage.getItem("selfieUrl"));
+        $('#gyuAvatar').attr('src', window.localStorage.getItem("selfieUrl"));
+      }
+
+      $('#gyuAvatar').click(function() {
+        $('#gyuRegisterModal').css('display', 'block');
+        $('#iconBtnGroup').css('display', 'flex');
+        $('#textBtnGroup').css('display', 'none');
+        $('#sampleAvatar').css('display', 'block');
+        $('#sampleAvatar').css('border', '');
+        $('#captureVideo').css('display', 'none');
+        $('.label-image').css('display', 'none');
+        $('.image-body').css('gap', '0px');
+        $('#gyuComplete').css('display', 'none');
+        $('#customerImage').val('');
+        if (gyuStatus == "true") {
+          $('#sampleAvatar').attr('src', window.localStorage.getItem("selfieUrl"));
+          $('#gyuAnalysisImage').attr('src', window.localStorage.getItem("profileUrlImageMesh"));
+          $('#registerEyeColor').attr('src', window.localStorage.getItem("profileEyeColor"));
+          $('#registerSkinColor').attr('src', window.localStorage.getItem("profileFaceColor"));
+          $('#registerHairColor').attr('src', window.localStorage.getItem("profileHairColor"));
+          $('#registerDescription').text(window.localStorage.getItem("profileDescription"));
+          $('#registerRecommendation').text(window.localStorage.getItem("profileRecommendation"));
+
+          $('#registerGyuResult').css('display', 'block');
+          $('#analyzeBtn').css('display', 'none');
+        }
+      });
+
+      $('.gyu-register-close').click(function() {
+        $('.gyu-register-modal').css('display', 'none');
+        hideWebcamStream();
+      });
+
+      $(window).click(function(event) {
+        if (event.target == $('.gyu-register-modal')[0]) {
+          $('.gyu-register-modal').css('display', 'none');
+          hideWebcamStream();
+        }
+      });
+
+      $("#showMore").click(function() {
+        $('#showMore').css('display', 'none');
+        $('#showLess').css('display', 'block');
+        $('#registerRecommendation').css('display', 'block');
+      });
+
+      $("#showLess").click(function() {
+        $('#showMore').css('display', 'block');
+        $('#showLess').css('display', 'none');
+        $('#registerRecommendation').css('display', 'none');
+      });      
+
+      $("#gyuComplete").click(function() {        
+        $('.gyu-register-modal').css('display', 'none');
+        const originalSelfieUrl = window.localStorage.getItem("selfieUrl");
+        if (originalSelfieUrl) {
+          const removeData = new FormData();
+          removeData.append('selfieUrl', originalSelfieUrl);
+          $.ajax({
+            url: `${MAIN_SERVER_URL}/selfie/remove`,
+            cache: false,
+            contentType: false,
+            processData: false,
+            method: 'POST',
+            data: removeData,
+            success: function (response) {
+              console.log("ok");
+            }
+          })
+        }
+        window.localStorage.setItem('gyuStatus', true);
+        window.localStorage.setItem('selfieId', selfieId);
+        window.localStorage.setItem("selfieUrl", selfieUrl);
+        window.localStorage.setItem("profileUrlImageMesh", profileUrlImageMesh);
+        window.localStorage.setItem("profileFaceColor", profileFaceColor);
+        window.localStorage.setItem("profileHairColor", profileHairColor);
+        window.localStorage.setItem("profileEyeColor", profileEyeColor);
+        window.localStorage.setItem("profileDescription", profileDescription);
+        window.localStorage.setItem("profileRecommendation", profileRecommendation);
+        $('#gyuAvatar').attr('src', window.localStorage.getItem("selfieUrl"));
+      });
+
+      $("#take-capture").click(function() {
+        startWebcamRecorder();        
+      });
+
+      $("#cancel-capture").click(function() {
+        $('#sampleAvatar').attr('src', "{{ 'sample.png' | asset_url }}");
+        $('#captureVideo').css('display', 'none');
+        $('.label-image').css('display', 'none');
+        $('.image-body').css('gap', '0px');
+        $('#iconBtnGroup').css('display', 'flex');
+        $('#textBtnGroup').css('display', 'none');
+        $('#sampleAvatar').css('display', 'block');
+        $('#sampleAvatar').css('border', '');
+        $('#analyzeBtn').css('display', 'none');
+        $('#cameraError').css('display', 'none');
+      });
+
+      // process when click upload image
+      $("#upload-selfie").click(function() {
+        $('#cameraError').css('display', 'none');
+        $('#customerImage').val('');
+        $('#customerImage').click();
+      });
+
+      $('#customerImage').change(function() {
+        var overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        document.body.appendChild(overlay);
+
+        const input = this; // 'this' refers to the file input element
+
+        if (input.files && input.files[0]) {
+          var reader = new FileReader();
+
+          reader.onload = function (e) {
+            $('#sampleAvatar').attr('src', e.target.result);
+            imageStatus = 0;
+            $('#registerGyuResult').css('display', 'none');
+            $('#gyuComplete').css('display', 'none');
+            $('#analyzeBtn').css('display', 'block');
+          };
+
+          reader.readAsDataURL(input.files[0]);
+        }
+
+        document.body.removeChild(overlay);
+      });
+
+      // processing when click capture button
+      $("#capture-selfie").click(function() {
+        const captureVideo = document.getElementById('captureVideo');
+        const capturedSelfie = document.getElementById('capturedSelfie');
+        capturedSelfie.width = captureVideo.videoWidth;
+        capturedSelfie.height = captureVideo.videoHeight;
+        capturedSelfie.getContext('2d').drawImage(captureVideo, 0, 0, capturedSelfie.width, capturedSelfie.height);
+        capturedURL = capturedSelfie.toDataURL('image/jpeg');
+
+        $('#sampleAvatar').attr('src', capturedURL);
+        $('#sampleAvatar').css('border', 'solid 10px green');
+        $('.label-image').css('display', 'block');
+        $('.image-body').css('gap', '20px');
+        imageStatus = 1;
+        $('#sampleAvatar').css('display', 'block');
+        $('#captureVideo').css('display', 'none !important');
+        $('#registerGyuResult').css('display', 'none');
+        $('#analyzeBtn').css('display', 'block');
+      });
+
+      // process when click analysis button and pass to AI server
+      $("#analyzeBtn").click(function() {
+        $('#cameraError').css('display', 'none');
+        $('.loader-progress').css('width', '0');
+        $('#captureVideo').css('display', 'none');
+        $('.label-image').css('display', 'none');
+        $('.image-body').css('gap', '0px');
+        $('#sampleAvatar').css('border', '');
+        $('#iconBtnGroup').css('display', 'flex');
+        $('#textBtnGroup').css('display', 'none');
+        $('#analyzeBtn').css('display', 'none');
+        let uniqueId = generateUniqueId();
+        let shopId = {{ shop.id | json }};
+        selfieId = uniqueId;
+        if (imageStatus == 0) {
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          const img = new Image();
+          img.src = $('#sampleAvatar').attr('src');
+          img.onload = async function () {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            context.drawImage(img, 0, 0);
+            canvas.toBlob(function (blob) {
+              startProgress(17);
+              const formData = new FormData();
+              formData.append('jpegFile', blob, uniqueId + '.jpg');
+              formData.append('selfie_id', uniqueId);
+              formData.append('shop_id', shopId);
+              processWithAI(formData);
+            }, 'image/jpeg');
+          };
+        } else if (imageStatus == 1) {
+          startProgress(17);
+          const formData = new FormData();
+          formData.append('capturedURL', capturedURL);
+          formData.append('selfie_id', uniqueId);
+          formData.append('shop_id', shopId);
+          processWithAI(formData);
+        }
+      });
+
+      function processWithAI(formData) {
+        $.ajax({
+          url: `${MAIN_SERVER_URL}/selfie/register`,
+          cache: false,
+          contentType: false,
+          processData: false,
+          method: 'POST',
+          data: formData,
+          success: function (response) {
+            endProgress();
+            if (response.fail == "fail") {
+              errorToast(response.error);
+              return;
+            } else if (response.error == "billing failed") {
+              errorToast(errorHandleNotifications["billing failed"]);
+              return;
+            } else if (response.error == "There are more than one face in the photo.") {
+              errorToast(errorHandleNotifications["image error"]);
+              return;
+            } else if (response.error == "timeout error") {
+              errorToast(errorHandleNotifications["timeout error"]);
+              return;
+            } else if (response.error == "ai response failed") {
+              errorToast(errorHandleNotifications["ai response failed"]);
+              return;
+            } else if (response.error == "request failed") {
+              errorToast(errorHandleNotifications["request failed"]);
+              return;
+            } 
+            else if (response.error == "unknown error") {
+              errorToast(errorHandleNotifications["unknown error"]);
+              return;
+            }
+            selfieUrl = response.selfie.url;
+            profileUrlImageMesh = response.selfie.url_image_mesh;
+            profileFaceColor = response.selfie.url_image_colorbars.face;
+            profileHairColor = response.selfie.url_image_colorbars.hair;
+            profileEyeColor = response.selfie.url_image_colorbars.eye;
+            profileDescription = response.selfie.description;
+            profileRecommendation = response.selfie.recommendation;
+
+            $('#sampleAvatar').attr('src', response.selfie.url);
+            $('#gyuAnalysisImage').attr('src', response.selfie.url_image_mesh);
+            $('#registerEyeColor').attr('src', response.selfie.url_image_colorbars.eye);
+            $('#registerSkinColor').attr('src', response.selfie.url_image_colorbars.face);
+            $('#registerHairColor').attr('src', response.selfie.url_image_colorbars.hair);
+            $('#registerDescription').text(response.selfie.description);
+            $('#registerRecommendation').text(response.selfie.recommendation);
+
+            $('#registerGyuResult').css('display', 'block');
+            $('#gyuComplete').css('display', 'block');
+
+            // code refactor
+            {% comment %} const originalSelfieUrl = window.localStorage.getItem("selfieUrl");
+            if (originalSelfieUrl) {
+              const removeData = new FormData();
+              removeData.append('selfieUrl', originalSelfieUrl);
+              $.ajax({
+                url: `${MAIN_SERVER_URL}/selfie/remove`,
+                cache: false,
+                contentType: false,
+                processData: false,
+                method: 'POST',
+                data: removeData,
+                success: function (response) {
+                  console.log("ok");
+                }
+              })
+            }
+            window.localStorage.setItem('gyuStatus', true);
+            window.localStorage.setItem('selfieId', selfieId);
+            window.localStorage.setItem("selfieUrl", selfieUrl);
+            window.localStorage.setItem("profileUrlImageMesh", profileUrlImageMesh);
+            window.localStorage.setItem("profileFaceColor", profileFaceColor);
+            window.localStorage.setItem("profileHairColor", profileHairColor);
+            window.localStorage.setItem("profileEyeColor", profileEyeColor);
+            window.localStorage.setItem("profileDescription", profileDescription);
+            window.localStorage.setItem("profileRecommendation", profileRecommendation);
+            $('#gyuAvatar').attr('src', window.localStorage.getItem("selfieUrl")); {% endcomment %}
+            //
+          },
+          error: function (jqXHR, textStatus, errorThrown) {
+            endProgress();
+            errorToast(errorHandleNotifications["unknown error"]);
+            {% comment %} $('#analyzeBtn').prop('disabled', false); {% endcomment %}
+          }
+        });
+      }
+    });
+  });
+
+</script>
+
+{% schema %}
+{
+  "name": "GYU register",
+  "target": "section",
+  "enabled_on": {
+    "groups": ["header"]
+  },
+  "settings": []
+}
+{% endschema %}

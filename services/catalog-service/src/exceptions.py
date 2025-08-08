@@ -1,22 +1,43 @@
-# src/exceptions.py
-from shared.errors import DomainError, NotFoundError, ValidationError
+from shared.utils.exceptions import (
+    GlamBaseError,
+    ValidationError,
+    NotFoundError,
+    ConflictError,
+    UnauthorizedError,
+    ForbiddenError,
+    ServiceUnavailableError
+)
 
-class CatalogError(DomainError):
-    """Base catalog service error"""
+class CatalogServiceError(GlamBaseError):
+    """Base error for catalog service"""
     pass
 
-class SyncOperationNotFoundError(NotFoundError):
-    """Sync operation not found"""
+class InvalidShopDomainError(ValidationError):
+    """Invalid shop domain format"""
     pass
 
-class SyncOperationAlreadyRunningError(ValidationError):
-    """Sync operation already running"""
+class SyncNotAllowedError(ForbiddenError):
+    """Sync not allowed due to settings or entitlements"""
     pass
 
-class ItemNotFoundError(NotFoundError):
-    """Catalog item not found"""
+class SyncNotFoundError(NotFoundError):
+    """Sync job not found"""
+    pass
+
+class SyncAlreadyActiveError(ConflictError):
+    """Active sync already exists"""
     pass
 
 class InvalidSyncTypeError(ValidationError):
     """Invalid sync type"""
     pass
+
+class SyncFailedError(ServiceUnavailableError):
+    """Sync operation failed"""
+    pass
+
+class EventProcessingError(ServiceUnavailableError):
+    """Failed to process event"""
+    pass
+
+# ================================================================

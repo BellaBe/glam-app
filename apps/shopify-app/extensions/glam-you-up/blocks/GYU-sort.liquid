@@ -1,0 +1,763 @@
+{% style %}
+  #gyu_sort_section {
+    display: flex;
+    justify-content: end;
+    margin-bottom: 0px;
+  }
+
+  #gyuRecommendBtn {
+    margin-right: 0px;
+    margin-bottom: 10px;
+    font-family: 'poppins';
+  }
+
+  .gyu-sort-modal {
+    display: block;
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+  }
+
+  .gyu-sort-modal-content {
+    position: relative;
+    margin-top: 30px !important;
+    margin: auto;
+    background-color: #fefefe;
+    width: 1024px;
+    min-height: 700px!important;
+    height: fit-content!important;
+    overflow: hidden;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px, rgba(0, 0, 0, 0.23) 0px 3px 6px;
+  }
+
+  .gyu-collection {
+    padding: 20px!important;
+    padding-top: 0px!important;
+    margin-top: 20px;
+    height: 570px;
+    overflow-y: auto!important;
+  }
+
+  @media screen and (max-width: 1110px) {
+    .gyu-sort-modal-content {
+      width: 90%;
+    }
+
+    .gyu-collection {
+      height: 500px;
+    }
+  }
+
+  .gyu-sort-close {
+    color: #aaaaaa;
+    font-size: 28px;
+    top: 20px!important;
+    right: 30px!important;
+    font-weight: bold;
+    position: absolute;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .gyu-sort-close:hover,
+  .gyu-sort-close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .gyu-product-link {
+    text-decoration: none;
+  }
+
+  .gyu-product-card {
+    width: 200px;
+    background-color: #fff0fb;
+    border: 1px solid {{ block.settings.button_color }};
+    padding: 20px;
+    margin: 10px;
+    display: inline-block;
+    border-radius: 20px;
+    box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 2px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
+    font-family: 'poppins';
+  }
+
+  .gyu-product-card:hover {
+    cursor: pointer;
+    transform: scale(1.03);
+  }
+
+  .gyu-product-image {
+    width: 100%;
+    height: 260px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid {{ block.settings.button_color }};
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 1px 2px 0px;
+  }
+
+  .gyu-product-title {
+    font-size: 14px;
+    color: {{ block.settings.button_color }};
+    margin: 10px 0;
+    height: 50px;
+    line-height: normal;
+    display: flex;
+    align-items: center;
+  }
+
+  .gyu-product-price {
+    font-size: 16px;
+    font-weight: 600;
+    color: #6d3e6e;
+    margin: 0;
+  }
+
+  .ai-custom-schema:after {
+    border-radius: {{ block.settings.button_radius }}px;
+  }
+
+  .loader-progress {
+    background-color: {{ block.settings.button_color }};
+  }
+
+  .ai-neon {
+    border:none;
+    transition:0.3s;
+    background-color:{{ block.settings.button_color | color_to_rgba: 0.3 }};
+    animation: glow 1s infinite ;
+    transition:0.5s;
+  }
+
+  .ai-neon:hover{
+    background-color:{{ block.settings.button_color }};
+    transition:0.5s;
+  }
+
+  @keyframes glow{
+    0%{
+    box-shadow: 5px 5px 20px rgb(93, 52, 168),-5px -5px 20px rgb(93, 52, 168);}
+    
+    50%{
+    box-shadow: 5px 5px 20px rgb(81, 224, 210),-5px -5px 20px rgb(81, 224, 210)
+    }
+    100%{
+    box-shadow: 5px 5px 20px rgb(93, 52, 168),-5px -5px 20px rgb(93, 52, 168)
+    }
+  }
+
+  .ai-hover {
+    position: relative;
+    text-align: center;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: 0.5s;
+  }
+
+  .ai-hover::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(
+      45deg,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad
+    );
+    background-size: 400%;
+    opacity: 0;
+    transition: 2.5s;
+    animation: eff 20s linear infinite;
+  }
+
+  .ai-hover:hover::before,
+  .ai-hover:hover::after {
+    opacity: 1;
+  }
+
+  .ai-hover::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      45deg,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad,
+      #c0392b,
+      #f39c12,
+      #f1c40f,
+      #2ecc71,
+      #3498db,
+      #2980b9,
+      #9b59b6,
+      #8e44ad
+    );
+    background-size: 400%;
+    opacity: 0;
+    filter: blur(20px);
+    transition: 0.5s;
+    animation: eff 20s ease infinite;
+  }
+
+  @keyframes eff {
+    0% {
+      background-position: 0 0;
+    }
+    50% {
+      background-position: 400% 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  .ai-round::after {
+    content: '';
+    width: 30px; height: 30px;
+    border-radius: 100%!important;
+    border: 6px solid {{ block.settings.button_color }};
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: ring 1.5s infinite;
+  }
+
+  .ai-round {
+    display: inline-flex;
+    font-size: 16px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    letter-spacing: 1.3px;
+    font-weight: 500;
+    border: none;
+    border-radius: 1000px!important;
+    box-shadow: 12px 12px 24px {{ block.settings.button_color | color_to_rgba: 0.64 }};
+    transition: all 0.3s ease-in-out 0s;
+    cursor: pointer;
+    outline: none;
+    position: relative;
+    padding: 10px 20px;
+  }
+
+  .ai-round::before {
+    content: '';
+    min-width: calc(100% + 20px);
+    min-height: calc(100% + 20px);
+    border-radius: 1000px!important;
+    border: 6px solid {{ block.settings.button_color }};
+    box-shadow: 0 0 60px {{ block.settings.button_color | color_to_rgba: 0.64 }};
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: all .3s ease-in-out 0s;
+  }
+
+  .ai-light {
+    border-color: {{ block.settings.button_color }};
+    box-shadow: 0 0 40px 40px {{ block.settings.button_color }} inset, 0 0 0 0 {{ block.settings.button_color }};
+    transition: all 150ms ease-in-out;   
+    padding: 10px 20px;
+  }
+  .ai-light:hover {
+    box-shadow: 0 0 10px 0 {{ block.settings.button_color }} inset, 0 0 10px 4px {{ block.settings.button_color }};
+  }
+
+  .ai-pulse {
+    background: none!important;
+    border: 2px solid {{ block.settings.button_color }};
+    font: inherit;
+    line-height: 1;
+    margin: 0.5em;
+    padding: 1em 2em;
+  }
+
+  .ai-pulse:hover, 
+  .ai-pulse:focus {
+    animation: pulse 1s;
+    box-shadow: 0 0 0 2em transparent;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 {{ block.settings.button_color }}; }
+  }
+{% endstyle %}
+
+<div id="gyu_sort_section">
+  <button class="ai-custom-schema {{ block.settings.template }}" id="gyuRecommendBtn" style="
+    background: {{ block.settings.button_color }};
+    color: {{ block.settings.text_color }};
+    border-radius: {{ block.settings.button_radius }}px;
+    transform: rotate({{ block.settings.button_rotate }}deg);
+    display: flex;
+    align-items: center;    
+    padding: 10px 20px;
+    cursor: pointer;
+    position: relative;
+  " onclick="gyuSort()">
+  {% if block.settings.button_icon != blank %}
+    {% if block.settings.button_icon_type == 'background' %}
+      <img 
+        src="{{ block.settings.button_icon | img_url }}" 
+        alt="Icon" 
+        style="position: absolute; 
+          width: 100%; 
+          height: 100%; 
+          z-index: -1; 
+          object-fit: cover;
+          object-position: center;
+          left: 0;
+          top: 0">
+    {% else %}
+      {% if block.settings.button_icon_ratio == 'square' %}
+        <img src="{{ block.settings.button_icon | img_url: '24x24' }}" alt="Icon" style="vertical-align: middle; margin-right: 8px; width: 24px; height: 24px;">
+      {% else %}
+        <img src="{{ block.settings.button_icon | img_url: '24x24' }}" alt="Icon" style="vertical-align: middle; margin-right: 8px; height: 24px;">
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {{ block.settings.ctaText }}
+  </button>
+</div>
+
+<script>
+  var sortBtn = document.getElementById("gyuRecommendBtn");
+  var body = document.querySelector("main");
+  const firstVisit = window.localStorage.getItem("collection-page-first-visit");
+  let loadedProgress = false;
+
+  window.onload = function() {
+    if (firstVisit && (firstVisit == "false")) {
+      window.localStorage.setItem("collection-page-first-visit", true);
+      setTimeout(() => {
+        gyuSort();
+      }, 3000);
+      return;
+    }
+    const fromSortModal = window.localStorage.getItem("fromSortModal");
+    const referrerLink = window.localStorage.getItem("referrerLink");
+    if ((fromSortModal && (fromSortModal == "true")) && (referrerLink && (referrerLink == document.referrer))) {
+      gyuSort();
+    }
+    window.localStorage.setItem("fromSortModal", false);
+    window.localStorage.setItem("referrerLink", "");
+  }
+
+  function getSortedProductsWithAI(formData) {
+    $.ajax({
+      url: `${MAIN_SERVER_URL}/sort/analysis`,
+      cache: false,
+      contentType: false,
+      processData: false,
+      method: 'POST',
+      data: formData,
+      success: function (response) {
+        endProgress();
+        if (response.error == "billing failed") {
+          errorToast(errorHandleNotifications["billing failed"]);
+          return;
+        } else if (response.error == "timeout error") {
+          errorToast(errorHandleNotifications["timeout error"]);
+          return;
+        } else if (response.error == "ai response failed") {
+          errorToast(errorHandleNotifications["ai response failed"]);
+          return;
+        } else if (response.error == "request failed") {
+          errorToast(errorHandleNotifications["request failed"]);
+          return;
+        } else if (response.error == "unknown error") {
+          errorToast(errorHandleNotifications["unknown error"]);
+          return;
+        }
+        if (response.success == "no registered") {
+          errorToast(errorHandleNotifications["no registered"]);
+          return;
+        } else if (response.success == "no update") {
+          gyuProducts = JSON.parse(window.localStorage.getItem("gyuProducts"));
+        } else {
+          const strSortedProducts = JSON.stringify(response.sorted_products);
+          window.localStorage.setItem("gyuProducts", strSortedProducts);
+          if (!strSortedProducts || strSortedProducts == "undefined" || strSortedProducts == "null") {
+            errorToast(errorHandleNotifications["billing failed"]);
+            return;
+          }
+          gyuProducts = JSON.parse(strSortedProducts);
+        }
+        
+        displaySortModal();
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        endProgress();
+        errorToast(errorHandleNotifications["unknown error"]);
+      }
+    });
+  }
+
+  async function gyuSort() {    
+    $('.scroll-trigger.animate--slide-in').attr('style', 'opacity: 1;');
+    var recommendProducts = [];
+    const currentPath = window.location.href;
+    if (currentPath != window.localStorage.getItem("collection-page-link")) {
+      window.localStorage.setItem("collection-page-link", currentPath);
+      window.localStorage.setItem("collection-page-first-visit", false);
+      window.location.reload();
+      return;
+    }    
+    var value = window.localStorage.getItem('gyuStatus');
+    if( value == "true" ) {
+      let checkGyuProducts = window.localStorage.getItem("gyuProducts");
+      if (!checkGyuProducts || checkGyuProducts == "undefined" || checkGyuProducts == "null") checkGyuProducts = "[]";
+      let shopId = {{ shop.id | json }};
+      let selfieId = window.localStorage.getItem('selfieId');
+      const formData = new FormData();
+      formData.append('selfie_id', selfieId);
+      formData.append('shop_id', shopId);
+      formData.append('gyu_products', checkGyuProducts);
+      startProgress(17);
+      getSortedProductsWithAI(formData);
+    } else {
+      warningToast(warningNotifications["missing selfie"]);
+      document.getElementById('gyuRegisterModal').style.display = 'block';
+      $('#iconBtnGroup').css('display', 'flex');
+      $('#textBtnGroup').css('display', 'none');
+      $('#sampleAvatar').css('display', 'block');
+      $('#sampleAvatar').css('border', '');
+      $('#captureVideo').css('display', 'none');
+      $('.label-image').css('display', 'none');
+      $('.image-body').css('gap', '0px');
+      $('#gyuComplete').css('display', 'none');
+      $('#customerImage').val('');
+    }
+  }
+
+  function saveClickStatusFromSortModal() {
+    window.localStorage.setItem("fromSortModal", true);
+    window.localStorage.setItem("referrerLink", document.referrer);
+  }
+
+  let gyuProducts = [];
+  let filteredProducts = [];
+  let shop_symbol = "{{ shop.money_format }}";
+
+  function displaySortModal() {    
+    shop_symbol = shop_symbol.trim();
+    if (shop_symbol.substring(shop_symbol.length - 1) !== '}' && shop_symbol.substring(shop_symbol.length - 1).length > 0) {
+      shop_symbol = shop_symbol.substring(shop_symbol.length - 1);
+    } else {
+      shop_symbol = shop_symbol.substring(0, 1);
+    }
+
+    if(gyuProducts) {
+      recommendProducts = getDistinctProducts(gyuProducts);
+    }  
+    if (recommendProducts.length == 0) {
+      errorToast(errorHandleNotifications["no sort products"]);
+      return;
+    }
+    // get filtered products from collection page
+    
+    let product = {};
+    let product_url = {};
+    {% for product in collection.products %}
+      product = {{ product | json }};
+      product_url = "{{ product.url }}";
+      if (product.available)
+        filteredProducts.push({...product, url: product_url});
+    {% endfor %}
+
+    console.log({filteredProducts});
+    if (filteredProducts.length == 0) {
+      errorToast(errorHandleNotifications["no sort products"]);
+      return;
+    }
+
+    body.innerHTML += `
+    <div id="gyuSortModal" class="gyu-sort-modal">
+      <div class="gyu-sort-modal-content">
+        <p class="gyu-sort-close" onclick="closeSort()">&times;</p>
+        <h1 style="margin: 0; padding-left: 50px; font-weight: bold; font-size: 20px;">Recommended Products by AI</h1>
+        <div style="display: flex; justify-content: end; margin-top: 20px">
+          <select class="classic" id="sortCategory" onChange="changedSortCategory()">
+            <option value="product">Sort by product</option>
+            <option value="variant">Sort by variant</option>
+          </select>
+        </div>
+        <div class="gyu-collection" id="gyuCollection">
+        </div>
+      </div>
+    </div>`;      
+    
+    viewProducts('product');
+  }
+
+  function changedSortCategory() {
+    const selectElement = document.getElementById('sortCategory');  
+    const selectedValue = selectElement.value;
+    if (selectedValue === 'product') {
+      viewProducts('product');
+    } else if (selectedValue === 'variant') {
+      viewProducts('variant');
+    }
+  }
+
+  function viewProducts(sortCategory) {
+    var gyuSortModal = document.querySelector("#gyuSortModal");
+    var recommendedCollection = gyuSortModal.querySelector("#gyuCollection");
+    recommendedCollection.innerHTML = '';
+    if (sortCategory === 'product') {
+      const recommendDistinctProducts = getDistinctProducts(gyuProducts);
+      let indexing = 0;
+      for (const recommendProduct of recommendDistinctProducts) {
+        const recommendFilteredProduct = filteredProducts.find(product => product.id == recommendProduct.product_id);
+        if (recommendFilteredProduct) {
+          indexing ++;
+          if (indexing > 50) break;          
+          let featured_image = recommendFilteredProduct.featured_image;
+          let title = recommendFilteredProduct.title;
+          let price = recommendFilteredProduct.price / 100;
+          let product_id = recommendFilteredProduct.id;
+          let variant_id = '';
+          const recommendFilteredVariants = gyuProducts.filter(variant => variant.product_id == recommendFilteredProduct.id);
+          for (const variantFiltered of recommendFilteredVariants) {
+            if (recommendFilteredProduct.variants.length) {
+              const recommendFilteredVariant = recommendFilteredProduct.variants.find(variant => variant.id == variantFiltered.variant_id && variant.available == true);
+              if (recommendFilteredVariant) {
+                if (recommendFilteredVariant.featured_image) featured_image = recommendFilteredVariant.featured_image.src;
+                if (recommendFilteredVariant.price) price = recommendFilteredVariant.price / 100;
+                variant_id = recommendFilteredVariant.id;
+                break;
+              }
+            }
+          }
+          
+          $('#gyu_featured_image').data('valid', featured_image);
+          let productPath = recommendFilteredProduct.url.split('?')[0];
+          if (variant_id) productPath = productPath + '?variant=' + variant_id;
+
+          recommendedCollection.innerHTML += `
+            <a href="${productPath}" class="gyu-product-link" onclick="saveClickStatusFromSortModal()">
+              <div class="gyu-product-card">
+                <img
+                  src="${featured_image}"
+                  class="gyu-product-image"
+                >
+                <p class="gyu-product-title">
+                  ${title}
+                </p>
+                <p class="gyu-product-price">
+                  ${shop_symbol} ${price.toFixed(2)}
+                </p>
+              </div>
+            </a>`;
+        }
+      }
+    } else {
+      let indexing = 0;
+      for (const recommendProduct of gyuProducts) {
+        const recommendFilteredProduct = filteredProducts.find(product => product.id == recommendProduct.product_id);
+        if (recommendFilteredProduct) {
+          
+          let featured_image = recommendFilteredProduct.featured_image;
+          let title = recommendFilteredProduct.title;
+          let price = recommendFilteredProduct.price / 100;
+          let product_id = recommendFilteredProduct.id;
+          let variant_id = '';
+          if (recommendFilteredProduct.variants.length) {
+            const recommendFilteredVariant = recommendFilteredProduct.variants.find(variant => (variant.id == recommendProduct.variant_id && variant.available == true));
+            if (recommendFilteredVariant) {
+              indexing ++;
+              if (indexing > 50) break;
+              if (recommendFilteredVariant.featured_image) featured_image = recommendFilteredVariant.featured_image.src;
+              if (recommendFilteredVariant.price) price = recommendFilteredVariant.price / 100;
+              variant_id = recommendFilteredVariant.id;
+              $('#gyu_featured_image').data('valid', featured_image);
+              let productPath = recommendFilteredProduct.url.split('?')[0];
+              productPath = productPath + '?variant=' + variant_id;
+              recommendedCollection.innerHTML += `
+                <a href="${productPath}" class="gyu-product-link" onclick="saveClickStatusFromSortModal()">
+                  <div class="gyu-product-card">
+                    <img
+                      src="${featured_image}"
+                      class="gyu-product-image"
+                    >
+                    <p class="gyu-product-title">
+                      ${title}
+                    </p>
+                    <p class="gyu-product-price">
+                      ${shop_symbol} ${price.toFixed(2)}
+                    </p>
+                  </div>
+                </a>`;
+            }
+          }          
+        }
+      }
+    }
+  }
+
+  function closeSort() {
+    var aiSortModal = document.getElementById('gyuSortModal');
+    if (aiSortModal) {
+      aiSortModal.parentNode.removeChild(aiSortModal);
+    }
+  }
+</script>
+
+{% schema %}
+{
+  "name": "GYU sort",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["collection"]
+  },
+  "settings": [
+    {
+      "type": "color",
+      "id": "button_color",
+      "default": "#A16892",
+      "label": "AI theme background color",
+      "info": "You can indicate the theme's background color"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "default": "#000",
+      "label": "AI theme text color",
+      "info": "You can indicate the theme's text color"
+    },
+    {
+      "type": "range",
+      "id": "button_radius",
+      "min": 0,
+      "max": 10,
+      "step": 1,
+      "unit": "px",
+      "default": 0,
+      "label": "AI theme button radius",
+      "info": "You can indicate the theme's button rounded"
+    },
+    {
+      "type": "range",
+      "id": "button_rotate",
+      "min": -10,
+      "max": 10,
+      "step": 1,
+      "unit": "deg",
+      "default": -2,
+      "label": "AI theme button rotate",
+      "info": "You can indicate the theme's button rotate"
+    },
+    {
+      "type": "select",
+      "id": "template",
+      "label": "AI theme button template",
+      "info": "You can indicate the theme's button template",
+      "options": [
+        {
+          "value": "ai-btn",
+          "label": "default"
+        },
+        {
+          "value": "ai-neon",
+          "label": "neon"
+        },
+        {
+          "value": "ai-hover",
+          "label": "hover"
+        },
+        {
+          "value": "ai-light",
+          "label": "light"
+        },
+        {
+          "value": "ai-pulse",
+          "label": "pulse"
+        }
+      ],
+      "default": "ai-btn"
+    },
+    {
+      "type": "text",
+      "id": "ctaText",
+      "label": "AI theme CTA text",
+      "info": "You can set the theme's CTA text",
+      "default": "Recommend by GYU"
+    },
+    {
+      "type": "image_picker",
+      "id": "button_icon",
+      "label": "Button Image",
+      "info": "Upload an image to use as the button icon"
+    },
+    {
+      "type": "select",
+      "id": "button_icon_type",
+      "label": "Button Image Type",
+      "info": "You can choose the image type",
+      "options": [
+        {
+          "value": "icon",
+          "label": "icon"
+        },
+        {
+          "value": "background",
+          "label": "background"
+        }
+      ],
+      "default": "icon"
+    },
+    {
+      "type": "select",
+      "id": "button_icon_ratio",
+      "label": "Button Image Ratio",
+      "info": "You can choose the image ratio",
+      "options": [
+        {
+          "value": "square",
+          "label": "square"
+        },
+        {
+          "value": "original",
+          "label": "original"
+        }
+      ],
+      "default": "square"
+    }
+  ]
+}
+{% endschema %}

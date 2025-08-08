@@ -1,0 +1,10 @@
+node_modules
+
+/build
+/prisma/dev.sqlite
+
+.env
+.env.dev
+.env.staging
+.env.prod
+yarn.lock

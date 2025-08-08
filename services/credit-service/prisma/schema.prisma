@@ -1,0 +1,39 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MerchantCredit {
+  shopDomain  String    @id @db.Citext
+  balance     Int       @default(0)          // credits (integer units)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  ledger      CreditLedger[]
+  
+  @@index([updatedAt])
+  @@map("merchant_credits")
+}
+
+model CreditLedger {
+  id           String    @id @default(cuid())
+  shopDomain   String    @map("shop_domain") @db.Citext
+  amount       Int                             // positive only for now
+  reason       String                           // 'trial' | 'subscription' | 'manual' | 'one_time_pack'
+  externalRef  String?   @unique @map("external_ref")              // e.g., subscriptionId/chargeId/eventId
+  metadata     Json?                           // additional context
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  merchant     MerchantCredit @relation(fields: [shopDomain], references: [shopDomain])
+
+  @@index([shopDomain, createdAt(sort: Desc)])
+  @@index([reason])
+  @@map("credit_ledger")
+}
+

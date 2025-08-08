@@ -11,6 +11,7 @@ class MerchantSync(BaseModel):
     shop_gid: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
     shop_name: Optional[str] = Field(None, description="Shop display name")
     email: Optional[EmailStr] = Field(None, description="Primary contact email")
+    url: Optional[str] = Field(None, description="Shop URL")
     timezone: Optional[str] = Field("UTC", description="IANA timezone")
     currency: Optional[str] = Field("USD", description="ISO currency code")
     scopes: str = Field(..., description="Comma-separated OAuth scopes")

@@ -1,0 +1,37 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "29719b18dae61f572d2853498a0e58d2"
+name = "Glam You Up"
+handle = "ProdGYUApp"
+application_url = "https://d303e263f3e7.ngrok-free.app"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "dev-demo-th-store.myshopify.com"
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2024-04"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/CUSTOMERS_DATA_REQUEST"
+  compliance_topics = [ "customers/data_request" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/CUSTOMERS_REDACT"
+  compliance_topics = [ "customers/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/SHOP_REDACT"
+  compliance_topics = [ "shop/redact" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
+
+[auth]
+redirect_urls = ["https://d303e263f3e7.ngrok-free.app/auth/callback", "https://d303e263f3e7.ngrok-free.app/auth/shopify/callback", "https://d303e263f3e7.ngrok-free.app/api/auth/callback"]
+
+[pos]
+embedded = false

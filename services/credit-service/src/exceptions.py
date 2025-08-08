@@ -1,87 +1,57 @@
-# services/credit-service/src/exceptions.py
-"""
-Credit service exceptions using shared error classes.
-
-All exceptions are re-exported from shared.errors for consistency
-across the platform.
-"""
-
-# Re-export all shared exceptions
-from shared.errors import (
-    # Base exceptions
+from shared.utils.exceptions import (
+    GlamBaseError,
     DomainError,
     ValidationError,
     NotFoundError,
     ConflictError,
-    
-    # HTTP exceptions
-    UnauthorizedError,
-    ForbiddenError,
-    ServiceUnavailableError,
-    
-    # Database exceptions
-    DatabaseError,
+    UnauthorizedError
 )
 
-class CreditServiceError(DomainError):
-    """Base class for all credit service errors"""
+class CreditServiceError(GlamBaseError):
+    """Base exception for credit service"""
     pass
 
-# Credit-specific exceptions
-class InsufficientCreditsError(DomainError):
-    """Raised when merchant has insufficient credits"""
-    pass
+class InvalidDomainError(ValidationError):
+    """Invalid shop domain format"""
+    def __init__(self, domain: str):
+        super().__init__(
+            message=f"Invalid shop domain format: {domain}",
+            field="shopDomain",
+            value=domain
+        )
 
-class InvalidCreditAmountError(ValidationError):
-    """Raised when credit amount is invalid"""
-    pass
+class InvalidAmountError(ValidationError):
+    """Invalid credit amount"""
+    def __init__(self, amount: int):
+        super().__init__(
+            message="Amount must be positive",
+            field="amount",
+            value=amount
+        )
 
-class DuplicateTransactionError(ConflictError):
-    """Raised when attempting to create duplicate transaction"""
-    pass
+class MissingHeaderError(ValidationError):
+    """Missing required header"""
+    def __init__(self, header: str):
+        super().__init__(
+            message=f"Missing {header} header",
+            field=header
+        )
 
+class MerchantCreditNotFoundError(NotFoundError):
+    """Merchant credit account not found"""
+    def __init__(self, shop_domain: str):
+        super().__init__(
+            message="Merchant credit account not found",
+            resource="merchant_credit",
+            resource_id=shop_domain
+        )
 
-class AccountNotFoundError(NotFoundError):
-    """Raised when credit account is not found"""
-    pass
+class DuplicateGrantError(ConflictError):
+    """Grant already processed (for internal use)"""
+    def __init__(self, external_ref: str):
+        super().__init__(
+            message="Grant already processed",
+            conflicting_resource="credit_grant",
+            current_state=external_ref
+        )
 
-class TransactionNotFoundError(NotFoundError):
-    """Raised when transaction is not found"""
-    pass
-
-class BalanceCalculationError(DomainError):
-    """Raised when balance calculation fails"""
-    pass
-
-class ThresholdConfigurationError(ValidationError):
-    """Raised when threshold configuration is invalid"""
-    pass
-
-class PluginStatusError(DomainError):
-    """Raised when plugin status cannot be determined"""
-    pass
-
-
-# Export all exceptions
-__all__ = [
-    # Shared exceptions
-    "CreditServiceError",
-    "DomainError", 
-    "ValidationError",
-    "NotFoundError",
-    "ConflictError",
-    "UnauthorizedError", 
-    "ForbiddenError",
-    "ServiceUnavailableError",
-    "DatabaseError",
-    
-    # Credit-specific exceptions
-    "InsufficientCreditsError",
-    "InvalidCreditAmountError", 
-    "DuplicateTransactionError",
-    "AccountNotFoundError",
-    "TransactionNotFoundError",
-    "BalanceCalculationError",
-    "ThresholdConfigurationError",
-    "PluginStatusError",
-]

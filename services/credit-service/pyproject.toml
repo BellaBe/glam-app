@@ -1,27 +1,25 @@
 [tool.poetry]
 name = "credit-service"
 version = "1.0.0"
-description = "Credit management service for merchant credits and plugin access control"
-authors = ["GlamYouUp Team <dev@glamyouup.com>"]
-readme = "README.md"
-packages = [{include = "src"}]
+description = "Credit balance and ledger management service"
+authors = ["GlamYouUp Team"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.104.1"
-uvicorn = {extras = ["standard"], version = "^0.24.0"}
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.25.0"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
-sqlalchemy = "^2.0.23"
-asyncpg = "^0.29.0"
-alembic = "^1.13.1"
-redis = "^5.0.1"
+prisma = "^0.11.0"
 nats-py = "^2.6.0"
+redis = "^5.0.1"
+python-multipart = "^0.0.6"
+httpx = "^0.25.2"
+python-dotenv = "^1.0.0"
 prometheus-client = "^0.19.0"
-structlog = "^23.2.0"
-
-# Shared package (local development)
-shared = {path = "../../shared", develop = true}
+uuid7 = "^0.1.0"
+shared = { path = "../../shared", develop = true }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
@@ -38,10 +36,6 @@ httpx = "^0.25.2"
 pytest-mock = "^3.12.0"
 testcontainers = "^3.7.1"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q --strict-markers --strict-config"
@@ -50,29 +44,24 @@ pythonpath = ["src"]
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
-    "integration: Integration tests",
-    "e2e: End-to-end tests",
-    "slow: Slow running tests"
+    "integration: Integration tests", 
+    "e2e: End-to-end tests"
 ]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["src"]
-omit = [
-    "tests/*",
-    "*/migrations/*",
-    "*/__init__.py"
-]
+omit = ["tests/*", "*/migrations/*", "*/__init__.py"]
 
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*Protocol.*:",
-    "@overload"
-]
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+

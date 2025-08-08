@@ -1,83 +1,130 @@
-# services/credit-service/src/repositories/credit_repository.py
-"""Repository for credit account operations."""
-
-from typing import Optional, Dict
+from typing import Optional, List
 from uuid import UUID
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from datetime import datetime
+from prisma import Prisma
+from prisma.models import MerchantCredit, CreditLedger
+from ..schemas.credit import CreditGrantIn, LedgerEntryOut, BalanceOut
+from ..utils import normalize_shop_domain
 
-from shared.database.repository import Repository
-from ..models.credit import Credit
-
-
-class CreditRepository(Repository[Credit]):
-    """Repository for credit account operations"""
-
-    def __init__(
-        self,
-        model_class: type[Credit],
-        session_factory: async_sessionmaker[AsyncSession],
-    ):
-        super().__init__(model_class, session_factory)
-
-    async def find_by_merchant_id(self, merchant_id: UUID) -> Optional[Credit]:
-        """Find credit account by merchant ID"""
-
-        stmt = select(Credit).where(Credit.merchant_id == merchant_id)
-        async with self.session_factory() as session:
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
-
-    async def create_credit(
-        self, merchant_id: UUID, initial_balance: int = 0
-    ) -> Credit:
-        """Create a new credit account"""
-
-        account = Credit(
-            merchant_id=merchant_id,
-            balance=initial_balance,
+class CreditRepository:
+    """Repository for credit operations using Prisma"""
+    
+    def __init__(self, prisma: Prisma):
+        self.prisma = prisma
+    
+    async def get_or_create_merchant_credit(self, shop_domain: str) -> MerchantCredit:
+        """Get or create merchant credit account"""
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        # Try to get existing
+        merchant = await self.prisma.merchantcredit.find_unique(
+            where={"shopDomain": shop_domain}
         )
-        async with self.session_factory() as session:
-            session.add(account)
-            await session.commit()
-            await session.refresh(account)
-
-            return account
-
-    async def update_balance(
-        self,
-        credit_record_id: UUID,
-        new_balance: int,
-        transaction_id: UUID
-    ) -> bool:
-        """Update account balance"""
-
-        update_data: Dict[str, int |UUID] = {"balance": new_balance, "last_transaction_id": transaction_id}
-
-        stmt = update(Credit).where(Credit.id == credit_record_id).values(**update_data)
-        async with self.session_factory() as session:
-            result = await session.execute(stmt)
-            await session.commit()
-            return result.rowcount > 0
-
-    async def get_merchants_with_zero_balance(self) -> list[Credit]:
-        """Get all merchants with zero balance"""
-        stmt = select(Credit).where(Credit.balance == 0)
-        async with self.session_factory() as session:
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
-
+        
+        if not merchant:
+            # Create new with default balance
+            merchant = await self.prisma.merchantcredit.create(
+                data={"shopDomain": shop_domain, "balance": 0}
+            )
+        
+        return merchant
+    
+    async def find_ledger_by_external_ref(self, external_ref: str) -> Optional[CreditLedger]:
+        """Find ledger entry by external reference"""
+        return await self.prisma.creditledger.find_unique(
+            where={"externalRef": external_ref}
+        )
+    
+    async def grant_credits_transactional(
+        self, 
+        shop_domain: str, 
+        amount: int, 
+        reason: str,
+        external_ref: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ) -> tuple[int, bool]:  # (new_balance, was_idempotent)
+        """Grant credits in a transaction with row locking"""
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        # Check for existing grant (idempotency)
+        if external_ref:
+            existing = await self.find_ledger_by_external_ref(external_ref)
+            if existing:
+                # Get current balance
+                merchant = await self.get_or_create_merchant_credit(shop_domain)
+                return merchant.balance, True
+        
+        # Execute in transaction
+        async with self.prisma.tx() as tx:
+            # Get or create with lock
+            merchant = await tx.merchantcredit.upsert(
+                where={"shopDomain": shop_domain},
+                create={"shopDomain": shop_domain, "balance": 0},
+                update={}
+            )
             
-
-    async def get_merchants_with_low_balance(
-        self, threshold: int
-    ) -> list[tuple[UUID, int]]:
-        """Get merchants with balance below threshold"""
-
-        stmt = select(Credit.merchant_id, Credit.balance).where(
-            Credit.balance <= threshold, Credit.balance > 0
+            # Create ledger entry
+            await tx.creditledger.create(
+                data={
+                    "shopDomain": shop_domain,
+                    "amount": amount,
+                    "reason": reason,
+                    "externalRef": external_ref,
+                    "metadata": metadata
+                }
+            )
+            
+            # Update balance
+            updated = await tx.merchantcredit.update(
+                where={"shopDomain": shop_domain},
+                data={"balance": {"increment": amount}}
+            )
+            
+            return updated.balance, False
+    
+    async def get_balance(self, shop_domain: str) -> Optional[BalanceOut]:
+        """Get merchant credit balance"""
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        merchant = await self.prisma.merchantcredit.find_unique(
+            where={"shopDomain": shop_domain}
         )
-        async with self.session_factory() as session:
+        
+        if not merchant:
+            return None
+        
+        return BalanceOut(
+            balance=merchant.balance,
+            updated_at=merchant.updatedAt
+        )
+    
+    async def get_ledger_entries(self, shop_domain: str, limit: int = 100) -> List[LedgerEntryOut]:
+        """Get ledger entries for a merchant"""
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        entries = await self.prisma.creditledger.find_many(
+            where={"shopDomain": shop_domain},
+            order_by={"createdAt": "desc"},
+            take=limit
+        )
+        
+        return [
+            LedgerEntryOut(
+                id=entry.id,
+                amount=entry.amount,
+                reason=entry.reason,
+                external_ref=entry.externalRef,
+                metadata=entry.metadata,
+                created_at=entry.createdAt
+            )
+            for entry in entries
+        ]
+    
+    async def count_ledger_entries(self, shop_domain: str) -> int:
+        """Count total ledger entries for a merchant"""
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        return await self.prisma.creditledger.count(
+            where={"shopDomain": shop_domain}
+        )
 
-            result = await session.execute(stmt)
-            return [(row[0], row[1]) for row in result.fetchall()]

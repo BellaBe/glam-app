@@ -40,6 +40,9 @@ def create_application() -> FastAPI:
         version=config.service_version,
         lifespan=lifespan,
         description="Merchant service for GlamYouUp platform - manages merchant identity and consent",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        exception_handlers={}  # Use shared middleware for exception handling
     )
     
     setup_middleware(

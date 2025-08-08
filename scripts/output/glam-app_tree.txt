@@ -1,0 +1,592 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app
+================================================================================
+
+glam-app/
+config/
+├── services/
+│   ├── analytics-service.yml
+│   ├── billing.yml
+│   ├── catalog-service.yml
+│   ├── catalog_ai_apparel.yml
+│   ├── connector.py
+│   ├── credit.yml
+│   ├── merchant-service.yml
+│   ├── merchant.yml
+│   ├── notification.yml
+│   └── webhook.yml
+└── shared.yml
+monitoring/
+├── grafana/
+│   ├── dashboards/
+│   │   └── notification-dashboard.yml
+│   └── provisioning/
+│       ├── dashboards/
+│       │   └── dashboard.yml
+│       └── datasources/
+│           └── prometheus.yml
+├── prometheus/
+│   └── alerts.yml
+├── scripts/
+│   └── import-dashboards.sh
+├── prometheus-queries.yml
+├── prometheus.yml
+└── README.md
+scripts/
+├── output/
+│   ├── billing-service_tree_with_code.txt
+│   ├── credit-service_tree_with_code.txt
+│   ├── merchant-service_tree_with_code.txt
+│   ├── notification-service_tree_with_code.txt
+│   ├── scheduler-service_tree_with_code.txt
+│   ├── shared_tree_with_code.txt
+│   └── webhook-service_tree_with_code.txt
+├── tmp/
+│   ├── .gitkeep
+│   ├── billing_artifact.txt
+│   ├── catalog_artifact.txt
+│   ├── credit_artifact.txt
+│   ├── merchant_artifact.txt
+│   └── webhook_artifact.txt
+├── code_flattener.py
+├── distribute-artifact.sh
+└── scaffold-service.sh
+services/
+├── analytics-service/
+│   ├── alembic/
+│   │   └── versions/
+│   ├── scripts/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── alerts.py
+│   │   │   │   ├── analytics.py
+│   │   │   │   └── platform.py
+│   │   │   ├── __init__.py
+│   │   │   └── router.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── publishers.py
+│   │   │   ├── subscribers.py
+│   │   │   └── types.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── mappers/
+│   │   │   ├── __init__.py
+│   │   │   └── analytics_mapper.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── analytics.py
+│   │   │   └── enums.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── alert_repository.py
+│   │   │   ├── analytics_repository.py
+│   │   │   └── platform_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── analytics.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── alert_service.py
+│   │   │   ├── analytics_service.py
+│   │   │   ├── pattern_detection_service.py
+│   │   │   └── prediction_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   └── __init__.py
+│   │   ├── unit/
+│   │   │   └── __init__.py
+│   │   └── __init__.py
+│   ├── .env.example
+│   ├── __init__.py
+│   ├── alembic.ini
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── Makefile
+│   ├── pyproject.toml
+│   └── README.md
+├── billing-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── billing.py
+│   │   │   │   └── health.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_plan_repository.py
+│   │   │   ├── merchant_billing_repository.py
+│   │   │   ├── merchant_trial_repository.py
+│   │   │   └── one_time_purchase_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── billing.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_service.py
+│   │   │   └── webhook_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .env.example
+│   ├── __init__.py
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── catalog-ai-apparel/
+│   ├── scripts/
+│   │   └── test_catalog_analysis.py
+│   ├── src/
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── publishers.py
+│   │   │   └── types.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── catalog_item.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── analysis.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   └── test_events.py
+│   │   ├── unit/
+│   │   │   └── test_catalog_analysis_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── catalog-connector/
+│   ├── alembic/
+│   ├── logs/
+│   ├── src/
+│   │   ├── events/
+│   │   │   ├── publishers.py
+│   │   │   ├── subscribers.py
+│   │   │   └── types.py
+│   │   ├── external/
+│   │   │   └── shopify_client.py
+│   │   ├── models/
+│   │   │   ├── bulk_operation.py
+│   │   │   └── fetch_operation.py
+│   │   ├── repositories/
+│   │   │   ├── bulk_operation.py
+│   │   │   └── fetch_operation.py
+│   │   ├── schemas/
+│   │   │   ├── product.py
+│   │   │   └── sync.py
+│   │   ├── services/
+│   │   │   ├── bulk_operation.py
+│   │   │   └── product_transformer.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .env.examples
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── catalog-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── catalog_sync.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog_state_repository.py
+│   │   │   ├── sync_item_repository.py
+│   │   │   └── sync_job_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── catalog_sync.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── cache_service.py
+│   │   │   └── catalog_sync_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .env.example
+│   ├── .pre-commit-config.yaml
+│   ├── __init__.py
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── credit-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── credits.py
+│   │   │   │   └── health.py
+│   │   │   ├── __init__.py
+│   │   │   └── router.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── credit_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── credit.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── credit_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── utils.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_credit_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .env.example
+│   ├── __init__.py
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   └── pyproject.toml
+├── merchant-service/
+│   ├── logs/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   │   ├── 20250803094605_init/
+│   │   │   │   └── migration.sql
+│   │   │   └── migration_lock.toml
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── merchants.py
+│   │   │   ├── __init__.py
+│   │   │   └── router.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   ├── publishers.py
+│   │   │   ├── subscribers.py
+│   │   │   └── types.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .env.example
+│   ├── .pre-commit-config.yaml
+│   ├── .python-version
+│   ├── __init__.py
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── pyproject.toml
+│   └── README.md
+├── notification-service/
+│   ├── alembic/
+│   │   ├── versions/
+│   │   ├── alembic.ini
+│   │   └── env.py
+│   ├── migrations/
+│   │   └── env.py
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── health.py
+│   │   │   │   ├── notifications.py
+│   │   │   │   └── templates.py
+│   │   │   └── __init__.py
+│   │   ├── constants/
+│   │   │   ├── __init__.py
+│   │   │   └── notification_types.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   ├── payloads.py
+│   │   │   └── publishers.py
+│   │   ├── mappers/
+│   │   │   ├── __init__.py
+│   │   │   └── notification_mapper.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── notification.py
+│   │   │   └── template.py
+│   │   ├── providers/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── sendgrid.py
+│   │   │   ├── ses.py
+│   │   │   └── smtp.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── notification_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── common.py
+│   │   │   ├── notification.py
+│   │   │   └── template.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── email_service.py
+│   │   │   ├── notification_service.py
+│   │   │   └── template_service.py
+│   │   ├── templates/
+│   │   │   ├── __init__.py
+│   │   │   ├── email_templates.py
+│   │   │   └── template_renderer.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── metrics.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   ├── pyproject.toml
+│   └── README.md
+├── profile-ai-selfie/
+│   ├── src/
+│   │   └── __init__.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── profile-service/
+│   ├── src/
+│   │   └── __init__.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── scheduler-service/
+│   ├── logs/
+│   ├── migrations/
+│   │   └── env.py
+│   ├── src/
+│   │   ├── config/
+│   │   │   ├── __init__.py
+│   │   │   └── service_config.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── publishers.py
+│   │   │   └── subscribers.py
+│   │   ├── mappers/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── execution_mapper.py
+│   │   │   └── schedule_mapper.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── database.py
+│   │   │   ├── execution.py
+│   │   │   └── schedule.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── execution_repository.py
+│   │   │   └── schedule_repository.py
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── executions.py
+│   │   │   ├── health.py
+│   │   │   └── schedules.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── execution.py
+│   │   │   └── schedule.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── job_executor.py
+│   │   │   ├── schedule_service.py
+│   │   │   └── scheduler_manager.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── distributed_lock.py
+│   │   │   └── scheduler_factory.py
+│   │   ├── __init__.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── metrics.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── webhook-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   ├── test_webhook.py
+│   │   └── validate_event_context.py
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── webhooks.py
+│   │   │   ├── __init__.py
+│   │   │   └── router.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   └── publishers.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── enums.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── webhook_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── webhook.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── webhook_processor.py
+│   │   │   └── webhook_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_webhook_processor.py
+│   │   │   └── test_webhook_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── .pre-commit-config.yaml
+│   ├── __init__.py
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── Makefile
+│   ├── pyproject.toml
+│   └── README.md
+└── __init__.py
+shared/
+├── shared/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── correlation.py
+│   │   ├── dependencies.py
+│   │   ├── health.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   └── responses.py
+│   ├── messaging/
+│   │   ├── __init__.py
+│   │   ├── common_payloads.py
+│   │   ├── jetstream_client.py
+│   │   ├── listener.py
+│   │   ├── publisher.py
+│   │   ├── stream_config.py
+│   │   └── subjects.py
+│   ├── metrics/
+│   │   ├── __init__.py
+│   │   └── middleware.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config_loader.py
+│   │   ├── exceptions.py
+│   │   ├── idempotency_key.py
+│   │   ├── logger.py
+│   │   └── query_helpers.py
+│   └── __init__.py
+├── tests/
+│   └── __init__.py
+├── .python-version
+├── poetry.lock
+├── pyproject.toml
+└── README.md
+.env.example
+.gitignore
+docker-compose.local.yml
+docker-compose.yml
+Makefile
+README.md
+setup-monitoring.sh
+test.http
+
+================================================================================
+Output shows tree structure only (use --code to include file contents)
+================================================================================

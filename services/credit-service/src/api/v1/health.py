@@ -1,12 +1,22 @@
-# glam-app/services/credit-service/src/api/v1/health.py
+from fastapi import APIRouter, status
+from shared.api import ApiResponse, success_response
+from ...config import get_service_config
 
-from fastapi import APIRouter
-from shared.api.health import create_health_router
+router = APIRouter(tags=["health"])
+config = get_service_config()
 
-router = APIRouter()
-
-# Include reusable shared health routes for this service
-health_router = create_health_router("credit-service")
-router.include_router(health_router)
-
+@router.get(
+    "/health",
+    response_model=ApiResponse[dict],
+    status_code=status.HTTP_200_OK,
+    summary="Health check"
+)
+async def health_check():
+    """Service health check endpoint"""
+    return success_response({
+        "status": "healthy",
+        "service": config.service_name,
+        "version": config.service_version,
+        "environment": config.environment
+    })
 

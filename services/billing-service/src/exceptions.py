@@ -1,74 +1,95 @@
-# services/billing-service/src/exceptions.py
-"""Billing service exceptions using shared error classes.
-All exceptions are re-exported from shared.errors for consistency
-across the platform.
-"""
-
-from shared.errors import (
-    # Base exceptions
-    DomainError,
-    ValidationError,
-    NotFoundError,
+from shared.utils.exceptions import (
+    DomainError, 
+    ValidationError, 
+    NotFoundError, 
     ConflictError,
-    
-    # HTTP exceptions
     UnauthorizedError,
     ForbiddenError,
-    ServiceUnavailableError,
-    
-    # Database exceptions
-    DatabaseError,
+    InfrastructureError,
+    ServiceUnavailableError
 )
 
-class BillingServiceError(DomainError):
-    """Base class for all billing service errors"""
+class BillingError(DomainError):
+    """Base class for billing domain errors"""
     pass
 
-# Billing-specific exceptions
-class BillingPlanNotFoundError(NotFoundError):
-    """Raised when billing plan is not found"""
-    pass
+class InvalidDomainError(ValidationError):
+    """Invalid shop domain format"""
+    def __init__(self, domain: str):
+        super().__init__(
+            message=f"Invalid shop domain format: {domain}",
+            field="shop_domain",
+            value=domain
+        )
 
-class SubscriptionNotFoundError(NotFoundError):
-    """Raised when subscription is not found"""
-    pass
-
-class InvalidBillingIntervalError(ValidationError):
-    """Raised when billing interval is invalid"""
-    pass    
-class ShopifyBillingError(DomainError):
-    """Raised for errors from Shopify billing API"""
-    pass
-
-class SubscriptionCreationError(DomainError):
-    """Raised when subscription creation fails"""
-    pass
+class InvalidPlanError(ValidationError):
+    """Invalid plan ID"""
+    def __init__(self, plan_id: str):
+        super().__init__(
+            message=f"Invalid plan ID: {plan_id}",
+            field="plan",
+            value=plan_id
+        )
 
 class InvalidReturnUrlError(ValidationError):
-    """Raised when return URL is invalid"""
-    pass
+    """Invalid return URL"""
+    def __init__(self, url: str):
+        super().__init__(
+            message="Invalid return URL",
+            field="return_url",
+            value=url
+        )
 
-class BillingServiceConfigError(ValidationError):
-    """Raised when billing service configuration is invalid"""
-    pass
+class MissingHeaderError(ValidationError):
+    """Missing required header"""
+    def __init__(self, header: str):
+        super().__init__(
+            message=f"Missing required header: {header}",
+            field="headers",
+            value=header
+        )
 
-# Export all exceptions
-__all__ = [
-    "BillingServiceError",
-    "BillingPlanNotFoundError",
-    "SubscriptionNotFoundError",
-    "InvalidBillingIntervalError",
-    "ShopifyBillingError",
-    "SubscriptionCreationError",
-    "InvalidReturnUrlError",
-    "BillingServiceConfigError",
-    # Re-export all shared exceptions
-    "DomainError",
-    "ValidationError",
-    "NotFoundError",
-    "ConflictError",
-    "UnauthorizedError",
-    "ForbiddenError",
-    "ServiceUnavailableError",
-    "DatabaseError",
-]
+class TrialAlreadyUsedError(ConflictError):
+    """Trial has already been used"""
+    def __init__(self, shop_domain: str):
+        super().__init__(
+            message="Trial has already been used for this merchant",
+            conflicting_resource="trial",
+            current_state="consumed"
+        )
+
+class SubscriptionExistsError(ConflictError):
+    """Already subscribed to this plan"""
+    def __init__(self, plan_id: str):
+        super().__init__(
+            message="Already subscribed to this plan",
+            conflicting_resource="subscription",
+            current_state=plan_id
+        )
+
+class PolicyBlockedError(ForbiddenError):
+    """Trial creation blocked by policy"""
+    def __init__(self, reason: str = "Trial creation blocked by policy"):
+        super().__init__(
+            message=reason,
+            required_permission="trial_creation"
+        )
+
+class TokenServiceError(ServiceUnavailableError):
+    """Failed to fetch access token"""
+    def __init__(self):
+        super().__init__(
+            message="Failed to fetch access token",
+            service="token-service",
+            retryable=True
+        )
+
+class ShopifyApiError(ServiceUnavailableError):
+    """Shopify API error"""
+    def __init__(self, details: str):
+        super().__init__(
+            message=f"Shopify API error: {details}",
+            service="shopify",
+            retryable=True
+        )
+

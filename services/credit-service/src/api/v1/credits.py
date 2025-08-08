@@ -1,57 +1,100 @@
-"""Credit account API endpoints."""
-
-from uuid import UUID
-from typing import List
-from fastapi import APIRouter, HTTPException, status
-
-from shared.api import (
-    ApiResponse,
-    success_response,
-    RequestContextDep,
+from fastapi import APIRouter, status, HTTPException, Query
+from shared.api import ApiResponse, success_response
+from shared.api.dependencies import RequestContextDep
+from ...dependencies import (
+    CreditServiceDep, ShopDomainDep, AdminAuthDep
 )
+from ...schemas.credit import (
+    BalanceOut, CreditGrantIn, CreditGrantOut, LedgerOut
+)
+from ...exceptions import (
+    InvalidDomainError, InvalidAmountError,
+    MerchantCreditNotFoundError
+)
+from ...utils import normalize_shop_domain
 
-from ...dependencies import CreditServiceDep
-from ...schemas.credit import CreditResponse
+router = APIRouter(tags=["credits"])
 
-router = APIRouter(prefix="", tags=["credits"])
-
-
-@router.get("/{merchant_id}", 
-            response_model=ApiResponse[CreditResponse], 
-            summary="Get credits status for merchant",
-            status_code=status.HTTP_200_OK
-            )
-async def get_credit(
-    merchant_id: UUID,
-    svc: CreditServiceDep,
-    ctx: RequestContextDep  
+@router.get(
+    "/api/credits/current",
+    response_model=ApiResponse[BalanceOut],
+    status_code=status.HTTP_200_OK,
+    summary="Get current credit balance",
+    description="Get the current credit balance for a merchant"
+)
+async def get_current_balance(
+    service: CreditServiceDep,
+    ctx: RequestContextDep,
+    shop_domain: ShopDomainDep
 ):
-    """Get credit account for merchant"""
-    credit = await svc.get_credit(merchant_id)
-    if not credit:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Credit account not found for merchant {merchant_id}"
+    """Get current credit balance for a merchant"""
+    try:
+        balance = await service.get_balance(shop_domain)
+        return success_response(
+            balance,
+            ctx.request_id,
+            ctx.correlation_id
         )
-    return success_response(
-        data=credit,
-        request_id=ctx.request_id,
-        correlation_id=ctx.correlation_id,
-    )
+    except InvalidDomainError:
+        raise HTTPException(400, "Invalid shop domain format")
+    except Exception as e:
+        raise HTTPException(500, "Failed to retrieve balance")
 
-@router.get("admin/zero-balance", 
-            response_model=ApiResponse[List[CreditResponse]], 
-            summary="Get all merchants with zero balance",
-            status_code=status.HTTP_200_OK
-            )
-async def get_merchants_with_zero_balance(
-    svc: CreditServiceDep,
-    ctx: RequestContextDep
+@router.post(
+    "/internal/credits/grant",
+    response_model=ApiResponse[CreditGrantOut],
+    status_code=status.HTTP_200_OK,
+    summary="Grant credits (admin)",
+    description="Grant credits to a merchant (admin endpoint)"
+)
+async def grant_credits(
+    service: CreditServiceDep,
+    ctx: RequestContextDep,
+    grant: CreditGrantIn,
+    _auth: AdminAuthDep
 ):
-    """Get all merchants with zero balance"""
-    merchants = await svc.get_merchants_with_zero_balance()
-    return success_response(
-        data=merchants,
-        request_id=ctx.request_id,
-        correlation_id=ctx.correlation_id
-    )
+    """Grant credits to a merchant (admin only)"""
+    try:
+        result = await service.grant_credits(grant, ctx)
+        return success_response(
+            result,
+            ctx.request_id,
+            ctx.correlation_id
+        )
+    except InvalidDomainError as e:
+        raise HTTPException(400, str(e))
+    except InvalidAmountError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, "Failed to grant credits")
+
+@router.get(
+    "/internal/credits/ledger/{shop_domain}",
+    response_model=ApiResponse[LedgerOut],
+    status_code=status.HTTP_200_OK,
+    summary="Get credit ledger (admin)",
+    description="Get credit ledger entries for a merchant (admin endpoint)"
+)
+async def get_credit_ledger(
+    service: CreditServiceDep,
+    ctx: RequestContextDep,
+    shop_domain: str,
+    _auth: AdminAuthDep,
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Get credit ledger for audit trail (admin only)"""
+    try:
+        # Normalize domain
+        shop_domain = normalize_shop_domain(shop_domain)
+        
+        ledger = await service.get_ledger(shop_domain)
+        return success_response(
+            ledger,
+            ctx.request_id,
+            ctx.correlation_id
+        )
+    except InvalidDomainError:
+        raise HTTPException(400, "Invalid shop domain format")
+    except Exception as e:
+        raise HTTPException(500, "Failed to retrieve ledger")
+

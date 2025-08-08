@@ -1,123 +1,71 @@
-# services/credit-service/tests/conftest.py
-"""Test configuration and fixtures for credit service."""
-
-import asyncio
 import pytest
 import pytest_asyncio
-
-from uuid import uuid4
-from typing import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+import os
+import uuid7
+from pathlib import Path
+from httpx import AsyncClient
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
+from prisma import Prisma
+from shared.api.correlation import set_correlation_context
 
-from shared.database.base import Base
-from shared.utils.logger import create_logger
-
-from src.config import CreditServiceConfig
-from src.models import Credit, CreditTransaction, TransactionType
-from src.repositories.credit_repository import CreditRepository
-from src.repositories.credit_transaction_repository import CreditTransactionRepository
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_config():
+    """Set up test configuration"""
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ["CREDIT_DB_PASSWORD"] = "test_password"
+    os.environ["CREDIT_ADMIN_TOKEN"] = "test_admin_token"
 
 @pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
+
+@pytest_asyncio.fixture(scope="session")
 async def postgres_container():
-    """Start PostgreSQL container for testing."""
+    """PostgreSQL test container"""
     with PostgresContainer("postgres:15-alpine") as postgres:
+        db_url = postgres.get_connection_url()
+        db_url = db_url.replace("psycopg2", "asyncpg")
+        os.environ["DATABASE_URL"] = db_url
         yield postgres
 
-
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def redis_container():
-    """Start Redis container for testing."""
+    """Redis test container"""
     with RedisContainer("redis:7-alpine") as redis:
+        os.environ["REDIS_URL"] = redis.get_connection_url()
         yield redis
 
-
-@pytest.fixture(scope="session")
-async def test_config(postgres_container, redis_container):
-    """Create test configuration."""
-    return CreditServiceConfig(
-        DATABASE_URL=postgres_container.get_connection_url().replace(
-            "psycopg2", "asyncpg"
-        ),
-        REDIS_URL=redis_container.get_connection_url(),
-        NATS_URL="nats://localhost:4222",  # Mock or skip in tests
-        TRIAL_CREDITS=Decimal("100.00"),
-        LOG_LEVEL="DEBUG",
-    )
-
+@pytest_asyncio.fixture
+async def prisma_client(postgres_container):
+    """Test Prisma client"""
+    client = Prisma()
+    await client.connect()
+    
+    # Run migrations for tests
+    import subprocess
+    subprocess.run(["prisma", "db", "push", "--skip-generate"], check=True)
+    
+    yield client
+    
+    # Cleanup
+    await client.disconnect()
 
 @pytest_asyncio.fixture
-async def db_session(test_config) -> AsyncGenerator[AsyncSession, None]:
-    """Create database session for testing."""
-    engine = create_async_engine(test_config.DATABASE_URL)
-
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # Create session
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    async with session_factory() as session:
-        yield session
-
-    # Cleanup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-    await engine.dispose()
-
+async def client(prisma_client, redis_container):
+    """Test client with correlation context"""
+    from src.main import app
+    app.state.test_mode = True
+    
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
 
 @pytest.fixture
-def test_merchant_id():
-    """Create test merchant ID."""
-    return uuid4()
+def correlation_context():
+    """Set up correlation context for tests"""
+    correlation_id = str(uuid7.uuid7())
+    set_correlation_context(correlation_id)
+    return {
+        "correlation_id": correlation_id
+    }
 
-
-@pytest.fixture
-async def test_account(db_session: AsyncSession, test_merchant_id) -> Credit:
-    """Create test credit account."""
-    account = Credit(
-        merchant_id=test_merchant_id,
-        balance=Decimal("50.00"),
-        lifetime_credits=Decimal("100.00"),
-    )
-
-    db_session.add(account)
-    await db_session.commit()
-    await db_session.refresh(account)
-
-    return account
-
-
-@pytest.fixture
-async def credit_repo(db_session: AsyncSession) -> CreditRepository:
-    """Create credit account repository."""
-    session_factory = async_sessionmaker(bind=db_session.bind)
-    return CreditRepository(session_factory)
-
-
-@pytest.fixture
-async def credit_transaction_repo(
-    db_session: AsyncSession,
-) -> CreditTransactionRepository:
-    """Create credit transaction repository."""
-    session_factory = async_sessionmaker(bind=db_session.bind)
-    return CreditTransactionRepository(session_factory)
-
-
-@pytest.fixture
-def logger():
-    """Create test logger."""
-    return create_logger("credit-service-test", "DEBUG")

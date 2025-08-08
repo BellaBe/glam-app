@@ -1,0 +1,38 @@
+service:
+  name: "catalog-service"
+  version: "1.0.0"
+
+api:
+  host: "localhost"
+  port: 8018
+  external_port: 8118
+  cors_origins: ["*"]
+
+database:
+  enabled: true
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+
+rate_limiting:
+  enabled: true
+  window_seconds: 60
+
+environment: development
+
+logging:
+  level: DEBUG
+  format: json
+  file_path: "/var/log/catalog-service.log"
+
+cache:
+  enabled: true
+  ttl_settings: 30      # Merchant settings cache TTL
+  ttl_entitlements: 30  # Billing entitlements cache TTL
+  max_connections: 50
+
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: true

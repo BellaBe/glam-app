@@ -1,104 +1,102 @@
-# services/billing-service/src/config.py
 import os
 from functools import lru_cache
-from pydantic import BaseModel, Field, SecretStr
+from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from shared.utils.config_loader import merged_config, flatten_config
-from shared.database import DatabaseConfig, create_database_config
 
-
-class BillingServiceConfig(BaseModel):
-    """Billing service configuration from YAML + environment"""
+class ServiceConfig(BaseModel):
+    """Service configuration from YAML + environment"""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
     
-    # Service Identity (from shared + service YAML)
+    # Service Identity
     service_name: str = Field(..., alias="service.name")
     service_version: str = Field(..., alias="service.version")
-    environment: str
-    debug: bool
+    environment: str = Field(..., alias="environment")
+    debug: bool = Field(False, alias="service.debug")
     
     # API Configuration - BOTH PORTS
     api_host: str = Field(..., alias="api.host")
-    api_port: int = Field(..., alias="api.port")                    # Internal/container port
-    api_external_port: int = Field(..., alias="api.external_port")  # Local development port
-    api_cors_origins: list = Field(..., alias="api.cors_origins")
+    api_port: int = Field(..., alias="api.port")
+    api_external_port: int = Field(..., alias="api.external_port")
+    api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
     
-    # Infrastructure (from shared YAML)
-    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
-    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
+    # Infrastructure
+    nats_url: str = Field(..., alias="infrastructure.nats_url")
+    redis_url: str = Field(..., alias="infrastructure.redis_url")
     
-    # Database Configuration
-    db_enabled: bool = Field(..., alias="database.enabled")
-    
-    # Logging (from shared YAML)
+    # Logging
     logging_level: str = Field(..., alias="logging.level")
     logging_format: str = Field(..., alias="logging.format")
+    logging_file_path: str = Field(..., alias="logging.file_path")
     
-    # Rate Limiting (from shared YAML)
-    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
-    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-
-    # Monitoring (from shared YAML)
+    # Monitoring
     monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
     monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
     
-    # Cache (service override of shared defaults)
-    cache_enabled: bool = Field(..., alias="cache.enabled")
-    cache_ttl_seconds: int = Field(..., alias="cache.ttl_seconds")
+    # Rate limiting
+    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
+    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    # Features from service YAML
-    max_retries: int = Field(alias="features.max_retries", default=3)
-    timeout_seconds: int = Field(alias="features.timeout_seconds", default=30)
+    # Database
+    db_enabled: bool = Field(..., alias="database.enabled")
+    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
     
-    # Billing business rules
-    trial_period_days: int = Field(alias="billing.trial_period_days", default=14)
-    max_trial_extensions: int = Field(alias="billing.max_trial_extensions", default=2)
-    max_extension_days: int = Field(alias="billing.max_extension_days", default=30)
+    # Authentication
+    billing_api_key: str = Field(..., alias="BILLING_API_KEY")
+    billing_admin_api_key: str = Field(..., alias="BILLING_ADMIN_API_KEY")
     
-    # Frontend URL for redirects
-    frontend_url: str = Field(alias="frontend.url", default="http://localhost:3000")
+    # Shopify Configuration
+    app_handle: str = Field(..., alias="APP_HANDLE")
+    shopify_managed_checkout_base: str = Field(..., alias="SHOPIFY_MANAGED_CHECKOUT_BASE")
+    allowed_return_domains: List[str] = Field(..., alias="ALLOWED_RETURN_DOMAINS")
     
-    # Shopify configuration
-    shopify_api_version: str = Field(alias="shopify.api_version", default="2024-01")
-    shopify_test_mode: bool = Field(alias="shopify.test_mode", default=False)
+    # Trial Configuration
+    default_trial_days: int = Field(14, alias="DEFAULT_TRIAL_DAYS")
+    trial_grace_hours: int = Field(0, alias="TRIAL_GRACE_HOURS")
     
-    # Secrets from environment (.env)
-    shopify_api_key: SecretStr
-    shopify_api_secret: SecretStr
-
+    # Cache Configuration
+    idempotency_ttl_hours: int = Field(24, alias="IDEMPOTENCY_TTL_HOURS")
+    entitlements_cache_ttl_seconds: int = Field(30, alias="ENTITLEMENTS_CACHE_TTL_SECONDS")
+    reconciliation_cache_ttl_seconds: int = Field(60, alias="RECONCILIATION_CACHE_TTL_SECONDS")
+    
+    # Rate Limiting
+    shopify_rate_limit_points_per_second: int = Field(2, alias="SHOPIFY_RATE_LIMIT_POINTS_PER_SECOND")
+    
     @property
-    def database_config(self) -> DatabaseConfig:
-        """Get database configuration"""
-        cfg = create_database_config(prefix="CREDIT_")
-        return cfg
-
-    @property
-    def effective_port(self) -> int:
-        """
-        Get the effective port to use based on environment.
-        
-        Logic:
-        - Local development (not in Docker): use external_port
-        - Docker/container environment: use internal port
-        - Environment override: CREDIT_USE_EXTERNAL_PORT=true forces external_port
-        """
-        # Check if explicitly requested to use external port
-        use_external = os.getenv("CREDIT_USE_EXTERNAL_PORT", "false").lower() == "true"
-        
-        # Check if running in container (common Docker environment variables)
-        in_container = any([
-            os.getenv("DOCKER_CONTAINER"),
-            os.getenv("HOSTNAME", "").startswith("credit-service"),
-            os.path.exists("/.dockerenv")
-        ])
-        
-        if use_external or (not in_container and self.environment == "development"):
-            return self.api_external_port
-        else:
-            return self.api_port
-
+    def effective_api_port(self) -> int:
+        in_container = os.path.exists("/.dockerenv")
+        return self.api_port if in_container else self.api_external_port
+    
+    @model_validator(mode="after")
+    def _require_db_url_when_enabled(self):
+        if self.db_enabled and not self.database_url:
+            raise ValueError("database.enabled=true requires DATABASE_URL")
+        return self
+    
+    @model_validator(mode="after")
+    def _parse_allowed_domains(self):
+        if isinstance(self.allowed_return_domains, str):
+            self.allowed_return_domains = [d.strip() for d in self.allowed_return_domains.split(",")]
+        return self
 
 @lru_cache
-def get_service_config() -> BillingServiceConfig:
+def get_service_config() -> ServiceConfig:
     """Load and cache service configuration"""
-    cfg_dict = merged_config("billing", env_prefix="BILLING")
+    cfg_dict = merged_config("billing-service")
     flattened = flatten_config(cfg_dict)
-    return BillingServiceConfig(**flattened)
+    
+    # Ensure environment variables survive
+    env_vars = [
+        "DATABASE_URL", "BILLING_API_KEY", "BILLING_ADMIN_API_KEY",
+        "APP_HANDLE", "SHOPIFY_MANAGED_CHECKOUT_BASE", "ALLOWED_RETURN_DOMAINS",
+        "DEFAULT_TRIAL_DAYS", "TRIAL_GRACE_HOURS", "IDEMPOTENCY_TTL_HOURS",
+        "ENTITLEMENTS_CACHE_TTL_SECONDS", "RECONCILIATION_CACHE_TTL_SECONDS",
+        "SHOPIFY_RATE_LIMIT_POINTS_PER_SECOND"
+    ]
+    
+    for var in env_vars:
+        if var not in flattened and var in os.environ:
+            flattened[var] = os.environ[var]
+    
+    return ServiceConfig(**flattened)
+
