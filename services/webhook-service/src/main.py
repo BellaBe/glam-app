@@ -5,7 +5,7 @@ from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
-from .api.router import router
+from .api import router
 
 
 # Global singletons
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
         "version": config.service_version,
         "environment": config.environment,
         "api_host": config.api_host,
-        "api_port": config.effective_api_port,
+        "api_port": config.api_port,
     })
     
     app.state.lifecycle = lifecycle
@@ -42,7 +42,7 @@ def create_application() -> FastAPI:
         title=config.service_name,
         version=config.service_version,
         lifespan=lifespan,
-        description="Webhook service for GlamYouUp platform - receives and processes webhooks from external platforms",
+        description=config.service_description,
         docs_url="/docs",
         redoc_url="/redoc",
         exception_handlers={}  # Use shared middleware for exception handling
@@ -69,7 +69,7 @@ app = create_application()
 if __name__ == "__main__":
     import uvicorn
     
-    port = config.effective_api_port
+    port = config.api_port
     uvicorn.run(
         "src.main:app",
         host=config.api_host,

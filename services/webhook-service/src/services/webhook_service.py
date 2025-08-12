@@ -1,102 +1,225 @@
-import hmac
-import hashlib
-import base64
-from typing import Optional, Tuple
+# services/webhook-service/src/services/webhook_service.py
+from typing import Dict, Any
 from shared.utils.logger import ServiceLogger
-from shared.api.correlation import get_correlation_context
+from ..models import WebhookPlatform, ShopifyWebhookTopic
+from ..repositories.webhook_repository import WebhookRepository
+from ..events.publishers import WebhookEventPublisher
 from ..config import ServiceConfig
-from ..models.enums import WebhookPlatform
-
 
 class WebhookService:
-    """Business logic for webhook processing"""
-    
-    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
-        self.config = config
-        self.logger = logger
-    
-    def validate_hmac(
+    def __init__(
         self,
-        raw_body: bytes,
-        header_hmac: str,
-        primary_secret: str,
-        next_secret: Optional[str] = None
-    ) -> Tuple[Optional[str], bool]:
-        """Validate HMAC with secret rotation support"""
-        # Try primary secret
-        computed_hmac = self._compute_hmac(raw_body, primary_secret)
-        if self._constant_time_compare(computed_hmac, header_hmac):
-            return ('primary', True)
-        
-        # Try rotation secret
-        if next_secret:
-            computed_hmac_next = self._compute_hmac(raw_body, next_secret)
-            if self._constant_time_compare(computed_hmac_next, header_hmac):
-                return ('next', True)
-        
-        return (None, False)
-    
-    def _compute_hmac(self, raw_body: bytes, secret: str) -> str:
-        """Compute HMAC-SHA256 and return base64 encoded"""
-        hash_obj = hmac.new(
-            secret.encode('utf-8'),
-            raw_body,
-            hashlib.sha256
+        config: ServiceConfig,
+        repository: WebhookRepository,
+        publisher: WebhookEventPublisher,
+        logger: ServiceLogger
+    ):
+        self.config = config
+        self.repository = repository
+        self.publisher = publisher
+        self.logger = logger
+
+    async def receive_webhook(
+        self,
+        *,
+        platform: WebhookPlatform,
+        topic: ShopifyWebhookTopic,
+        shop_domain: str,
+        webhook_id: str,
+        payload: dict,
+        correlation_id: str,
+    ) -> str:
+        """
+        Store webhook and publish domain events if new.
+        Returns the webhook entry ID.
+        """
+
+        if topic is ShopifyWebhookTopic.UNKNOWN:
+
+            self.logger.warning(
+                "Received webhook with unknown topic",
+                extra={
+                    "topic_enum": topic.name,
+                    "topic": topic.value,
+                    "shop_domain": shop_domain,
+                    "webhook_id": webhook_id,
+                    "correlation_id": correlation_id,
+                }
+            )
+
+        # Store the webhook
+        entry, is_new = await self.repository.create_or_get_existing(
+            platform=platform.value,
+            webhook_id=webhook_id,
+            topic=topic.value,
+            shop_domain=shop_domain,
+            payload=payload,
         )
-        return base64.b64encode(hash_obj.digest()).decode('utf-8')
-    
-    def _constant_time_compare(self, a: str, b: str) -> bool:
-        """Constant time string comparison to prevent timing attacks"""
-        if len(a) != len(b):
-            return False
-        
-        result = 0
-        for char_a, char_b in zip(a, b):
-            result |= ord(char_a) ^ ord(char_b)
-        
-        return result == 0
-    
-    def validate_content_type(self, content_type: Optional[str]) -> bool:
-        """Validate content type, ignoring charset"""
-        if not content_type:
-            return False
-        
-        # Handle "application/json; charset=utf-8"
-        main_type = content_type.split(';', 1)[0].strip().lower()
-        return main_type == 'application/json'
-    
-    def validate_shop_domain(self, domain: str) -> bool:
-        """Validate shop domain format"""
-        return domain.lower().endswith('.myshopify.com')
-    
-    def is_shopify_ip(self, client_ip: str) -> bool:
-        """Check if IP is from Shopify (simplified for now)"""
-        # In production, this would check against actual Shopify IP ranges
-        # For now, return True if no IPs configured
-        if not self.config.webhook_shopify_ips:
-            return True
-        
-        return client_ip in self.config.webhook_shopify_ips
-    
-    def extract_canonical_headers(self, headers: dict) -> dict:
-        """Extract and canonicalize required headers"""
-        # Case-insensitive header lookup
-        canonical = {}
-        header_map = {k.lower(): v for k, v in headers.items()}
-        
-        # Required headers with canonical names
-        required_headers = {
-            'x-shopify-hmac-sha256': 'X-Shopify-Hmac-Sha256',
-            'x-shopify-topic': 'X-Shopify-Topic',
-            'x-shopify-shop-domain': 'X-Shopify-Shop-Domain',
-            'x-shopify-webhook-id': 'X-Shopify-Webhook-Id',
-            'x-shopify-api-version': 'X-Shopify-Api-Version',
-        }
-        
-        for lower_name, canonical_name in required_headers.items():
-            if lower_name in header_map:
-                canonical[canonical_name] = header_map[lower_name]
-        
-        return canonical
 
+        if not is_new:
+            # Duplicate webhook - already processed
+            self.logger.info(
+                "Duplicate webhook received",
+                extra={
+                    "topic_enum": topic.name,
+                    "topic": topic.value,
+                    "shop_domain": shop_domain,
+                    "webhook_id": webhook_id,
+                    "correlation_id":  correlation_id,
+                    "entry_id": entry.id,
+                },
+            )
+            return entry.id
+        
+        
+        await self._publish_domain_event(
+            topic=topic,
+            shop_domain=shop_domain,
+            webhook_id=webhook_id,
+            payload=payload,
+            correlation_id=correlation_id,
+        )
 
+        self.logger.info(
+            "New webhook stored & events published",
+            extra={
+                "topic": topic,
+                "topic_enum": topic.value,
+                "shop_domain": shop_domain,
+                "webhook_id": webhook_id,
+                "correlation_id": correlation_id,
+                "entry_id": entry.id,
+            },
+        )
+
+        return entry.id
+    
+    async def _publish_domain_event(
+        self,
+        topic: ShopifyWebhookTopic,
+        shop_domain: str,
+        webhook_id: str,
+        payload: Dict[Any, Any],
+        correlation_id: str,
+    ) -> None:
+        """Publish appropriate domain event based on webhook topic"""
+        
+        # Map webhook topics to domain events
+        if topic is ShopifyWebhookTopic.APP_UNINSTALLED:
+            await self.publisher.app_uninstalled(
+                shop_domain=shop_domain,
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+
+        elif topic is ShopifyWebhookTopic.ORDERS_CREATE:
+            await self.publisher.order_created(
+                shop_domain=shop_domain,
+                order_id=str(payload.get("id", "")),
+                total_price=payload.get("total_price", "0.00"),
+                currency=payload.get("currency", "USD"),
+                created_at=payload.get("created_at", ""),
+                line_items_count=len(payload.get("line_items", [])),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+
+        elif topic is ShopifyWebhookTopic.APP_SUBSCRIPTIONS_UPDATE:
+            subscription = payload.get("app_subscription", {})
+            await self.publisher.app_subscription_updated(
+                shop_domain=shop_domain,
+                subscription_id=str(subscription.get("id", "")),
+                status=subscription.get("status", ""),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+
+        elif topic is ShopifyWebhookTopic.APP_PURCHASES_ONE_TIME_UPDATE:
+            purchase = payload.get("app_purchase_one_time", {})
+            await self.publisher.app_purchase_updated(
+                shop_domain=shop_domain,
+                charge_id=str(purchase.get("id", "")),
+                status=purchase.get("status", ""),
+                test=purchase.get("test", False),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic in (ShopifyWebhookTopic.PRODUCTS_CREATE, ShopifyWebhookTopic.PRODUCTS_UPDATE, ShopifyWebhookTopic.PRODUCTS_DELETE):
+            action_map = {
+                ShopifyWebhookTopic.PRODUCTS_CREATE: "created",
+                ShopifyWebhookTopic.PRODUCTS_UPDATE: "updated",
+                ShopifyWebhookTopic.PRODUCTS_DELETE: "deleted"
+            }
+            event_type = action_map[topic]
+            await self.publisher.catalog_product_event(
+                event_type=event_type,
+                shop_domain=shop_domain,
+                product_id=str(payload.get("id", "")),
+                updated_at=payload.get("updated_at") if event_type == "updated" else None,
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic in (ShopifyWebhookTopic.COLLECTIONS_CREATE, ShopifyWebhookTopic.COLLECTIONS_UPDATE, ShopifyWebhookTopic.COLLECTIONS_DELETE):
+            action_map = {
+                ShopifyWebhookTopic.COLLECTIONS_CREATE: "created",
+                ShopifyWebhookTopic.COLLECTIONS_UPDATE: "updated",
+                ShopifyWebhookTopic.COLLECTIONS_DELETE: "deleted"
+            }
+            event_type = action_map[topic]
+            await self.publisher.catalog_collection_event(
+                event_type=event_type,
+                shop_domain=shop_domain,
+                collection_id=str(payload.get("id", "")),
+                updated_at=payload.get("updated_at") if event_type == "updated" else None,
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic is ShopifyWebhookTopic.INVENTORY_LEVELS_UPDATE:
+            await self.publisher.inventory_updated(
+                shop_domain=shop_domain,
+                inventory_item_id=str(payload.get("inventory_item_id", "")),
+                location_id=str(payload.get("location_id", "")),
+                available=payload.get("available", 0),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic is ShopifyWebhookTopic.CUSTOMERS_DATA_REQUEST:
+            customer = payload.get("customer", {})
+            await self.publisher.gdpr_data_request(
+                shop_domain=shop_domain,
+                customer_id=str(customer.get("id", "")),
+                orders_requested=payload.get("orders_requested", []),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic is ShopifyWebhookTopic.CUSTOMERS_REDACT:
+            customer = payload.get("customer", {})
+            await self.publisher.gdpr_customer_redact(
+                shop_domain=shop_domain,
+                customer_id=str(customer.get("id", "")),
+                orders_to_redact=payload.get("orders_to_redact", []),
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        elif topic is ShopifyWebhookTopic.SHOP_REDACT:
+            await self.publisher.gdpr_shop_redact(
+                shop_domain=shop_domain,
+                webhook_id=webhook_id,
+                correlation_id=correlation_id,
+            )
+            
+        else:
+            self.logger.warning(
+                f"No domain event mapping for topic: {topic}",
+                extra={
+                    "topic": topic.value,
+                    "shop_domain": shop_domain,
+                    "correlation_id": correlation_id,
+                }
+            )

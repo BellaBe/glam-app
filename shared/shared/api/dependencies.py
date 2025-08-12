@@ -7,6 +7,7 @@ Simplified to focus on commonly used dependencies.
 """
 
 from typing import Annotated, Optional, Iterable
+import jwt
 from fastapi import Query, Request, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 import os, re
@@ -53,9 +54,17 @@ def get_client_ip(request: Request) -> str:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+def get_content_type(request: Request) -> Optional[str]:
+    """
+    Get the content type from the request headers.
+    Returns None if not set.
+    """
+    return request.headers.get("Content-Type")
+
 
 ClientIpDep = Annotated[str, Depends(get_client_ip)]
 RequestIdDep = Annotated[str, Depends(get_request_id)]
+ContentTypeDep = Annotated[Optional[str], Depends(get_content_type)]
 
 
 # =========================
@@ -64,14 +73,15 @@ RequestIdDep = Annotated[str, Depends(get_request_id)]
 
 CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]  # Re-export
 
-
 class RequestContext(BaseModel):
     """Essential request context for logging/auditing."""
     request_id: str
     correlation_id: str
     method: str
     path: str
+    content_type: Optional[str] = None
     ip_client: Optional[str] = None
+    
 
     @classmethod
     def from_request(cls, request: Request) -> "RequestContext":
@@ -81,6 +91,7 @@ class RequestContext(BaseModel):
             method=request.method,
             path=str(request.url.path),
             ip_client=get_client_ip(request),
+            content_type=get_content_type(request),
         )
 
 
@@ -185,3 +196,104 @@ ShopDomainDep = Annotated[str, Depends(require_shop_domain)]
 # =========================
 
 PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
+
+
+# =========================
+# JWT-based internal auth
+# =========================
+
+class JwtAuthContext(BaseModel):
+    """JWT Authentication result."""
+    audience: str  # "internal" or "fe"
+    shop: str
+    scope: str
+    token: str
+
+def require_internal_jwt(request: Request) -> JwtAuthContext:
+    """
+    Service-to-service auth with short-lived JWT.
+    Uses INTERNAL_JWT_SECRET to verify.
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    
+    token = auth.split(" ", 1)[1].strip()
+    secret = os.getenv("INTERNAL_JWT_SECRET", "")
+    if not secret:
+        raise RuntimeError("INTERNAL_JWT_SECRET not configured")
+    
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {str(e)}")
+    
+    return JwtAuthContext(
+        audience="internal",
+        shop=payload.get("sub", ""),
+        scope=payload.get("scope", ""),
+        token=token
+    )
+
+InternalJwtDep = Annotated[JwtAuthContext, Depends(require_internal_jwt)]
+
+
+# =========================
+# Shopify webhook headers
+# =========================
+
+class ShopifyWebhookHeaders(BaseModel):
+    """
+    Canonicalized Shopify webhook headers extracted from the request.
+    """
+    topic_raw: str
+    shop_domain: str
+    webhook_id: Optional[str] = None
+
+def get_shopify_webhook_headers(
+    request: Request,
+) -> ShopifyWebhookHeaders:
+    """
+    Extracts and validates Shopify webhook headers from a BFF-relayed request.
+    Assumes the BFF already verified origin (no HMAC here).
+    """
+    # FastAPI's Header(...) could be used, but pulling from request.headers keeps this dep reusable in middleware too.
+    headers = request.headers
+
+
+    topic = headers.get("X-Shopify-Topic")
+    shop = headers.get("X-Shopify-Shop-Domain")
+    webhook_id = headers.get("X-Shopify-Webhook-Id")
+
+    missing = [name for name, val in [
+        ("X-Shopify-Topic", topic),
+        ("X-Shopify-Shop-Domain", shop),
+        ("X-Shopify-Webhook-Id", webhook_id),
+    ] if not val]
+    
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Missing required headers: {', '.join(missing)}"
+        )
+
+    # Normalize and validate domain
+    try:
+        shop_norm = _normalize_myshopify(shop) #type: ignore
+    except HTTPException: 
+        # Re-raise with the same error for consistency
+        raise
+
+    # (Optional) lightweight sanity checks to avoid absurd header sizes
+    if len(webhook_id) > 256: #type: ignore
+        raise HTTPException(status_code=400, detail="X-Shopify-Webhook-Id too long")
+    if len(topic) > 256: #type: ignore
+        raise HTTPException(status_code=400, detail="X-Shopify-Topic too long")
+
+    return ShopifyWebhookHeaders(
+        webhook_id=webhook_id, #type: ignore
+        topic_raw=topic, #type: ignore
+        shop_domain=shop_norm,
+    )
+
+ShopifyHeadersDep = Annotated[ShopifyWebhookHeaders, Depends(get_shopify_webhook_headers)]

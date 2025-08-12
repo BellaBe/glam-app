@@ -9,9 +9,9 @@ package-mode = false
 python = "^3.11"
 fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.25.0"}
-pydantic = "^2.5.0"
+pydantic = {extras = ["email"], version = "^2.11.7"}
 pydantic-settings = "^2.1.0"
-prisma = "^0.11.0"
+prisma = "^0.15.0"
 nats-py = "^2.6.0"
 redis = "^5.0.1"
 python-multipart = "^0.0.6"
@@ -19,7 +19,7 @@ httpx = "^0.25.2"
 python-dotenv = "^1.0.0"
 prometheus-client = "^0.19.0"
 uuid7 = "^0.1.0"
-shared = { path = "../../shared", develop = true }
+shared = {path = "../../shared", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

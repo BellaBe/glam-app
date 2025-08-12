@@ -1,7 +1,8 @@
+# src/api/v1/__init__.py
 from fastapi import APIRouter
-from .merchants import router as merchants_router
+from .merchants import merchants_router
 
-router = APIRouter(prefix="/api/v1")
+v1_router = APIRouter(prefix="/v1")
 
-# Include v1 API routes
-router.include_router(merchants_router, prefix="/merchants")
+# Include merchant routes
+v1_router.include_router(merchants_router, tags=["merchants"])

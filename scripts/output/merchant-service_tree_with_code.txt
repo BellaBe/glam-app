@@ -173,15 +173,14 @@ src/
 │   │   │   
 │   │   │   ```py
 │   │   │   from fastapi import APIRouter
-│   │   │   from .merchants import router as merchants_router
+│   │   │   from .merchants import router
 │   │   │   
-│   │   │   router = APIRouter(prefix="/api/v1")
+│   │   │   router = APIRouter(prefix="/v1")
 │   │   │   
 │   │   │   # Include v1 API routes
-│   │   │   router.include_router(merchants_router, prefix="/merchants")
+│   │   │   router.include_router(router, tags=["merchants"])
 │   │   │   ```
 │   │   │   
-│   │   ├── health.py
 │   │   └── merchants.py
 │   │       
 │   │       ```py
@@ -195,11 +194,12 @@ src/
 │   │           MerchantSettingsOut, MerchantSyncOut, MerchantActivity
 │   │       )
 │   │       from ...exceptions import (
-│   │           MerchantNotFoundError, InvalidDomainError,
-│   │           InvalidStatusTransitionError, ConsentViolationError
-│   │       )
+│   │           MerchantNotFoundError, 
+│   │           InvalidDomainError, 
+│   │           ConsentViolationError
+│   │           )
 │   │       
-│   │       router = APIRouter()
+│   │       router = APIRouter(prefix="/merchants")
 │   │       
 │   │       @router.post(
 │   │           "/sync",
@@ -216,6 +216,8 @@ src/
 │   │       ):
 │   │           """Sync merchant after OAuth completion"""
 │   │           try:
+│   │               
+│   │               print("AM HERE========")
 │   │               # Validate shop domain matches header
 │   │               if body.shop_domain.lower() != shop_domain_header:
 │   │                   raise InvalidDomainError("Shop domain mismatch between body and header")
@@ -346,18 +348,16 @@ src/
 │   │       
 │   │       ```
 │   │       
-│   ├── __init__.py
-│   └── router.py
+│   └── __init__.py
 │       
 │       ```py
 │       from fastapi import APIRouter
-│       from .v1 import merchants
+│       from .v1 import router
 │       
-│       router = APIRouter()
+│       router = APIRouter(prefix="/api")
 │       
 │       # Include v1 routes
-│       router.include_router(merchants.router, tags=["merchants"])
-│       
+│       router.include_router(router, tags=["merchants"])
 │       ```
 │       
 ├── events/
@@ -715,6 +715,7 @@ src/
 │                       ]
 │                   }
 │               )
+│               print(f"Found merchant: {merchant}")
 │               return merchant
 │           
 │           async def create(self, data: MerchantSync) -> Merchant:
@@ -874,6 +875,7 @@ src/
 │           shop_gid: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
 │           shop_name: Optional[str] = Field(None, description="Shop display name")
 │           email: Optional[EmailStr] = Field(None, description="Primary contact email")
+│           url: Optional[str] = Field(None, description="Shop URL")
 │           timezone: Optional[str] = Field("UTC", description="IANA timezone")
 │           currency: Optional[str] = Field("USD", description="ISO currency code")
 │           scopes: str = Field(..., description="Comma-separated OAuth scopes")
@@ -1075,13 +1077,6 @@ src/
 │               if not data.shop_domain.lower().endswith('.myshopify.com'):
 │                   raise InvalidDomainError(f"Invalid shop domain: {data.shop_domain}")
 │               
-│               # Check idempotency
-│               # if idempotency_key:
-│               #     cached = await self.redis.get(f"idem:{idempotency_key}")
-│               #     if cached:
-│               #         import json
-│               #         return MerchantSyncOut(**json.loads(cached))
-│               
 │               # Find existing merchant
 │               existing = await self.repository.find_by_domain_or_gid(data.shop_domain, data.shop_gid)
 │               
@@ -1091,6 +1086,7 @@ src/
 │                   created = False
 │               else:
 │                   # New install
+│                   print("DATA========", data)
 │                   merchant = await self.repository.create(data)
 │                   created = True
 │                   
@@ -1322,6 +1318,7 @@ src/
 │   from typing import Optional
 │   from pydantic import BaseModel, Field, ConfigDict, model_validator
 │   from shared.utils.config_loader import merged_config, flatten_config
+│   from shared.utils.exceptions import ConfigurationError
 │   
 │   class ServiceConfig(BaseModel):
 │       """Service configuration from YAML + environment"""
@@ -1330,19 +1327,21 @@ src/
 │       # Service Identity
 │       service_name: str = Field(..., alias="service.name")
 │       service_version: str = Field(..., alias="service.version")
-│       environment: str = Field(..., alias="environment")
-│       debug: bool = Field(False, alias="service.debug")
+│       service_description: str = Field(..., alias="service.description")
+│       debug: bool = Field(..., alias="service.debug")
 │       
-│       # API Configuration - BOTH PORTS
+│       # Environment - from env
+│       environment: str = Field(..., alias="APP_ENV")
+│       
+│       # API Configuration
 │       api_host: str = Field(..., alias="api.host")
-│       api_port: int = Field(..., alias="api.port")
-│       api_external_port: int = Field(..., alias="api.external_port")
+│       api_external_port: int = Field(..., alias="MERCHANT_API_EXTERNAL_PORT")
 │       api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
 │       
-│       # Infrastructure
-│       nats_url: str = Field(..., alias="infrastructure.nats_url")
-│       redis_url: str = Field(..., alias="infrastructure.redis_url")
-│       
+│       # Database
+│       database_enabled: bool = Field(..., alias="MERCHANT_DB_ENABLED")
+│       database_url: str = Field(..., alias="DATABASE_URL")
+│   
 │       # Logging
 │       logging_level: str = Field(..., alias="logging.level")
 │       logging_format: str = Field(..., alias="logging.format")
@@ -1356,37 +1355,52 @@ src/
 │       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
 │       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
 │       
-│       # Database
-│       db_enabled: bool = Field(..., alias="database.enabled")
-│       database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
+│       # Internal Authentication
+│       internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_KEY")
 │       
-│       # Authentication
-│       backend_api_key: str = Field(..., alias="BACKEND_API_KEY")
+│       # Computed properties
+│       @property
+│       def nats_url(self) -> str:
+│           in_container = os.path.exists("/.dockerenv")
+│           if in_container or self.environment in ["development", "production"]:
+│               return "nats://nats:4222"
+│           return "nats://localhost:4222"
 │       
 │       @property
-│       def effective_api_port(self) -> int:
+│       def redis_url(self) -> str:
 │           in_container = os.path.exists("/.dockerenv")
-│           return self.api_port if in_container else self.api_external_port
+│           if in_container or self.environment in ["development", "production"]:
+│               return "redis://redis:6379"
+│           return "redis://localhost:6379"
 │       
+│       @property
+│       def api_port(self) -> int:
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│   
 │       @model_validator(mode="after")
 │       def _require_db_url_when_enabled(self):
-│           if self.db_enabled and not self.database_url:
-│               raise ValueError("database.enabled=true requires DATABASE_URL")
+│           if self.database_enabled and not self.database_url:
+│               raise ValueError("database_enabled=true requires DATABASE_URL")
 │           return self
+│   
 │   
 │   @lru_cache
 │   def get_service_config() -> ServiceConfig:
 │       """Load and cache service configuration"""
-│       cfg_dict = merged_config("merchant-service")
-│       flattened = flatten_config(cfg_dict)
-│       
-│       # Ensure raw environment variables survive
-│       for key in ["DATABASE_URL", "BACKEND_API_KEY"]:
-│           if key not in flattened and key in os.environ:
-│               flattened[key] = os.environ[key]
-│       
-│       return ServiceConfig(**flattened)
-│   
+│       try:
+│           # Load YAML + all env vars
+│           cfg_dict = merged_config("merchant-service")
+│           flattened = flatten_config(cfg_dict)
+│           return ServiceConfig(**flattened)
+│           
+│       except Exception as e:
+│           print(f"❌ Configuration error: {e}")
+│           raise ConfigurationError(
+│               f"Failed to load service configuration: {e}", 
+│               config_key="merchant-service", 
+│               expected_value="valid config"
+│           )
 │   ```
 │   
 ├── dependencies.py
@@ -1561,7 +1575,7 @@ src/
 │   
 │       async def _init_database(self) -> None:
 │           """Initialize Prisma client if database is enabled."""
-│           if not self.config.db_enabled:
+│           if not self.config.database_enabled:
 │               self.logger.info("Database disabled; skipping Prisma initialization")
 │               return
 │   
@@ -1582,7 +1596,7 @@ src/
 │   
 │       # ---------------------------------------------------------------- repos
 │       def _init_repositories(self) -> None:
-│           if self.config.db_enabled:
+│           if self.config.database_enabled:
 │               if not (self.prisma and self._db_connected):
 │                   raise RuntimeError("Prisma client not initialized/connected")
 │               self.merchant_repo = MerchantRepository(self.prisma)
@@ -1635,7 +1649,7 @@ src/
     from shared.utils.logger import create_logger
     from .config import get_service_config
     from .lifecycle import ServiceLifecycle
-    from .api.router import router
+    from .api import router as merchant_router
     
     # Global singletons
     config = get_service_config()
@@ -1650,7 +1664,7 @@ src/
             "version": config.service_version,
             "environment": config.environment,
             "api_host": config.api_host,
-            "api_port": config.effective_api_port,
+            "api_port": config.api_port,
         })
         
         app.state.lifecycle = lifecycle
@@ -1669,7 +1683,10 @@ src/
             title=config.service_name,
             version=config.service_version,
             lifespan=lifespan,
-            description="Merchant service for GlamYouUp platform - manages merchant identity and consent",
+            description=config.service_description,
+            docs_url="/docs",
+            redoc_url="/redoc",
+            exception_handlers={}  # Use shared middleware for exception handling
         )
         
         setup_middleware(
@@ -1681,7 +1698,7 @@ src/
         
         # Include routers
         app.include_router(create_health_router(config.service_name))
-        app.include_router(router)
+        app.include_router(merchant_router)
         
         return app
     
@@ -1689,11 +1706,10 @@ src/
     
     if __name__ == "__main__":
         import uvicorn
-        port = config.effective_api_port
         uvicorn.run(
             "src.main:app",
             host=config.api_host,
-            port=port,
+            port=config.api_port,
             reload=config.debug
         )
     
@@ -1913,6 +1929,13 @@ CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 -
 ```
 
 poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
 pyproject.toml
 
 ```toml

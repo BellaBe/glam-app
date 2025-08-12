@@ -1,10 +1,10 @@
-# shared/config/loader.py
+# shared/utils/config_loader.py
 from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable
 import os
 import yaml
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 
 # repo root
 _REPO_ROOT = Path(__file__).resolve()
@@ -16,7 +16,6 @@ while _REPO_ROOT.name != "glam-app":
 _CONFIG_DIR = _REPO_ROOT / "config"
 _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"
 _SVC_CFG_DIR = _CONFIG_DIR / "services"
-_SERVICES_DIR = _REPO_ROOT / "services"
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
     if not path.is_file():
@@ -33,33 +32,24 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
             out[k] = v
     return out
 
-def _load_service_dotenv(service: str) -> None:
-    """Load services/{service}/.env for local runs only. Never override existing env."""
-    if os.path.exists("/.dockerenv") or os.getenv("DISABLE_DOTENV") == "1":
-        return
-    p = _SERVICES_DIR / service / ".env"
-    if not p.is_file():
-        return
-    for k, v in (dotenv_values(p) or {}).items():
-        if v is not None and k not in os.environ:
-            os.environ[k] = v
-
-def merged_config(
-    service: str,
-    *,
-    passthrough_env: Iterable[str] = ("DATABASE_URL",),
-) -> Dict[str, Any]:
-    """shared.yml < service.yml, plus selected raw env keys (no prefixes)."""
-    _load_service_dotenv(service)
-
+def merged_config(service: str) -> Dict[str, Any]:
+    """Load config: shared.yml < service.yml < ALL environment variables"""
+    
+    # Load root .env if not in Docker and not disabled
+    if not os.path.exists("/.dockerenv") and os.getenv("DISABLE_DOTENV") != "1":
+        root_env = _REPO_ROOT / ".env"
+        if root_env.is_file():
+            load_dotenv(root_env, override=False)
+    
+    # Merge YAML configs
     cfg = _deep_merge(
         _load_yaml(_SHARED_CONFIG),
         _load_yaml(_SVC_CFG_DIR / f"{service}.yml"),
     )
-
-    for k in passthrough_env:
-        if k in os.environ and k not in cfg:
-            cfg[k] = os.environ[k]
+    
+    # Add ALL environment variables
+    cfg.update(os.environ)
+    
     return cfg
 
 def flatten_config(data: dict, parent_key: str = "", sep: str = ".") -> dict:

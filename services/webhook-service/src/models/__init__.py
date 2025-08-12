@@ -4,16 +4,14 @@ from .enums import (
     WebhookPlatform,
     WebhookStatus,
     ShopifyWebhookTopic,
-    normalize_topic_enum,
-    TOPIC_MAPPING
+    parse_topic
 )
 
 __all__ = [
     "WebhookPlatform",
     "WebhookStatus", 
     "ShopifyWebhookTopic",
-    "normalize_topic_enum",
-    "TOPIC_MAPPING"
+    "parse_topic"
 ]
 
 

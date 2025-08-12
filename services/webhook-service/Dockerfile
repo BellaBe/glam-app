@@ -1,3 +1,4 @@
+# services/webhook-service/Dockerfile
 # ──────────────────────────────────────────────────────────────
 # 📦  Stage 1 ─ Builder
 # ──────────────────────────────────────────────────────────────
@@ -51,9 +52,7 @@ WORKDIR /app
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8012
+EXPOSE 8000
 
 # Run migrations and start server
-CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8012"]
-
-
+CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]

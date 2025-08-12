@@ -1,4 +1,3 @@
-"""
 [tool.poetry]
 name = "analytics-service"
 version = "1.0.0"
@@ -69,5 +68,4 @@ omit = ["tests/*", "*/migrations/*", "*/__init__.py"]
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-"""
 

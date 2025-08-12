@@ -8,7 +8,6 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./db.server";
 import apiClient from "./lib/apiClient";
 import { GET_SHOP_INFO } from "./query";
-
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
@@ -37,25 +36,38 @@ const shopify = shopifyApp({
         const shopInfoResponse = await admin.graphql(GET_SHOP_INFO);
         const shopData = await shopInfoResponse.json();
 
-        console.log("[SHOPIFY] Shop DATA:========", JSON.stringify(shopData, null, 2));
-
         const syncData = {
-          shop_gid: shopData.data.shop.id,
-          name: shopData.data.shop.name,
-          url: shopData.data.shop.url,
+          platform_name: "shopify",
+          platform_id: shopData.data.shop.id,
+          shop_name: shopData.data.shop.name,
+          shop_url: shopData.data.shop.url,
           email: shopData.data.shop.email,
-          currencyCode: shopData.data.shop.currencyCode,   
-          primaryDomainDomain: shopData.data.shop.primaryDomain?.domain,
-          primaryDomainHost: shopData.data.shop.primaryDomain?.host,
-          plan: shopData.data.shop.plan?.displayName,
-          myshopifyDomain: shopData.data.shop.myshopifyDomain,
-          contactEmail: shopData.data.shop.contactEmail,
-          country: shopData.data.shop.billingAddress?.countryCodeV2,
-          accessToken: session.accessToken,
-          scope: session.scope,
+          contact_email: shopData.data.shop.contactEmail,
+          currency_code: shopData.data.shop.currencyCode,
+          primary_domain_url: shopData.data.shop.primaryDomain?.url,
+          primary_domain_host: shopData.data.shop.primaryDomain?.host,
+          myshopify_domain: shopData.data.shop.myshopifyDomain,
+          platform_plan: shopData.data.shop.plan?.displayName,
+          billing_address: JSON.stringify(shopData.data.shop.billingAddress),
         };
 
-        
+        // ADD THESE LOGS:
+        console.log("[SHOPIFY] ===== SYNC REQUEST DEBUG =====");
+        console.log("[SHOPIFY] Sync Data:", JSON.stringify(syncData, null, 2));
+        console.log(
+          "[SHOPIFY] Data Types:",
+          Object.entries(syncData).map(
+            ([k, v]) =>
+              `${k}: ${typeof v} (${v === null ? "null" : v === undefined ? "undefined" : "valued"})`,
+          ),
+        );
+
+        // Log what apiClient.syncShop actually sends
+        console.log(
+          "[SHOPIFY] API Client method being called:",
+          apiClient.syncShop.toString(),
+        );
+
         const syncResponse = await apiClient.syncShop(syncData);
         console.log("[SHOPIFY] Sync Shop Response:", syncResponse);
         if (syncResponse.error) {
@@ -64,8 +76,17 @@ const shopify = shopifyApp({
           console.log("[SHOPIFY] Shop synced successfully:", syncResponse.data);
         }
       } catch (error) {
-        console.error("[SHOPIFY] Error in afterAuth hook:", error);
-        throw error;
+        console.error("[SHOPIFY] ===== SYNC ERROR DETAILS =====");
+    console.error("[SHOPIFY] Status:", error.response?.status);
+    console.error("[SHOPIFY] Response Data:", JSON.stringify(error.response?.data, null, 2));
+    console.error("[SHOPIFY] Response Headers:", error.response?.headers);
+    console.error("[SHOPIFY] Request Config:", {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers,
+        data: error.config?.data
+    });
+    throw error;
       }
     },
   },

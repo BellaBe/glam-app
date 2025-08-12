@@ -34,6 +34,7 @@ class MerchantRepository:
                 ]
             }
         )
+        print(f"Found merchant: {merchant}")
         return merchant
     
     async def create(self, data: MerchantSync) -> Merchant:

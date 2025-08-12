@@ -1,4 +1,4 @@
-import uuid7
+from uuid_extensions import uuid7
 from typing import Optional, List
 from shared.messaging.publisher import Publisher
 from shared.messaging.subjects import Subjects

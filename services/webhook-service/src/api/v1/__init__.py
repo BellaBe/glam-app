@@ -1,7 +1,7 @@
-"""API v1 endpoints"""
+from fastapi import APIRouter
+from .webhooks import router as webhooks_router
 
-from . import webhooks
+router = APIRouter(prefix="/v1")
 
-__all__ = ["webhooks"]
-
-
+# Include v1 API routes
+router.include_router(webhooks_router, tags=["webhooks"])

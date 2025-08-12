@@ -1,4 +1,16 @@
 # config/shared.yml
-infrastructure:
-  nats_url: nats://localhost:4222
-  redis_url: redis://localhost:6379
+environment: local
+
+logging:
+  level: DEBUG
+  format: json
+  file_path: "/var/log/service.log"
+
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: false
+
+rate_limiting:
+  enabled: true
+  window_seconds: 60
+

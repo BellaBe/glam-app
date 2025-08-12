@@ -56,13 +56,6 @@ class MerchantService:
         if not data.shop_domain.lower().endswith('.myshopify.com'):
             raise InvalidDomainError(f"Invalid shop domain: {data.shop_domain}")
         
-        # Check idempotency
-        # if idempotency_key:
-        #     cached = await self.redis.get(f"idem:{idempotency_key}")
-        #     if cached:
-        #         import json
-        #         return MerchantSyncOut(**json.loads(cached))
-        
         # Find existing merchant
         existing = await self.repository.find_by_domain_or_gid(data.shop_domain, data.shop_gid)
         
@@ -72,6 +65,7 @@ class MerchantService:
             created = False
         else:
             # New install
+            print("DATA========", data)
             merchant = await self.repository.create(data)
             created = True
             

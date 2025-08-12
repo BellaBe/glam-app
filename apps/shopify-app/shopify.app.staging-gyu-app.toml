@@ -3,27 +3,78 @@
 client_id = "9ab171053318ab7feabfaf0e810fbd76"
 name = "Staging-GYU-App"
 handle = "StagingGYUApp"
-application_url = "https://7e18abe4c748.ngrok-free.app"
+application_url = "https://99b85466943b.ngrok-free.app"
 embedded = true
 
-[build]
-automatically_update_urls_on_dev = true
-dev_store_url = "bb-staging-test.myshopify.com"
-include_config_on_deploy = true
-
 [webhooks]
-api_version = "2024-04"
+api_version = "2025-01"
 
-  [[webhooks.subscriptions]]
-  uri = "https://413e2ec4b6f2.ngrok-free.app/webhooks/relay"
-  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+# Standard webhooks → all POST to /webhooks/relay
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]  # Changed from 'topic' to 'topics' (array)
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["app_purchases_one_time/update"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["orders/create"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["products/create"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["products/update"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["products/delete"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["collections/create"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["collections/update"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["collections/delete"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+topics = ["inventory_levels/update"]
+uri = "/webhooks/relay"
+
+# GDPR compliance webhooks
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/redact"]
+uri = "/webhooks/relay"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["shop/redact"]
+uri = "/webhooks/relay"
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
 
 [auth]
-redirect_urls = ["https://7e18abe4c748.ngrok-free.app/auth/callback", "https://7e18abe4c748.ngrok-free.app/auth/shopify/callback", "https://7e18abe4c748.ngrok-free.app/api/auth/callback"]
+redirect_urls = ["https://99b85466943b.ngrok-free.app/auth/callback", "https://99b85466943b.ngrok-free.app/auth/shopify/callback", "https://99b85466943b.ngrok-free.app/api/auth/callback"]
 
 [pos]
 embedded = false
+
+[build]
+automatically_update_urls_on_dev = true

@@ -1,0 +1,15 @@
+{
+  "folders": [
+    {"name": "🏠 Root", "path": "."},
+    {"name": "📦 shared", "path": "shared"},
+    {"name": "⚙️ config", "path": "config"},
+    {"name": "webhook-service", "path": "services/webhook-service"},
+    {"name": "billing-service", "path": "services/billing-service"},
+    {"name": "catalog-service", "path": "services/catalog-service"},
+    {"name": "merchant-service", "path": "services/merchant-service"}
+  ],
+  "settings": {
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.useImportHeuristic": true
+  }
+}

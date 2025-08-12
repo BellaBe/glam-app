@@ -1,0 +1,380 @@
+# docker-compose.prod.yml - Production environment
+# NO database ports exposed for security
+# Services behind reverse proxy (nginx/traefik)
+
+services:
+  # ----------------- Infrastructure Services -----------------
+  nats:
+    image: nats:2.10.7-alpine
+    container_name: glam-nats
+    command: ["nats-server", "-m", "8222", "-js", "--store_dir", "/data"]
+    volumes:
+      - nats-data:/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD", "nats-server", "-v"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: glam-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+      
+  # ----------------- Webhook Service -----------------
+  webhook-db:
+    image: postgres:15-alpine
+    container_name: webhook-db
+    environment:
+      POSTGRES_USER: ${WEBHOOK_DB_USER}
+      POSTGRES_PASSWORD: ${WEBHOOK_DB_PASSWORD}
+      POSTGRES_DB: ${WEBHOOK_DB_NAME}
+    volumes:
+      - webhook-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WEBHOOK_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  webhook-service:
+    image: glamapp/webhook-service:${VERSION:-latest}
+    container_name: webhook-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      webhook-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${WEBHOOK_DB_USER}:${WEBHOOK_DB_PASSWORD}@webhook-db:5432/${WEBHOOK_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Merchant Service -----------------
+  merchant-db:
+    image: postgres:15-alpine
+    container_name: merchant-db
+    environment:
+      POSTGRES_USER: ${MERCHANT_DB_USER}  # Fixed: correct variables
+      POSTGRES_PASSWORD: ${MERCHANT_DB_PASSWORD}
+      POSTGRES_DB: ${MERCHANT_DB_NAME}
+    volumes:
+      - merchant-db-data:/var/lib/postgresql/data 
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MERCHANT_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  merchant-service:
+    image: glamapp/merchant-service:${VERSION:-latest}
+    container_name: merchant-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      merchant-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@merchant-db:5432/${MERCHANT_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Catalog Service -----------------
+  catalog-db:
+    image: postgres:15-alpine
+    container_name: catalog-db
+    environment:
+      POSTGRES_USER: ${CATALOG_DB_USER}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD}
+      POSTGRES_DB: ${CATALOG_DB_NAME}
+    volumes:
+      - catalog-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  catalog-service:
+    image: glamapp/catalog-service:${VERSION:-latest}
+    container_name: catalog-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      catalog-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@catalog-db:5432/${CATALOG_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Credit Service -----------------
+  credit-db:
+    image: postgres:15-alpine
+    container_name: credit-db
+    environment:
+      POSTGRES_USER: ${CREDIT_DB_USER}
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD}
+      POSTGRES_DB: ${CREDIT_DB_NAME}
+    # NO PORTS EXPOSED
+    volumes:
+      - credit-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  credit-service:
+    image: glamapp/credit-service:${VERSION:-latest}
+    container_name: credit-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      credit-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CREDIT_DB_USER}:${CREDIT_DB_PASSWORD}@credit-db:5432/${CREDIT_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Billing Service -----------------
+  billing-db:
+    image: postgres:15-alpine
+    container_name: billing-db
+    environment:
+      POSTGRES_USER: ${BILLING_DB_USER}
+      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
+      POSTGRES_DB: ${BILLING_DB_NAME}
+    # NO PORTS EXPOSED
+    volumes:
+      - billing-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  billing-service:
+    image: glamapp/billing-service:${VERSION:-latest}
+    container_name: billing-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      billing-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${BILLING_DB_USER}:${BILLING_DB_PASSWORD}@billing-db:5432/${BILLING_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Notification Service -----------------
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+    # NO PORTS EXPOSED
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  notification-service:
+    image: glamapp/notification-service:${VERSION:-latest}
+    container_name: notification-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${NOTIFICATION_DB_USER}:${NOTIFICATION_DB_PASSWORD}@notification-db:5432/${NOTIFICATION_DB_NAME}
+      APP_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Production email config
+      SMTP_HOST: ${NOTIFICATION_SMTP_HOST}
+      SMTP_PORT: ${NOTIFICATION_SMTP_PORT}
+      SMTP_USERNAME: ${NOTIFICATION_SMTP_USERNAME}
+      SMTP_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD}
+      SENDGRID_API_KEY: ${NOTIFICATION_SENDGRID_API_KEY}
+      EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM_ADDRESS}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ----------------- Worker Services (No API) -----------------
+  catalog-connector:
+    image: glamapp/catalog-connector:${VERSION:-latest}
+    container_name: catalog-connector
+    depends_on:
+      nats:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SHOPIFY_API_VERSION: ${SHOPIFY_API_VERSION}
+      SHOPIFY_API_KEY: ${SHOPIFY_API_KEY}
+      SHOPIFY_API_SECRET: ${SHOPIFY_API_SECRET}
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ----------------- Reverse Proxy -----------------
+  nginx:
+    image: nginx:alpine
+    container_name: glam-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-cache:/var/cache/nginx
+    depends_on:
+      - webhook-service
+      - merchant-service
+      - catalog-service
+      - notification-service
+      - billing-service
+      - credit-service
+    networks:
+      - glam-net
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+  
+networks:
+  glam-net:
+    driver: bridge
+
+volumes:
+  nats-data:
+  redis-data:
+  nginx-cache:
+  # Database volumes
+  webhook-db-data:
+  merchant-db-data:
+  catalog-db-data:
+  credit-db-data:
+  billing-db-data:
+  notification-db-data:

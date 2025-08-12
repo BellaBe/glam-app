@@ -1398,7 +1398,6 @@ develop = true
 [package.dependencies]
 asyncio = "^3.4.3"
 nats-py = "^2.6.0"
-prisma = "^0.15.0"
 pydantic = "^2.5.0"
 pydantic-settings = "^2.10.1"
 python-dotenv = "^1.1.1"

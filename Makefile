@@ -1,264 +1,292 @@
-# ──────────────────────────────────────────────
-# Makefile – Dev & Prod helpers (Fashion stack)
-# ──────────────────────────────────────────────
+# Makefile for Glam App Monorepo
 
-# Adjust if you rename folders
-SERVICE_DIRS = \
-	services/catalog-ai-apparel \
-	services/catalog-connector \
-	services/catalog-image-cache \
-	services/catalog-job-processor \
-	services/catalog-service \
-	services/profile-service \
-	services/profile-ai-selfie
+# Service directories (auto-detect)
+SERVICE_DIRS := $(shell find services -maxdepth 1 -type d -name "*-service" -o -name "*-ai-*" -o -name "*-connector" -o -name "*-cache" | sort)
+SERVICE_NAMES := $(shell find services -maxdepth 1 -type d \( -name "*-service" -o -name "*-ai-*" -o -name "*-connector" -o -name "*-cache" \) -exec basename {} \; | sort)
 
-# Compose files
+# Docker compose files
 LOCAL_COMPOSE = docker-compose.local.yml
-PROD_COMPOSE  = docker-compose.yml
+DEV_COMPOSE = docker-compose.dev.yml
+PROD_COMPOSE = docker-compose.prod.yml
 
-.PHONY: help install dev dev-down dev-logs dev-ps dev-clean \
-        prod prod-build prod-down prod-logs prod-ps prod-clean \
-        run-service run-all-services clean-dev clean-prod clean-all \
-        docker-health docker-size
+# Colors for output
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+RED := \033[0;31m
+BLUE := \033[0;34m
+NC := \033[0m
 
-# ---------- General ----------
+# Default environment file
+ENV_FILE ?= .env
 
+.PHONY: help
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS=":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-install: ## Poetry install every service locally
-	@for d in $(SERVICE_DIRS); do \
-	  echo "→ Installing deps in $$d"; \
-	  cd $$d && poetry install; \
-	done
-
-# ---------- Local dev (infra in docker) ----------
-
-dev: ## Start all infrastructure including monitoring
-	@echo "🚀 Starting development infrastructure..."
-	docker compose -f $(LOCAL_COMPOSE) up -d
-	@echo "⏳ Waiting for services to initialize..."
-	@sleep 5
-	@echo "✅ Infrastructure started!"
+	@echo "$(BLUE)╔════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║       Glam App - Monorepo Management       ║$(NC)"
+	@echo "$(BLUE)╚════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@echo "📊 Services available at:"
-	@echo "   • NATS:       http://localhost:4222 (clients), http://localhost:8222 (monitoring)"
-	@echo "   • Redis:      localhost:6379"
-	@echo "   • MailHog:    http://localhost:8025 (UI), localhost:1025 (SMTP)"
-	@echo "   • MinIO:      http://localhost:9001 (console), localhost:9000 (API)"
-	@echo "   • Databases:  See .env for ports"
+	@echo "$(YELLOW)🏗️  Infrastructure (docker-compose.local.yml):$(NC)"
+	@echo "  make dev            Start infrastructure (DBs, NATS, Redis, MinIO)"
+	@echo "  make dev-down       Stop infrastructure"
+	@echo "  make dev-logs       Show infrastructure logs"
+	@echo "  make dev-clean      Remove infrastructure + volumes"
 	@echo ""
-	@echo "📈 Monitoring available at:"
-	@echo "   • Grafana:    http://localhost:3000 (admin/admin)"
-	@echo "   • Prometheus: http://localhost:9090"
-	@echo "   • Metrics:    http://localhost:7777/metrics (NATS)"
-	@echo "                 http://localhost:9121/metrics (Redis)"
+	@echo "$(YELLOW)💻 Local Development (run services on host):$(NC)"
+	@echo "  make run SERVICE=webhook-service    Run single service"
+	@echo "  make run-all                        Run all services in parallel"
+	@echo "  make setup SERVICE=webhook-service  Setup service (install deps + prisma)"
+	@echo ""
+	@echo "$(YELLOW)🐳 Docker Development (docker-compose.yml):$(NC)"
+	@echo "  make docker-dev     Start all services in Docker"
+	@echo "  make docker-build   Build Docker images"
+	@echo "  make docker-down    Stop Docker stack"
+	@echo "  make docker-logs    Show Docker logs"
+	@echo ""
+	@echo "$(YELLOW)🚀 Production (docker-compose.prod.yml):$(NC)"
+	@echo "  make prod           Start production stack"
+	@echo "  make prod-build     Build production images"
+	@echo "  make prod-down      Stop production stack"
+	@echo ""
+	@echo "$(YELLOW)🗄️  Database:$(NC)"
+	@echo "  make db-push SERVICE=webhook-service    Push Prisma schema"
+	@echo "  make db-migrate SERVICE=webhook-service Create migration"
+	@echo "  make db-url SERVICE=webhook-service     Show DATABASE_URL"
+	@echo ""
+	@echo "$(YELLOW)📦 Available services:$(NC)"
+	@for service in $(SERVICE_NAMES); do echo "  • $$service"; done
 
-dev-core: ## Start only core services (no monitoring)
-	@echo "Starting core infrastructure only..."
-	docker compose -f $(LOCAL_COMPOSE) up -d nats redis mailhog minio minio-setup catalog-db notification-db profile-db catalog-job-processor-db merchant-db
+# ─────────────────────────────────────────────────
+# Infrastructure Management (Local Development)
+# ─────────────────────────────────────────────────
 
-dev-monitoring: ## Start only monitoring stack
-	@echo "Starting monitoring stack..."
-	docker compose -f $(LOCAL_COMPOSE) up -d prometheus grafana nats-exporter redis-exporter
-	@echo "Monitoring services starting at:"
-	@echo "   • Grafana:    http://localhost:3000"
-	@echo "   • Prometheus: http://localhost:9090"
+dev:
+	@echo "$(GREEN)🚀 Starting local infrastructure...$(NC)"
+	@docker compose -f $(LOCAL_COMPOSE) --env-file $(ENV_FILE) up -d
+	@echo "$(GREEN)✅ Infrastructure ready!$(NC)"
+	@echo ""
+	@echo "$(BLUE)📡 Services:$(NC)"
+	@echo "  • NATS:       http://localhost:4222 (client) | http://localhost:8222 (monitoring)"
+	@echo "  • Redis:      localhost:6379"
+	@echo "  • MailHog:    http://localhost:8025 (UI) | localhost:1025 (SMTP)"
+	@echo "  • MinIO:      http://localhost:9001 (console) | localhost:9000 (API)"
+	@echo "  • Grafana:    http://localhost:3000 (admin/admin)"
+	@echo "  • Prometheus: http://localhost:9090"
+	@echo ""
+	@echo "$(BLUE)🗄️  Databases:$(NC)"
+	@docker compose -f $(LOCAL_COMPOSE) ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}" | grep -E "db|Database"
 
-dev-down: ## Stop all infrastructure
-	docker compose -f $(LOCAL_COMPOSE) down
+dev-down:
+	@echo "$(YELLOW)Stopping infrastructure...$(NC)"
+	@docker compose -f $(LOCAL_COMPOSE) down
+	@echo "$(GREEN)✅ Infrastructure stopped$(NC)"
 
-dev-logs: ## Follow logs (all services)
+dev-logs:
 	docker compose -f $(LOCAL_COMPOSE) logs -f
 
-dev-logs-app: ## Follow logs (app services only)
-	docker compose -f $(LOCAL_COMPOSE) logs -f nats redis mailhog
+dev-ps:
+	@docker compose -f $(LOCAL_COMPOSE) ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
 
-dev-logs-monitoring: ## Follow logs (monitoring only)
-	docker compose -f $(LOCAL_COMPOSE) logs -f prometheus grafana nats-exporter redis-exporter
+dev-clean:
+	@echo "$(RED)⚠️  This will delete all local data. Continue? [y/N]$(NC)"
+	@read ans && [ $${ans:-N} = y ] && \
+		docker compose -f $(LOCAL_COMPOSE) down -v && \
+		echo "$(GREEN)✅ Infrastructure cleaned$(NC)"
 
-dev-ps: ## List containers
-	docker compose -f $(LOCAL_COMPOSE) ps
+# ─────────────────────────────────────────────────
+# Service Setup & Local Running
+# ─────────────────────────────────────────────────
 
-dev-health: ## Check health of all services
-	@echo "🏥 Checking service health..."
-	@docker compose -f $(LOCAL_COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
-
-dev-clean: ## Remove all containers & volumes (WARNING: deletes data)
-	@echo "⚠️  This will delete all local data. Continue? [y/N] " && read ans && [ $${ans:-N} = y ]
-	docker compose -f $(LOCAL_COMPOSE) down -v
-	@echo "🧹 Cleanup complete"
-
-dev-restart: ## Restart all services
-	@make dev-down
-	@make dev
-
-dev-reset-monitoring: ## Reset monitoring data only
-	docker compose -f $(LOCAL_COMPOSE) stop prometheus grafana
-	docker volume rm -f $(shell docker volume ls -q | grep -E "(prometheus|grafana)-data")
-	docker compose -f $(LOCAL_COMPOSE) up -d prometheus grafana
-	@echo "Monitoring data reset"
-
-# ---------- Shortcuts ----------
-up: dev ## Alias for 'make dev'
-down: dev-down ## Alias for 'make dev-down'
-logs: dev-logs ## Alias for 'make dev-logs'
-ps: dev-ps ## Alias for 'make dev-ps'
-
-# ---------- Per-service helpers ----------
-install-service: ## SERVICE=<folder>  – Poetry install only that service
-	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make install-service SERVICE=<folder>"; exit 1; fi
-	cd services/$(SERVICE) && poetry install
-
-download-models: ## fetch antelopev2 once
-	mkdir -p services/catalog-ai-apparel/models
-	curl -L https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip \
-	     -o services/catalog-ai-apparel/models/antelopev2.zip
-	unzip -oq services/catalog-ai-apparel/models/antelopev2.zip -d services/catalog-ai-apparel/models
-	rm services/catalog-ai-apparel/models/antelopev2.zip
-
-download-cloth-models:  ## fetch MP cloth-seg TFLite
-	@mkdir -p services/catalog-connector/models
-	curl -L https://storage.googleapis.com/mediapipe-assets/selfie_multiclass_256x256.tflite \
-	     -o services/catalog-connector/models/selfie_multiclass_256x256.tflite
-
-download-selfie-models: ## fetch antelopev2 for profile-ai-selfie
-	mkdir -p services/profile-ai-selfie/models
-	curl -L https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip \
-	     -o services/profile-ai-selfie/models/antelopev2.zip
-	unzip -oq services/profile-ai-selfie/models/antelopev2.zip -d services/profile-ai-selfie/models
-	rm services/profile-ai-selfie/models/antelopev2.zip
-
-download-all-models: download-models download-cloth-models download-selfie-models ## fetch all AI models
-
-# Run one FASTApiservice with hot-reload: make run-service SERVICE=catalog-service
-# Usage: make run SERVICE=catalog-service PORT=8000
-run-service:
-	@if [ -z "$(SERVICE)" ]; then \
-	  echo "❌ Usage: make run-service SERVICE=notification-service"; \
-	  exit 1; \
-	fi
-	@echo "🚀 Running service: $(SERVICE)"
-	
-	# Check if service directory exists
-	@if [ ! -d "services/$(SERVICE)" ]; then \
-	  echo "❌ Service directory not found: services/$(SERVICE)"; \
-	  exit 1; \
-	fi
-	
-	# Install shared package
-	@echo "📦 Installing shared package..."
-	@cd services/$(SERVICE) && pip install -e ../../shared
-	
-	# NO PORT EXTRACTION - service handles its own port via effective_port!
-	@echo "🎯 Starting $(SERVICE) (port determined by service config)..."
+setup:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make setup SERVICE=webhook-service$(NC)"; exit 1; }
+	@echo "$(GREEN)📦 Setting up $(SERVICE)...$(NC)"
 	@cd services/$(SERVICE) && \
-	PYTHONPATH=../../shared:../../config poetry run python -m src.main --reload --host 0.0.0.0
+		{ test -f poetry.lock || poetry lock --no-update; } && \
+		poetry install --sync
+	@if [ -f "services/$(SERVICE)/prisma/schema.prisma" ]; then \
+		echo "$(BLUE)Generating Prisma client...$(NC)"; \
+		cd services/$(SERVICE) && \
+		DATABASE_URL="postgresql://temp:temp@temp:5432/temp" \
+		poetry run prisma generate --schema=prisma/schema.prisma; \
+	fi
+	@echo "$(GREEN)✅ $(SERVICE) setup complete$(NC)"
 
-		
-# Run one non-FASTAPI service (e.g. catalog-job-processor) with hot-reload
-run-non-fastapi-service: ## SERVICE=<folder>
-	@if [ -z "$(SERVICE)" ]; then \
-	  echo "Usage: make run-non-fastapi-service SERVICE=catalog-job-processor"; exit 1; fi
+# Get database connection details for a service
+get-db-config:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make get-db-config SERVICE=webhook-service$(NC)"; exit 1; }
+	@SERVICE_NAME=$$(echo $(SERVICE) | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); \
+	DB_USER=$$(grep "$${SERVICE_NAME}_DB_USER" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_PASSWORD=$$(grep "$${SERVICE_NAME}_DB_PASSWORD" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_NAME=$$(grep "$${SERVICE_NAME}_DB_NAME" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_PORT=$$(grep -E "$${SERVICE_NAME}_DB_(PORT_)?EXTERNAL" $(ENV_FILE) | cut -d '=' -f2); \
+	if [ -z "$$DB_USER" ]; then DB_USER=$$(grep "^DB_USER=" $(ENV_FILE) | cut -d '=' -f2); fi; \
+	if [ -z "$$DB_PASSWORD" ]; then DB_PASSWORD=$$(grep "^DB_PASSWORD=" $(ENV_FILE) | cut -d '=' -f2); fi; \
+	echo "postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}"
+
+run:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make run SERVICE=webhook-service$(NC)"; exit 1; }
+	@SERVICE_NAME=$$(echo $(SERVICE) | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); \
+	DB_USER=$$(grep "$${SERVICE_NAME}_DB_USER" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_PASSWORD=$$(grep "$${SERVICE_NAME}_DB_PASSWORD" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_NAME=$$(grep "$${SERVICE_NAME}_DB_NAME" $(ENV_FILE) | cut -d '=' -f2); \
+	DB_PORT=$$(grep "$${SERVICE_NAME}_DB_PORT_EXTERNAL" $(ENV_FILE) | cut -d '=' -f2); \
+	API_PORT=$$(grep "$${SERVICE_NAME}_API_EXTERNAL_PORT" $(ENV_FILE) | cut -d '=' -f2); \
+	echo "$(GREEN)🚀 Starting $(SERVICE) on port $$API_PORT...$(NC)"; \
 	cd services/$(SERVICE) && \
-	pip install -e ../../shared && \
-	PYTHONPATH=../../shared poetry run -m python src.main
+		DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" \
+		APP_ENV=local \
+		PYTHONPATH="../../shared:../../config" \
+		poetry run python -m src.main
 
-# Run ALL services locally with hot-reload (Ctrl-C to kill)
+run-all:
+	@echo "$(GREEN)🚀 Starting all services...$(NC)"
+	@trap 'kill 0' SIGINT EXIT; \
+	for service_dir in $(SERVICE_DIRS); do \
+		SERVICE=$$(basename $$service_dir); \
+		($(MAKE) run SERVICE=$$SERVICE 2>&1 | sed "s/^/[$$SERVICE] /") & \
+	done; \
+	wait
 
-clean_env: ## Remove all .env files in services
-	unset $(env | grep ^NOTIFICATION_ | cut -d= -f1) ## Unset all notification service env vars
+# ─────────────────────────────────────────────────
+# Database Management
+# ─────────────────────────────────────────────────
 
-# ---------- Production (everything in docker) ----------
+db-url:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-url SERVICE=webhook-service$(NC)"; exit 1; }
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	echo "$(BLUE)DATABASE_URL for $(SERVICE):$(NC)"; \
+	echo "$$DATABASE_URL"
 
-prod: ## docker-compose up -d
-	docker compose -f $(PROD_COMPOSE) up -d
+db-push:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-push SERVICE=webhook-service$(NC)"; exit 1; }
+	@echo "$(GREEN)📤 Pushing Prisma schema for $(SERVICE)...$(NC)"
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	cd services/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma db push --schema=prisma/schema.prisma
+	@echo "$(GREEN)✅ Schema pushed$(NC)"
 
-prod-build: ## Build images
-	docker compose -f $(PROD_COMPOSE) build
+db-migrate:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-migrate SERVICE=webhook-service NAME='add_user_table'$(NC)"; exit 1; }
+	@test -n "$(NAME)" || { echo "$(RED)❌ Please provide migration name: NAME='description'$(NC)"; exit 1; }
+	@echo "$(GREEN)🔄 Creating migration for $(SERVICE)...$(NC)"
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	cd services/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma migrate dev --name $(NAME) --schema=prisma/schema.prisma
+	@echo "$(GREEN)✅ Migration created$(NC)"
 
-prod-down: ## Stop prod stack
-	docker compose -f $(PROD_COMPOSE) down
+db-studio:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-studio SERVICE=webhook-service$(NC)"; exit 1; }
+	@echo "$(GREEN)🎨 Opening Prisma Studio for $(SERVICE)...$(NC)"
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	cd services/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma studio --schema=prisma/schema.prisma
 
-prod-logs: ## Logs
-	docker compose -f $(PROD_COMPOSE) logs -f
+# ─────────────────────────────────────────────────
+# Docker Development (All services in containers)
+# ─────────────────────────────────────────────────
 
-prod-ps: ## ps
-	docker compose -f $(PROD_COMPOSE) ps
+docker-dev:
+	@echo "$(GREEN)🐳 Starting all services in Docker...$(NC)"
+	@docker compose -f $(DEV_COMPOSE) --env-file $(ENV_FILE) up -d
+	@echo "$(GREEN)✅ Docker development environment ready$(NC)"
 
-prod-clean: ## Down + volumes
-	docker compose -f $(PROD_COMPOSE) down -v
+docker-build:
+	@echo "$(GREEN)🔨 Building Docker images...$(NC)"
+	@docker compose -f $(DEV_COMPOSE) --env-file $(ENV_FILE) build
+	@echo "$(GREEN)✅ Build complete$(NC)"
 
-# ---------- Profile Service Specific Commands ----------
+docker-down:
+	@docker compose -f $(DEV_COMPOSE) down
 
-run-profile-service: ## Run profile service locally
-	cd services/profile-service && \
-	pip install -e ../../shared && \
-	PYTHONPATH=../../shared poetry run uvicorn src.main:app \
-		--reload --host 0.0.0.0 --port 8007
+docker-logs:
+	@docker compose -f $(DEV_COMPOSE) logs -f $(SERVICE)
 
-run-profile-ai: ## Run profile AI selfie worker locally
-	cd services/profile-ai-selfie && \
-	pip install -e ../../shared && \
-	PYTHONPATH=../../shared poetry run python src.main
+docker-restart:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make docker-restart SERVICE=webhook-service$(NC)"; exit 1; }
+	@docker compose -f $(DEV_COMPOSE) restart $(SERVICE)
 
-test-profile-upload: ## Test selfie upload endpoint
-	@echo "Testing profile service health..."
-	@curl -s http://localhost:8007/health | jq .
-	@echo "\nTesting selfie upload (requires running service)..."
-	@echo "Run: curl -X POST -F 'file=@test.jpg' -F 'persist=false' http://localhost:8007/api/v1/selfies/upload"
+# ─────────────────────────────────────────────────
+# Production
+# ─────────────────────────────────────────────────
 
-# ---------- Database Helpers ----------
+prod:
+	@echo "$(GREEN)🚀 Starting production environment...$(NC)"
+	@docker compose -f $(PROD_COMPOSE) --env-file .env.prod up -d
+	@echo "$(GREEN)✅ Production environment ready$(NC)"
 
-db-migrate-profile: ## Run profile database migrations
-	cd services/profile-service && \
-	poetry run alembic upgrade head
+prod-build:
+	@echo "$(GREEN)🔨 Building production images...$(NC)"
+	@docker compose -f $(PROD_COMPOSE) --env-file .env.prod build --no-cache
+	@echo "$(GREEN)✅ Production build complete$(NC)"
 
-db-connect-profile: ## Connect to profile database
-	docker exec -it profile-db psql -U $(PROFILE_DB_USER) -d $(PROFILE_DB_NAME)
+prod-down:
+	@docker compose -f $(PROD_COMPOSE) down
 
-# ---------- Docker housekeeping ----------
+prod-logs:
+	@docker compose -f $(PROD_COMPOSE) logs -f $(SERVICE)
 
-clean-dev: ## stop dev + prune
-	docker compose -f $(LOCAL_COMPOSE) down -v
-	docker system prune -af --filter "until=24h"
-	docker volume prune -f
+prod-clean:
+	@echo "$(RED)⚠️  This will delete all production data. Continue? [y/N]$(NC)"
+	@read ans && [ $${ans:-N} = y ] && \
+		docker compose -f $(PROD_COMPOSE) down -v
 
-clean-prod: ## stop prod + prune
-	docker compose -f $(PROD_COMPOSE) down -v
-	docker system prune -af --filter "until=24h"
-	docker volume prune -f
+# ─────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────
 
-clean-all: ## nuke everything
-	docker system prune -af
-	docker volume prune -f
+status:
+	@echo "$(BLUE)📊 System Status$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Infrastructure:$(NC)"
+	@docker compose -f $(LOCAL_COMPOSE) ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null || echo "  Not running"
+	@echo ""
+	@echo "$(YELLOW)Local Services:$(NC)"
+	@for service in $(SERVICE_NAMES); do \
+		if pgrep -f "services/$$service" > /dev/null 2>&1; then \
+			echo "  $(GREEN)● $$service (running)$(NC)"; \
+		else \
+			echo "  ○ $$service (stopped)"; \
+		fi; \
+	done
 
-docker-health: ## show container health & ports
-	@docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+clean-all:
+	@echo "$(RED)⚠️  This will remove ALL Docker data. Continue? [y/N]$(NC)"
+	@read ans && [ $${ans:-N} = y ] && \
+		docker system prune -af && \
+		docker volume prune -f && \
+		echo "$(GREEN)✅ Docker cleaned$(NC)"
 
-docker-size: ## disk usage
-	docker system df
+list:
+	@echo "$(GREEN)📦 Available services:$(NC)"
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "services/$$service/prisma/schema.prisma" ]; then \
+			echo "  • $$service $(BLUE)[Prisma]$(NC)"; \
+		else \
+			echo "  • $$service"; \
+		fi; \
+	done
 
-# ---------- Development Shortcuts ----------
+test:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make test SERVICE=webhook-service$(NC)"; exit 1; }
+	@echo "$(GREEN)🧪 Running tests for $(SERVICE)...$(NC)"
+	@cd services/$(SERVICE) && poetry run pytest
 
-dev-profile: ## Start only profile-related services
-	docker compose -f $(PROD_COMPOSE) up -d nats redis profile-db
-	@echo "Infrastructure ready. Run 'make run-profile-service' and 'make run-profile-ai'"
+lint:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make lint SERVICE=webhook-service$(NC)"; exit 1; }
+	@echo "$(GREEN)🔍 Linting $(SERVICE)...$(NC)"
+	@cd services/$(SERVICE) && \
+		poetry run black . && \
+		poetry run isort . && \
+		poetry run flake8 .
 
-prod-profile: ## Build and start profile services in Docker
-	docker compose -f $(PROD_COMPOSE) build profile-service profile-ai-selfie
-	docker compose -f $(PROD_COMPOSE) up -d profile-db profile-service profile-ai-selfie
-
-logs-profile: ## Show logs for profile services
-	docker compose -f $(PROD_COMPOSE) logs -f profile-service profile-ai-selfie
-
-# ---------- Monitoring ----------
-
-check-services: ## Check all service health endpoints
-	@echo "Checking service health..."
-	@echo "Catalog Service: " && curl -s http://localhost:8001/health 2>/dev/null || echo "DOWN"
-	@echo "Profile Service: " && curl -s http://localhost:8007/health 2>/dev/null || echo "DOWN"
-	@echo "\nNATS: " && curl -s http://localhost:8222/varz 2>/dev/null | jq -r '.server_name' || echo "DOWN"
-	@echo "Redis: " && docker exec glam-redis redis-cli ping 2>/dev/null || echo "DOWN"
+# Quick database connection test
+db-test:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-test SERVICE=webhook-service$(NC)"; exit 1; }
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	echo "$(BLUE)Testing database connection for $(SERVICE)...$(NC)"; \
+	echo "$$DATABASE_URL" | grep -o "postgresql://[^@]*@[^/]*" && \
+	docker exec -it $$(echo $(SERVICE) | sed 's/-service/-db-local/') pg_isready 2>/dev/null && \
+	echo "$(GREEN)✅ Database is reachable$(NC)" || \
+	echo "$(RED)❌ Database is not reachable$(NC)"

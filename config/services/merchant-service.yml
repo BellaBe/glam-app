@@ -1,23 +1,24 @@
 service:
   name: "merchant-service"
   version: "1.0.0"
+  description: "Handles merchant data management"
+  debug: True
 
 api:
-  host: "localhost"
-  port: 8013              # Container port
-  external_port: 8113     # Local development port
-  cors_origins: ["*"]
+  host: "0.0.0.0"
+  cors_origins:
+    - "http://localhost:3000"
 
 database:
-  enabled: true
+  enabled: True
   pool_size: 10
   max_overflow: 20
   pool_timeout: 30
   pool_recycle: 3600
-  echo: false
+  echo: False
 
 rate_limiting:
-  enabled: true
+  enabled: True
   window_seconds: 60
 
 environment: development
@@ -33,5 +34,5 @@ cache:
   max_connections: 50
 
 monitoring:
-  metrics_enabled: true
-  tracing_enabled: true
+  metrics_enabled: True
+  tracing_enabled: True

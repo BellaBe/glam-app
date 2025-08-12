@@ -3,6 +3,133 @@ Directory Structure: /home/bellabe/glam-app
 ================================================================================
 
 glam-app/
+apps/
+└── shopify-app/
+    ├── .shopify/
+    │   ├── dev-bundle/
+    │   │   └── 8f5b2d85-f702-f0ed-04cd-1ff48e851e60acc53fbd/
+    │   │       ├── assets/
+    │   │       │   ├── common-color.png
+    │   │       │   ├── GYU-modified.png
+    │   │       │   ├── GYU.png
+    │   │       │   ├── jquery-3.7.1.min.js
+    │   │       │   ├── sample.png
+    │   │       │   ├── script.js
+    │   │       │   ├── search.png
+    │   │       │   ├── style.css
+    │   │       │   └── thumbs-up.png
+    │   │       ├── blocks/
+    │   │       │   ├── GYU-recommend.liquid
+    │   │       │   ├── GYU-register.liquid
+    │   │       │   └── GYU-sort.liquid
+    │   │       ├── locales/
+    │   │       │   └── en.default.json
+    │   │       └── snippets/
+    │   │           ├── icon-camera.liquid
+    │   │           ├── icon-folder.liquid
+    │   │           ├── icon-green-star-empty.liquid
+    │   │           ├── icon-green-star-full.liquid
+    │   │           ├── icon-star-empty.liquid
+    │   │           ├── icon-star-full.liquid
+    │   │           ├── icon-star-half.liquid
+    │   │           └── stars.liquid
+    │   ├── .gitignore
+    │   └── project.json
+    ├── app/
+    │   ├── assets/
+    │   │   └── help-hero.png
+    │   ├── components/
+    │   │   ├── BillingPlans.jsx
+    │   │   ├── CatalogSync.jsx
+    │   │   ├── CreditUsage.jsx
+    │   │   ├── DashboardStats.jsx
+    │   │   ├── LoadingState.jsx
+    │   │   └── SubscriptionStatus.jsx
+    │   ├── lib/
+    │   │   └── apiClient.js
+    │   ├── routes/
+    │   │   ├── _index/
+    │   │   │   ├── route.jsx
+    │   │   │   └── styles.module.css
+    │   │   ├── auth.login/
+    │   │   │   ├── error.server.jsx
+    │   │   │   └── route.jsx
+    │   │   ├── app._index.jsx
+    │   │   ├── app.analytics.jsx
+    │   │   ├── app.billing.jsx
+    │   │   ├── app.catalog.jsx
+    │   │   ├── app.help.jsx
+    │   │   ├── app.jsx
+    │   │   ├── auth.$.jsx
+    │   │   ├── match.analysis.jsx
+    │   │   ├── selfie.register.jsx
+    │   │   ├── selfie.remove.jsx
+    │   │   ├── sort.analysis.jsx
+    │   │   └── webhooks.relay.jsx
+    │   ├── db.server.js
+    │   ├── entry.server.jsx
+    │   ├── query.js
+    │   ├── root.jsx
+    │   ├── routes.js
+    │   └── shopify.server.js
+    ├── extensions/
+    │   ├── glam-you-up/
+    │   │   ├── assets/
+    │   │   │   ├── common-color.png
+    │   │   │   ├── GYU-modified.png
+    │   │   │   ├── GYU.png
+    │   │   │   ├── jquery-3.7.1.min.js
+    │   │   │   ├── sample.png
+    │   │   │   ├── script.js
+    │   │   │   ├── search.png
+    │   │   │   ├── style.css
+    │   │   │   └── thumbs-up.png
+    │   │   ├── blocks/
+    │   │   │   ├── GYU-recommend.liquid
+    │   │   │   ├── GYU-register.liquid
+    │   │   │   └── GYU-sort.liquid
+    │   │   ├── locales/
+    │   │   │   └── en.default.json
+    │   │   ├── snippets/
+    │   │   │   ├── icon-camera.liquid
+    │   │   │   ├── icon-folder.liquid
+    │   │   │   ├── icon-green-star-empty.liquid
+    │   │   │   ├── icon-green-star-full.liquid
+    │   │   │   ├── icon-star-empty.liquid
+    │   │   │   ├── icon-star-full.liquid
+    │   │   │   ├── icon-star-half.liquid
+    │   │   │   └── stars.liquid
+    │   │   └── shopify.extension.toml
+    │   └── .gitkeep
+    ├── prisma/
+    │   ├── migrations/
+    │   │   └── 20240530213853_create_session_table/
+    │   │       └── migration.sql
+    │   ├── dev.sqlite
+    │   └── schema.prisma
+    ├── public/
+    │   └── favicon.ico
+    ├── scripts/
+    │   ├── output/
+    │   │   └── app_tree_with_code.txt
+    │   └── code-flattener.js
+    ├── .editorconfig
+    ├── .eslintignore
+    ├── .eslintrc.cjs
+    ├── .gitignore
+    ├── .graphqlrc.js
+    ├── .npmrc
+    ├── .prettierignore
+    ├── Dockerfile
+    ├── package-lock.json
+    ├── package.json
+    ├── README.md
+    ├── remix.config.js
+    ├── shopify.app.staging-gyu-app.toml
+    ├── shopify.app.toml
+    ├── shopify.web.toml
+    ├── tsconfig.json
+    └── vite.config.js
 config/
 ├── services/
 │   ├── analytics-service.yml
@@ -36,6 +163,7 @@ scripts/
 ├── output/
 │   ├── billing-service_tree_with_code.txt
 │   ├── credit-service_tree_with_code.txt
+│   ├── glam-app_tree.txt
 │   ├── merchant-service_tree_with_code.txt
 │   ├── notification-service_tree_with_code.txt
 │   ├── scheduler-service_tree_with_code.txt
@@ -106,11 +234,14 @@ services/
 │   │   │   └── __init__.py
 │   │   └── __init__.py
 │   ├── .env.example
+│   ├── .python-version
 │   ├── __init__.py
 │   ├── alembic.ini
 │   ├── docker-compose.yml
 │   ├── Dockerfile
 │   ├── Makefile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── billing-service/
@@ -147,9 +278,12 @@ services/
 │   │   ├── lifecycle.py
 │   │   └── main.py
 │   ├── .env.example
+│   ├── .python-version
 │   ├── __init__.py
 │   ├── docker-compose.yml
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── catalog-ai-apparel/
@@ -178,7 +312,10 @@ services/
 │   │   │   └── test_catalog_analysis_service.py
 │   │   ├── __init__.py
 │   │   └── conftest.py
+│   ├── .python-version
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── catalog-connector/
@@ -212,7 +349,10 @@ services/
 │   │   └── __init__.py
 │   ├── .env.examples
 │   ├── .gitignore
+│   ├── .python-version
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── catalog-service/
@@ -248,9 +388,12 @@ services/
 │   │   └── main.py
 │   ├── .env.example
 │   ├── .pre-commit-config.yaml
+│   ├── .python-version
 │   ├── __init__.py
 │   ├── docker-compose.yml
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── credit-service/
@@ -291,9 +434,12 @@ services/
 │   │   ├── __init__.py
 │   │   └── conftest.py
 │   ├── .env.example
+│   ├── .python-version
 │   ├── __init__.py
 │   ├── docker-compose.yml
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   └── pyproject.toml
 ├── merchant-service/
 │   ├── logs/
@@ -308,8 +454,7 @@ services/
 │   │   │   ├── v1/
 │   │   │   │   ├── __init__.py
 │   │   │   │   └── merchants.py
-│   │   │   ├── __init__.py
-│   │   │   └── router.py
+│   │   │   └── __init__.py
 │   │   ├── events/
 │   │   │   ├── __init__.py
 │   │   │   ├── listeners.py
@@ -340,6 +485,7 @@ services/
 │   ├── docker-compose.yml
 │   ├── Dockerfile
 │   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── notification-service/
@@ -417,7 +563,10 @@ services/
 │   │   └── __init__.py
 │   ├── tests/
 │   │   └── __init__.py
+│   ├── .python-version
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── profile-service/
@@ -425,7 +574,10 @@ services/
 │   │   └── __init__.py
 │   ├── tests/
 │   │   └── __init__.py
+│   ├── .python-version
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── scheduler-service/
@@ -484,7 +636,10 @@ services/
 │   │   └── __init__.py
 │   ├── .env.example
 │   ├── .gitignore
+│   ├── .python-version
 │   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 ├── webhook-service/
@@ -499,8 +654,7 @@ services/
 │   │   │   ├── v1/
 │   │   │   │   ├── __init__.py
 │   │   │   │   └── webhooks.py
-│   │   │   ├── __init__.py
-│   │   │   └── router.py
+│   │   │   └── __init__.py
 │   │   ├── events/
 │   │   │   ├── __init__.py
 │   │   │   └── publishers.py
@@ -512,10 +666,9 @@ services/
 │   │   │   └── webhook_repository.py
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
-│   │   │   └── webhook.py
+│   │   │   └── webhooks.py
 │   │   ├── services/
 │   │   │   ├── __init__.py
-│   │   │   ├── webhook_processor.py
 │   │   │   └── webhook_service.py
 │   │   ├── __init__.py
 │   │   ├── config.py
@@ -529,17 +682,18 @@ services/
 │   │   │   └── test_api.py
 │   │   ├── unit/
 │   │   │   ├── __init__.py
-│   │   │   ├── test_webhook_processor.py
 │   │   │   └── test_webhook_service.py
 │   │   ├── __init__.py
 │   │   └── conftest.py
-│   ├── .env.example
 │   ├── .gitignore
 │   ├── .pre-commit-config.yaml
+│   ├── .python-version
 │   ├── __init__.py
 │   ├── docker-compose.yml
 │   ├── Dockerfile
 │   ├── Makefile
+│   ├── poetry.lock
+│   ├── poetry.toml
 │   ├── pyproject.toml
 │   └── README.md
 └── __init__.py
@@ -580,12 +734,14 @@ shared/
 └── README.md
 .env.example
 .gitignore
+docker-compose.dev.yml
 docker-compose.local.yml
-docker-compose.yml
+docker-compose.prod.yml
 Makefile
 README.md
 setup-monitoring.sh
 test.http
+workspace
 
 ================================================================================
 Output shows tree structure only (use --code to include file contents)

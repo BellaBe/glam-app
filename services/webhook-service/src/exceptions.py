@@ -1,3 +1,5 @@
+from typing import Optional
+
 from shared.utils.exceptions import (
     GlamBaseError,
     ValidationError,
@@ -49,16 +51,6 @@ class MissingHeadersError(ValidationError):
         )
 
 
-class DomainMismatchError(ValidationError):
-    """Shop domain mismatch"""
-    def __init__(self, header_domain: str, payload_domain: str):
-        super().__init__(
-            message="Shop domain mismatch",
-            field="shop_domain",
-            value=f"header: {header_domain}, payload: {payload_domain}"
-        )
-
-
 class MalformedPayloadError(ValidationError):
     """Invalid JSON payload"""
     def __init__(self):
@@ -87,3 +79,22 @@ class IPNotAllowedError(UnauthorizedError):
         )
 
 
+# services/webhook-service/src/exceptions.py
+class DomainMismatchError(ValidationError):
+    """Shop domain mismatch"""
+    def __init__(self, header_domain: str, payload_domain: Optional[str] = None, jwt_domain: Optional[str] = None):
+        if jwt_domain:
+            message = f"Shop domain mismatch - JWT: {jwt_domain}, Header: {header_domain}"
+            value = f"jwt: {jwt_domain}, header: {header_domain}"
+        elif payload_domain:
+            message = f"Shop domain mismatch - Header: {header_domain}, Payload: {payload_domain}"
+            value = f"header: {header_domain}, payload: {payload_domain}"
+        else:
+            message = "Shop domain mismatch"
+            value = header_domain
+            
+        super().__init__(
+            message=message,
+            field="shop_domain",
+            value=value
+        )

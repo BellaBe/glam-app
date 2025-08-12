@@ -90,7 +90,7 @@ class ServiceLifecycle:
 
     async def _init_database(self) -> None:
         """Initialize Prisma client if database is enabled."""
-        if not self.config.db_enabled:
+        if not self.config.database_enabled:
             self.logger.info("Database disabled; skipping Prisma initialization")
             return
 
@@ -111,7 +111,7 @@ class ServiceLifecycle:
 
     # ---------------------------------------------------------------- repos
     def _init_repositories(self) -> None:
-        if self.config.db_enabled:
+        if self.config.database_enabled:
             if not (self.prisma and self._db_connected):
                 raise RuntimeError("Prisma client not initialized/connected")
             self.merchant_repo = MerchantRepository(self.prisma)

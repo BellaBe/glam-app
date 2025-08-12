@@ -12,27 +12,18 @@ datasource db {
 model WebhookEntry {
   id                  String    @id @default(uuid()) @db.Uuid
   platform            String    @db.VarChar(50)
-  topic_raw           String    @db.VarChar(120)
-  topic_enum          String    @db.VarChar(100)
-  shop_domain         String    @db.Text  // Case-insensitive in Postgres with CITEXT
-  webhook_id          String    @unique @db.VarChar(100)
-  api_version         String?   @db.VarChar(20)
-  signature           String    @db.Text
-  headers             Json
-  payload             Json
-  payload_bytes       Int?
-  status              String    @db.VarChar(20)
+  webhook_id          String    @unique @db.VarChar(255)  // Idempotency key
+  topic               String    @db.VarChar(255)  // Original: "orders/create"
+  shop_domain         String    @db.VarChar(255)
+  payload             Json      // The actual webhook payload
+  status              String    @default("RECEIVED") @db.VarChar(20)
   processing_attempts Int       @default(0)
   error_message       String?   @db.Text
-  received_at         DateTime  @default(now()) @db.Timestamptz(3)
   processed_at        DateTime? @db.Timestamptz(3)
   created_at          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updated_at          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  
-  @@index([platform, topic_enum, received_at(sort: Desc)])
-  @@index([shop_domain, received_at(sort: Desc)])
-  @@index([status, created_at])
+
+  @@index([shop_domain, topic])
+  @@index([status, processing_attempts])
   @@map("webhook_entries")
 }
-
-

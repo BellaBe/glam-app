@@ -3,23 +3,22 @@ service:
   name: "webhook-service"
   version: "1.0.0"
   description: "Receives and processes webhooks from external platforms"
-
+  debug: True
+  
 api:
   host: "0.0.0.0"
-  port: 8012              # Container port
-  external_port: 8112     # Local development port
-  cors_origins: ["*"]
+  cors_origins:
+    - "http://localhost:3000"
 
 database:
-  enabled: true
   pool_size: 20           # Higher for webhook volume
   max_overflow: 30
   pool_timeout: 30
   pool_recycle: 3600
-  echo: false
+  echo: False
 
 rate_limiting:
-  enabled: false          # Webhooks need high throughput
+  enabled: False          # Webhooks need high throughput
   window_seconds: 60
 
 webhook:
@@ -28,8 +27,7 @@ webhook:
   max_retries: 10
   ip_allowlist_mode: "disabled"  # disabled/soft/hard
   shopify_ips: []               # Populate with actual Shopify IPs in production
-
-environment: development
+  retry_delay_seconds: 60
 
 logging:
   level: INFO
@@ -37,17 +35,10 @@ logging:
   file_path: "/var/log/webhook-service.log"
 
 cache:
-  enabled: true
+  enabled: True
   ttl_seconds: 259200    # 72 hours for idempotency
   max_connections: 100   # High for concurrent webhooks
 
 monitoring:
-  metrics_enabled: true
-  tracing_enabled: false
-
-# Queue configuration
-queue:
-  max_deliver: 10
-  ack_wait_seconds: 30
-  batch_size: 10
-  backoff_seconds: [5, 30, 120, 600]  # 5s, 30s, 2m, 10m
+  metrics_enabled: True
+  tracing_enabled: False

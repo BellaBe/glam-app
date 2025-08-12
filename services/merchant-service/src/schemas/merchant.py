@@ -7,26 +7,21 @@ from prisma.enums import MerchantStatus, ConsentType
 # ---------- INPUT DTOs ----------
 class MerchantSync(BaseModel):
     """Input DTO for syncing merchant"""
-    shop_domain: str = Field(..., description="Shopify domain (e.g., example.myshopify.com)")
-    shop_gid: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-    shop_name: Optional[str] = Field(None, description="Shop display name")
-    email: Optional[EmailStr] = Field(None, description="Primary contact email")
-    url: Optional[str] = Field(None, description="Shop URL")
-    timezone: Optional[str] = Field("UTC", description="IANA timezone")
-    currency: Optional[str] = Field("USD", description="ISO currency code")
-    scopes: str = Field(..., description="Comma-separated OAuth scopes")
-    auth_at: datetime = Field(..., description="When OAuth was completed")
-    app_version: Optional[str] = Field(None, description="Our app version")
-    install_source: Optional[str] = Field(None, description="app_store | partner | direct")
-    platform_api_version: Optional[str] = Field("2024-01", description="Shopify API version")
-    
-    @field_validator('shop_domain')
-    def validate_shop_domain(cls, v):
-        if not v.lower().endswith('.myshopify.com'):
-            raise ValueError('Shop domain must end with .myshopify.com')
-        return v.lower()
+    platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
+    platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
+    shop_name: str = Field(..., description="Shop display name")
+    shop_url: str = Field(None, description="Shop URL")
+    email: EmailStr = Field(None, description="Primary contact email")
+    contact_email: EmailStr = Field(None, description="Contact email for support")
+    currency_code: str = Field("USD", description="ISO currency code")
+    primary_domain_url: str = Field(None, description="Primary domain (e.g., example.com)")
+    primary_domain_host: str = Field(None, description="Primary domain host (e.g., example.com)")
+    myshopify_domain: str = Field(None, description="MyShopify domain (e.g., example.myshopify.com)")
+    platform_plan: str = Field(None, description="Shop plan name")
+    billing_address: str = Field(None, description="Billing address in JSON format")
     
     model_config = ConfigDict(extra="forbid")
+
 
 class MerchantSettingsUpdate(BaseModel):
     """Input DTO for updating merchant settings"""

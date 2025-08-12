@@ -65,7 +65,6 @@ class GlamBaseError(Exception):
 
         return result
 
-
 class InfrastructureError(GlamBaseError):
     """
     Infrastructure/external system errors.
@@ -92,7 +91,6 @@ class InfrastructureError(GlamBaseError):
 
         self.details["retryable"] = retryable
         self.retryable = retryable
-
 
 class DomainError(GlamBaseError):
     """
@@ -288,3 +286,25 @@ class InternalError(GlamBaseError):
 
         if error_id:
             self.details["error_id"] = error_id
+            
+            
+class ConfigurationError(GlamBaseError):
+    """Configuration errors in the application."""
+
+    code = "CONFIGURATION_ERROR"
+    status = 500
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        config_key: Optional[str] = None,
+        expected_value: Optional[Any] = None,
+        **kwargs
+    ):
+        super().__init__(message, **kwargs)
+
+        if config_key:
+            self.details["config_key"] = config_key
+        if expected_value is not None:
+            self.details["expected_value"] = expected_value

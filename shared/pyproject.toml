@@ -4,6 +4,7 @@ name = "shared"
 version = "0.1.0"
 description = "Shared utilities for GLAM system services"
 authors = ["GLAM Team <team@glam.com>"]
+package-mode = true
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -15,7 +16,6 @@ pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
 uuid7 = "^0.1.0"
-prisma = "^0.15.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

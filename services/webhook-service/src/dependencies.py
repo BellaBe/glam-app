@@ -1,44 +1,32 @@
 from typing import Annotated
-from fastapi import Depends, Request, HTTPException
-from prisma import Prisma
-import redis.asyncio as redis
-from shared.api.dependencies import RequestIdDep, PaginationDep, CorrelationIdDep, RequestContextDep
-from shared.messaging.jetstream_client import JetStreamClient
+from fastapi import Depends, Request, HTTPException, status
+from shared.api.dependencies import ( RequestContextDep, ShopifyHeadersDep)
 from .lifecycle import ServiceLifecycle
-from .config import ServiceConfig, get_service_config
-from .services.webhook_service import WebhookService
-from .services.webhook_processor import WebhookProcessor
-from .events.publishers import WebhookEventPublisher
+from .config import ServiceConfig
+from .services import WebhookService
 
-
-# Re-export shared dependencies
 __all__ = [
-    "PrismaDep",
-    "RedisClientDep",
-    "CorrelationIdDep", 
-    "PaginationDep",
-    "RequestIdDep",
     "RequestContextDep",
+    "ShopifyHeadersDep",
     "LifecycleDep",
     "ConfigDep",
     "WebhookServiceDep",
-    "WebhookProcessorDep",
-    "PublisherDep"
 ]
-
 
 # Core dependencies
 def get_lifecycle(request: Request) -> ServiceLifecycle:
-    """Get service lifecycle from app state"""
-    return request.app.state.lifecycle
-
+    lc = getattr(request.app.state, "lifecycle", None)
+    if lc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
+    return lc
 
 def get_config(request: Request) -> ServiceConfig:
-    """Get service config from app state"""
-    return request.app.state.config
+    cfg = getattr(request.app.state, "config", None)
+    if cfg is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
+    return cfg
 
-
-# Type aliases for core dependencies
+# Type aliases
 LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
 
@@ -49,16 +37,7 @@ def get_webhook_service(lifecycle: LifecycleDep) -> WebhookService:
         raise HTTPException(500, "Webhook service not initialized")
     return lifecycle.webhook_service
 
-
-def get_webhook_processor(lifecycle: LifecycleDep) -> WebhookProcessor:
-    """Get webhook processor"""
-    if not lifecycle.webhook_processor:
-        raise HTTPException(500, "Webhook processor not initialized")
-    return lifecycle.webhook_processor
-
-
 # Type aliases
 WebhookServiceDep = Annotated[WebhookService, Depends(get_webhook_service)]
-WebhookProcessorDep = Annotated[WebhookProcessor, Depends(get_webhook_processor)]
 
 

@@ -7,7 +7,6 @@ from shared.utils.logger import ServiceLogger
 from .config import ServiceConfig
 from .repositories.webhook_repository import WebhookRepository
 from .services.webhook_service import WebhookService
-from .services.webhook_processor import WebhookProcessor
 from .events.publishers import WebhookEventPublisher
 
 
@@ -31,7 +30,6 @@ class ServiceLifecycle:
         # Repositories / services
         self.webhook_repo: Optional[WebhookRepository] = None
         self.webhook_service: Optional[WebhookService] = None
-        self.webhook_processor: Optional[WebhookProcessor] = None
         
         # Tasks
         self._tasks: List[asyncio.Task] = []
@@ -118,7 +116,7 @@ class ServiceLifecycle:
     
     async def _init_database(self) -> None:
         """Initialize Prisma client if database is enabled."""
-        if not self.config.db_enabled:
+        if not self.config.database_enabled:
             self.logger.info("Database disabled; skipping Prisma initialization")
             return
         
@@ -135,7 +133,7 @@ class ServiceLifecycle:
             raise
     
     def _init_repositories(self) -> None:
-        if self.config.db_enabled:
+        if self.config.database_enabled:
             if not (self.prisma and self._db_connected):
                 raise RuntimeError("Prisma client not initialized/connected")
             
@@ -143,16 +141,17 @@ class ServiceLifecycle:
             self.logger.info("Webhook repository initialized")
         else:
             self.webhook_repo = None
+
     
     def _init_local_services(self) -> None:
-        # Initialize webhook service
-        self.webhook_service = WebhookService(self.config, self.logger)
+        """Initialize local services with proper dependencies"""
+        if not self.webhook_repo:
+            raise RuntimeError("Webhook repository not initialized")
+        if not self.event_publisher:
+            raise RuntimeError("Event publisher not initialized")
         
-        # Initialize webhook processor
-        if not self.webhook_repo or not self.event_publisher:
-            raise RuntimeError("Repository or publisher not initialized")
-        
-        self.webhook_processor = WebhookProcessor(
+        # Initialize webhook service with all required dependencies
+        self.webhook_service = WebhookService(
             config=self.config,
             repository=self.webhook_repo,
             publisher=self.event_publisher,

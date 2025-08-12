@@ -1,77 +1,95 @@
+# services/webhook-service/src/config.py
 import os
 from functools import lru_cache
-from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from shared.utils.config_loader import merged_config, flatten_config
+from shared.utils.exceptions import ConfigurationError
 
 
 class ServiceConfig(BaseModel):
-    """Service configuration from YAML + environment"""
+    """Webhook service configuration - API layer for Remix BFF"""
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
-    
-    # Service Identity
+
+    # Service Identity - from webhook-service.yml
     service_name: str = Field(..., alias="service.name")
     service_version: str = Field(..., alias="service.version")
-    environment: str = Field(..., alias="environment")
-    debug: bool = Field(False, alias="service.debug")
+    service_description: str = Field(..., alias="service.description")
+    debug: bool = Field(..., alias="service.debug")
     
-    # API Configuration - BOTH PORTS
+    # Environment - from .env
+    environment: str = Field(..., alias="APP_ENV")  # Will come from APP_ENV
+    
+    # API Configuration - from webhook-service.yml
     api_host: str = Field(..., alias="api.host")
-    api_port: int = Field(..., alias="api.port")
-    api_external_port: int = Field(..., alias="api.external_port")
+    api_external_port: int = Field(..., alias="WEBHOOK_API_EXTERNAL_PORT")
     api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
     
-    nats_url: str = Field(..., alias="infrastructure.nats_url")
-    redis_url: str = Field(..., alias="infrastructure.redis_url")
-    
+    # Database - from webhook-service.yml + env
+    database_enabled: int = Field(..., alias="WEBHOOK_DB_ENABLED")
+    database_url: str = Field(..., alias="DATABASE_URL")  # From env
+
+    # Logging - from webhook-service.yml (NOT shared.yml)
     logging_level: str = Field(..., alias="logging.level")
     logging_format: str = Field(..., alias="logging.format")
     logging_file_path: str = Field(..., alias="logging.file_path")
     
+    # Monitoring - from webhook-service.yml (NOT shared.yml)
     monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
     monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
     
+    # Rate limiting - from webhook-service.yml (NOT shared.yml)
     rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
     rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
-    db_enabled: bool = Field(..., alias="database.enabled")
-    database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
+    # Webhook specific - from webhook-service.yml
+    body_limit_bytes: int = Field(..., alias="webhook.body_limit_bytes")
+    idempotency_ttl_seconds: int = Field(..., alias="webhook.idempotency_ttl_seconds")
+    max_retries: int = Field(..., alias="webhook.max_retries")
+    retry_delay_seconds: int = Field(60, alias="webhook.retry_delay_seconds")  # Default since missing
     
-    # Webhook specific config
-    webhook_body_limit: int = Field(2097152, alias="webhook.body_limit_bytes")  # 2MB
-    webhook_idempotency_ttl: int = Field(259200, alias="webhook.idempotency_ttl_seconds")  # 72h
-    webhook_max_retries: int = Field(10, alias="webhook.max_retries")
-    webhook_ip_allowlist_mode: str = Field("disabled", alias="webhook.ip_allowlist_mode")  # disabled/soft/hard
-    webhook_shopify_ips: List[str] = Field(default_factory=list, alias="webhook.shopify_ips")
+    # Internal Authentication - from env
+    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_KEY")
     
-    # Shopify secrets
-    shopify_api_secret: str = Field(..., alias="SHOPIFY_API_SECRET")
-    shopify_api_secret_next: Optional[str] = Field(None, alias="SHOPIFY_API_SECRET_NEXT")
+    # Computed properties
+    @property
+    def nats_url(self) -> str:
+        in_container = os.path.exists("/.dockerenv")
+        if in_container or self.environment in ["development", "production"]:
+            return "nats://nats:4222"
+        return "nats://localhost:4222"
     
     @property
-    def effective_api_port(self) -> int:
+    def redis_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
-        return self.api_port if in_container else self.api_external_port
+        if in_container or self.environment in ["development", "production"]:
+            return "redis://redis:6379"
+        return "redis://localhost:6379"
     
+    @property
+    def api_port(self) -> int:
+        in_container = os.path.exists("/.dockerenv")
+        return 8000 if in_container else self.api_external_port
+
     @model_validator(mode="after")
     def _require_db_url_when_enabled(self):
-        if self.db_enabled and not self.database_url:
-            raise ValueError("database.enabled=true requires DATABASE_URL")
+        if self.database_enabled and not self.database_url:
+            raise ValueError("database_enabled=true requires DATABASE_URL")
         return self
 
 
 @lru_cache
 def get_service_config() -> ServiceConfig:
-    """Load and cache service configuration"""
-    cfg_dict = merged_config("webhook-service")
-    flattened = flatten_config(cfg_dict)
+    """Load config - fail if anything is missing"""
+    try:
+        # Load YAML + all env vars
+        cfg_dict = merged_config("webhook-service")
+        flattened = flatten_config(cfg_dict)
+        return ServiceConfig(**flattened)
     
-    # Ensure raw env vars survive
-    env_vars = ["DATABASE_URL", "SHOPIFY_API_SECRET", "SHOPIFY_API_SECRET_NEXT"]
-    for var in env_vars:
-        if var not in flattened and var in os.environ:
-            flattened[var] = os.environ[var]
-    
-    return ServiceConfig(**flattened)
-
-
+    except Exception as e:
+        print(f"❌ Configuration error: {e}")
+        raise ConfigurationError(
+            f"Failed to load service configuration: {e}",
+            config_key="webhook-service",
+            expected_value="valid config"
+        )
