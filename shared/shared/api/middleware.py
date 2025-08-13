@@ -16,12 +16,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException
 
 from shared.utils.exceptions import GlamBaseError
+from shared.utils.logger import ServiceLogger
 from ..metrics import PrometheusMiddleware, metrics_endpoint
 
 from .responses import error_response
 from .correlation import get_correlation_id, set_correlation_context
-
-logger = logging.getLogger(__name__)
 
 
 class APIMiddleware(BaseHTTPMiddleware):
@@ -32,6 +31,7 @@ class APIMiddleware(BaseHTTPMiddleware):
         self.service_name = service_name
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        
         # Generate IDs
         request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:12]}")
         
@@ -45,6 +45,16 @@ class APIMiddleware(BaseHTTPMiddleware):
         # IMPORTANT: Set correlation context for async operations
         # This makes correlation_id available throughout the request lifecycle
         set_correlation_context(correlation_id)
+        
+        logger = request.app.state.logger
+        logger.set_request_context(
+            request_id=request_id,
+            correlation_id=correlation_id,
+            method=request.method,
+            path=request.url.path,
+            ip_client=request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
+                     (request.client.host if request.client else "unknown")
+        )
         
         # Track timing
         start_time = time.perf_counter()
@@ -61,7 +71,7 @@ class APIMiddleware(BaseHTTPMiddleware):
             
         except Exception as exc:
             # Convert to standard error response
-            error_resp = self._handle_exception(exc, request_id, correlation_id)
+            error_resp = self._handle_exception(exc, request_id, correlation_id, logger)
             
             # Determine status code
             status_code = 500
@@ -100,8 +110,8 @@ class APIMiddleware(BaseHTTPMiddleware):
             
             return response
     
-    def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str):
-        """Convert exception to error response."""
+    def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str, logger: ServiceLogger):
+        """Convert exception to error response using the standard error_response function."""
         
         if isinstance(exc, GlamBaseError):
             return error_response(
@@ -131,26 +141,42 @@ class APIMiddleware(BaseHTTPMiddleware):
             )
         
         elif isinstance(exc, HTTPException):
-            return error_response(
-                code=f"HTTP_{exc.status_code}",
-                message=exc.detail,
-                request_id=request_id,
-                correlation_id=correlation_id
-            )
+            # CRITICAL FIX: Properly extract structured details from HTTPException
+            if isinstance(exc.detail, dict):
+                # Dependency raised HTTPException with structured detail
+                return error_response(
+                    code=exc.detail.get("code", f"HTTP_{exc.status_code}"),
+                    message=exc.detail.get("message", str(exc.detail)),
+                    details=exc.detail.get("details", exc.detail),  # Pass ALL details
+                    request_id=request_id,
+                    correlation_id=correlation_id
+                )
+            else:
+                # Simple string detail
+                return error_response(
+                    code=f"HTTP_{exc.status_code}",
+                    message=str(exc.detail),
+                    details=None,
+                    request_id=request_id,
+                    correlation_id=correlation_id
+                )
         
         else:
-            logger.exception(
+            # Unexpected errors - include actual error message
+            logger.critical(
                 "Unhandled exception",
                 extra={
                     "request_id": request_id,
                     "correlation_id": correlation_id,
-                    "error_type": type(exc).__name__
+                    "error_type": type(exc).__name__,
+                    "error_str": str(exc)
                 }
             )
             
             return error_response(
                 code="INTERNAL_ERROR",
-                message="An unexpected error occurred",
+                message=f"An unexpected error occurred: {str(exc)}",  # Include actual error
+                details={"type": type(exc).__name__},
                 request_id=request_id,
                 correlation_id=correlation_id
             )

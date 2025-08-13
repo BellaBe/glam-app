@@ -17,7 +17,7 @@ from shared.utils.logger import ServiceLogger
 class JetStreamClient:
     """Pure JetStream client - only connection + stream management."""
 
-    def __init__(self, logger: Optional[ServiceLogger] = None) -> None:  # ✔ typed
+    def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
         self._client: Optional[Client] = None
         self._js: Optional[JetStreamContext] = None
         self.logger = logger
@@ -72,7 +72,7 @@ class JetStreamClient:
     ) -> None:
         if not self._js:
             raise RuntimeError("JetStream not initialized")
-
+        
         cfg = StreamConfig(
             name=name,
             subjects=subjects,
@@ -86,11 +86,11 @@ class JetStreamClient:
             await self._js.stream_info(name)
             if self.logger:
                 self.logger.debug("Using existing stream: %s", name)
-        except NotFoundError:                       # ← only when it’s absent
+        except NotFoundError:  
             await self._js.add_stream(cfg)
             if self.logger:
                 self.logger.info("Created new stream: %s", name)
-
+            
     async def delete_stream(self, name: str) -> None:
         if not self._js:
             raise RuntimeError("JetStream not initialized")

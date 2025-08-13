@@ -175,6 +175,31 @@ db-migrate:
 		poetry run prisma migrate dev --name $(NAME) --schema=prisma/schema.prisma
 	@echo "$(GREEN)✅ Migration created$(NC)"
 
+db-reset:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-reset SERVICE=merchant-service$(NC)"; exit 1; }
+	@echo "$(YELLOW)⚠️  WARNING: This will delete all data in $(SERVICE) database!$(NC)"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ] || { echo "$(RED)Cancelled$(NC)"; exit 1; }
+	@echo "$(GREEN)🔄 Resetting database for $(SERVICE)...$(NC)"
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	cd services/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma migrate reset --force --skip-seed --schema=prisma/schema.prisma
+	@echo "$(GREEN)✅ Database reset complete$(NC)"
+	
+db-clean-reset:
+	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-clean-reset SERVICE=merchant-service$(NC)"; exit 1; }
+	@echo "$(YELLOW)⚠️  WARNING: This will delete all data and migrations in $(SERVICE)!$(NC)"
+	@read -p "Are you sure? (y/N): " confirm && [ "$$confirm" = "y" ] || { echo "$(RED)Cancelled$(NC)"; exit 1; }
+	@echo "$(GREEN)🔄 Cleaning migrations for $(SERVICE)...$(NC)"
+	@rm -rf services/$(SERVICE)/prisma/migrations/*
+	@echo "$(GREEN)🔄 Resetting database for $(SERVICE)...$(NC)"
+	@DATABASE_URL=$$($(MAKE) -s get-db-config SERVICE=$(SERVICE)); \
+	cd services/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma migrate reset --force --skip-seed --schema=prisma/schema.prisma && \
+		poetry run prisma generate
+	@echo "$(GREEN)✅ Clean reset complete$(NC)"
+
 db-studio:
 	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-studio SERVICE=webhook-service$(NC)"; exit 1; }
 	@echo "$(GREEN)🎨 Opening Prisma Studio for $(SERVICE)...$(NC)"

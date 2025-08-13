@@ -79,7 +79,7 @@ class ServiceLifecycle:
     async def _init_messaging(self) -> None:
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher now (you require it in _init_listeners)
         self.event_publisher = MerchantEventPublisher(

@@ -172,13 +172,14 @@ src/
 │   │   ├── __init__.py
 │   │   │   
 │   │   │   ```py
+│   │   │   # src/api/v1/__init__.py
 │   │   │   from fastapi import APIRouter
-│   │   │   from .merchants import router
+│   │   │   from .merchants import merchants_router
 │   │   │   
-│   │   │   router = APIRouter(prefix="/v1")
+│   │   │   v1_router = APIRouter(prefix="/v1")
 │   │   │   
-│   │   │   # Include v1 API routes
-│   │   │   router.include_router(router, tags=["merchants"])
+│   │   │   # Include merchant routes
+│   │   │   v1_router.include_router(merchants_router, tags=["merchants"])
 │   │   │   ```
 │   │   │   
 │   │   └── merchants.py
@@ -186,11 +187,12 @@ src/
 │   │       ```py
 │   │       from fastapi import APIRouter, status, HTTPException, Header, Request
 │   │       from typing import Optional
+│   │       
 │   │       from shared.api import ApiResponse, success_response, error_response
 │   │       from shared.api.dependencies import RequestContextDep, ClientIpDep, AuthDep, ShopDomainDep
 │   │       from ...dependencies import MerchantServiceDep
 │   │       from ...schemas.merchant import (
-│   │           MerchantSync, MerchantOut, MerchantSettingsUpdate,
+│   │           MerchantSyncIn, MerchantOut, MerchantSettingsUpdate,
 │   │           MerchantSettingsOut, MerchantSyncOut, MerchantActivity
 │   │       )
 │   │       from ...exceptions import (
@@ -199,54 +201,78 @@ src/
 │   │           ConsentViolationError
 │   │           )
 │   │       
-│   │       router = APIRouter(prefix="/merchants")
+│   │       merchants_router = APIRouter(prefix="/merchants")
 │   │       
-│   │       @router.post(
+│   │       @merchants_router.post(
 │   │           "/sync",
 │   │           response_model=ApiResponse[MerchantSyncOut],
 │   │           status_code=status.HTTP_200_OK,
 │   │           summary="Sync merchant from OAuth flow",
 │   │       )
+│   │       @merchants_router.post("/sync")
 │   │       async def sync_merchant(
 │   │           service: MerchantServiceDep,
 │   │           ctx: RequestContextDep,
 │   │           shop_domain_header: ShopDomainDep,
-│   │           body: MerchantSync,
-│   │           idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+│   │           body: MerchantSyncIn,
 │   │       ):
 │   │           """Sync merchant after OAuth completion"""
 │   │           try:
+│   │               # Business logic validation
+│   │               if body.myshopify_domain.lower() != shop_domain_header.lower():
+│   │                   # Use error_response for business logic errors
+│   │                   return error_response(
+│   │                       code="SHOP_DOMAIN_MISMATCH",
+│   │                       message="Shop domain mismatch between request body and header",
+│   │                       details={
+│   │                           "body_shop": body.shop_domain,
+│   │                           "header_shop": shop_domain_header
+│   │                       },\
+│   │                       request_id=ctx.request_id,
+│   │                       correlation_id=ctx.correlation_id
+│   │                   )
 │   │               
-│   │               print("AM HERE========")
-│   │               # Validate shop domain matches header
-│   │               if body.shop_domain.lower() != shop_domain_header:
-│   │                   raise InvalidDomainError("Shop domain mismatch between body and header")
-│   │               
-│   │               result = await service.sync_merchant(body, idempotency_key)
+│   │               result = await service.sync_merchant(body, ctx)
 │   │               return success_response(
 │   │                   result,
 │   │                   ctx.request_id,
 │   │                   ctx.correlation_id
 │   │               )
+│   │           
+│   │           
 │   │           except InvalidDomainError as e:
+│   │               # Business logic error - use error_response
 │   │               return error_response(
 │   │                   code="INVALID_DOMAIN",
 │   │                   message=str(e),
-│   │                   # status=400,
 │   │                   request_id=ctx.request_id,
 │   │                   correlation_id=ctx.correlation_id
 │   │               )
-│   │           except Exception as e:
+│   │           
+│   │           except MerchantNotFoundError as e:
 │   │               return error_response(
-│   │                   code="INTERNAL_ERROR",
+│   │                   code="MERCHANT_NOT_FOUND", 
+│   │                   message=str(e),
+│   │                   request_id=ctx.request_id,
+│   │                   correlation_id=ctx.correlation_id
+│   │               )
+│   │           
+│   │           except Exception as e:
+│   │               # Log unexpected errors
+│   │               # logger.exception(f"Unexpected error in sync_merchant")
+│   │               print(f"Unexpected error in sync_merchant: {e}")  # For debugging
+│   │               
+│   │               # Return error response for unexpected errors
+│   │               return error_response(
+│   │                   code="SYNC_FAILED",
 │   │                   message="Failed to sync merchant",
-│   │                   # status=500,
+│   │                   details={"error": str(e)},
 │   │                   request_id=ctx.request_id,
 │   │                   correlation_id=ctx.correlation_id
 │   │               )
 │   │       
-│   │       @router.get(
-│   │           "/self",
+│   │       @merchants_router.get(
+│   │           "/self/{platform_domain}",
 │   │           response_model=ApiResponse[MerchantOut],
 │   │           summary="Get current merchant info",
 │   │       )
@@ -254,11 +280,11 @@ src/
 │   │           service: MerchantServiceDep,
 │   │           ctx: RequestContextDep,
 │   │           auth: AuthDep,
-│   │           shop_domain: ShopDomainDep
+│   │           platform_domain: ShopDomainDep 
 │   │       ):
 │   │           """Get current merchant information"""
 │   │           try:
-│   │               merchant = await service.get_merchant_by_domain(shop_domain)
+│   │               merchant = await service.get_merchant_by_domain(platform_domain)
 │   │               return success_response(
 │   │                   merchant,
 │   │                   ctx.request_id,
@@ -267,7 +293,7 @@ src/
 │   │           except MerchantNotFoundError:
 │   │               raise HTTPException(404, "Merchant not found")
 │   │       
-│   │       @router.get(
+│   │       @merchants_router.get(
 │   │           "/self/settings",
 │   │           response_model=ApiResponse[MerchantSettingsOut],
 │   │           summary="Get current merchant settings",
@@ -289,7 +315,7 @@ src/
 │   │           except MerchantNotFoundError:
 │   │               raise HTTPException(404, "Merchant not found")
 │   │       
-│   │       @router.put(
+│   │       @merchants_router.put(
 │   │           "/self/settings",
 │   │           response_model=ApiResponse[MerchantSettingsOut],
 │   │           summary="Update merchant settings",
@@ -328,7 +354,7 @@ src/
 │   │                   correlation_id=ctx.correlation_id
 │   │               )
 │   │       
-│   │       @router.post(
+│   │       @merchants_router.post(
 │   │           "/self/activity",
 │   │           status_code=status.HTTP_204_NO_CONTENT,
 │   │           summary="Record merchant activity",
@@ -351,13 +377,14 @@ src/
 │   └── __init__.py
 │       
 │       ```py
+│       # src/api/__init__.py
 │       from fastapi import APIRouter
-│       from .v1 import router
+│       from .v1 import v1_router
 │       
-│       router = APIRouter(prefix="/api")
+│       api_router = APIRouter(prefix="/api")
 │       
 │       # Include v1 routes
-│       router.include_router(router, tags=["merchants"])
+│       api_router.include_router(v1_router)
 │       ```
 │       
 ├── events/
@@ -685,7 +712,7 @@ src/
 │       from prisma import Prisma
 │       from prisma.models import Merchant, MerchantSettings, MerchantConsent, IdempotencyKey
 │       from prisma.enums import MerchantStatus, ConsentType
-│       from ..schemas.merchant import MerchantSync, MerchantSettingsUpdate
+│       from ..schemas.merchant import MerchantSyncIn, MerchantSettingsUpdate
 │       
 │       class MerchantRepository:
 │           """Repository for Merchant operations using Prisma"""
@@ -718,7 +745,7 @@ src/
 │               print(f"Found merchant: {merchant}")
 │               return merchant
 │           
-│           async def create(self, data: MerchantSync) -> Merchant:
+│           async def create(self, data: MerchantSyncIn) -> Merchant:
 │               """Create new merchant"""
 │               merchant = await self.prisma.merchant.create(
 │                   data={
@@ -758,7 +785,7 @@ src/
 │                   data=data
 │               )
 │           
-│           async def update_for_reinstall(self, merchant_id: str, data: MerchantSync) -> Merchant:
+│           async def update_for_reinstall(self, merchant_id: str, data: MerchantSyncIn) -> Merchant:
 │               """Update merchant for reinstall"""
 │               return await self.prisma.merchant.update(
 │                   where={"id": merchant_id},
@@ -859,146 +886,83 @@ src/
 │       
 ├── schemas/
 │   ├── __init__.py
+│   │   
+│   │   ```py
+│   │   from .merchant import (
+│   │       MerchantSyncIn,
+│   │       MerchantSyncOut,
+│   │       MerchantSelfIn,
+│   │       MerchantSelfOut,
+│   │       MerchantSyncedPayload,
+│   │       MerchantStatusUpdatedPayload
+│   │   )
+│   │   
+│   │   __all__ = [
+│   │       "MerchantSyncIn",
+│   │       "MerchantSyncOut",
+│   │       "MerchantSelfIn",
+│   │       "MerchantSelfOut",
+│   │       "MerchantSyncedPayload",
+│   │       "MerchantStatusUpdatedPayload"
+│   │   ]
+│   │   ```
+│   │   
 │   └── merchant.py
 │       
 │       ```py
-│       from uuid import UUID
-│       from datetime import datetime
-│       from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
-│       from typing import Optional, Dict, Any
-│       from prisma.enums import MerchantStatus, ConsentType
+│       # services/merchant-service/src/schemas/merchant.py
+│       from pydantic import BaseModel, Field, EmailStr
+│       from prisma.enums import MerchantStatus
 │       
 │       # ---------- INPUT DTOs ----------
-│       class MerchantSync(BaseModel):
+│       class MerchantSyncIn(BaseModel):
 │           """Input DTO for syncing merchant"""
-│           shop_domain: str = Field(..., description="Shopify domain (e.g., example.myshopify.com)")
-│           shop_gid: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-│           shop_name: Optional[str] = Field(None, description="Shop display name")
-│           email: Optional[EmailStr] = Field(None, description="Primary contact email")
-│           url: Optional[str] = Field(None, description="Shop URL")
-│           timezone: Optional[str] = Field("UTC", description="IANA timezone")
-│           currency: Optional[str] = Field("USD", description="ISO currency code")
-│           scopes: str = Field(..., description="Comma-separated OAuth scopes")
-│           auth_at: datetime = Field(..., description="When OAuth was completed")
-│           app_version: Optional[str] = Field(None, description="Our app version")
-│           install_source: Optional[str] = Field(None, description="app_store | partner | direct")
-│           platform_api_version: Optional[str] = Field("2024-01", description="Shopify API version")
+│           platform: str = Field(..., description="Platform name (e.g., Shopify)")
+│           platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
+│           platform_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
+│           name: str = Field(..., description="Shop display name")
+│           email: EmailStr = Field(None, description="Shop contact email")
+│           primary_domain: str = Field(..., description="Primary domain of the shop")
+│           currency: str = Field(..., description="Shop currency (e.g., USD)")
+│           country: str = Field(..., description="Shop country code (e.g., US)")
+│           platform_version: str = Field(..., description="Shopify API version (e.g., 2024-01)")
+│           scopes: str = Field(..., description="OAuth scopes granted by the shop")
 │           
-│           @field_validator('shop_domain')
-│           def validate_shop_domain(cls, v):
-│               if not v.lower().endswith('.myshopify.com'):
-│                   raise ValueError('Shop domain must end with .myshopify.com')
-│               return v.lower()
-│           
-│           model_config = ConfigDict(extra="forbid")
-│       
-│       class MerchantSettingsUpdate(BaseModel):
-│           """Input DTO for updating merchant settings"""
-│           data_access: Optional[bool] = None
-│           auto_sync: Optional[bool] = None
-│           tos: Optional[bool] = None
-│           
-│           model_config = ConfigDict(extra="forbid")
-│       
-│       class MerchantActivity(BaseModel):
-│           """Input DTO for recording merchant activity"""
-│           activity_type: str = Field(..., description="Type of activity (e.g., page_view, feature_use)")
-│           activity_name: str = Field(..., description="Specific activity name")
-│           activity_data: Optional[Dict[str, Any]] = Field(None, description="Additional activity data")
-│           
-│           model_config = ConfigDict(extra="forbid")
-│       
-│       # ---------- OUTPUT DTOs ----------
-│       class MerchantOut(BaseModel):
-│           """Output DTO for merchant"""
-│           merchant_id: str
-│           shop_domain: str
-│           shop_gid: str
-│           shop_name: Optional[str]
-│           email: Optional[str]
-│           timezone: str
-│           currency: str
-│           installed_at: datetime
-│           uninstalled_at: Optional[datetime]
-│           last_auth_at: Optional[datetime]
-│           last_activity_at: Optional[datetime]
-│           status: MerchantStatus
-│           status_reason: Optional[str]
-│           settings_accepted: bool = False  # Derived field
-│           
-│           model_config = ConfigDict(from_attributes=True)
-│       
-│       class MerchantSettingsOut(BaseModel):
-│           """Output DTO for merchant settings"""
-│           data_access: bool
-│           auto_sync: bool
-│           tos: bool
-│           
-│           model_config = ConfigDict(from_attributes=True)
-│       
 │       class MerchantSyncOut(BaseModel):
 │           """Output DTO for merchant sync result"""
-│           created: bool
-│           merchant_id: str
+│           created: bool = Field(..., description="Indicates if the merchant was newly created")
+│           merchant_id: str = Field(..., description="Unique identifier of the merchant")
 │           
-│           model_config = ConfigDict(from_attributes=True)
+│       class MerchantSelfIn(BaseModel):
+│           """Get self merchant"""
+│           platform_id: str
+│           platform_domain: str
+│           
+│       class MerchantSelfOut(BaseModel):
+│           """Output DTO for self merchant"""
+│           id: str
+│           platform_id: str
+│           platform_domain: str
+│           name: str
+│           status: MerchantStatus  
 │       
 │       # ---------- EVENT PAYLOADS ----------
-│       class MerchantCreatedPayload(BaseModel):
-│           """Payload for evt.merchant.created"""
-│           merchant_id: str
-│           shop_gid: str
-│           shop_domain: str
-│           shop_name: Optional[str]
-│           email: Optional[str]
-│           timezone: str
-│           currency: str
-│           platform: str
-│           installed_at: datetime
-│           install_source: Optional[str]
-│       
 │       class MerchantSyncedPayload(BaseModel):
 │           """Payload for evt.merchant.synced"""
 │           merchant_id: str
-│           shop_gid: str
-│           shop_domain: str
-│           first_install: bool
-│           last_auth_at: datetime
-│           scopes: str
-│       
-│       class MerchantSettingsUpdatedPayload(BaseModel):
-│           """Payload for evt.merchant.settings.updated"""
+│           platform: str
+│           platform_id: str
+│           platform_domain: str
+│           contact_email: EmailStr
+│           name: str
+│           status: MerchantStatus
+│           
+│       class MerchantStatusUpdatedPayload(BaseModel):
+│           """Payload for evt.merchant.status_updated"""
 │           merchant_id: str
-│           shop_gid: str
-│           shop_domain: str
-│           changes: Dict[str, bool]
-│           updated_at: datetime
-│       
-│       class MerchantStatusChangedPayload(BaseModel):
-│           """Payload for evt.merchant.status.changed"""
-│           merchant_id: str
-│           shop_gid: str
-│           old_status: MerchantStatus
-│           new_status: MerchantStatus
-│           reason: str
-│           changed_at: datetime
-│       
-│       class MerchantUninstalledPayload(BaseModel):
-│           """Payload for evt.merchant.uninstalled"""
-│           merchant_id: str
-│           shop_gid: str
-│           shop_domain: str
-│           uninstalled_at: datetime
-│           uninstall_reason: Optional[str]
-│       
-│       class MerchantActivityRecordedPayload(BaseModel):
-│           """Payload for evt.merchant.activity.recorded"""
-│           merchant_id: str
-│           shop_gid: str
-│           activity_type: str
-│           activity_name: str
-│           activity_data: Optional[Dict[str, Any]]
-│           timestamp: datetime
+│           platform_id: str
+│           platform_domain: str
+│           status: MerchantStatus
 │       
 │       ```
 │       
@@ -1019,21 +983,17 @@ src/
 │   └── merchant_service.py
 │       
 │       ```py
-│       from uuid import UUID
-│       from typing import Optional, Dict, Tuple
+│       from typing import Optional
 │       from datetime import datetime
 │       from shared.utils.logger import ServiceLogger
-│       from shared.api.correlation import get_correlation_context
 │       from ..repositories.merchant_repository import MerchantRepository
 │       from ..schemas.merchant import (
-│           MerchantSync, MerchantOut, MerchantSettingsUpdate, 
+│           MerchantSyncIn, MerchantOut, MerchantSettingsUpdate, 
 │           MerchantSettingsOut, MerchantSyncOut, MerchantActivity
 │       )
 │       from ..events.publishers import MerchantEventPublisher
 │       from ..exceptions import (
-│           MerchantNotFoundError, InvalidDomainError, 
-│           InvalidStatusTransitionError, ConsentViolationError
-│       )
+│           MerchantNotFoundError, InvalidStatusTransitionError)
 │       from prisma.enums import MerchantStatus, ConsentType
 │       import redis.asyncio as redis
 │       
@@ -1060,22 +1020,17 @@ src/
 │               self.logger = logger
 │               # self.redis = redis_client
 │           
-│           async def sync_merchant(self, data: MerchantSync, idempotency_key: Optional[str] = None) -> MerchantSyncOut:
+│           async def sync_merchant(self, data: MerchantSyncIn, ctx) -> MerchantSyncOut:
 │               """Sync merchant from OAuth flow"""
-│               correlation_id = get_correlation_context()
 │               
 │               self.logger.info(
 │                   f"Syncing merchant: {data.shop_domain}",
 │                   extra={
-│                       "correlation_id": correlation_id,
+│                       "correlation_id": ctx.correlation_id,
 │                       "shop_domain": data.shop_domain,
 │                       "shop_gid": data.shop_gid
 │                   }
 │               )
-│               
-│               # Validate domain
-│               if not data.shop_domain.lower().endswith('.myshopify.com'):
-│                   raise InvalidDomainError(f"Invalid shop domain: {data.shop_domain}")
 │               
 │               # Find existing merchant
 │               existing = await self.repository.find_by_domain_or_gid(data.shop_domain, data.shop_gid)
@@ -1086,7 +1041,6 @@ src/
 │                   created = False
 │               else:
 │                   # New install
-│                   print("DATA========", data)
 │                   merchant = await self.repository.create(data)
 │                   created = True
 │                   
@@ -1115,15 +1069,6 @@ src/
 │               )
 │               
 │               result = MerchantSyncOut(created=created, merchant_id=merchant.id)
-│               
-│               # # Cache if idempotent
-│               # if idempotency_key:
-│               #     import json
-│               #     await self.redis.setex(
-│               #         f"idem:{idempotency_key}",
-│               #         3600,
-│               #         json.dumps(result.model_dump())
-│               #     )
 │               
 │               return result
 │           
@@ -1356,7 +1301,7 @@ src/
 │       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
 │       
 │       # Internal Authentication
-│       internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_KEY")
+│       internal_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
 │       
 │       # Computed properties
 │       @property
@@ -1649,7 +1594,7 @@ src/
     from shared.utils.logger import create_logger
     from .config import get_service_config
     from .lifecycle import ServiceLifecycle
-    from .api import router as merchant_router
+    from .api import api_router
     
     # Global singletons
     config = get_service_config()
@@ -1698,7 +1643,8 @@ src/
         
         # Include routers
         app.include_router(create_health_router(config.service_name))
-        app.include_router(merchant_router)
+        app.include_router(api_router)
+        
         
         return app
     

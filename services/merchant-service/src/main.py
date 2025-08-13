@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from shared.api import setup_middleware
 from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
 from .api import api_router
+from shared.api import setup_debug_handlers, setup_debug_middleware
 
 # Global singletons
 config = get_service_config()
@@ -46,6 +46,11 @@ def create_application() -> FastAPI:
         exception_handlers={}  # Use shared middleware for exception handling
     )
     
+    if config.debug:
+        logger.info("🚨 Debug mode enabled - adding debug handlers")
+        setup_debug_handlers(app)
+        setup_debug_middleware(app)
+    
     setup_middleware(
         app,
         service_name=config.service_name,
@@ -62,47 +67,13 @@ def create_application() -> FastAPI:
 
 app = create_application()
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    print("[VALIDATION ERROR] ===== Request Validation Failed =====")
-    print(f"[VALIDATION ERROR] Path: {request.url.path}")
-    print(f"[VALIDATION ERROR] Method: {request.method}")
-    
-    # Log the raw body if available
-    try:
-        body = await request.body()
-        body_str = body.decode('utf-8')
-        print(f"[VALIDATION ERROR] Raw Body: {body_str}")
-        
-        # Try to parse as JSON to pretty print
-        try:
-            body_json = json.loads(body_str)
-            print(f"[VALIDATION ERROR] Parsed Body: {json.dumps(body_json, indent=2)}")
-        except:
-            pass
-    except:
-        print("[VALIDATION ERROR] Could not read request body")
-    
-    # Log validation errors
-    print(f"[VALIDATION ERROR] Errors: {exc.errors()}")
-    
-    # Log specific field issues
-    for error in exc.errors():
-        field_path = ".".join(str(loc) for loc in error["loc"])
-        print(f"[VALIDATION ERROR] Field '{field_path}': {error['msg']} (type: {error['type']})")
-    
-    # Return the normal error response
-    return JSONResponse(
-        status_code=422,
-        content={"detail": exc.errors()}
-    )
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "src.main:app",
         host=config.api_host,
         port=config.api_port,
-        reload=config.debug
+        reload=config.debug,
+        workers=1
     )
 

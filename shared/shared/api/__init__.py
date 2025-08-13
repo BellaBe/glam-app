@@ -48,6 +48,12 @@ from .correlation import (
     extract_correlation_from_event, 
 )
 
+from .debug import (
+    # Debugging utilities
+    setup_debug_middleware,
+    setup_debug_handlers,
+)
+
 __all__ = [
     # Models
     "ApiResponse",

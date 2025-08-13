@@ -41,7 +41,7 @@ class ServiceConfig(BaseModel):
     rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
     
     # Internal Authentication
-    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_KEY")
+    internal_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
     
     # Computed properties
     @property

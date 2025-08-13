@@ -48,7 +48,7 @@ class ServiceConfig(BaseModel):
     retry_delay_seconds: int = Field(60, alias="webhook.retry_delay_seconds")  # Default since missing
     
     # Internal Authentication - from env
-    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_KEY")
+    internal_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
     
     # Computed properties
     @property

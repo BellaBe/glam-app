@@ -24,9 +24,11 @@ const shopify = shopifyApp({
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
+
+  // Fixed afterAuth hook in shopify.server.js
   hooks: {
     afterAuth: async ({ admin, session, request }) => {
-      console.log("[SHOPIFY] After Auth:", session);
+      console.log(`[SHOPIFY] After Auth: ${session.shop}`);
 
       try {
         // Sync the shop with the external API after authentication
@@ -36,57 +38,103 @@ const shopify = shopifyApp({
         const shopInfoResponse = await admin.graphql(GET_SHOP_INFO);
         const shopData = await shopInfoResponse.json();
 
+        console.log("[SHOPIFY] Shop data fetched successfully");
+
+        // Build sync payload with correct field names
         const syncData = {
           platform_name: "shopify",
           platform_id: shopData.data.shop.id,
+          platform_domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
           shop_name: shopData.data.shop.name,
-          shop_url: shopData.data.shop.url,
-          email: shopData.data.shop.email,
-          contact_email: shopData.data.shop.contactEmail,
-          currency_code: shopData.data.shop.currencyCode,
-          primary_domain_url: shopData.data.shop.primaryDomain?.url,
-          primary_domain_host: shopData.data.shop.primaryDomain?.host,
-          myshopify_domain: shopData.data.shop.myshopifyDomain,
-          platform_plan: shopData.data.shop.plan?.displayName,
-          billing_address: JSON.stringify(shopData.data.shop.billingAddress),
+          email: shopData.data.shop.contactEmail,
+          primary_domain_host: shopData.data.shop.primaryDomain.host,
+          currency: shopData.data.shop.currencyCode,
+          country: shopData.data.shop.billingAddress.countryCodeV2,
+          platform_version: "2025-01", // API version
+          scopes: session.scope,
         };
 
-        // ADD THESE LOGS:
-        console.log("[SHOPIFY] ===== SYNC REQUEST DEBUG =====");
-        console.log("[SHOPIFY] Sync Data:", JSON.stringify(syncData, null, 2));
-        console.log(
-          "[SHOPIFY] Data Types:",
-          Object.entries(syncData).map(
-            ([k, v]) =>
-              `${k}: ${typeof v} (${v === null ? "null" : v === undefined ? "undefined" : "valued"})`,
-          ),
-        );
+        console.log("[SHOPIFY] Sync payload prepared:", {
+          shop: syncData.platform_domain,
+          platform: syncData.platform,
+          hasAccessToken: !!syncData.access_token,
+        });
 
-        // Log what apiClient.syncShop actually sends
-        console.log(
-          "[SHOPIFY] API Client method being called:",
-          apiClient.syncShop.toString(),
-        );
-
+        // 1. Call sync API
         const syncResponse = await apiClient.syncShop(syncData);
-        console.log("[SHOPIFY] Sync Shop Response:", syncResponse);
-        if (syncResponse.error) {
-          console.error("[SHOPIFY] Sync Shop Error:", syncResponse.error);
-        } else {
-          console.log("[SHOPIFY] Shop synced successfully:", syncResponse.data);
+        console.log("[SHOPIFY] Sync API returned:", syncResponse);
+
+        // 2. Verify the merchant was created/updated with retry
+        console.log("[SHOPIFY] Verifying merchant creation...");
+
+        let merchant = null;
+        let attempts = 0;
+        const maxAttempts = 3;
+
+        while (!merchant && attempts < maxAttempts) {
+          attempts++;
+          console.log(
+            `[SHOPIFY] Verification attempt ${attempts}/${maxAttempts}`,
+          );
+
+          try {
+            // Use simple domain-based lookup
+            merchant = await apiClient.getMerchant(syncData.platform_domain);
+            console.log("[SHOPIFY] Merchant verified successfully!");
+            break;
+          } catch (error) {
+            if (error.status === 404 && attempts < maxAttempts) {
+              console.log(`[SHOPIFY] Merchant not found yet, waiting 500ms...`);
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } else {
+              throw error; // Re-throw if it's not a 404 or we've exhausted attempts
+            }
+          }
         }
+
+        if (!merchant) {
+          console.error("[SHOPIFY] Failed to verify merchant after sync");
+          return null; // Don't fail auth, but log the issue
+        }
+
+        console.log(
+          "[SHOPIFY] Shop sync and verification completed successfully!",
+        );
+        return { syncResponse, merchant };
       } catch (error) {
+        // Handle fetch-style errors properly
         console.error("[SHOPIFY] ===== SYNC ERROR DETAILS =====");
-    console.error("[SHOPIFY] Status:", error.response?.status);
-    console.error("[SHOPIFY] Response Data:", JSON.stringify(error.response?.data, null, 2));
-    console.error("[SHOPIFY] Response Headers:", error.response?.headers);
-    console.error("[SHOPIFY] Request Config:", {
-        url: error.config?.url,
-        method: error.config?.method,
-        headers: error.config?.headers,
-        data: error.config?.data
-    });
-    throw error;
+        console.error("[SHOPIFY] Error message:", error.message);
+
+        if (error.status) {
+          // This is an API error with structured data
+          console.error("[SHOPIFY] HTTP Status:", error.status);
+          console.error("[SHOPIFY] Request URL:", error.url);
+          console.error("[SHOPIFY] Request Method:", error.method);
+          console.error(
+            "[SHOPIFY] Response Data:",
+            JSON.stringify(error.responseData, null, 2),
+          );
+          console.error(
+            "[SHOPIFY] Request Headers:",
+            JSON.stringify(error.requestHeaders, null, 2),
+          );
+
+          if (error.requestBody) {
+            console.error(
+              "[SHOPIFY] Request Body:",
+              JSON.stringify(error.requestBody, null, 2),
+            );
+          }
+        } else {
+          // This is a network/parsing error
+          console.error("[SHOPIFY] Error type: Network/Parsing error");
+          console.error("[SHOPIFY] Full error:", error);
+        }
+
+        // Don't rethrow - log the error but allow auth to continue
+        console.error("[SHOPIFY] Shop sync failed, but auth will continue");
+        return null;
       }
     },
   },

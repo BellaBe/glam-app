@@ -7,29 +7,56 @@ const svc = {
   credits:   process.env.CREDITS_URL,
   analytics: process.env.ANALYTICS_URL,
   webhook:   process.env.WEBHOOK_URL,    // e.g. http://localhost:8010/  (base only)
+  billing:   process.env.BILLING_URL,    // e.g. http://localhost:8004/  (base only)
 };
-
 
 function signJwt(shop) {
   const token = jwt.sign(
-    { sub: shop, scope: "bff:call", iat: Math.floor(Date.now() / 1000) },
-    process.env.INTERNAL_JWT_SECRET,
+    { 
+      sub: shop, 
+      scope: "bff:api:access", 
+      iat: Math.floor(Date.now() / 1000),
+      platform: "shopify"
+    },
+    process.env.CLIENT_JWT_SECRET,
     { expiresIn: "180s", algorithm: "HS256" },
   );
-  if (!token) throw new Error("Failed to create internal JWT");
+  if (!token) throw new Error("Failed to create client JWT");
   return token;
 }
 
-function addHeaders(shop, { webhookId = null, topic = null } = {}) {
+function addApiHeaders(shop) {
   const token = signJwt(shop);
+  
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-Shop-Platform": "shopify",
+    "X-Shop-Domain": shop,
+  };
+}
 
+function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
+  const token = signJwt(shop);
+  
   const headers = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    "X-Shopify-Shop-Domain": shop,
+    "X-Shop-Platform": "shopify", 
+    "X-Shop-Domain": shop,
+    "X-Webhook-Platform": "shopify",
   };
-  if (webhookId) headers["X-ShopifyWebhook-Id"] = webhookId;
-  if (topic) headers["X-Shopify-Topic"] = topic;
+  
+  if (topic) {
+    headers["X-Webhook-Topic"] = topic;
+  }
+  
+  if (webhookId) {
+    headers["X-Webhook-Id"] = webhookId;
+    // Keep Shopify-specific for backward compatibility if needed
+    headers["X-Shopify-Webhook-Id"] = webhookId;
+  }
+  
   return headers;
 }
 
@@ -42,9 +69,10 @@ function buildUrl(base, path) {
 
 async function callAndForget(base, path, { method = "GET", shop, body, webhookId, topic } = {}) {
   const url = buildUrl(base, path);
-  const headers = addHeaders(shop, { webhookId, topic });
+  const headers = addWebhookHeaders(shop, { webhookId, topic });
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 1500); // don’t hang; we’re not awaiting
+  setTimeout(() => controller.abort(), 1500); // don't hang; we're not awaiting
+  
   fetch(url, {
     method,
     signal: controller.signal,
@@ -57,11 +85,16 @@ async function call(base, path, { method = "GET", shop, body } = {}) {
   const url = buildUrl(base, path);
   const res = await fetch(url, {
     method,
-    headers: addHeaders(shop),
+    headers: addApiHeaders(shop),
     body: body ? JSON.stringify(body) : undefined,
   });
+  
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error?.message || `API ${res.status}`);
+  if (!res.ok) {
+    const errorMsg = json?.error?.message || json?.detail?.message || `API ${res.status}`;
+    throw new Error(errorMsg);
+  }
+  
   return json?.data ?? json;
 }
 
@@ -70,27 +103,24 @@ export default {
   syncShop: (payload) =>
     call(svc.merchant, "/merchants/sync", {
       method: "POST",
-      shop: payload.myshopify_domain,
+      shop: payload.platform_domain,
       body: payload,
     }),
+  getMerchant: (shop) => call(svc.merchant, "/merchants/self", { shop }),
 
   startTrial: (shop) =>
-    call(svc.merchant, "/merchants/trial", {
+    call(svc.merchant, "/billing/trial", {
       method: "POST",
       shop,
       body: { shop },
     }),
-
+  // Billing
   createSubscription: (shop, plan, id) =>
-    call(svc.merchant, "/billing/subscription", {
+    call(svc.billing, "/billing/subscription", {
       method: "POST",
       shop,
       body: { shop, plan, charge_id: id },
     }),
-
-  getMerchantStatus: (shop) =>
-    call(svc.merchant, `/merchants/status?shop=${shop}`, { shop }),
-
   // Catalog
   syncCatalog: (shop) =>
     call(svc.catalog, "/catalog/sync", {

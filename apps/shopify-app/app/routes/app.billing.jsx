@@ -11,7 +11,7 @@ export const loader = async ({ request }) => {
   const shop = session.shop;
 
   const [merchantStatus, creditsStatus] = await Promise.all([
-    apiClient.getMerchantStatus(shop),
+    apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop)
   ]);
 

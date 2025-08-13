@@ -1,5 +1,5 @@
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import { Page, Layout, Card, Button, Text, Badge, CalloutCard, DataTable, ProgressBar, Grid, BlockStack, InlineStack, Box } from "@shopify/polaris";
+import { Page, Layout, Card, Button, Text, Badge, CalloutCard, ProgressBar, BlockStack, InlineStack, Box } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import { useState, useEffect } from "react";
@@ -9,10 +9,12 @@ import SubscriptionStatus from "../components/SubscriptionStatus";
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
+  
+  console.log("Loader called for shop:", shop);
 
   // Fetch data from external API
   const [merchantStatus, creditsStatus, catalogStatus, analytics] = await Promise.all([
-    apiClient.getMerchantStatus(shop),
+    apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop),
     apiClient.getCatalogStatus(shop),
     apiClient.getAnalytics(shop, 

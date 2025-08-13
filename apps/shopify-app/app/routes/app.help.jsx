@@ -35,7 +35,7 @@ export const loader = async ({ request }) => {
   const shop = session.shop;
 
   // Fetch merchant status for context
-  const merchantStatus = await apiClient.getMerchantStatus(shop);
+  const merchantStatus = await apiClient.getMerchant(shop);
 
   return Response.json({
     shop,

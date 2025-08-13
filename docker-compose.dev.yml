@@ -84,7 +84,7 @@ services:
     environment:
       WEBHOOK_DATABASE_URL: postgresql://${WEBHOOK_DB_USER}:${WEBHOOK_DB_PASSWORD}@webhook-db:5432/${WEBHOOK_DB_NAME}
       APP_ENV: ${APP_ENV:-development}
-      INTERNAL_JWT_KEY: ${INTERNAL_JWT_KEY}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
       WEBHOOK_DB_ENABLED: ${WEBHOOK_DB_ENABLED}  # Added for clarity
     ports:
       - "${WEBHOOK_API_EXTERNAL_PORT}:8000"
@@ -129,7 +129,7 @@ services:
     environment:
       MERCHANT_DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@merchant-db:5432/${MERCHANT_DB_NAME}
       APP_ENV: ${APP_ENV:-development}
-      INTERNAL_JWT_KEY: ${JWT_SECRET}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
       MERCHANT_DB_ENABLED: ${MERCHANT_DB_ENABLED}
     ports:
       - "${MERCHANT_API_EXTERNAL_PORT}:8000"

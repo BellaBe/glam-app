@@ -1,18 +1,20 @@
-# File: shared/api/dependencies.py
-
 """
 FastAPI dependencies for standardized API behavior.
-
-Simplified to focus on commonly used dependencies.
+Clean, generic, production-ready dependencies.
 """
 
-from typing import Annotated, Optional, Iterable
+from typing import Annotated, Optional, TYPE_CHECKING
 import jwt
+import os
+import re
 from fastapi import Query, Request, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-import os, re
 
 from .correlation import get_correlation_id
+
+if TYPE_CHECKING:
+    from shared.utils.logger import ServiceLogger
+
 
 
 # =========================
@@ -36,15 +38,27 @@ def get_pagination_params(
     return PaginationParams(page=page, limit=limit)
 
 
+PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
+
 # =========================
-# Request IDs / IP
+# Logger Dependency  
+# =========================
+
+def get_logger(request: Request) -> "ServiceLogger":
+    """Get the service logger from app state."""
+    return request.app.state.logger
+
+
+LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
+
+
+# =========================
+# Request Context
 # =========================
 
 def get_request_id(request: Request) -> str:
     if not hasattr(request.state, "request_id"):
-        raise RuntimeError(
-            "Request ID not found. Ensure APIMiddleware is properly configured."
-        )
+        raise RuntimeError("Request ID not found. Ensure APIMiddleware is properly configured.")
     return request.state.request_id
 
 
@@ -54,24 +68,10 @@ def get_client_ip(request: Request) -> str:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+
 def get_content_type(request: Request) -> Optional[str]:
-    """
-    Get the content type from the request headers.
-    Returns None if not set.
-    """
     return request.headers.get("Content-Type")
 
-
-ClientIpDep = Annotated[str, Depends(get_client_ip)]
-RequestIdDep = Annotated[str, Depends(get_request_id)]
-ContentTypeDep = Annotated[Optional[str], Depends(get_content_type)]
-
-
-# =========================
-# Correlation / Context
-# =========================
-
-CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]  # Re-export
 
 class RequestContext(BaseModel):
     """Essential request context for logging/auditing."""
@@ -81,7 +81,6 @@ class RequestContext(BaseModel):
     path: str
     content_type: Optional[str] = None
     ip_client: Optional[str] = None
-    
 
     @classmethod
     def from_request(cls, request: Request) -> "RequestContext":
@@ -99,201 +98,322 @@ def get_request_context(request: Request) -> RequestContext:
     return RequestContext.from_request(request)
 
 
+# Type annotations
+ClientIpDep = Annotated[str, Depends(get_client_ip)]
+RequestIdDep = Annotated[str, Depends(get_request_id)]
+ContentTypeDep = Annotated[Optional[str], Depends(get_content_type)]
+CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
 RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
 
 
 # =========================
-# Auth (Bearer) deps
+# Platform & Domain Context
 # =========================
 
-class AuthContext(BaseModel):
-    """Authentication result."""
-    audience: str  # "fe" | "internal"
-    token: str
+SUPPORTED_PLATFORMS = {
+    "shopify", 
+    "bigcommerce", 
+    "woocommerce", 
+    "magento", 
+    "squarespace",
+    "custom"
+}
 
 
-def _bearer_token(request: Request) -> str:
-    auth = request.headers.get("Authorization")
-    if not auth or not auth.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-    return auth.split(" ", 1)[1].strip()
+class PlatformContext(BaseModel):
+    """Generic platform and domain information."""
+    platform: str
+    domain: str
+    
+    @property
+    def is_shopify(self) -> bool:
+        return self.platform == "shopify"
+    
+    @property
+    def is_custom_domain(self) -> bool:
+        """Check if domain appears to be a custom domain vs platform default."""
+        if self.platform == "shopify":
+            return not self.domain.endswith(".myshopify.com")
+        elif self.platform == "bigcommerce":
+            return not self.domain.endswith(".mybigcommerce.com")
+        return True
 
 
-def _require_exact_token(token: str, expected: str, audience: str) -> AuthContext:
-    if token != expected:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
-    return AuthContext(audience=audience, token=token)
-
-
-def _require_any_token(token: str, allowed: Iterable[str], audience: str) -> AuthContext:
-    if token not in allowed:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
-    return AuthContext(audience=audience, token=token)
-
-
-def require_backend_auth(request: Request) -> AuthContext:
-    """
-    Public FE → service auth (BACKEND_API_KEY).
-    """
-    token = _bearer_token(request)
-    expected = os.getenv("BACKEND_API_KEY", "")
-    if not expected:
-        raise RuntimeError("BACKEND_API_KEY not configured")
-    return _require_exact_token(token, expected, audience="fe")
-
-
-def require_internal_auth(request: Request) -> AuthContext:
-    """
-    Service-to-service auth. Comma-separated INTERNAL_API_KEYS is supported.
-    """
-    token = _bearer_token(request)
-    raw = os.getenv("INTERNAL_API_KEYS", "")
-    if not raw:
-        raise RuntimeError("INTERNAL_API_KEYS not configured")
-    allowed = {k.strip() for k in raw.split(",") if k.strip()}
-    return _require_any_token(token, allowed, audience="internal")
-
-
-AuthDep = Annotated[AuthContext, Depends(require_backend_auth)]
-InternalAuthDep = Annotated[AuthContext, Depends(require_internal_auth)]
-
-
-# =========================
-# Shop domain dep
-# =========================
-
-_MYSHOPIFY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.myshopify\.com$")
-
-
-def _normalize_myshopify(value: str) -> str:
-    v = (value or "").strip().lower()
-    if not _MYSHOPIFY_RE.match(v):
+def _validate_platform(platform: str) -> str:
+    """Validate and normalize platform name."""
+    platform_norm = platform.strip().lower()
+    
+    if platform_norm not in SUPPORTED_PLATFORMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid X-Shop-Domain (must be canonical myshopify domain)",
+            detail={
+                "code": "UNSUPPORTED_PLATFORM",
+                "message": f"Platform '{platform}' is not supported",
+                "details": {
+                    "received": platform,
+                    "supported_platforms": sorted(SUPPORTED_PLATFORMS)
+                }
+            }
         )
-    return v
+    
+    return platform_norm
+
+
+def _validate_domain(domain: str) -> str:
+    """Generic domain validation - works for any platform."""
+    domain_norm = domain.strip().lower()
+    
+    # Basic domain format validation
+    domain_pattern = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+    
+    if not re.match(domain_pattern, domain_norm):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_DOMAIN_FORMAT",
+                "message": f"Invalid domain format: '{domain}'",
+                "details": {
+                    "received": domain,
+                    "expected_format": "Valid domain name (e.g., shop.example.com, my-store.myshopify.com)"
+                }
+            }
+        )
+    
+    if len(domain_norm) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Domain name too long (max 255 characters)"
+        )
+    
+    return domain_norm
+
+
+def require_platform_context(request: Request) -> PlatformContext:
+    """
+    Extract and validate shop platform and domain from headers.
+    
+    Expected headers:
+    - X-Shop-Platform: The e-commerce platform (shopify, bigcommerce, etc.)
+    - X-Shop-Domain: The shop's domain (can be platform domain or custom)
+    """
+    
+    platform = request.headers.get("X-Shop-Platform")
+    if not platform:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "MISSING_PLATFORM_HEADER",
+                "message": "Missing required shop platform header",
+                "details": {
+                    "expected_header": "X-Shop-Platform",
+                    "supported_platforms": sorted(SUPPORTED_PLATFORMS)
+                }
+            }
+        )
+    
+    domain = request.headers.get("X-Shop-Domain")
+    if not domain:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "MISSING_DOMAIN_HEADER", 
+                "message": "Missing required shop domain header",
+                "details": {
+                    "expected_header": "X-Shop-Domain"
+                }
+            }
+        )
+    
+    platform_norm = _validate_platform(platform)
+    domain_norm = _validate_domain(domain)
+    
+    return PlatformContext(platform=platform_norm, domain=domain_norm)
+
+
+def require_shop_platform(request: Request) -> str:
+    """Extract just the platform."""
+    return require_platform_context(request).platform
 
 
 def require_shop_domain(request: Request) -> str:
-    """
-    Extract and validate canonical myshopify domain from 'X-Shop-Domain' header.
-    """
-    hdr = request.headers.get("X-Shop-Domain")
-    if not hdr:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing X-Shop-Domain header",
-        )
-    return _normalize_myshopify(hdr)
+    """Extract just the domain."""
+    return require_platform_context(request).domain
 
 
+# Type annotations
+PlatformContextDep = Annotated[PlatformContext, Depends(require_platform_context)]
+ShopPlatformDep = Annotated[str, Depends(require_shop_platform)]
 ShopDomainDep = Annotated[str, Depends(require_shop_domain)]
 
 
 # =========================
-# Pagination alias
+# Authentication
 # =========================
 
-PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
-
-
-# =========================
-# JWT-based internal auth
-# =========================
-
-class JwtAuthContext(BaseModel):
-    """JWT Authentication result."""
-    audience: str  # "internal" or "fe"
+class ClientAuthContext(BaseModel):
+    """Client authentication result with shop context."""
     shop: str
     scope: str
     token: str
+    
+    @property
+    def audience(self) -> str:
+        return "client"
 
-def require_internal_jwt(request: Request) -> JwtAuthContext:
-    """
-    Service-to-service auth with short-lived JWT.
-    Uses INTERNAL_JWT_SECRET to verify.
-    """
+
+class InternalAuthContext(BaseModel):
+    """Internal service-to-service authentication result."""
+    service: str  # Identifying which service made the request
+    token: str
+    
+    @property
+    def audience(self) -> str:
+        return "internal"
+
+
+def _get_bearer_token(request: Request) -> str:
+    """Extract bearer token from Authorization header."""
     auth = request.headers.get("Authorization")
     if not auth or not auth.lower().startswith("bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-    
-    token = auth.split(" ", 1)[1].strip()
-    secret = os.getenv("INTERNAL_JWT_SECRET", "")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Missing bearer token"
+        )
+    return auth.split(" ", 1)[1].strip()
+
+
+def require_client_auth(request: Request) -> ClientAuthContext:
+    """
+    Client authentication using JWTs.
+    For requests from client applications with shop context.
+    """
+    token = _get_bearer_token(request)
+    secret = os.getenv("CLIENT_JWT_SECRET", "")
     if not secret:
-        raise RuntimeError("INTERNAL_JWT_SECRET not configured")
+        raise RuntimeError("CLIENT_JWT_SECRET not configured")
     
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
     except jwt.PyJWTError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=f"Invalid JWT: {str(e)}"
+        )
     
-    return JwtAuthContext(
-        audience="internal",
+    return ClientAuthContext(
         shop=payload.get("sub", ""),
         scope=payload.get("scope", ""),
         token=token
     )
 
-InternalJwtDep = Annotated[JwtAuthContext, Depends(require_internal_jwt)]
+
+def require_internal_auth(request: Request) -> InternalAuthContext:
+    """
+    Internal service-to-service authentication.
+    Uses static API keys for simplicity and performance.
+    """
+    token = _get_bearer_token(request)
+    raw = os.getenv("INTERNAL_API_KEYS", "")
+    if not raw:
+        raise RuntimeError("INTERNAL_API_KEYS not configured")
+    
+    # Format: "service1:key1,service2:key2" or just "key1,key2"
+    allowed = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if ":" in entry:
+            service, key = entry.split(":", 1)
+            allowed[key.strip()] = service.strip()
+        else:
+            allowed[entry] = "unknown"
+    
+    if token not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Invalid bearer token"
+        )
+    
+    return InternalAuthContext(
+        service=allowed[token],
+        token=token
+    )
+
+
+# Type annotations
+ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
+InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
 
 
 # =========================
-# Shopify webhook headers
+# Webhook Headers
 # =========================
 
-class ShopifyWebhookHeaders(BaseModel):
-    """
-    Canonicalized Shopify webhook headers extracted from the request.
-    """
-    topic_raw: str
+class WebhookHeaders(BaseModel):
+    """Generic webhook headers that work across platforms."""
+    platform: str
+    topic: str
     shop_domain: str
     webhook_id: Optional[str] = None
+    
+    @property
+    def is_shopify_webhook(self) -> bool:
+        return self.platform == "shopify"
 
-def get_shopify_webhook_headers(
-    request: Request,
-) -> ShopifyWebhookHeaders:
+
+def get_webhook_headers(request: Request) -> WebhookHeaders:
     """
-    Extracts and validates Shopify webhook headers from a BFF-relayed request.
-    Assumes the BFF already verified origin (no HMAC here).
+    Extract webhook headers that work across different platforms.
+    
+    Expected headers:
+    - X-Webhook-Platform: The platform sending the webhook
+    - X-Webhook-Topic: The webhook event type
+    - X-Shop-Domain: The shop domain 
+    - X-Webhook-Id: Optional webhook identifier
     """
-    # FastAPI's Header(...) could be used, but pulling from request.headers keeps this dep reusable in middleware too.
     headers = request.headers
-
-
-    topic = headers.get("X-Shopify-Topic")
-    shop = headers.get("X-Shopify-Shop-Domain")
-    webhook_id = headers.get("X-Shopify-Webhook-Id")
-
-    missing = [name for name, val in [
-        ("X-Shopify-Topic", topic),
-        ("X-Shopify-Shop-Domain", shop),
-        ("X-Shopify-Webhook-Id", webhook_id),
-    ] if not val]
+    
+    platform = headers.get("X-Webhook-Platform")
+    topic = headers.get("X-Webhook-Topic")  
+    shop_domain = headers.get("X-Shop-Domain")
+    webhook_id = headers.get("X-Webhook-Id")
+    
+    # Check for missing required headers
+    missing = []
+    if not platform:
+        missing.append("X-Webhook-Platform")
+    if not topic:
+        missing.append("X-Webhook-Topic")
+    if not shop_domain:
+        missing.append("X-Shop-Domain")
     
     if missing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Missing required headers: {', '.join(missing)}"
+            detail={
+                "code": "MISSING_WEBHOOK_HEADERS",
+                "message": f"Missing required webhook headers: {', '.join(missing)}",
+                "details": {"missing_headers": missing}
+            }
         )
-
-    # Normalize and validate domain
-    try:
-        shop_norm = _normalize_myshopify(shop) #type: ignore
-    except HTTPException: 
-        # Re-raise with the same error for consistency
-        raise
-
-    # (Optional) lightweight sanity checks to avoid absurd header sizes
-    if len(webhook_id) > 256: #type: ignore
-        raise HTTPException(status_code=400, detail="X-Shopify-Webhook-Id too long")
-    if len(topic) > 256: #type: ignore
-        raise HTTPException(status_code=400, detail="X-Shopify-Topic too long")
-
-    return ShopifyWebhookHeaders(
-        webhook_id=webhook_id, #type: ignore
-        topic_raw=topic, #type: ignore
-        shop_domain=shop_norm,
+    
+    # Validate platform and domain
+    platform_norm = _validate_platform(platform) # type: ignore
+    domain_norm = _validate_domain(shop_domain) # type: ignore
+    
+    # Basic validation for header sizes
+    if len(topic) > 256: # type: ignore
+        raise HTTPException(status_code=400, detail="X-Webhook-Topic too long")
+    if webhook_id and len(webhook_id) > 256:
+        raise HTTPException(status_code=400, detail="X-Webhook-Id too long")
+    
+    return WebhookHeaders(
+        platform=platform_norm,
+        topic=topic, # type: ignore
+        shop_domain=domain_norm,
+        webhook_id=webhook_id
     )
 
-ShopifyHeadersDep = Annotated[ShopifyWebhookHeaders, Depends(get_shopify_webhook_headers)]
+
+WebhookHeadersDep = Annotated[WebhookHeaders, Depends(get_webhook_headers)]
