@@ -6,7 +6,6 @@
 
 import time
 import uuid
-import logging
 from typing import Callable
 
 from fastapi import Request, Response
@@ -17,7 +16,6 @@ from fastapi.exceptions import RequestValidationError, HTTPException
 
 from shared.utils.exceptions import GlamBaseError
 from shared.utils.logger import ServiceLogger
-from ..metrics import PrometheusMiddleware, metrics_endpoint
 
 from .responses import error_response
 from .correlation import get_correlation_id, set_correlation_context
@@ -185,9 +183,7 @@ class APIMiddleware(BaseHTTPMiddleware):
 def setup_middleware(
     app: FastAPI,
     *,
-    service_name: str,
-    enable_metrics: bool = True,
-    metrics_path: str = "/metrics",
+    service_name: str
 ):
     """
     Set up all standard middleware for a service.
@@ -199,22 +195,8 @@ def setup_middleware(
     Args:
         app: FastAPI application
         service_name: Name of the service
-        enable_metrics: Whether to enable Prometheus metrics
-        metrics_path: Path for metrics endpoint
         debug: Whether to include error details in responses
     """
-    # Add Prometheus middleware FIRST (captures all requests)
-    if enable_metrics:
-        app.add_middleware(PrometheusMiddleware, service_name=service_name)
-        
-        # Add metrics endpoint
-        app.add_api_route(
-            metrics_path,
-            metrics_endpoint,
-            methods=["GET"],
-            include_in_schema=False,
-            tags=["monitoring"]
-        )
 
     # Add API middleware for standardized responses
     app.add_middleware(APIMiddleware, service_name=service_name)

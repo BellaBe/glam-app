@@ -40,6 +40,19 @@ shared/
 │   │       # FastAPI dependencies
 │   │       PaginationDep,
 │   │       RequestContextDep, 
+│   │       WebhookHeadersDep,
+│   │       LoggerDep,
+│   │       ClientIpDep,
+│   │       RequestIdDep,
+│   │       ContentTypeDep,
+│   │       CorrelationIdDep,
+│   │       RequestContextDep,
+│   │       PlatformContextDep,
+│   │       ShopDomainDep,
+│   │       ShopPlatformDep,
+│   │       ClientAuthContext,
+│   │       InternalAuthDep,
+│   │       WebhookHeadersDep  
 │   │   )
 │   │   
 │   │   from .middleware import (
@@ -56,6 +69,22 @@ shared/
 │   │       add_correlation_header,
 │   │       add_correlation_to_event,
 │   │       extract_correlation_from_event, 
+│   │   )
+│   │   
+│   │   from .debug import (
+│   │       # Debugging utilities
+│   │       setup_debug_middleware,
+│   │       setup_debug_handlers,
+│   │   )
+│   │   
+│   │   from .health import (
+│   │       # Health check utilities
+│   │       create_health_router,
+│   │   )
+│   │   
+│   │   from .validation import (
+│   │       # Validation utilities
+│   │       validate_shop_context
 │   │   )
 │   │   
 │   │   __all__ = [
@@ -75,6 +104,22 @@ shared/
 │   │       # Dependencies
 │   │       "PaginationDep",
 │   │       "RequestContextDep",
+│   │       "LoggerDep",
+│   │       "ClientIpDep",
+│   │       "RequestIdDep",
+│   │       "ContentTypeDep",
+│   │       "CorrelationIdDep",
+│   │       "RequestContextDep",
+│   │       "PlatformContextDep",
+│   │       "ShopDomainDep",
+│   │       "ShopPlatformDep",
+│   │       "ClientAuthContext",
+│   │       "InternalAuthDep",
+│   │       "WebhookHeadersDep",
+│   │       
+│   │       # Debugging
+│   │       "setup_debug_middleware",
+│   │       "setup_debug_handlers", 
 │   │       
 │   │       # Correlation
 │   │       "get_correlation_id",
@@ -87,6 +132,12 @@ shared/
 │   │       # Middleware
 │   │       "APIMiddleware",
 │   │       "setup_middleware",
+│   │       
+│   │       # Health checks
+│   │       "create_health_router",
+│   │       
+│   │       # Validation
+│   │       "validate_shop_context"
 │   │   ]
 │   │   ```
 │   │   
@@ -111,7 +162,6 @@ shared/
 │   │   _correlation_context: ContextVar[Optional[str]] = ContextVar(
 │   │       "correlation_id", default=None
 │   │   )
-│   │   
 │   │   
 │   │   def get_correlation_id(request: Request) -> str:
 │   │       """
@@ -187,109 +237,606 @@ shared/
 │   │       return event_data.get("metadata", {}).get("correlation_id")
 │   │   ```
 │   │   
+│   ├── debug.py
+│   │   
+│   │   ```py
+│   │   # shared/api/debug.py
+│   │   """Debug utilities for FastAPI applications."""
+│   │   
+│   │   import logging
+│   │   import json
+│   │   from typing import Callable
+│   │   from fastapi import FastAPI, Request, HTTPException
+│   │   from fastapi.exceptions import RequestValidationError
+│   │   from fastapi.responses import JSONResponse
+│   │   from starlette.middleware.base import BaseHTTPMiddleware
+│   │   
+│   │   logger = logging.getLogger(__name__)
+│   │   
+│   │   
+│   │   class EarlyDebugMiddleware(BaseHTTPMiddleware):
+│   │       """Debug middleware that runs before any dependencies or validation."""
+│   │       
+│   │       async def dispatch(self, request: Request, call_next: Callable):
+│   │           print("\n" + "="*60)
+│   │           print("🔍 EARLY DEBUG - REQUEST RECEIVED")
+│   │           print("="*60)
+│   │           
+│   │           # Log all request details
+│   │           print(f"🌐 URL: {request.url}")
+│   │           print(f"📍 Path: {request.url.path}")
+│   │           print(f"🔧 Method: {request.method}")
+│   │           print(f"❓ Query Params: {dict(request.query_params)}")
+│   │           
+│   │           # Log all headers
+│   │           print("📋 Headers:")
+│   │           for name, value in request.headers.items():
+│   │               # Mask authorization for security
+│   │               if name.lower() == "authorization":
+│   │                   value = f"Bearer {value[7:17]}..." if value.startswith("Bearer ") else "***"
+│   │               print(f"   {name}: {value}")
+│   │           
+│   │           # Log body for POST/PUT/PATCH WITHOUT consuming it
+│   │           body_logged = False
+│   │           if request.method in ["POST", "PUT", "PATCH"]:
+│   │               try:
+│   │                   # Read body once and store it
+│   │                   body = await request.body()
+│   │                   if body:
+│   │                       try:
+│   │                           body_json = json.loads(body)
+│   │                           print(f"📦 Body (JSON):")
+│   │                           print(json.dumps(body_json, indent=2))
+│   │                           body_logged = True
+│   │                       except json.JSONDecodeError:
+│   │                           body_str = body.decode('utf-8', errors='ignore')
+│   │                           print(f"📦 Body (Raw): {body_str[:200]}{'...' if len(body_str) > 200 else ''}")
+│   │                           body_logged = True
+│   │                   else:
+│   │                       print("📦 Body: (empty)")
+│   │                       body_logged = True
+│   │                       
+│   │               except Exception as e:
+│   │                   print(f"📦 Body: (error reading: {e})")
+│   │           
+│   │           if not body_logged:
+│   │               print("📦 Body: (no body for GET request)")
+│   │           
+│   │           print("⏳ Calling next middleware/handler...")
+│   │           print("="*60)
+│   │           
+│   │           try:
+│   │               response = await call_next(request)
+│   │               
+│   │               print("\n" + "="*60)
+│   │               print("✅ EARLY DEBUG - RESPONSE READY")
+│   │               print("="*60)
+│   │               print(f"📤 Status: {response.status_code}")
+│   │               print(f"📤 Headers: {dict(response.headers)}")
+│   │               print("="*60 + "\n")
+│   │               
+│   │               return response
+│   │               
+│   │           except Exception as e:
+│   │               print("\n" + "="*60)
+│   │               print("❌ EARLY DEBUG - EXCEPTION CAUGHT")
+│   │               print("="*60)
+│   │               print(f"💥 Exception Type: {type(e).__name__}")
+│   │               print(f"💥 Exception Message: {str(e)}")
+│   │               print(f"💥 Exception Details: {getattr(e, 'detail', 'No details')}")
+│   │               if hasattr(e, 'status_code'):
+│   │                   print(f"💥 Status Code: {e.status_code}")
+│   │               print("="*60 + "\n")
+│   │               raise  # Re-raise to let other handlers deal with it
+│   │   
+│   │   
+│   │   def setup_debug_middleware(app: FastAPI):
+│   │       """Add debug middleware as the first middleware."""
+│   │       app.add_middleware(EarlyDebugMiddleware)
+│   │   
+│   │   
+│   │   def setup_debug_handlers(app: FastAPI):
+│   │       """Add debug exception handlers to catch errors before middleware."""
+│   │       
+│   │       @app.exception_handler(RequestValidationError)
+│   │       async def validation_exception_handler(request: Request, exc: RequestValidationError):
+│   │           """Debug validation errors in detail."""
+│   │           
+│   │           print("=" * 50)
+│   │           print("🚨 VALIDATION ERROR CAUGHT!")
+│   │           print("=" * 50)
+│   │           
+│   │           # Log request details
+│   │           print(f"📥 Request URL: {request.url}")
+│   │           print(f"📥 Request Method: {request.method}")
+│   │           print(f"📥 Request Headers:")
+│   │           for name, value in request.headers.items():
+│   │               print(f"   {name}: {value}")
+│   │           
+│   │           # Log request body if available
+│   │           try:
+│   │               if request.method in ["POST", "PUT", "PATCH"]:
+│   │                   # Try to get body (might be consumed already)
+│   │                   body = await request.body()
+│   │                   if body:
+│   │                       try:
+│   │                           body_json = json.loads(body)
+│   │                           print(f"📥 Request Body (JSON): {json.dumps(body_json, indent=2)}")
+│   │                       except:
+│   │                           print(f"📥 Request Body (Raw): {body.decode('utf-8', errors='ignore')[:500]}...")
+│   │                   else:
+│   │                       print("📥 Request Body: (empty)")
+│   │           except Exception as e:
+│   │               print(f"📥 Request Body: (error reading: {e})")
+│   │           
+│   │           # Log validation errors in detail
+│   │           print(f"❌ Validation Errors ({len(exc.errors())} total):")
+│   │           for i, error in enumerate(exc.errors()):
+│   │               print(f"   {i+1}. Field: {error.get('loc', 'unknown')}")
+│   │               print(f"      Type: {error.get('type', 'unknown')}")
+│   │               print(f"      Message: {error.get('msg', 'unknown')}")
+│   │               print(f"      Input: {error.get('input', 'not provided')}")
+│   │               print()
+│   │           
+│   │           print("=" * 50)
+│   │           
+│   │           # Return structured error response
+│   │           validation_errors = []
+│   │           for error in exc.errors():
+│   │               field_path = ".".join(str(loc) for loc in error["loc"])
+│   │               validation_errors.append({
+│   │                   "field": field_path,
+│   │                   "message": error["msg"],
+│   │                   "type": error["type"],
+│   │                   "input": error.get("input")
+│   │               })
+│   │           
+│   │           return JSONResponse(
+│   │               status_code=422,
+│   │               content={
+│   │                   "error": {
+│   │                       "code": "VALIDATION_ERROR",
+│   │                       "message": "Request validation failed",
+│   │                       "details": {
+│   │                           "validation_errors": validation_errors,
+│   │                           "total_errors": len(validation_errors)
+│   │                       }
+│   │                   }
+│   │               }
+│   │           )
+│   │       
+│   │       @app.exception_handler(HTTPException)
+│   │       async def http_exception_handler(request: Request, exc: HTTPException):
+│   │           """Debug HTTP exceptions."""
+│   │           
+│   │           print("=" * 50)
+│   │           print(f"🚨 HTTP EXCEPTION: {exc.status_code}")
+│   │           print("=" * 50)
+│   │           print(f"📥 Request URL: {request.url}")
+│   │           print(f"📥 Request Method: {request.method}")
+│   │           print(f"❌ Exception Detail: {exc.detail}")
+│   │           print(f"❌ Exception Type: {type(exc.detail)}")
+│   │           print("=" * 50)
+│   │           
+│   │           # Let your middleware handle this
+│   │           raise exc
+│   │       
+│   │       @app.exception_handler(Exception)
+│   │       async def general_exception_handler(request: Request, exc: Exception):
+│   │           """Catch any other exceptions."""
+│   │           
+│   │           print("=" * 50)
+│   │           print(f"🚨 GENERAL EXCEPTION: {type(exc).__name__}")
+│   │           print("=" * 50)
+│   │           print(f"📥 Request URL: {request.url}")
+│   │           print(f"📥 Request Method: {request.method}")
+│   │           print(f"❌ Exception: {exc}")
+│   │           print("=" * 50)
+│   │           
+│   │           # Let your middleware handle this
+│   │           raise exc
+│   │   ```
+│   │   
 │   ├── dependencies.py
 │   │   
 │   │   ```py
-│   │   # File: shared/api/dependencies.py
-│   │   
 │   │   """
 │   │   FastAPI dependencies for standardized API behavior.
-│   │   
-│   │   Simplified to focus on commonly used dependencies.
+│   │   Clean, generic, production-ready dependencies.
 │   │   """
 │   │   
-│   │   from typing import Annotated, Optional
-│   │   from fastapi import Query, Request, Depends
+│   │   from typing import Annotated, Optional, TYPE_CHECKING
+│   │   import jwt
+│   │   import os
+│   │   import re
+│   │   from fastapi import Query, Request, Depends, HTTPException, status
 │   │   from pydantic import BaseModel, Field
+│   │   
 │   │   from .correlation import get_correlation_id
 │   │   
+│   │   if TYPE_CHECKING:
+│   │       from shared.utils.logger import ServiceLogger
+│   │   
+│   │   # =========================
+│   │   # Pagination
+│   │   # =========================
 │   │   
 │   │   class PaginationParams(BaseModel):
 │   │       """Standard pagination parameters."""
-│   │       
 │   │       page: int = Field(default=1, ge=1)
 │   │       limit: int = Field(default=50, ge=1, le=1000)
-│   │       
+│   │   
 │   │       @property
 │   │       def offset(self) -> int:
-│   │           """Calculate offset for database queries."""
 │   │           return (self.page - 1) * self.limit
 │   │   
 │   │   
 │   │   def get_pagination_params(
 │   │       page: int = Query(1, ge=1, description="Page number"),
-│   │       limit: int = Query(50, ge=1, le=1000, description="Items per page")
+│   │       limit: int = Query(50, ge=1, le=1000, description="Items per page"),
 │   │   ) -> PaginationParams:
-│   │       """
-│   │       FastAPI dependency for pagination parameters.
-│   │       
-│   │       Usage:
-│   │           @app.get("/items")
-│   │           async def list_items(pagination: PaginationDep):
-│   │               items = await db.query(offset=pagination.offset, limit=pagination.limit)
-│   │       """
 │   │       return PaginationParams(page=page, limit=limit)
 │   │   
 │   │   
+│   │   PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
+│   │   
+│   │   # =========================
+│   │   # Logger Dependency  
+│   │   # =========================
+│   │   
+│   │   def get_logger(request: Request) -> "ServiceLogger":
+│   │       """Get the service logger from app state."""
+│   │       return request.app.state.logger
+│   │   
+│   │   
+│   │   LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
+│   │   
+│   │   
+│   │   # =========================
+│   │   # Request Context
+│   │   # =========================
+│   │   
 │   │   def get_request_id(request: Request) -> str:
-│   │       """
-│   │       Get request ID from middleware-set state.
-│   │       
-│   │       Raises error if middleware hasn't run, ensuring proper initialization.
-│   │       """
 │   │       if not hasattr(request.state, "request_id"):
-│   │           raise RuntimeError(
-│   │               "Request ID not found. Ensure APIMiddleware is properly configured."
-│   │           )
+│   │           raise RuntimeError("Request ID not found. Ensure APIMiddleware is properly configured.")
 │   │       return request.state.request_id
 │   │   
+│   │   
 │   │   def get_client_ip(request: Request) -> str:
-│   │       """
-│   │       Extract client IP address.
-│   │       Only add if needed for rate limiting or security.
-│   │       """
 │   │       forwarded_for = request.headers.get("X-Forwarded-For")
 │   │       if forwarded_for:
 │   │           return forwarded_for.split(",")[0].strip()
 │   │       return request.client.host if request.client else "unknown"
 │   │   
 │   │   
-│   │   # Type aliases for clean dependency injection
-│   │   ClientIpDep = Annotated[str, Depends(get_client_ip)]
-│   │   RequestIdDep = Annotated[str, Depends(get_request_id)]
-│   │   PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
-│   │   CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]  # Re-export for convenience
+│   │   def get_content_type(request: Request) -> Optional[str]:
+│   │       return request.headers.get("Content-Type")
 │   │   
 │   │   
-│   │   # Optional: Simplified request context for logging
 │   │   class RequestContext(BaseModel):
 │   │       """Essential request context for logging/auditing."""
-│   │       
 │   │       request_id: str
 │   │       correlation_id: str
 │   │       method: str
 │   │       path: str
-│   │       ip_client: Optional[str] = None  # Optional client IP for rate limiting/security
-│   │       
+│   │       content_type: Optional[str] = None
+│   │       ip_client: Optional[str] = None
+│   │   
 │   │       @classmethod
 │   │       def from_request(cls, request: Request) -> "RequestContext":
-│   │           """Create context from FastAPI request."""
 │   │           return cls(
 │   │               request_id=get_request_id(request),
 │   │               correlation_id=get_correlation_id(request),
 │   │               method=request.method,
 │   │               path=str(request.url.path),
-│   │               ip_client=get_client_ip(request)  # Optional: Add client IP if needed
+│   │               ip_client=get_client_ip(request),
+│   │               content_type=get_content_type(request),
 │   │           )
 │   │   
 │   │   
 │   │   def get_request_context(request: Request) -> RequestContext:
-│   │       """Get essential request context."""
 │   │       return RequestContext.from_request(request)
 │   │   
 │   │   
+│   │   # Type annotations
+│   │   ClientIpDep = Annotated[str, Depends(get_client_ip)]
+│   │   RequestIdDep = Annotated[str, Depends(get_request_id)]
+│   │   ContentTypeDep = Annotated[Optional[str], Depends(get_content_type)]
+│   │   CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
 │   │   RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
 │   │   
+│   │   
+│   │   # =========================
+│   │   # Platform & Domain Context
+│   │   # =========================
+│   │   
+│   │   SUPPORTED_PLATFORMS = {
+│   │       "shopify", 
+│   │       "bigcommerce", 
+│   │       "woocommerce", 
+│   │       "magento", 
+│   │       "squarespace",
+│   │       "custom"
+│   │   }
+│   │   
+│   │   
+│   │   class PlatformContext(BaseModel):
+│   │       """Generic platform and domain information."""
+│   │       platform: str
+│   │       domain: str
+│   │       
+│   │       @property
+│   │       def is_shopify(self) -> bool:
+│   │           return self.platform == "shopify"
+│   │       
+│   │       @property
+│   │       def is_custom_domain(self) -> bool:
+│   │           """Check if domain appears to be a custom domain vs platform default."""
+│   │           if self.platform == "shopify":
+│   │               return not self.domain.endswith(".myshopify.com")
+│   │           elif self.platform == "bigcommerce":
+│   │               return not self.domain.endswith(".mybigcommerce.com")
+│   │           return True
+│   │   
+│   │   
+│   │   def _validate_platform(platform: str) -> str:
+│   │       """Validate and normalize platform name."""
+│   │       platform_norm = platform.strip().lower()
+│   │       
+│   │       if platform_norm not in SUPPORTED_PLATFORMS:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail={
+│   │                   "code": "UNSUPPORTED_PLATFORM",
+│   │                   "message": f"Platform '{platform}' is not supported",
+│   │                   "details": {
+│   │                       "received": platform,
+│   │                       "supported_platforms": sorted(SUPPORTED_PLATFORMS)
+│   │                   }
+│   │               }
+│   │           )
+│   │       
+│   │       return platform_norm
+│   │   
+│   │   
+│   │   def _validate_domain(domain: str) -> str:
+│   │       """Generic domain validation - works for any platform."""
+│   │       domain_norm = domain.strip().lower()
+│   │       
+│   │       # Basic domain format validation
+│   │       domain_pattern = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+│   │       
+│   │       if not re.match(domain_pattern, domain_norm):
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail={
+│   │                   "code": "INVALID_DOMAIN_FORMAT",
+│   │                   "message": f"Invalid domain format: '{domain}'",
+│   │                   "details": {
+│   │                       "received": domain,
+│   │                       "expected_format": "Valid domain name (e.g., shop.example.com, my-store.myshopify.com)"
+│   │                   }
+│   │               }
+│   │           )
+│   │       
+│   │       if len(domain_norm) > 255:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail="Domain name too long (max 255 characters)"
+│   │           )
+│   │       
+│   │       return domain_norm
+│   │   
+│   │   
+│   │   def require_platform_context(request: Request) -> PlatformContext:
+│   │       """
+│   │       Extract and validate shop platform and domain from headers.
+│   │       
+│   │       Expected headers:
+│   │       - X-Shop-Platform: The e-commerce platform (shopify, bigcommerce, etc.)
+│   │       - X-Shop-Domain: The shop's domain (can be platform domain or custom)
+│   │       """
+│   │       
+│   │       platform = request.headers.get("X-Shop-Platform")
+│   │       if not platform:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail={
+│   │                   "code": "MISSING_PLATFORM_HEADER",
+│   │                   "message": "Missing required shop platform header",
+│   │                   "details": {
+│   │                       "expected_header": "X-Shop-Platform",
+│   │                       "supported_platforms": sorted(SUPPORTED_PLATFORMS)
+│   │                   }
+│   │               }
+│   │           )
+│   │       
+│   │       domain = request.headers.get("X-Shop-Domain")
+│   │       if not domain:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail={
+│   │                   "code": "MISSING_DOMAIN_HEADER", 
+│   │                   "message": "Missing required shop domain header",
+│   │                   "details": {
+│   │                       "expected_header": "X-Shop-Domain"
+│   │                   }
+│   │               }
+│   │           )
+│   │       
+│   │       platform_norm = _validate_platform(platform)
+│   │       domain_norm = _validate_domain(domain)
+│   │       
+│   │       return PlatformContext(platform=platform_norm, domain=domain_norm)
+│   │   
+│   │   
+│   │   def require_shop_platform(request: Request) -> str:
+│   │       """Extract just the platform."""
+│   │       return require_platform_context(request).platform
+│   │   
+│   │   
+│   │   def require_shop_domain(request: Request) -> str:
+│   │       """Extract just the domain."""
+│   │       return require_platform_context(request).domain
+│   │   
+│   │   
+│   │   # Type annotations
+│   │   PlatformContextDep = Annotated[PlatformContext, Depends(require_platform_context)]
+│   │   ShopPlatformDep = Annotated[str, Depends(require_shop_platform)]
+│   │   ShopDomainDep = Annotated[str, Depends(require_shop_domain)]
+│   │   
+│   │   
+│   │   # =========================
+│   │   # Authentication
+│   │   # =========================
+│   │   
+│   │   class ClientAuthContext(BaseModel):
+│   │       """Client authentication result with shop context."""
+│   │       shop: str
+│   │       scope: str
+│   │       token: str
+│   │       
+│   │       @property
+│   │       def audience(self) -> str:
+│   │           return "client"
+│   │   
+│   │   
+│   │   class InternalAuthContext(BaseModel):
+│   │       """Internal service-to-service authentication result."""
+│   │       service: str  # Identifying which service made the request
+│   │       token: str
+│   │       
+│   │       @property
+│   │       def audience(self) -> str:
+│   │           return "internal"
+│   │   
+│   │   
+│   │   def _get_bearer_token(request: Request) -> str:
+│   │       """Extract bearer token from Authorization header."""
+│   │       auth = request.headers.get("Authorization")
+│   │       if not auth or not auth.lower().startswith("bearer "):
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_401_UNAUTHORIZED, 
+│   │               detail="Missing bearer token"
+│   │           )
+│   │       return auth.split(" ", 1)[1].strip()
+│   │   
+│   │   
+│   │   def require_client_auth(request: Request) -> ClientAuthContext:
+│   │       """
+│   │       Client authentication using JWTs.
+│   │       For requests from client applications with shop context.
+│   │       """
+│   │       token = _get_bearer_token(request)
+│   │       secret = os.getenv("CLIENT_JWT_SECRET", "")
+│   │       if not secret:
+│   │           raise RuntimeError("CLIENT_JWT_SECRET not configured")
+│   │       
+│   │       try:
+│   │           payload = jwt.decode(token, secret, algorithms=["HS256"])
+│   │       except jwt.PyJWTError as e:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_401_UNAUTHORIZED, 
+│   │               detail=f"Invalid JWT: {str(e)}"
+│   │           )
+│   │       
+│   │       return ClientAuthContext(
+│   │           shop=payload.get("sub", ""),
+│   │           scope=payload.get("scope", ""),
+│   │           token=token
+│   │       )
+│   │   
+│   │   
+│   │   def require_internal_auth(request: Request) -> InternalAuthContext:
+│   │       """
+│   │       Internal service-to-service authentication.
+│   │       Uses static API keys for simplicity and performance.
+│   │       """
+│   │       token = _get_bearer_token(request)
+│   │       raw = os.getenv("INTERNAL_API_KEYS", "")
+│   │       if not raw:
+│   │           raise RuntimeError("INTERNAL_API_KEYS not configured")
+│   │       
+│   │       # Format: "service1:key1,service2:key2" or just "key1,key2"
+│   │       allowed = {}
+│   │       for entry in raw.split(","):
+│   │           entry = entry.strip()
+│   │           if not entry:
+│   │               continue
+│   │           if ":" in entry:
+│   │               service, key = entry.split(":", 1)
+│   │               allowed[key.strip()] = service.strip()
+│   │           else:
+│   │               allowed[entry] = "unknown"
+│   │       
+│   │       if token not in allowed:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_401_UNAUTHORIZED, 
+│   │               detail="Invalid bearer token"
+│   │           )
+│   │       
+│   │       return InternalAuthContext(
+│   │           service=allowed[token],
+│   │           token=token
+│   │       )
+│   │   
+│   │   
+│   │   # Type annotations
+│   │   ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
+│   │   InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
+│   │   
+│   │   
+│   │   # =========================
+│   │   # Webhook Headers
+│   │   # =========================
+│   │   
+│   │   class WebhookHeaders(BaseModel):
+│   │       """Pure webhook metadata - platform-agnostic."""
+│   │       topic: str
+│   │       webhook_id: Optional[str] = None
+│   │       
+│   │       @property
+│   │       def event_type(self) -> str:
+│   │           """Normalized event type from topic."""
+│   │           # e.g., "orders/create" -> "order.created"
+│   │           return self.topic.replace("/", ".").replace("_", ".")
+│   │   
+│   │   
+│   │   def get_webhook_headers(request: Request) -> WebhookHeaders:
+│   │       """
+│   │       Extract webhook-specific headers only.
+│   │       Platform/domain handled by PlatformContext.
+│   │       """
+│   │       topic = request.headers.get("X-Webhook-Topic")
+│   │       if not topic:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail={
+│   │                   "code": "MISSING_WEBHOOK_TOPIC",
+│   │                   "message": "Missing required webhook topic header",
+│   │                   "details": {"expected_header": "X-Webhook-Topic"}
+│   │               }
+│   │           )
+│   │       
+│   │       if len(topic) > 256:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail="X-Webhook-Topic too long (max 256 characters)"
+│   │           )
+│   │       
+│   │       webhook_id = request.headers.get("X-Webhook-Id")
+│   │       if webhook_id and len(webhook_id) > 256:
+│   │           raise HTTPException(
+│   │               status_code=status.HTTP_400_BAD_REQUEST,
+│   │               detail="X-Webhook-Id too long (max 256 characters)"
+│   │           )
+│   │       
+│   │       return WebhookHeaders(
+│   │           topic=topic,
+│   │           webhook_id=webhook_id
+│   │       )
+│   │   
+│   │   WebhookHeadersDep = Annotated[WebhookHeaders, Depends(get_webhook_headers)]
 │   │   ```
 │   │   
 │   ├── health.py
@@ -332,7 +879,6 @@ shared/
 │   │   
 │   │   import time
 │   │   import uuid
-│   │   import logging
 │   │   from typing import Callable
 │   │   
 │   │   from fastapi import Request, Response
@@ -342,12 +888,10 @@ shared/
 │   │   from fastapi.exceptions import RequestValidationError, HTTPException
 │   │   
 │   │   from shared.utils.exceptions import GlamBaseError
-│   │   from ..metrics import PrometheusMiddleware, metrics_endpoint
+│   │   from shared.utils.logger import ServiceLogger
 │   │   
 │   │   from .responses import error_response
 │   │   from .correlation import get_correlation_id, set_correlation_context
-│   │   
-│   │   logger = logging.getLogger(__name__)
 │   │   
 │   │   
 │   │   class APIMiddleware(BaseHTTPMiddleware):
@@ -358,6 +902,7 @@ shared/
 │   │           self.service_name = service_name
 │   │       
 │   │       async def dispatch(self, request: Request, call_next: Callable) -> Response:
+│   │           
 │   │           # Generate IDs
 │   │           request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:12]}")
 │   │           
@@ -371,6 +916,16 @@ shared/
 │   │           # IMPORTANT: Set correlation context for async operations
 │   │           # This makes correlation_id available throughout the request lifecycle
 │   │           set_correlation_context(correlation_id)
+│   │           
+│   │           logger = request.app.state.logger
+│   │           logger.set_request_context(
+│   │               request_id=request_id,
+│   │               correlation_id=correlation_id,
+│   │               method=request.method,
+│   │               path=request.url.path,
+│   │               ip_client=request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or 
+│   │                        (request.client.host if request.client else "unknown")
+│   │           )
 │   │           
 │   │           # Track timing
 │   │           start_time = time.perf_counter()
@@ -387,7 +942,7 @@ shared/
 │   │               
 │   │           except Exception as exc:
 │   │               # Convert to standard error response
-│   │               error_resp = self._handle_exception(exc, request_id, correlation_id)
+│   │               error_resp = self._handle_exception(exc, request_id, correlation_id, logger)
 │   │               
 │   │               # Determine status code
 │   │               status_code = 500
@@ -426,8 +981,8 @@ shared/
 │   │               
 │   │               return response
 │   │       
-│   │       def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str):
-│   │           """Convert exception to error response."""
+│   │       def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str, logger: ServiceLogger):
+│   │           """Convert exception to error response using the standard error_response function."""
 │   │           
 │   │           if isinstance(exc, GlamBaseError):
 │   │               return error_response(
@@ -457,26 +1012,42 @@ shared/
 │   │               )
 │   │           
 │   │           elif isinstance(exc, HTTPException):
-│   │               return error_response(
-│   │                   code=f"HTTP_{exc.status_code}",
-│   │                   message=exc.detail,
-│   │                   request_id=request_id,
-│   │                   correlation_id=correlation_id
-│   │               )
+│   │               # CRITICAL FIX: Properly extract structured details from HTTPException
+│   │               if isinstance(exc.detail, dict):
+│   │                   # Dependency raised HTTPException with structured detail
+│   │                   return error_response(
+│   │                       code=exc.detail.get("code", f"HTTP_{exc.status_code}"),
+│   │                       message=exc.detail.get("message", str(exc.detail)),
+│   │                       details=exc.detail.get("details", exc.detail),  # Pass ALL details
+│   │                       request_id=request_id,
+│   │                       correlation_id=correlation_id
+│   │                   )
+│   │               else:
+│   │                   # Simple string detail
+│   │                   return error_response(
+│   │                       code=f"HTTP_{exc.status_code}",
+│   │                       message=str(exc.detail),
+│   │                       details=None,
+│   │                       request_id=request_id,
+│   │                       correlation_id=correlation_id
+│   │                   )
 │   │           
 │   │           else:
-│   │               logger.exception(
+│   │               # Unexpected errors - include actual error message
+│   │               logger.critical(
 │   │                   "Unhandled exception",
 │   │                   extra={
 │   │                       "request_id": request_id,
 │   │                       "correlation_id": correlation_id,
-│   │                       "error_type": type(exc).__name__
+│   │                       "error_type": type(exc).__name__,
+│   │                       "error_str": str(exc)
 │   │                   }
 │   │               )
 │   │               
 │   │               return error_response(
 │   │                   code="INTERNAL_ERROR",
-│   │                   message="An unexpected error occurred",
+│   │                   message=f"An unexpected error occurred: {str(exc)}",  # Include actual error
+│   │                   details={"type": type(exc).__name__},
 │   │                   request_id=request_id,
 │   │                   correlation_id=correlation_id
 │   │               )
@@ -485,9 +1056,7 @@ shared/
 │   │   def setup_middleware(
 │   │       app: FastAPI,
 │   │       *,
-│   │       service_name: str,
-│   │       enable_metrics: bool = True,
-│   │       metrics_path: str = "/metrics",
+│   │       service_name: str
 │   │   ):
 │   │       """
 │   │       Set up all standard middleware for a service.
@@ -499,22 +1068,8 @@ shared/
 │   │       Args:
 │   │           app: FastAPI application
 │   │           service_name: Name of the service
-│   │           enable_metrics: Whether to enable Prometheus metrics
-│   │           metrics_path: Path for metrics endpoint
 │   │           debug: Whether to include error details in responses
 │   │       """
-│   │       # Add Prometheus middleware FIRST (captures all requests)
-│   │       if enable_metrics:
-│   │           app.add_middleware(PrometheusMiddleware, service_name=service_name)
-│   │           
-│   │           # Add metrics endpoint
-│   │           app.add_api_route(
-│   │               metrics_path,
-│   │               metrics_endpoint,
-│   │               methods=["GET"],
-│   │               include_in_schema=False,
-│   │               tags=["monitoring"]
-│   │           )
 │   │   
 │   │       # Add API middleware for standardized responses
 │   │       app.add_middleware(APIMiddleware, service_name=service_name)
@@ -640,95 +1195,298 @@ shared/
 │   │       )
 │   │   ```
 │   │   
-│   └── responses.py
+│   ├── responses.py
+│   │   
+│   │   ```py
+│   │   # -------------------------------
+│   │   # shared/api/responses.py
+│   │   # -------------------------------
+│   │   
+│   │   """Response helper functions."""
+│   │   
+│   │   from typing import Optional, Dict, Any, List, Tuple
+│   │   import uuid
+│   │   from .models import ApiResponse, Meta, ErrorDetail, Pagination, Links, T
+│   │   
+│   │   
+│   │   def create_response(
+│   │       data: Optional[T] = None,
+│   │       error: Optional[ErrorDetail] = None,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       pagination: Optional[Pagination] = None,
+│   │       links: Optional[Links] = None
+│   │   ) -> ApiResponse[T]:
+│   │       """Create a unified API response."""
+│   │       if request_id is None:
+│   │           request_id = f"req_{uuid.uuid4().hex[:12]}"
+│   │       
+│   │       meta = Meta(request_id=request_id, correlation_id=correlation_id)
+│   │       
+│   │       return ApiResponse(
+│   │           data=data,
+│   │           error=error,
+│   │           meta=meta,
+│   │           pagination=pagination,
+│   │           links=links
+│   │       )
+│   │   
+│   │   
+│   │   def success_response(
+│   │       data: T,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       links: Optional[Links] = None
+│   │   ) -> ApiResponse[T]:
+│   │       """Create a success response."""
+│   │       return create_response(
+│   │           data=data,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id,
+│   │           links=links
+│   │       )
+│   │   
+│   │   
+│   │   def error_response(
+│   │       code: str,
+│   │       message: str,
+│   │       details: Optional[Dict[str, Any]] = None,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None
+│   │   ) -> ApiResponse[None]:
+│   │       """Create an error response."""
+│   │       error = ErrorDetail(code=code, message=message, details=details)
+│   │       return create_response(
+│   │           error=error,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id
+│   │       )
+│   │   
+│   │   
+│   │   def paginated_response(
+│   │       data: List[T],
+│   │       page: int,
+│   │       limit: int,
+│   │       total: int,
+│   │       base_url: str,
+│   │       request_id: Optional[str] = None,
+│   │       correlation_id: Optional[str] = None,
+│   │       **query_params
+│   │   ) -> ApiResponse[List[T]]:
+│   │       """Create a paginated response."""
+│   │       pagination = Pagination.create(page, limit, total)
+│   │       links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
+│   │       
+│   │       return create_response(
+│   │           data=data,
+│   │           request_id=request_id,
+│   │           correlation_id=correlation_id,
+│   │           pagination=pagination,
+│   │           links=links
+│   │       )
+│   │   ```
+│   │   
+│   └── validation.py
 │       
 │       ```py
-│       # -------------------------------
-│       # shared/api/responses.py
-│       # -------------------------------
-│       
-│       """Response helper functions."""
-│       
-│       from typing import Optional, Dict, Any, List, Tuple
-│       import uuid
-│       from .models import ApiResponse, Meta, ErrorDetail, Pagination, Links, T
+│       # shared/api/validation.py
+│       from typing import Optional, Dict, Any
+│       from fastapi import HTTPException, status
+│       from shared.api.dependencies import ClientAuthContext, PlatformContext
+│       from shared.utils.logger import ServiceLogger
 │       
 │       
-│       def create_response(
-│           data: Optional[T] = None,
-│           error: Optional[ErrorDetail] = None,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           pagination: Optional[Pagination] = None,
-│           links: Optional[Links] = None
-│       ) -> ApiResponse[T]:
-│           """Create a unified API response."""
-│           if request_id is None:
-│               request_id = f"req_{uuid.uuid4().hex[:12]}"
+│       def validate_shop_context(
+│           client_auth: ClientAuthContext,
+│           platform_ctx: PlatformContext,
+│           logger: ServiceLogger,
+│           body_platform: Optional[str] = None,
+│           body_domain: Optional[str] = None,
+│           expected_platform: Optional[str] = None,
+│           expected_scope: Optional[str] = None,
+│           webhook_payload: Optional[Dict[str, Any]] = None
+│       ) -> None:
+│           """
+│           Unified validation for shop context across auth, headers, body, and webhooks.
 │           
-│           meta = Meta(request_id=request_id, correlation_id=correlation_id)
+│           Args:
+│               client_auth: JWT authentication context
+│               platform_ctx: Platform context from headers
+│               logger: Service logger
+│               body_platform: Platform from request body (if applicable)
+│               body_domain: Domain from request body (if applicable)
+│               expected_platform: Expected platform for this endpoint (e.g., "shopify")
+│               expected_scope: Expected JWT scope (e.g., "bff:call")
+│               webhook_payload: Webhook payload for platform-specific validation
 │           
-│           return ApiResponse(
-│               data=data,
-│               error=error,
-│               meta=meta,
-│               pagination=pagination,
-│               links=links
-│           )
-│       
-│       
-│       def success_response(
-│           data: T,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           links: Optional[Links] = None
-│       ) -> ApiResponse[T]:
-│           """Create a success response."""
-│           return create_response(
-│               data=data,
-│               request_id=request_id,
-│               correlation_id=correlation_id,
-│               links=links
-│           )
-│       
-│       
-│       def error_response(
-│           code: str,
-│           message: str,
-│           details: Optional[Dict[str, Any]] = None,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None
-│       ) -> ApiResponse[None]:
-│           """Create an error response."""
-│           error = ErrorDetail(code=code, message=message, details=details)
-│           return create_response(
-│               error=error,
-│               request_id=request_id,
-│               correlation_id=correlation_id
-│           )
-│       
-│       
-│       def paginated_response(
-│           data: List[T],
-│           page: int,
-│           limit: int,
-│           total: int,
-│           base_url: str,
-│           request_id: Optional[str] = None,
-│           correlation_id: Optional[str] = None,
-│           **query_params
-│       ) -> ApiResponse[List[T]]:
-│           """Create a paginated response."""
-│           pagination = Pagination.create(page, limit, total)
-│           links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
+│           Raises:
+│               HTTPException: On any validation failure
+│           """
 │           
-│           return create_response(
-│               data=data,
-│               request_id=request_id,
-│               correlation_id=correlation_id,
-│               pagination=pagination,
-│               links=links
-│           )
+│           # 1. Validate expected platform (for platform-specific endpoints)
+│           if expected_platform and platform_ctx.platform != expected_platform:
+│               logger.warning(
+│                   f"Invalid platform for {expected_platform}-only endpoint",
+│                   extra={
+│                       "received_platform": platform_ctx.platform,
+│                       "expected_platform": expected_platform
+│                   }
+│               )
+│               raise HTTPException(
+│                   status_code=status.HTTP_400_BAD_REQUEST,
+│                   detail={
+│                       "code": "INVALID_PLATFORM",
+│                       "message": f"This endpoint only accepts {expected_platform} requests",
+│                       "details": {
+│                           "received": platform_ctx.platform,
+│                           "expected": expected_platform
+│                       }
+│                   }
+│               )
+│           
+│           # 2. Validate JWT shop matches header domain
+│           if client_auth.shop != platform_ctx.domain:
+│               logger.warning(
+│                   "Shop domain mismatch between JWT and headers",
+│                   extra={
+│                       "jwt_shop": client_auth.shop,
+│                       "header_domain": platform_ctx.domain
+│                   }
+│               )
+│               raise HTTPException(
+│                   status_code=status.HTTP_401_UNAUTHORIZED,
+│                   detail={
+│                       "code": "SHOP_DOMAIN_MISMATCH",
+│                       "message": "Shop domain mismatch between JWT and headers",
+│                       "details": {
+│                           "jwt_shop": client_auth.shop,
+│                           "header_domain": platform_ctx.domain
+│                       }
+│                   }
+│               )
+│           
+│           # 3. Validate JWT scope if specified
+│           if expected_scope and client_auth.scope != expected_scope:
+│               logger.warning(
+│                   "Invalid JWT scope",
+│                   extra={
+│                       "received_scope": client_auth.scope,
+│                       "expected_scope": expected_scope
+│                   }
+│               )
+│               raise HTTPException(
+│                   status_code=status.HTTP_403_FORBIDDEN,
+│                   detail={
+│                       "code": "INVALID_SCOPE",
+│                       "message": f"Invalid JWT scope",
+│                       "details": {
+│                           "received": client_auth.scope,
+│                           "expected": expected_scope
+│                       }
+│                   }
+│               )
+│           
+│           # 4. Validate body domain if provided
+│           if body_domain and body_domain.lower() != platform_ctx.domain.lower():
+│               logger.warning(
+│                   "Domain mismatch between request body and header",
+│                   extra={
+│                       "body_domain": body_domain,
+│                       "header_domain": platform_ctx.domain
+│                   }
+│               )
+│               raise HTTPException(
+│                   status_code=status.HTTP_400_BAD_REQUEST,
+│                   detail={
+│                       "code": "BODY_DOMAIN_MISMATCH",
+│                       "message": "Domain mismatch between request body and header",
+│                       "details": {
+│                           "body_domain": body_domain,
+│                           "header_domain": platform_ctx.domain
+│                       }
+│                   }
+│               )
+│           
+│           # 5. Validate body platform if provided
+│           if body_platform and body_platform.lower() != platform_ctx.platform.lower():
+│               logger.warning(
+│                   "Platform mismatch between request body and header",
+│                   extra={
+│                       "body_platform": body_platform,
+│                       "header_platform": platform_ctx.platform
+│                   }
+│               )
+│               raise HTTPException(
+│                   status_code=status.HTTP_400_BAD_REQUEST,
+│                   detail={
+│                       "code": "PLATFORM_MISMATCH",
+│                       "message": "Platform mismatch between request body and header",
+│                       "details": {
+│                           "body_platform": body_platform,
+│                           "header_platform": platform_ctx.platform
+│                       }
+│                   }
+│               )
+│           
+│           # 6. Platform-specific webhook payload validation
+│           if webhook_payload:
+│               if platform_ctx.is_shopify:
+│                   # Shopify-specific validation
+│                   payload_domain = (
+│                       webhook_payload.get("myshopify_domain") or 
+│                       webhook_payload.get("domain") or 
+│                       ""
+│                   ).lower()
+│                   
+│                   if payload_domain and payload_domain != platform_ctx.domain:
+│                       logger.warning(
+│                           "Shopify webhook payload domain mismatch",
+│                           extra={
+│                               "payload_domain": payload_domain,
+│                               "header_domain": platform_ctx.domain
+│                           }
+│                       )
+│                       raise HTTPException(
+│                           status_code=status.HTTP_400_BAD_REQUEST,
+│                           detail={
+│                               "code": "WEBHOOK_DOMAIN_MISMATCH",
+│                               "message": "Webhook payload domain doesn't match header domain",
+│                               "details": {
+│                                   "payload_domain": payload_domain,
+│                                   "header_domain": platform_ctx.domain
+│                               }
+│                           }
+│                       )
+│               
+│               # Add other platform-specific validations as needed
+│               # elif platform_ctx.platform == "bigcommerce":
+│               #     ...
+│       
+│       # Usage patterns:
+│       
+│       # Minimal validation (just auth consistency)
+│       # validate_shop_context(client_auth, platform_ctx, logger)
+│       
+│       # # With body validation
+│       # validate_shop_context(
+│       #     client_auth, platform_ctx, logger,
+│       #     body_platform=body.platform,
+│       #     body_domain=body.domain
+│       # )
+│       
+│       # # Platform-specific endpoint
+│       # validate_shop_context(
+│       #     client_auth, platform_ctx, logger,
+│       #     expected_platform="shopify"
+│       # )
+│       
+│       # # Webhook with all validations
+│       # validate_shop_context(
+│       #     client_auth, platform_ctx, logger,
+│       #     expected_platform="shopify",
+│       #     expected_scope="bff:call",
+│       #     webhook_payload=payload
+│       # )
 │       ```
 │       
 ├── messaging/
@@ -742,58 +1500,14 @@ shared/
 │   │   from .listener import Listener 
 │   │   
 │   │   from .jetstream_client import JetStreamClient
-│   │   from .stream_config import StreamConfig
 │   │   from .subjects import Subjects
-│   │   from .common_payloads import (
-│   │       MerchantCreatedPayload,
-│   │       WebhookReceivedPayload,
-│   │   )
 │   │   
 │   │   __all__ = [
 │   │       "Publisher",
 │   │       "Listener",
 │   │       "JetStreamClient",
-│   │       "StreamConfig",
 │   │       "Subjects",
-│   │       "MerchantCreatedPayload",
-│   │       "WebhookReceivedPayload",
 │   │   ]
-│   │   ```
-│   │   
-│   ├── common_payloads.py
-│   │   
-│   │   ```py
-│   │   # shared/messaging/payloads/common.py
-│   │   
-│   │   from pydantic import BaseModel, Field, EmailStr
-│   │   from typing import Dict, Any
-│   │   from uuid import UUID
-│   │   from datetime import datetime, timezone
-│   │   from enum import Enum
-│   │   
-│   │   class ExternalSource(str, Enum):
-│   │       SHOPIFY="shopify"
-│   │       STRIPE="stripe"
-│   │   
-│   │   class MerchantCreatedPayload(BaseModel):
-│   │       """Merchant created event payload"""
-│   │       merchant_id: UUID
-│   │       merchant_domain: str
-│   │       business_name: str
-│   │       contact_email: EmailStr
-│   │       created_by: str
-│   │       created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │       
-│   │       
-│   │   class WebhookReceivedPayload(BaseModel):
-│   │       """Webhook received - published by webhook service, consumed by others"""
-│   │       webhook_id: UUID
-│   │       merchant_id: UUID
-│   │       source: ExternalSource
-│   │       event_type: str
-│   │       payload: Dict[str, Any]
-│   │       received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-│   │       verified: bool = True
 │   │   ```
 │   │   
 │   ├── jetstream_client.py
@@ -818,7 +1532,7 @@ shared/
 │   │   class JetStreamClient:
 │   │       """Pure JetStream client - only connection + stream management."""
 │   │   
-│   │       def __init__(self, logger: Optional[ServiceLogger] = None) -> None:  # ✔ typed
+│   │       def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
 │   │           self._client: Optional[Client] = None
 │   │           self._js: Optional[JetStreamContext] = None
 │   │           self.logger = logger
@@ -873,7 +1587,7 @@ shared/
 │   │       ) -> None:
 │   │           if not self._js:
 │   │               raise RuntimeError("JetStream not initialized")
-│   │   
+│   │           
 │   │           cfg = StreamConfig(
 │   │               name=name,
 │   │               subjects=subjects,
@@ -887,11 +1601,11 @@ shared/
 │   │               await self._js.stream_info(name)
 │   │               if self.logger:
 │   │                   self.logger.debug("Using existing stream: %s", name)
-│   │           except NotFoundError:                       # ← only when it’s absent
+│   │           except NotFoundError:  
 │   │               await self._js.add_stream(cfg)
 │   │               if self.logger:
 │   │                   self.logger.info("Created new stream: %s", name)
-│   │   
+│   │               
 │   │       async def delete_stream(self, name: str) -> None:
 │   │           if not self._js:
 │   │               raise RuntimeError("JetStream not initialized")
@@ -926,7 +1640,7 @@ shared/
 │   │   
 │   │   from shared.utils.logger import ServiceLogger
 │   │   from .jetstream_client import JetStreamClient
-│   │   from .event_context import set_correlation_id, set_source_service
+│   │   # from .event_context import set_correlation_id, set_source_service
 │   │   
 │   │   
 │   │   class Listener(ABC):
@@ -1065,8 +1779,8 @@ shared/
 │   │               return
 │   │   
 │   │           # Context vars
-│   │           set_correlation_id(envelope.get("correlation_id"))
-│   │           set_source_service(envelope.get("source_service"))
+│   │           # set_correlation_id(envelope.get("correlation_id")) # TODO: figure out how to get correlation_id from context
+│   │           # set_source_service(envelope.get("source_service"))
 │   │   
 │   │           # Business logic
 │   │           try:
@@ -1085,23 +1799,21 @@ shared/
 │   ├── publisher.py
 │   │   
 │   │   ```py
-│   │   # shared/shared/messaging/publisher.py
+│   │   # shared/messaging/publisher.py
 │   │   """Publisher base class for domain events and commands."""
 │   │   import json
 │   │   from abc import ABC, abstractmethod
 │   │   from datetime import datetime, timezone
-│   │   from typing import Dict, Optional, TypeVar
+│   │   from typing import Dict, Optional
 │   │   from uuid import uuid4
 │   │   
 │   │   from shared.utils.logger import ServiceLogger
-│   │   from .event_context import get_correlation_id
+│   │   from shared.api.correlation import get_correlation_id
 │   │   from .jetstream_client import JetStreamClient
-│   │   
-│   │   DataT = TypeVar("DataT")
 │   │   
 │   │   
 │   │   class Publisher(ABC):
-│   │       """Publishes domain facts (evt.*) - commands to be added when needed."""
+│   │       """Publishes domain facts (evt.*) and commands (cmd.*)"""
 │   │   
 │   │       @property
 │   │       @abstractmethod
@@ -1110,39 +1822,23 @@ shared/
 │   │       def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
 │   │           self.js_client = jetstream_client
 │   │           self.logger = logger
-│   │           self._stream_ready = False
 │   │   
-│   │       # ────────────────────────────────────────────────────────────────────────
-│   │       async def _ensure_stream(self) -> None:
-│   │           if self._stream_ready:
-│   │               return
-│   │           await self.js_client.ensure_stream(
-│   │               name="GLAM_EVENTS",
-│   │               subjects=["evt.*", "cmd.*"],
-│   │               max_age=24 * 60 * 60,
-│   │               max_msgs=1_000_000,
-│   │           )
-│   │           self._stream_ready = True
-│   │   
-│   │       # ────────────────────────────────────────────────────────────────────────
 │   │       async def publish_event(
 │   │           self,
 │   │           subject: str,
 │   │           data: dict,
-│   │           correlation_id: Optional[str] = None,
+│   │           correlation_id: str,
 │   │           metadata: Optional[Dict[str, dict]] = None,
 │   │       ) -> str:
+│   │           """Publish an event to JetStream"""
+│   │           
+│   │           self.logger.info("Publishing event %s", subject)
 │   │           
 │   │           if not (subject.startswith("evt.") or subject.startswith("cmd.")):
 │   │               raise ValueError("subject must start with 'evt.' or 'cmd.'")
 │   │           
-│   │           
-│   │           await self._ensure_stream()
-│   │   
 │   │           event_id = str(uuid4())
-│   │           correlation_id = correlation_id or get_correlation_id()
 │   │           
-│   │   
 │   │           envelope = {
 │   │               "event_id": event_id,
 │   │               "event_type": subject,
@@ -1153,51 +1849,29 @@ shared/
 │   │               "metadata": metadata or {},
 │   │           }
 │   │   
-│   │   
-│   │           await self.js_client.js.publish(subject, json.dumps(envelope).encode())
-│   │           self.logger.info("Published %s [%s]", subject, event_id)
-│   │           return event_id
-│   │   ```
-│   │   
-│   ├── stream_config.py
-│   │   
-│   │   ```py
-│   │   # shared/messaging/streams/stream_config.py
-│   │   
-│   │   from enum import Enum
-│   │   from dataclasses import dataclass
-│   │   from typing import List
-│   │   
-│   │   class Streams(str, Enum):
-│   │       """NATS JetStream streams for GLAM"""
-│   │       EVENTS = "GLAM_EVENTS"  # Single stream for MVP
-│   │       DLQ = "GLAM_DLQ"       # Dead letter queue
-│   │   
-│   │   
-│   │   @dataclass
-│   │   class StreamConfig:
-│   │       """Stream configuration"""
-│   │       name: str
-│   │       subjects: List[str]
-│   │       max_age_hours: int = 24
-│   │       max_msgs: int = 1000000
-│   │   
-│   │   
-│   │   # MVP Stream configuration
-│   │   STREAM_CONFIGS = [
-│   │       StreamConfig(
-│   │           name=Streams.EVENTS,
-│   │           subjects=["evt.*", "cmd.*"],
-│   │           max_age_hours=24,
-│   │           max_msgs=1000000,
-│   │       ),
-│   │       StreamConfig(
-│   │           name=Streams.DLQ,
-│   │           subjects=["dlq.*"],
-│   │           max_age_hours=168,  # 7 days
-│   │           max_msgs=100000,
-│   │       )
-│   │   ]
+│   │           try:
+│   │               # Publish directly - stream already exists
+│   │               ack = await self.js_client.js.publish(
+│   │                   subject, 
+│   │                   json.dumps(envelope).encode()
+│   │               )
+│   │               
+│   │               self.logger.info(
+│   │                   "Published %s [event_id=%s, seq=%s]", 
+│   │                   subject, 
+│   │                   event_id,
+│   │                   ack.seq if ack else "unknown"
+│   │               )
+│   │               return event_id
+│   │               
+│   │           except Exception as e:
+│   │               self.logger.error(
+│   │                   "Failed to publish event %s: %s", 
+│   │                   subject, 
+│   │                   str(e),
+│   │                   exc_info=True
+│   │               )
+│   │               raise
 │   │   ```
 │   │   
 │   └── subjects.py
@@ -1221,162 +1895,47 @@ shared/
 │           
 │       ```
 │       
-├── metrics/
+├── utils/
 │   ├── __init__.py
 │   │   
 │   │   ```py
+│   │   from .config_loader import merged_config, flatten_config
+│   │   from .exceptions import GlamBaseError, ConfigurationError, InternalError, RequestTimeoutError, ServiceUnavailableError, RateLimitExceededError, ForbiddenError, UnauthorizedError, NotFoundError, ValidationError, DomainError, InfrastructureError
 │   │   
-│   │   # -------------------------------
-│   │   # shared/metrics/__init__.py
-│   │   # -------------------------------
-│   │   
-│   │   """Prometheus metrics utilities for microservices."""
-│   │   
-│   │   from .middleware import (
-│   │       PrometheusMiddleware,
-│   │       metrics_endpoint,
-│   │       http_requests_total,
-│   │       http_request_duration_seconds,
-│   │       http_requests_in_progress,
-│   │   )
+│   │   from .logger import create_logger, ServiceLogger
+│   │   from .idempotency_key import generate_idempotency_key
 │   │   
 │   │   __all__ = [
-│   │       "PrometheusMiddleware",
-│   │       "metrics_endpoint",
-│   │       "http_requests_total",
-│   │       "http_request_duration_seconds",
-│   │       "http_requests_in_progress",
+│   │       "merged_config",
+│   │       "flatten_config",
+│   │       "GlamBaseError",
+│   │       "ConfigurationError",
+│   │       "InternalError",
+│   │       "RequestTimeoutError",  
+│   │       "ServiceUnavailableError",
+│   │       "RateLimitExceededError",
+│   │       "ForbiddenError",
+│   │       "UnauthorizedError",
+│   │       "NotFoundError",
+│   │       "ValidationError",
+│   │       "DomainError",
+│   │       "InfrastructureError",
+│   │       "create_logger",
+│   │       "ServiceLogger",
+│   │       "generate_idempotency_key",
 │   │   ]
 │   │   ```
 │   │   
-│   └── middleware.py
-│       
-│       ```py
-│       # -------------------------------
-│       # shared/metrics/middleware.py
-│       # -------------------------------
-│       
-│       """
-│       Prometheus metrics middleware for all services.
-│       
-│       Provides standard HTTP metrics and allows services to register
-│       their own domain-specific metrics.
-│       """
-│       
-│       import time
-│       import re
-│       from fastapi import Request
-│       from starlette.middleware.base import BaseHTTPMiddleware
-│       from starlette.responses import Response
-│       from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-│       
-│       # Standard HTTP metrics for all services
-│       http_requests_total = Counter(
-│           'http_requests_total',
-│           'Total HTTP requests',
-│           ['service', 'method', 'endpoint', 'status']
-│       )
-│       
-│       http_request_duration_seconds = Histogram(
-│           'http_request_duration_seconds',
-│           'HTTP request duration in seconds',
-│           ['service', 'method', 'endpoint']
-│       )
-│       
-│       http_requests_in_progress = Gauge(
-│           'http_requests_in_progress',
-│           'HTTP requests in progress',
-│           ['service']
-│       )
-│       
-│       
-│       class PrometheusMiddleware(BaseHTTPMiddleware):
-│           """Prometheus metrics collection middleware."""
-│           
-│           def __init__(self, app, service_name: str):
-│               super().__init__(app)
-│               self.service_name = service_name
-│           
-│           async def dispatch(self, request: Request, call_next):
-│               # Skip metrics endpoint to avoid recursion
-│               if request.url.path == "/metrics":
-│                   return await call_next(request)
-│               
-│               # Get method and normalize path
-│               method = request.method
-│               path = self._normalize_path(request.url.path)
-│               
-│               # Track in-progress requests
-│               http_requests_in_progress.labels(service=self.service_name).inc()
-│               
-│               # Time the request
-│               start_time = time.time()
-│               
-│               try:
-│                   response = await call_next(request)
-│                   status_code = response.status_code
-│                   
-│                   # Record success metrics
-│                   self._record_metrics(method, path, status_code, start_time)
-│                   
-│                   return response
-│                   
-│               except Exception as e:
-│                   # Record failure metrics
-│                   self._record_metrics(method, path, 500, start_time)
-│                   raise
-│               finally:
-│                   http_requests_in_progress.labels(service=self.service_name).dec()
-│           
-│           def _record_metrics(self, method: str, path: str, status: int, start_time: float):
-│               """Record HTTP metrics."""
-│               http_requests_total.labels(
-│                   service=self.service_name,
-│                   method=method,
-│                   endpoint=path,
-│                   status=status
-│               ).inc()
-│               
-│               http_request_duration_seconds.labels(
-│                   service=self.service_name,
-│                   method=method,
-│                   endpoint=path
-│               ).observe(time.time() - start_time)
-│           
-│           def _normalize_path(self, path: str) -> str:
-│               """Normalize paths to prevent high cardinality."""
-│               # Replace UUIDs
-│               path = re.sub(
-│                   r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
-│                   '{id}',
-│                   path
-│               )
-│               # Replace numeric IDs
-│               path = re.sub(r'/\d+', '/{id}', path)
-│               return path
-│       
-│       
-│       async def metrics_endpoint(request: Request) -> Response:
-│           """Endpoint to expose Prometheus metrics."""
-│           return Response(
-│               content=generate_latest(),
-│               media_type=CONTENT_TYPE_LATEST
-│           )
-│       
-│       ```
-│       
-├── utils/
-│   ├── __init__.py
 │   ├── config_loader.py
 │   │   
 │   │   ```py
-│   │   # shared/config/loader.py
+│   │   # shared/utils/config_loader.py
 │   │   from __future__ import annotations
 │   │   from pathlib import Path
 │   │   from typing import Any, Dict, Iterable
 │   │   import os
 │   │   import yaml
-│   │   from dotenv import dotenv_values
+│   │   from dotenv import load_dotenv
 │   │   
 │   │   # repo root
 │   │   _REPO_ROOT = Path(__file__).resolve()
@@ -1388,7 +1947,6 @@ shared/
 │   │   _CONFIG_DIR = _REPO_ROOT / "config"
 │   │   _SHARED_CONFIG = _CONFIG_DIR / "shared.yml"
 │   │   _SVC_CFG_DIR = _CONFIG_DIR / "services"
-│   │   _SERVICES_DIR = _REPO_ROOT / "services"
 │   │   
 │   │   def _load_yaml(path: Path) -> Dict[str, Any]:
 │   │       if not path.is_file():
@@ -1405,33 +1963,24 @@ shared/
 │   │               out[k] = v
 │   │       return out
 │   │   
-│   │   def _load_service_dotenv(service: str) -> None:
-│   │       """Load services/{service}/.env for local runs only. Never override existing env."""
-│   │       if os.path.exists("/.dockerenv") or os.getenv("DISABLE_DOTENV") == "1":
-│   │           return
-│   │       p = _SERVICES_DIR / service / ".env"
-│   │       if not p.is_file():
-│   │           return
-│   │       for k, v in (dotenv_values(p) or {}).items():
-│   │           if v is not None and k not in os.environ:
-│   │               os.environ[k] = v
-│   │   
-│   │   def merged_config(
-│   │       service: str,
-│   │       *,
-│   │       passthrough_env: Iterable[str] = ("DATABASE_URL",),
-│   │   ) -> Dict[str, Any]:
-│   │       """shared.yml < service.yml, plus selected raw env keys (no prefixes)."""
-│   │       _load_service_dotenv(service)
-│   │   
+│   │   def merged_config(service: str) -> Dict[str, Any]:
+│   │       """Load config: shared.yml < service.yml < ALL environment variables"""
+│   │       
+│   │       # Load root .env if not in Docker and not disabled
+│   │       if not os.path.exists("/.dockerenv") and os.getenv("DISABLE_DOTENV") != "1":
+│   │           root_env = _REPO_ROOT / ".env"
+│   │           if root_env.is_file():
+│   │               load_dotenv(root_env, override=False)
+│   │       
+│   │       # Merge YAML configs
 │   │       cfg = _deep_merge(
 │   │           _load_yaml(_SHARED_CONFIG),
 │   │           _load_yaml(_SVC_CFG_DIR / f"{service}.yml"),
 │   │       )
-│   │   
-│   │       for k in passthrough_env:
-│   │           if k in os.environ and k not in cfg:
-│   │               cfg[k] = os.environ[k]
+│   │       
+│   │       # Add ALL environment variables
+│   │       cfg.update(os.environ)
+│   │       
 │   │       return cfg
 │   │   
 │   │   def flatten_config(data: dict, parent_key: str = "", sep: str = ".") -> dict:
@@ -1515,7 +2064,6 @@ shared/
 │   │   
 │   │           return result
 │   │   
-│   │   
 │   │   class InfrastructureError(GlamBaseError):
 │   │       """
 │   │       Infrastructure/external system errors.
@@ -1542,7 +2090,6 @@ shared/
 │   │   
 │   │           self.details["retryable"] = retryable
 │   │           self.retryable = retryable
-│   │   
 │   │   
 │   │   class DomainError(GlamBaseError):
 │   │       """
@@ -1666,7 +2213,7 @@ shared/
 │   │               self.details["resource"] = resource
 │   │   
 │   │   
-│   │   class RateLimitedError(DomainError):
+│   │   class RateLimitExceededError(DomainError):
 │   │       """Too many requests."""
 │   │   
 │   │       code = "RATE_LIMITED"
@@ -1738,6 +2285,28 @@ shared/
 │   │   
 │   │           if error_id:
 │   │               self.details["error_id"] = error_id
+│   │               
+│   │               
+│   │   class ConfigurationError(GlamBaseError):
+│   │       """Configuration errors in the application."""
+│   │   
+│   │       code = "CONFIGURATION_ERROR"
+│   │       status = 500
+│   │   
+│   │       def __init__(
+│   │           self,
+│   │           message: str,
+│   │           *,
+│   │           config_key: Optional[str] = None,
+│   │           expected_value: Optional[Any] = None,
+│   │           **kwargs
+│   │       ):
+│   │           super().__init__(message, **kwargs)
+│   │   
+│   │           if config_key:
+│   │               self.details["config_key"] = config_key
+│   │           if expected_value is not None:
+│   │               self.details["expected_value"] = expected_value
 │   │   ```
 │   │   
 │   ├── idempotency_key.py
@@ -1783,637 +2352,71 @@ shared/
 │   │       return '_'.join(parts)
 │   │   ```
 │   │   
-│   ├── logger.py
-│   │   
-│   │   ```py
-│   │   # shared/utils/logger.py
-│   │   import logging
-│   │   import logging.handlers
-│   │   import os
-│   │   import json
-│   │   from datetime import datetime
-│   │   from typing import Dict, Any
-│   │   from pathlib import Path
-│   │   from contextvars import ContextVar
-│   │   
-│   │   
-│   │   # Context variable for request-scoped data
-│   │   request_context: ContextVar[Dict[str, Any]] = ContextVar('request_context', default={})
-│   │   
-│   │   
-│   │   class ServiceLogger:
-│   │       """
-│   │       Service-specific logger that automatically includes service name and request context.
-│   │       """
-│   │       
-│   │       def __init__(self, service_name: str):
-│   │           self.service_name = service_name
-│   │           self._setup_logging()
-│   │           self._logger = logging.getLogger(service_name)
-│   │       
-│   │       def _setup_logging(self):
-│   │           """Configure logging for this service"""
-│   │           env = os.getenv("APP_ENV", "dev").lower()
-│   │           log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-│   │           print(f"Setting up logger for {self.service_name} in {env} environment with level {log_level}")
-│   │           
-│   │           # Create logs directory
-│   │           Path("logs").mkdir(exist_ok=True)
-│   │           
-│   │           # Configure formatters based on environment
-│   │           if env == "prod":
-│   │               formatter = JsonFormatter(self.service_name)
-│   │           else:
-│   │               formatter = ConsoleFormatter(self.service_name)
-│   │           
-│   │           # Set up handlers
-│   │           console_handler = logging.StreamHandler()
-│   │           console_handler.setFormatter(formatter)
-│   │           console_handler.setLevel(log_level)
-│   │           
-│   │           # Configure the service logger
-│   │           logger = logging.getLogger(self.service_name)
-│   │           logger.setLevel(log_level)
-│   │           logger.addHandler(console_handler)
-│   │           
-│   │           # Add file handler for production
-│   │           if env == "prod":
-│   │               file_handler = logging.handlers.RotatingFileHandler(
-│   │                   f"logs/{self.service_name}.log",
-│   │                   maxBytes=10485760,  # 10MB
-│   │                   backupCount=5,
-│   │                   encoding='utf8'
-│   │               )
-│   │               file_handler.setFormatter(formatter)
-│   │               file_handler.setLevel(logging.INFO)
-│   │               logger.addHandler(file_handler)
-│   │           
-│   │           # Prevent propagation to avoid duplicate logs
-│   │           logger.propagate = False
-│   │       
-│   │       def set_request_context(self, **kwargs):
-│   │           """Set request-scoped context (e.g., request_id, user_id)"""
-│   │           ctx = request_context.get()
-│   │           ctx.update(kwargs)
-│   │           request_context.set(ctx)
-│   │       
-│   │       def clear_request_context(self):
-│   │           """Clear request context"""
-│   │           request_context.set({})
-│   │       
-│   │       def _log(self, level: int, msg: str, *args, **kwargs):
-│   │           """Internal log method that adds context"""
-│   │           # Get request context
-│   │           ctx = request_context.get()
-│   │           
-│   │           # Add context to extra
-│   │           extra = kwargs.get('extra', {})
-│   │           extra.update(ctx)
-│   │           kwargs['extra'] = extra
-│   │           
-│   │           self._logger.log(level, msg, *args, **kwargs)
-│   │       
-│   │       def debug(self, msg: str, *args, **kwargs):
-│   │           self._log(logging.DEBUG, msg, *args, **kwargs)
-│   │       
-│   │       def info(self, msg: str, *args, **kwargs):
-│   │           self._log(logging.INFO, msg, *args, **kwargs)
-│   │       
-│   │       def warning(self, msg: str, *args, **kwargs):
-│   │           self._log(logging.WARNING, msg, *args, **kwargs)
-│   │       
-│   │       def error(self, msg: str, *args, **kwargs):
-│   │           self._log(logging.ERROR, msg, *args, **kwargs)
-│   │       
-│   │       def critical(self, msg: str, *args, **kwargs):
-│   │           self._log(logging.CRITICAL, msg, *args, **kwargs)
-│   │   
-│   │   
-│   │   class ConsoleFormatter(logging.Formatter):
-│   │       """Console formatter that includes service name and request context"""
-│   │       
-│   │       def __init__(self, service_name: str):
-│   │           self.service_name = service_name
-│   │           super().__init__()
-│   │       
-│   │       def format(self, record):
-│   │           # Build context string from extra fields
-│   │           context_parts = []
-│   │           request_id = getattr(record, 'request_id', None)
-│   │           if request_id is not None:
-│   │               context_parts.append(f"request_id={request_id}")
-│   │           user_id = getattr(record, 'user_id', None)
-│   │           if user_id is not None:
-│   │               context_parts.append(f"user_id={user_id}")
-│   │           
-│   │           # Add any other extra fields
-│   │           for key in record.__dict__:
-│   │               if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
-│   │                             'levelname', 'levelno', 'lineno', 'module', 'msecs',
-│   │                             'pathname', 'process', 'processName', 'relativeCreated',
-│   │                             'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
-│   │                             'message', 'getMessage', 'request_id', 'user_id']:
-│   │                   context_parts.append(f"{key}={getattr(record, key)}")
-│   │           
-│   │           # Format: 2024-01-15 10:30:45 - funding-service - INFO - [request_id=123] Processing order
-│   │           timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
-│   │           
-│   │           message = f"{timestamp} - {self.service_name} - {record.levelname}"
-│   │           if context_parts:
-│   │               message += f" - [{' '.join(context_parts)}]"
-│   │           message += f" - {record.getMessage()}"
-│   │           
-│   │           if record.exc_info:
-│   │               message += '\n' + self.formatException(record.exc_info)
-│   │           
-│   │           return message
-│   │   
-│   │   
-│   │   class JsonFormatter(logging.Formatter):
-│   │       """JSON formatter for production"""
-│   │       
-│   │       def __init__(self, service_name: str):
-│   │           self.service_name = service_name
-│   │           super().__init__()
-│   │       
-│   │       def format(self, record):
-│   │           log_data = {
-│   │               "timestamp": datetime.utcnow().isoformat(),
-│   │               "service": self.service_name,
-│   │               "level": record.levelname,
-│   │               "message": record.getMessage(),
-│   │               "environment": os.getenv("APP_ENV", "dev"),
-│   │           }
-│   │           
-│   │           # Add request context from extra
-│   │           request_id = getattr(record, 'request_id', None)
-│   │           if request_id is not None:
-│   │               log_data['request_id'] = request_id
-│   │           user_id = getattr(record, 'user_id', None)
-│   │           if user_id is not None:
-│   │               log_data['user_id'] = user_id
-│   │           
-│   │           # Add any other extra fields
-│   │           for key in record.__dict__:
-│   │               if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
-│   │                             'levelname', 'levelno', 'lineno', 'module', 'msecs',
-│   │                             'pathname', 'process', 'processName', 'relativeCreated',
-│   │                             'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
-│   │                             'message', 'getMessage', 'request_id', 'user_id']:
-│   │                   log_data[key] = getattr(record, key)
-│   │           
-│   │           # Add exception if present
-│   │           if record.exc_info:
-│   │               log_data['exception'] = self.formatException(record.exc_info)
-│   │           
-│   │           return json.dumps(log_data)
-│   │   
-│   │   
-│   │   # Factory function to create service logger
-│   │   def create_logger(service_name: str) -> ServiceLogger:
-│   │       """
-│   │       Create a logger for a specific service.
-│   │       
-│   │       Args:
-│   │           service_name: Name of the service
-│   │           
-│   │       Returns:
-│   │           ServiceLogger instance
-│   │       """
-│   │       return ServiceLogger(service_name)
-│   │   
-│   │   
-│   │   # ============ USAGE ============
-│   │   
-│   │   """
-│   │   USAGE:
-│   │   
-│   │   1. In your service initialization (main.py or app.py):
-│   │   ```python
-│   │   from shared.utils.logger import create_logger
-│   │   
-│   │   # Create service-specific logger
-│   │   logger = create_logger("funding-service")
-│   │   ```
-│   │   
-│   │   2. Basic logging:
-│   │   ```python
-│   │   logger.info("Service started")
-│   │   logger.error("Connection failed", extra={"host": "localhost", "port": 5432})
-│   │   ```
-│   │   
-│   │   3. In FastAPI middleware or request handler:
-│   │   ```python
-│   │   @app.middleware("http")
-│   │   async def add_request_context(request: Request, call_next):
-│   │       # Set request context for all logs in this request
-│   │       logger.set_request_context(
-│   │           request_id=request.headers.get("X-Request-ID", str(uuid.uuid4())),
-│   │           method=request.method,
-│   │           path=request.url.path
-│   │       )
-│   │       
-│   │       logger.info("Request started")
-│   │       response = await call_next(request)
-│   │       logger.info("Request completed", extra={"status_code": response.status_code})
-│   │       
-│   │       # Clear context after request
-│   │       logger.clear_request_context()
-│   │       return response
-│   │   ```
-│   │   
-│   │   4. In any route or service method:
-│   │   ```python
-│   │   @app.post("/api/orders")
-│   │   async def create_order(order: Order, user_id: str = Depends(get_current_user)):
-│   │       # Add user context
-│   │       logger.set_request_context(user_id=user_id)
-│   │       
-│   │       logger.info("Creating order", extra={"order_id": order.id})
-│   │       # ... business logic ...
-│   │       logger.info("Order created successfully")
-│   │   ```
-│   │   
-│   │   5. Output examples:
-│   │   
-│   │   Development:
-│   │   2024-01-15 10:30:45 - funding-service - INFO - [request_id=abc123 user_id=456] - Creating order
-│   │   
-│   │   Production (JSON):
-│   │   {"timestamp": "2024-01-15T10:30:45.123Z", "service": "funding-service", "level": "INFO", "message": "Creating order", "request_id": "abc123", "user_id": "456", "order_id": "789"}
-│   │   """
-│   │   ```
-│   │   
-│   └── query_helpers.py
+│   └── logger.py
 │       
 │       ```py
-│       # shared/database/helpers.py
-│       """Common query helpers for Prisma operations."""
-│       from typing import Dict, Any, Optional, List, Union
-│       from enum import Enum
-│       from uuid import UUID
+│       # shared/utils/logger.py
+│       import logging
+│       import sys
+│       from typing import Dict, Any
 │       
-│       
-│       def shop_filter(
-│           shop_id: Optional[Union[str, UUID]] = None,
-│           shop_domain: Optional[str] = None,
-│           field_prefix: Optional[str] = None
-│       ) -> Dict[str, Any]:
-│           """
-│           Generate filter for shop/merchant queries.
+│       class ServiceLogger:
+│           """Service logger that wraps Python's standard logger"""
 │           
-│           Args:
-│               shop_id: Shop/merchant UUID
-│               shop_domain: Shop domain (e.g., "example.myshopify.com")
-│               field_prefix: Field prefix for nested relations (e.g., "merchant" -> "merchantId")
+│           def __init__(self, service_name: str):
+│               self.service_name = service_name
+│               self.logger = logging.getLogger(service_name)
+│               self._request_context: Dict[str, Any] = {}
 │               
-│           Returns:
-│               Filter dictionary for Prisma where clause
-│               
-│           Example:
-│               # Filter by shop_id
-│               products = await db.product.find_many(
-│                   where=shop_filter(shop_id="123e4567-e89b-12d3-a456-426614174000")
-│               )
-│               
-│               # Filter by domain
-│               products = await db.product.find_many(
-│                   where=shop_filter(shop_domain="example.myshopify.com")
-│               )
-│               
-│               # Filter nested relation
-│               orders = await db.order.find_many(
-│                   where=shop_filter(
-│                       shop_id=shop_id,
-│                       field_prefix="merchant"
+│               # Only add handler if root logger has no handlers
+│               # This prevents duplicate handlers in reload
+│               if not logging.root.handlers:
+│                   handler = logging.StreamHandler(sys.stdout)
+│                   formatter = logging.Formatter(
+│                       '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+│                       datefmt='%Y-%m-%d %H:%M:%S'
 │                   )
-│               )
-│               # This generates: {"merchantId": shop_id}
-│           """
-│           if not shop_id and not shop_domain:
-│               return {}
+│                   handler.setFormatter(formatter)
+│                   logging.root.addHandler(handler)
+│                   logging.root.setLevel(logging.INFO)
 │           
-│           # Determine field names
-│           id_field = f"{field_prefix}Id" if field_prefix else "shopId"
-│           domain_field = f"{field_prefix}Domain" if field_prefix else "shopDomain"
+│           def set_request_context(self, **kwargs):
+│               """Set request-scoped context"""
+│               self._request_context = kwargs
 │           
-│           # Alternative common field names
-│           if field_prefix:
-│               # Already has prefix, use it as is
-│               pass
-│           else:
-│               # Try to auto-detect common field names
-│               # You can customize this based on your schema conventions
-│               id_field_alternatives = ["shopId", "merchantId"]
-│               domain_field_alternatives = ["shopDomain", "merchantDomain"]
+│           def clear_request_context(self):
+│               """Clear request context"""
+│               self._request_context = {}
 │           
-│           filters = {}
+│           def _add_context(self, extra: Dict = None) -> Dict:
+│               """Add request context to extra fields"""
+│               combined = self._request_context.copy()
+│               if extra:
+│                   combined.update(extra)
+│               return combined if combined else None
 │           
-│           if shop_id:
-│               filters[id_field] = str(shop_id)
+│           def info(self, msg, *args, **kwargs):
+│               extra = kwargs.pop('extra', None)
+│               self.logger.info(msg, *args, extra=self._add_context(extra), **kwargs)
 │           
-│           if shop_domain:
-│               filters[domain_field] = shop_domain
+│           def error(self, msg, *args, **kwargs):
+│               extra = kwargs.pop('extra', None)
+│               self.logger.error(msg, *args, extra=self._add_context(extra), **kwargs)
 │           
-│           # If both are provided, use AND logic
-│           if shop_id and shop_domain:
-│               return {"AND": [
-│                   {id_field: str(shop_id)},
-│                   {domain_field: shop_domain}
-│               ]}
+│           def warning(self, msg, *args, **kwargs):
+│               extra = kwargs.pop('extra', None)
+│               self.logger.warning(msg, *args, extra=self._add_context(extra), **kwargs)
 │           
-│           return filters
+│           def debug(self, msg, *args, **kwargs):
+│               extra = kwargs.pop('extra', None)
+│               self.logger.debug(msg, *args, extra=self._add_context(extra), **kwargs)
+│           
+│           def critical(self, msg, *args, **kwargs):
+│               extra = kwargs.pop('extra', None)
+│               self.logger.critical(msg, *args, extra=self._add_context(extra), **kwargs)
 │       
-│       
-│       def merchant_filter(
-│           merchant_id: Optional[Union[str, UUID]] = None,
-│           merchant_domain: Optional[str] = None
-│       ) -> Dict[str, Any]:
-│           """
-│           Alias for shop_filter using merchant terminology.
-│           
-│           Args:
-│               merchant_id: Merchant UUID
-│               merchant_domain: Merchant domain
-│               
-│           Returns:
-│               Filter dictionary with merchantId/merchantDomain fields
-│               
-│           Example:
-│               products = await db.product.find_many(
-│                   where=merchant_filter(merchant_id=merchant_id)
-│               )
-│           """
-│           filters = {}
-│           
-│           if merchant_id:
-│               filters["merchantId"] = str(merchant_id)
-│           
-│           if merchant_domain:
-│               filters["merchantDomain"] = merchant_domain
-│           
-│           if merchant_id and merchant_domain:
-│               return {"AND": [
-│                   {"merchantId": str(merchant_id)},
-│                   {"merchantDomain": merchant_domain}
-│               ]}
-│           
-│           return filters
-│       
-│       
-│       def soft_delete_filter(
-│           include_deleted: bool = False,
-│           table_alias: Optional[str] = None
-│       ) -> Dict[str, Any]:
-│           """
-│           Generate filter for soft-deleted records.
-│           
-│           Args:
-│               include_deleted: Whether to include soft-deleted records
-│               table_alias: Optional table alias for nested queries
-│               
-│           Returns:
-│               Filter dictionary for Prisma where clause
-│               
-│           Example:
-│               # Exclude soft-deleted records (default)
-│               products = await db.product.find_many(
-│                   where=soft_delete_filter()
-│               )
-│               
-│               # Include soft-deleted records
-│               all_products = await db.product.find_many(
-│                   where=soft_delete_filter(include_deleted=True)
-│               )
-│           """
-│           if include_deleted:
-│               return {}
-│           
-│           base_filter = {"isDeleted": False}
-│           
-│           if table_alias:
-│               return {table_alias: base_filter}
-│           
-│           return base_filter
-│       
-│       
-│       def pagination_args(
-│           page: int = 1,
-│           limit: int = 50,
-│           max_limit: int = 1000
-│       ) -> Dict[str, int]:
-│           """
-│           Generate pagination arguments for Prisma queries.
-│           
-│           Args:
-│               page: Page number (1-based)
-│               limit: Items per page
-│               max_limit: Maximum allowed items per page
-│               
-│           Returns:
-│               Dictionary with 'skip' and 'take' for Prisma
-│               
-│           Example:
-│               products = await db.product.find_many(
-│                   **pagination_args(page=2, limit=20)
-│               )
-│           """
-│           # Ensure valid page
-│           page = max(1, page)
-│           
-│           # Ensure limit is within bounds
-│           limit = min(max(1, limit), max_limit)
-│           
-│           return {
-│               "skip": (page - 1) * limit,
-│               "take": limit
-│           }
-│       
-│       
-│       class OrderDirection(str, Enum):
-│           """Order direction for sorting."""
-│           ASC = "asc"
-│           DESC = "desc"
-│       
-│       
-│       def parse_order_by(
-│           order_by: Optional[str] = None,
-│           allowed_fields: Optional[List[str]] = None,
-│           default_field: str = "createdAt",
-│           default_direction: OrderDirection = OrderDirection.DESC
-│       ) -> List[Dict[str, str]]:
-│           """
-│           Parse order_by string into Prisma orderBy format.
-│           
-│           Args:
-│               order_by: Comma-separated fields with optional direction (e.g., "name,-createdAt")
-│               allowed_fields: List of allowed field names (None allows all)
-│               default_field: Default field to sort by
-│               default_direction: Default sort direction
-│               
-│           Returns:
-│               List of orderBy dictionaries for Prisma
-│               
-│           Example:
-│               # Sort by name ascending, then createdAt descending
-│               products = await db.product.find_many(
-│                   order_by=parse_order_by("name,-createdAt")
-│               )
-│               
-│               # With field restrictions
-│               products = await db.product.find_many(
-│                   order_by=parse_order_by(
-│                       "name,-price",
-│                       allowed_fields=["name", "price", "createdAt"]
-│                   )
-│               )
-│           """
-│           if not order_by:
-│               return [{default_field: default_direction.value}]
-│           
-│           order_list = []
-│           
-│           for field_spec in order_by.split(","):
-│               field_spec = field_spec.strip()
-│               if not field_spec:
-│                   continue
-│                   
-│               # Check for descending prefix
-│               if field_spec.startswith("-"):
-│                   field = field_spec[1:]
-│                   direction = OrderDirection.DESC
-│               else:
-│                   field = field_spec
-│                   direction = OrderDirection.ASC
-│               
-│               # Validate field if restrictions are set
-│               if allowed_fields and field not in allowed_fields:
-│                   continue
-│                   
-│               order_list.append({field: direction.value})
-│           
-│           # Use default if no valid fields
-│           if not order_list:
-│               return [{default_field: default_direction.value}]
-│           
-│           return order_list
-│       
-│       
-│       # Optional: Add more helpers as needed
-│       def build_search_filter(
-│           search_term: Optional[str],
-│           search_fields: List[str],
-│           mode: str = "insensitive"
-│       ) -> Dict[str, Any]:
-│           """
-│           Build a search filter for multiple fields.
-│           
-│           Args:
-│               search_term: The search term
-│               search_fields: List of fields to search in
-│               mode: Prisma search mode ('insensitive' or 'default')
-│               
-│           Returns:
-│               OR filter for Prisma where clause
-│               
-│           Example:
-│               # Search in multiple fields
-│               products = await db.product.find_many(
-│                   where=build_search_filter(
-│                       "shirt",
-│                       ["name", "description", "sku"]
-│                   )
-│               )
-│           """
-│           if not search_term or not search_fields:
-│               return {}
-│           
-│           return {
-│               "OR": [
-│                   {field: {"contains": search_term, "mode": mode}}
-│                   for field in search_fields
-│               ]
-│           }
-│       
-│       
-│       def combine_filters(*filters: Dict[str, Any]) -> Dict[str, Any]:
-│           """
-│           Combine multiple filter dictionaries with AND logic.
-│           
-│           Args:
-│               *filters: Variable number of filter dictionaries
-│               
-│           Returns:
-│               Combined filter dictionary
-│               
-│           Example:
-│               products = await db.product.find_many(
-│                   where=combine_filters(
-│                       {"merchantId": merchant_id},
-│                       soft_delete_filter(),
-│                       build_search_filter(search, ["name", "sku"])
-│                   )
-│               )
-│           """
-│           # Remove empty filters
-│           valid_filters = [f for f in filters if f]
-│           
-│           if not valid_filters:
-│               return {}
-│           
-│           if len(valid_filters) == 1:
-│               return valid_filters[0]
-│           
-│           return {"AND": valid_filters}
-│       
-│       
-│       # ============ USAGE EXAMPLES ============
-│       """
-│       Common usage patterns for filtering:
-│       
-│       1. Filter products by shop:
-│       ```python
-│       # Using shop_filter
-│       products = await db.product.find_many(
-│           where=combine_filters(
-│               shop_filter(shop_id=shop_id),
-│               soft_delete_filter()
-│           )
-│       )
-│       
-│       # Using merchant_filter (same result, different field names)
-│       products = await db.product.find_many(
-│           where=combine_filters(
-│               merchant_filter(merchant_id=merchant_id),
-│               soft_delete_filter()
-│           )
-│       )
-│       ```
-│       
-│       2. Filter with pagination and search:
-│       ```python
-│       products = await db.product.find_many(
-│           where=combine_filters(
-│               merchant_filter(merchant_id=merchant_id, merchant_domain=domain),
-│               soft_delete_filter(),
-│               build_search_filter(search_term, ["name", "description", "sku"])
-│           ),
-│           order_by=parse_order_by("-updatedAt,name"),
-│           **pagination_args(page=2, limit=20)
-│       )
-│       ```
-│       
-│       3. Filter nested relations:
-│       ```python
-│       # If your schema has orders with a merchant relation
-│       orders = await db.order.find_many(
-│           where={
-│               "merchant": merchant_filter(merchant_id=merchant_id)
-│           },
-│           include={"merchant": True}
-│       )
-│       ```
-│       """
+│       def create_logger(service_name: str) -> ServiceLogger:
+│           return ServiceLogger(service_name)
 │       ```
 │       
 └── __init__.py
@@ -2430,6 +2433,7 @@ name = "shared"
 version = "0.1.0"
 description = "Shared utilities for GLAM system services"
 authors = ["GLAM Team <team@glam.com>"]
+package-mode = true
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -2441,7 +2445,6 @@ pydantic-settings = "^2.10.1"
 asyncio = "^3.4.3"
 python-dotenv = "^1.1.1"
 uuid7 = "^0.1.0"
-prisma = "^0.15.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

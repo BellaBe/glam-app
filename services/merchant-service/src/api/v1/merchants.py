@@ -1,6 +1,7 @@
 # services/merchant-service/src/api/v1/merchants.py
 from fastapi import APIRouter, status, HTTPException
 from shared.api import ApiResponse, success_response
+from shared.api.validation import validate_shop_context
 from shared.api.dependencies import (
     RequestContextDep, 
     ClientAuthDep, 
@@ -26,69 +27,15 @@ async def sync_merchant(
     ctx: RequestContextDep,
     client_auth: ClientAuthDep,
     platform_ctx: PlatformContextDep,
-    logger: LoggerDep,  # ✅ Logger automatically has request context
+    logger: LoggerDep,
 ):
     """Sync merchant after OAuth completion."""
-    
-    # Security validations
-    if client_auth.shop != platform_ctx.domain:
-        logger.warning(
-            "Shop domain mismatch between JWT and headers",
-            extra={
-                "jwt_shop": client_auth.shop,
-                "header_domain": platform_ctx.domain
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "SHOP_DOMAIN_MISMATCH",
-                "message": "Shop domain mismatch between JWT and headers",
-                "details": {
-                    "jwt_shop": client_auth.shop,
-                    "header_domain": platform_ctx.domain
-                }
-            }
-        )
-    
-    if body.platform_domain.lower() != platform_ctx.domain.lower():
-        logger.warning(
-            "Domain mismatch between request body and header",
-            extra={
-                "body_domain": body.platform_domain,
-                "header_domain": platform_ctx.domain
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "BODY_DOMAIN_MISMATCH", 
-                "message": "Shop domain mismatch between request body and header",
-                "details": {
-                    "body_domain": body.platform_domain,
-                    "header_domain": platform_ctx.domain
-                }
-            }
-        )
-    
-    if body.platform_name.lower() != platform_ctx.platform.lower():
-        logger.warning(
-            "Platform mismatch between request body and header",
-            extra={
-                "body_platform": body.platform_name,
-                "header_platform": platform_ctx.platform
-            }
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "PLATFORM_MISMATCH",
-                "message": "Platform mismatch between request body and header", 
-                "details": {
-                    "body_platform": body.platform_name,
-                    "header_platform": platform_ctx.platform
-                }
-            }
+    validate_shop_context(
+            client_auth=client_auth,
+            platform_ctx=platform_ctx,
+            logger=logger,
+            body_platform=body.platform_name,
+            body_domain=body.platform_domain
         )
     
     logger.set_request_context(

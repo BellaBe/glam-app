@@ -214,7 +214,7 @@ class ForbiddenError(DomainError):
             self.details["resource"] = resource
 
 
-class RateLimitedError(DomainError):
+class RateLimitExceededError(DomainError):
     """Too many requests."""
 
     code = "RATE_LIMITED"

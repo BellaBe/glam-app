@@ -1,32 +1,39 @@
 # services/webhook-service/src/api/v1/webhooks.py
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter
 import json
 
-from shared.api.dependencies import RequestContextDep, InternalJwtDep, ShopifyHeadersDep
+from shared.api.dependencies import (
+    RequestContextDep, 
+    ClientAuthDep, 
+    PlatformContextDep,
+    WebhookHeadersDep,
+    LoggerDep
+)
+from shared.api.validation import validate_shop_context
 from ...dependencies import WebhookServiceDep
 from ...models import WebhookPlatform, parse_topic
-from ...exceptions import PayloadTooLargeError, MalformedPayloadError, DomainMismatchError, InvalidContentTypeError
+from ...exceptions import PayloadTooLargeError, MalformedPayloadError, InvalidContentTypeError
 from ...schemas.webhooks import WebhookResponse
 
 
-router = APIRouter(prefix="/webhooks")
+webhooks_router = APIRouter(prefix="/webhooks")
 
-@router.post("/shopify", response_model=WebhookResponse)
+@webhooks_router.post("/shopify", response_model=WebhookResponse)
 async def receive_shopify_webhook(
+    body: bytes,
     svc: WebhookServiceDep,
     ctx: RequestContextDep,
-    auth: InternalJwtDep,
-    headers: ShopifyHeadersDep,
-    body: bytes = Body(...),
+    client_auth: ClientAuthDep,
+    platform_ctx: PlatformContextDep,
+    webhook: WebhookHeadersDep,
+    logger: LoggerDep,
 ) -> WebhookResponse:
-    """
-    Receive webhook from Shopify BFF.
-    """
+    """Receive webhook from Shopify BFF."""
     
+    # Validate content type
     ct = (ctx.content_type or "").lower()
     if "application/json" not in ct:
         raise InvalidContentTypeError(ct)
-    
     
     # Check payload size
     if len(body) > 2097152:  # 2MB limit
@@ -38,38 +45,42 @@ async def receive_shopify_webhook(
     except Exception:
         raise MalformedPayloadError()
     
-    # Extract headers
-    shop_domain = headers.shop_domain
-    topic = parse_topic(headers.topic_raw)
-    webhook_id = headers.webhook_id
+    # ✨ Single validation call handles everything
+    validate_shop_context(
+        client_auth=client_auth,
+        platform_ctx=platform_ctx,
+        logger=logger,
+        expected_platform="shopify",  # This is a Shopify-only endpoint
+        expected_scope="bff:call",    # Required scope
+        webhook_payload=payload       # Validate payload domain
+    )
     
-    # Validate shop domain matches JWT
-    if auth.shop != shop_domain:
-        raise DomainMismatchError(
-            header_domain=shop_domain,
-            jwt_domain=auth.shop
-        )
+    # Set logger context
+    logger.set_request_context(
+        platform=platform_ctx.platform,
+        domain=platform_ctx.domain,
+        webhook_topic=webhook.topic,
+        webhook_id=webhook.webhook_id
+    )
     
-    # Validate scope
-    if auth.scope != "bff:call":
-        raise HTTPException(
-            status_code=403,
-            detail=f"Invalid JWT scope: {auth.scope}. Expected: bff:call"
-        )
-    
-    payload_domain = (payload.get("myshopify_domain") or payload.get("domain") or "").lower()
-    if payload_domain and payload_domain != shop_domain:
-        raise DomainMismatchError(header_domain=shop_domain, payload_domain=payload_domain)
-
+    logger.info(
+        "Received Shopify webhook",
+        extra={
+            "correlation_id": ctx.correlation_id,
+            "payload_size": len(body)
+        }
+    )
     
     # Process the webhook
     entry_id = await svc.receive_webhook(
         platform=WebhookPlatform.SHOPIFY,
-        topic=topic,
-        shop_domain=shop_domain,
-        webhook_id=webhook_id,  # type: ignore
+        topic=parse_topic(webhook.topic),
+        shop_domain=platform_ctx.domain,
+        webhook_id=webhook.webhook_id,
         payload=payload,
         correlation_id=ctx.correlation_id,
     )
+    
+    logger.info("Webhook processed successfully")
     
     return WebhookResponse(success=True, webhook_id=entry_id)

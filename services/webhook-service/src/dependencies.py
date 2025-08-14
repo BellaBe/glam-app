@@ -1,13 +1,10 @@
 from typing import Annotated
 from fastapi import Depends, Request, HTTPException, status
-from shared.api.dependencies import ( RequestContextDep, ShopifyHeadersDep)
 from .lifecycle import ServiceLifecycle
 from .config import ServiceConfig
 from .services import WebhookService
 
 __all__ = [
-    "RequestContextDep",
-    "ShopifyHeadersDep",
     "LifecycleDep",
     "ConfigDep",
     "WebhookServiceDep",

@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from shared.api import setup_middleware
+from shared.api import setup_middleware, setup_debug_handlers, setup_debug_middleware
 from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
+
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
 from .api import api_router
-from shared.api import setup_debug_handlers, setup_debug_middleware
 
 # Global singletons
 config = get_service_config()
@@ -51,12 +51,7 @@ def create_application() -> FastAPI:
         setup_debug_handlers(app)
         setup_debug_middleware(app)
     
-    setup_middleware(
-        app,
-        service_name=config.service_name,
-        enable_metrics=config.monitoring_metrics_enabled,
-        metrics_path="/metrics"
-    )
+    setup_middleware(app, service_name=config.service_name)
     
     # Include routers
     app.include_router(create_health_router(config.service_name))

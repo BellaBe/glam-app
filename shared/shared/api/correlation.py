@@ -17,7 +17,6 @@ _correlation_context: ContextVar[Optional[str]] = ContextVar(
     "correlation_id", default=None
 )
 
-
 def get_correlation_id(request: Request) -> str:
     """
     Get or generate correlation ID for the current request.

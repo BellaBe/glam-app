@@ -15,8 +15,6 @@ from .correlation import get_correlation_id
 if TYPE_CHECKING:
     from shared.utils.logger import ServiceLogger
 
-
-
 # =========================
 # Pagination
 # =========================
@@ -351,69 +349,49 @@ InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
 # =========================
 
 class WebhookHeaders(BaseModel):
-    """Generic webhook headers that work across platforms."""
-    platform: str
+    """Pure webhook metadata - platform-agnostic."""
     topic: str
-    shop_domain: str
     webhook_id: Optional[str] = None
     
     @property
-    def is_shopify_webhook(self) -> bool:
-        return self.platform == "shopify"
+    def event_type(self) -> str:
+        """Normalized event type from topic."""
+        # e.g., "orders/create" -> "order.created"
+        return self.topic.replace("/", ".").replace("_", ".")
 
 
 def get_webhook_headers(request: Request) -> WebhookHeaders:
     """
-    Extract webhook headers that work across different platforms.
-    
-    Expected headers:
-    - X-Webhook-Platform: The platform sending the webhook
-    - X-Webhook-Topic: The webhook event type
-    - X-Shop-Domain: The shop domain 
-    - X-Webhook-Id: Optional webhook identifier
+    Extract webhook-specific headers only.
+    Platform/domain handled by PlatformContext.
     """
-    headers = request.headers
-    
-    platform = headers.get("X-Webhook-Platform")
-    topic = headers.get("X-Webhook-Topic")  
-    shop_domain = headers.get("X-Shop-Domain")
-    webhook_id = headers.get("X-Webhook-Id")
-    
-    # Check for missing required headers
-    missing = []
-    if not platform:
-        missing.append("X-Webhook-Platform")
+    topic = request.headers.get("X-Webhook-Topic")
     if not topic:
-        missing.append("X-Webhook-Topic")
-    if not shop_domain:
-        missing.append("X-Shop-Domain")
-    
-    if missing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
-                "code": "MISSING_WEBHOOK_HEADERS",
-                "message": f"Missing required webhook headers: {', '.join(missing)}",
-                "details": {"missing_headers": missing}
+                "code": "MISSING_WEBHOOK_TOPIC",
+                "message": "Missing required webhook topic header",
+                "details": {"expected_header": "X-Webhook-Topic"}
             }
         )
     
-    # Validate platform and domain
-    platform_norm = _validate_platform(platform) # type: ignore
-    domain_norm = _validate_domain(shop_domain) # type: ignore
+    if len(topic) > 256:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Webhook-Topic too long (max 256 characters)"
+        )
     
-    # Basic validation for header sizes
-    if len(topic) > 256: # type: ignore
-        raise HTTPException(status_code=400, detail="X-Webhook-Topic too long")
+    webhook_id = request.headers.get("X-Webhook-Id")
     if webhook_id and len(webhook_id) > 256:
-        raise HTTPException(status_code=400, detail="X-Webhook-Id too long")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Webhook-Id too long (max 256 characters)"
+        )
     
     return WebhookHeaders(
-        platform=platform_norm,
-        topic=topic, # type: ignore
-        shop_domain=domain_norm,
+        topic=topic,
         webhook_id=webhook_id
     )
-
 
 WebhookHeadersDep = Annotated[WebhookHeaders, Depends(get_webhook_headers)]

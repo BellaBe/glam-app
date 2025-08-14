@@ -1,8 +1,7 @@
+# services/webhook-service/src/api/__init__.py
 from fastapi import APIRouter
-from .v1 import webhooks
+from .v1 import v1_router
 
+api_router = APIRouter(prefix="/api")
 
-router = APIRouter(prefix="/api")
-
-# Include v1 routers
-router.include_router(webhooks.router, tags=["webhooks"])
+api_router.include_router(v1_router, tags=["v1"])   

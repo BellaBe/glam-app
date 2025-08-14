@@ -21,8 +21,6 @@ rate_limiting:
   enabled: True
   window_seconds: 60
 
-environment: development
-
 logging:
   level: DEBUG
   format: json

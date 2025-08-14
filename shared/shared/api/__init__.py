@@ -30,6 +30,19 @@ from .dependencies import (
     # FastAPI dependencies
     PaginationDep,
     RequestContextDep, 
+    WebhookHeadersDep,
+    LoggerDep,
+    ClientIpDep,
+    RequestIdDep,
+    ContentTypeDep,
+    CorrelationIdDep,
+    RequestContextDep,
+    PlatformContextDep,
+    ShopDomainDep,
+    ShopPlatformDep,
+    ClientAuthContext,
+    InternalAuthDep,
+    WebhookHeadersDep  
 )
 
 from .middleware import (
@@ -54,6 +67,16 @@ from .debug import (
     setup_debug_handlers,
 )
 
+from .health import (
+    # Health check utilities
+    create_health_router,
+)
+
+from .validation import (
+    # Validation utilities
+    validate_shop_context
+)
+
 __all__ = [
     # Models
     "ApiResponse",
@@ -71,6 +94,22 @@ __all__ = [
     # Dependencies
     "PaginationDep",
     "RequestContextDep",
+    "LoggerDep",
+    "ClientIpDep",
+    "RequestIdDep",
+    "ContentTypeDep",
+    "CorrelationIdDep",
+    "RequestContextDep",
+    "PlatformContextDep",
+    "ShopDomainDep",
+    "ShopPlatformDep",
+    "ClientAuthContext",
+    "InternalAuthDep",
+    "WebhookHeadersDep",
+    
+    # Debugging
+    "setup_debug_middleware",
+    "setup_debug_handlers", 
     
     # Correlation
     "get_correlation_id",
@@ -83,4 +122,10 @@ __all__ = [
     # Middleware
     "APIMiddleware",
     "setup_middleware",
+    
+    # Health checks
+    "create_health_router",
+    
+    # Validation
+    "validate_shop_context"
 ]

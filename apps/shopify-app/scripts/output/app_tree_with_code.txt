@@ -1,5 +1,5 @@
 ================================================================================
-Directory Structure: /home/bellabe/glam-legacy/Shopify-App/app
+Directory Structure: /home/bellabe/glam-app/apps/shopify-app/app
 ================================================================================
 
 app/
@@ -32,7 +32,7 @@ routes/
 ├── selfie.register.jsx
 ├── selfie.remove.jsx
 ├── sort.analysis.jsx
-└── webhooks.relay.tsx
+└── webhooks.relay.jsx
 db.server.js
 entry.server.jsx
 query.js
@@ -620,158 +620,158 @@ export default function SubscriptionStatus({ subscription, onStartTrial, onViewP
 ────────────────────────────────────────────────────────────
 
 ```js
-const API_BASE_URL = process.env.GLAM_API_URL
-const API_KEY = process.env.GLAM_API_KEY;
+// apps/shopify-bff/app/lib/apiClient.js
+import jwt from "jsonwebtoken";
 
-class ApiClient {
-  constructor() {
-    this.baseURL = API_BASE_URL;
-    this.apiKey = API_KEY;
-    this.api_version = 'api/v1';
-    console.log("[API Client] Initialized with base URL:", this.baseURL, "and API key:", this.apiKey, "api version:", this.api_version);
-    
-  }
+const svc = {
+  merchant:  process.env.MERCHANT_URL,   // e.g. http://merchant-service:8000/
+  catalog:   process.env.CATALOG_URL,    // e.g. http://catalog-service:8000/
+  credits:   process.env.CREDITS_URL,
+  analytics: process.env.ANALYTICS_URL,
+  webhook:   process.env.WEBHOOK_URL,    // e.g. http://localhost:8010/  (base only)
+  billing:   process.env.BILLING_URL,    // e.g. http://localhost:8004/  (base only)
+};
 
-  async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${this.api_version}${endpoint}`;
-
-    const config = {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-        'X-Shop-Domain': options.shop || '',
-        ...options.headers,
-      },
-    };
-
-    try {
-      const response = await fetch(url, config);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || `API Error: ${response.status}`);
-      }
-
-      return {
-        data: data.data || data,
-        error: null,
-        meta: data.meta || {},
-        pagination: data.pagination || null,
-        links: data.links || {}
-      };
-    } catch (error) {
-      console.error(`API Request Failed: ${endpoint}`, error);
-      return {
-        data: null,
-        error: {
-          message: error.message,
-          status: error.status || 500
-        },
-        meta: {},
-        pagination: null,
-        links: {}
-      };
-    }
-  }
-  
-  async syncShop(shop) {
-    return this.request('/merchants/sync', {
-      method: 'POST',
-      shop,
-      body: JSON.stringify({ shop })
-    });
-  }
-
-  // Merchant endpoints
-  async startTrial(shop) {
-    return this.request('/merchants/trial', {
-      method: 'POST',
-      shop,
-      body: JSON.stringify({ shop })
-    });
-  }
-
-  async createSubscription(shop, plan, chargeId) {
-    return this.request('/merchants/subscription', {
-      method: 'POST',
-      shop,
-      body: JSON.stringify({ shop, plan, charge_id: chargeId })
-    });
-  }
-
-  async getMerchantStatus(shop) {
-    return this.request(`/merchants/status?shop=${shop}`, {
-      method: 'GET',
-      shop
-    });
-  }
-
-  // Catalog endpoints
-  async syncCatalog(shop) {
-    return this.request('/catalog/sync', {
-      method: 'POST',
-      shop,
-      body: JSON.stringify({ shop })
-    });
-  }
-
-  async getCatalogStatus(shop) {
-    return this.request(`/catalog/status?shop=${shop}`, {
-      method: 'GET',
-      shop
-    });
-  }
-
-  // Credits endpoints
-  async getCreditsStatus(shop) {
-    return this.request(`/api/credits/status?shop=${shop}`, {
-      method: 'GET',
-      shop
-    });
-  }
-
-  // Analytics endpoints
-  async getAnalytics(shop, from, to) {
-    return this.request(`/api/analysis/overview?shop=${shop}&from=${from}&to=${to}`, {
-      method: 'GET',
-      shop
-    });
-  }
-  // Add this method to the ApiClient class in apiClient.js
-
-  // Support endpoints
-  async submitSupportTicket(ticketData) {
-    return this.request('/api/support/ticket', {
-      method: 'POST',
-      shop: ticketData.shop,
-      body: JSON.stringify({
-        subject: ticketData.subject,
-        category: ticketData.category,
-        priority: ticketData.priority,
-        message: ticketData.message,
-        email: ticketData.email,
-        shop: ticketData.shop
-      })
-    });
-  }
-
-  async getSupportTickets(shop) {
-    return this.request(`/api/support/tickets?shop=${shop}`, {
-      method: 'GET',
-      shop
-    });
-  }
-
-  async getSystemStatus() {
-    return this.request('/api/system/status', {
-      method: 'GET'
-    });
-  }
+function signJwt(shop) {
+  const token = jwt.sign(
+    { 
+      sub: shop, 
+      scope: "bff:api:access", 
+      iat: Math.floor(Date.now() / 1000),
+      platform: "shopify"
+    },
+    process.env.CLIENT_JWT_SECRET,
+    { expiresIn: "180s", algorithm: "HS256" },
+  );
+  if (!token) throw new Error("Failed to create client JWT");
+  return token;
 }
 
+function addApiHeaders(shop) {
+  const token = signJwt(shop);
+  
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-Shop-Platform": "shopify",
+    "X-Shop-Domain": shop,
+  };
+}
 
-export default new ApiClient();
+function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
+  const token = signJwt(shop);
+  
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "X-Shop-Platform": "shopify", 
+    "X-Shop-Domain": shop,
+    "X-Webhook-Platform": "shopify",
+  };
+  
+  if (topic) {
+    headers["X-Webhook-Topic"] = topic;
+  }
+  
+  if (webhookId) {
+    headers["X-Webhook-Id"] = webhookId;
+    // Keep Shopify-specific for backward compatibility if needed
+    headers["X-Shopify-Webhook-Id"] = webhookId;
+  }
+  
+  return headers;
+}
+
+function buildUrl(base, path) {
+  if (!base) throw new Error("API base URL not set");
+  const baseNorm = base.endsWith("/") ? base : base + "/";
+  const pathNorm = path.startsWith("/") ? path : "/" + path;
+  return `${baseNorm}api/v1${pathNorm}`;
+}
+
+async function callAndForget(base, path, { method = "GET", shop, body, webhookId, topic } = {}) {
+  const url = buildUrl(base, path);
+  const headers = addWebhookHeaders(shop, { webhookId, topic });
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 1500); // don't hang; we're not awaiting
+  
+  fetch(url, {
+    method,
+    signal: controller.signal,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch((e) => console.error(`[API call ${method} ${url}] failed:`, e?.message || e));
+}
+
+async function call(base, path, { method = "GET", shop, body } = {}) {
+  const url = buildUrl(base, path);
+  const res = await fetch(url, {
+    method,
+    headers: addApiHeaders(shop),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const errorMsg = json?.error?.message || json?.detail?.message || `API ${res.status}`;
+    throw new Error(errorMsg);
+  }
+  
+  return json?.data ?? json;
+}
+
+export default {
+  // Merchant
+  syncShop: (payload) =>
+    call(svc.merchant, "/merchants/sync", {
+      method: "POST",
+      shop: payload.platform_domain,
+      body: payload,
+    }),
+  getMerchant: (shop) => call(svc.merchant, "/merchants/self", { shop }),
+
+  startTrial: (shop) =>
+    call(svc.merchant, "/billing/trial", {
+      method: "POST",
+      shop,
+      body: { shop },
+    }),
+  // Billing
+  createSubscription: (shop, plan, id) =>
+    call(svc.billing, "/billing/subscription", {
+      method: "POST",
+      shop,
+      body: { shop, plan, charge_id: id },
+    }),
+  // Catalog
+  syncCatalog: (shop) =>
+    call(svc.catalog, "/catalog/sync", {
+      method: "POST",
+      shop,
+      body: { shop },
+    }),
+
+  getCatalogStatus: (shop) =>
+    call(svc.catalog, `/catalog/status?shop=${shop}`, { shop }),
+
+  // Credits
+  getCreditsStatus: (shop) =>
+    call(svc.credits, `/credits/status?shop=${shop}`, { shop }),
+
+  // Analytics
+  getAnalytics: (shop, from, to) =>
+    call(svc.analytics, `/analysis/overview?shop=${shop}&from=${from}&to=${to}`, { shop }),
+
+  // Webhooks (fire-and-forget)
+  relayShopifyWebhook: ({ topic, shop, payload, webhookId }) =>
+    callAndForget(svc.webhook, "/webhooks/shopify", {
+      method: "POST",
+      shop, 
+      body: payload,
+      webhookId,
+      topic,            
+    }),
+};
 ```
 
 
@@ -1021,7 +1021,7 @@ export default function Auth() {
 
 ```jsx
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import { Page, Layout, Card, Button, Text, Badge, CalloutCard, DataTable, ProgressBar, Grid, BlockStack, InlineStack, Box } from "@shopify/polaris";
+import { Page, Layout, Card, Button, Text, Badge, CalloutCard, ProgressBar, BlockStack, InlineStack, Box } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import { useState, useEffect } from "react";
@@ -1031,10 +1031,12 @@ import SubscriptionStatus from "../components/SubscriptionStatus";
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
+  
+  console.log("Loader called for shop:", shop);
 
   // Fetch data from external API
   const [merchantStatus, creditsStatus, catalogStatus, analytics] = await Promise.all([
-    apiClient.getMerchantStatus(shop),
+    apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop),
     apiClient.getCatalogStatus(shop),
     apiClient.getAnalytics(shop, 
@@ -1608,7 +1610,7 @@ export const loader = async ({ request }) => {
   const shop = session.shop;
 
   const [merchantStatus, creditsStatus] = await Promise.all([
-    apiClient.getMerchantStatus(shop),
+    apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop)
   ]);
 
@@ -2017,7 +2019,7 @@ export const loader = async ({ request }) => {
   const shop = session.shop;
 
   // Fetch merchant status for context
-  const merchantStatus = await apiClient.getMerchantStatus(shop);
+  const merchantStatus = await apiClient.getMerchant(shop);
 
   return Response.json({
     shop,
@@ -3012,35 +3014,44 @@ export const loader = async ({ request }) => {
 
 
 ────────────────────────────────────────────────────────────
-📄 routes/webhooks.relay.tsx
+📄 routes/webhooks.relay.jsx
 ────────────────────────────────────────────────────────────
 
-```tsx
-import type { ActionFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { authenticate } from "~/shopify.server";
+```jsx
 
-/**
- * One endpoint handles every topic -> relays it to your BE server.
- */
-export const action: ActionFunction = async ({ request }) => {
-    
-  const { topic, shop, payload } = await authenticate.webhook(request); // HMAC + header checks ✔️ :contentReference[oaicite:1]{index=1}
+// apps/shopify-bff/app/routes/webhooks.relay.jsx
+import { authenticate } from "../shopify.server";
+import apiClient from "../lib/apiClient";
 
-  // Fire-and-forget relay; don’t block Shopify’s 1-second handshake.
-  fetch("https://west-block-shanghai-wma.trycloudflare.com/webhooks/shopify", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Topic": topic,
-      "X-Shopify-Shop": shop,
-    },
-    body: JSON.stringify(payload),
-  }).catch(console.error); // log but never throw—Shopify already got its 200.
+export const action = async ({ request }) => {
+  const { topic, shop, payload, webhookId } = await authenticate.webhook(request);
 
-  return json({ relayed: true });           // < 10 ms response
+  console.log(`[Webhook Relay] ${topic} from ${shop}`);
+
+  try {
+    // Fire-and-forget webhook relay with proper headers
+    void apiClient.relayShopifyWebhook({
+      topic,
+      shop,
+      payload,
+      webhookId,
+    });
+
+    console.log(`[Webhook Relay] Successfully relayed ${topic} webhook`);
+  } catch (error) {
+    console.error(`[Webhook Relay] Failed to relay ${topic} webhook:`, error.message);
+    // Still return 200 to Shopify to avoid retries
+  }
+
+  return new Response(JSON.stringify({ 
+    relayed: true,
+    topic,
+    shop: shop.replace(/\.myshopify\.com$/, '***') // Mask shop name in logs
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 };
-
 ```
 
 
@@ -3412,7 +3423,6 @@ import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prism
 import prisma from "./db.server";
 import apiClient from "./lib/apiClient";
 import { GET_SHOP_INFO } from "./query";
-
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
@@ -3429,9 +3439,11 @@ const shopify = shopifyApp({
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
+
+  // Fixed afterAuth hook in shopify.server.js
   hooks: {
     afterAuth: async ({ admin, session, request }) => {
-      console.log("[SHOPIFY] After Auth:", session);
+      console.log(`[SHOPIFY] After Auth: ${session.shop}`);
 
       try {
         // Sync the shop with the external API after authentication
@@ -3441,35 +3453,97 @@ const shopify = shopifyApp({
         const shopInfoResponse = await admin.graphql(GET_SHOP_INFO);
         const shopData = await shopInfoResponse.json();
 
-        console.log("[SHOPIFY] Shop DATA:========", JSON.stringify(shopData, null, 2));
+        console.log("[SHOPIFY] Shop data fetched successfully");
 
+        // Build sync payload with correct field names
         const syncData = {
-          shop_gid: shopData.data.shop.id,
-          name: shopData.data.shop.name,
-          url: shopData.data.shop.url,
-          email: shopData.data.shop.email,
-          currencyCode: shopData.data.shop.currencyCode,   
-          primaryDomainDomain: shopData.data.shop.primaryDomain?.domain,
-          primaryDomainHost: shopData.data.shop.primaryDomain?.host,
-          plan: shopData.data.shop.plan?.displayName,
-          myshopifyDomain: shopData.data.shop.myshopifyDomain,
-          contactEmail: shopData.data.shop.contactEmail,
-          country: shopData.data.shop.billingAddress?.countryCodeV2,
-          accessToken: session.accessToken,
-          scope: session.scope,
+          platform_name: "shopify",
+          platform_id: shopData.data.shop.id,
+          platform_domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
+          shop_name: shopData.data.shop.name,
+          email: shopData.data.shop.contactEmail,
+          primary_domain_host: shopData.data.shop.primaryDomain.host,
+          currency: shopData.data.shop.currencyCode,
+          country: shopData.data.shop.billingAddress.countryCodeV2,
+          platform_version: "2025-01", // API version
+          scopes: session.scope,
         };
 
-        
+        // 1. Call sync API
         const syncResponse = await apiClient.syncShop(syncData);
-        console.log("[SHOPIFY] Sync Shop Response:", syncResponse);
-        if (syncResponse.error) {
-          console.error("[SHOPIFY] Sync Shop Error:", syncResponse.error);
-        } else {
-          console.log("[SHOPIFY] Shop synced successfully:", syncResponse.data);
+        console.log("[SHOPIFY] Sync API returned:", syncResponse);
+
+        // 2. Verify the merchant was created/updated with retry
+        console.log("[SHOPIFY] Verifying merchant creation...");
+
+        let merchant = null;
+        let attempts = 0;
+        const maxAttempts = 3;
+
+        while (!merchant && attempts < maxAttempts) {
+          attempts++;
+          console.log(
+            `[SHOPIFY] Verification attempt ${attempts}/${maxAttempts}`,
+          );
+
+          try {
+            // Use simple domain-based lookup
+            merchant = await apiClient.getMerchant(syncData.platform_domain);
+            console.log("[SHOPIFY] Merchant verified successfully!");
+            break;
+          } catch (error) {
+            if (error.status === 404 && attempts < maxAttempts) {
+              console.log(`[SHOPIFY] Merchant not found yet, waiting 500ms...`);
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } else {
+              throw error; // Re-throw if it's not a 404 or we've exhausted attempts
+            }
+          }
         }
+
+        if (!merchant) {
+          console.error("[SHOPIFY] Failed to verify merchant after sync");
+          return null; // Don't fail auth, but log the issue
+        }
+
+        console.log(
+          "[SHOPIFY] Shop sync and verification completed successfully!",
+        );
+        return { syncResponse, merchant };
       } catch (error) {
-        console.error("[SHOPIFY] Error in afterAuth hook:", error);
-        throw error;
+        // Handle fetch-style errors properly
+        console.error("[SHOPIFY] ===== SYNC ERROR DETAILS =====");
+        console.error("[SHOPIFY] Error message:", error.message);
+
+        if (error.status) {
+          // This is an API error with structured data
+          console.error("[SHOPIFY] HTTP Status:", error.status);
+          console.error("[SHOPIFY] Request URL:", error.url);
+          console.error("[SHOPIFY] Request Method:", error.method);
+          console.error(
+            "[SHOPIFY] Response Data:",
+            JSON.stringify(error.responseData, null, 2),
+          );
+          console.error(
+            "[SHOPIFY] Request Headers:",
+            JSON.stringify(error.requestHeaders, null, 2),
+          );
+
+          if (error.requestBody) {
+            console.error(
+              "[SHOPIFY] Request Body:",
+              JSON.stringify(error.requestBody, null, 2),
+            );
+          }
+        } else {
+          // This is a network/parsing error
+          console.error("[SHOPIFY] Error type: Network/Parsing error");
+          console.error("[SHOPIFY] Full error:", error);
+        }
+
+        // Don't rethrow - log the error but allow auth to continue
+        console.error("[SHOPIFY] Shop sync failed, but auth will continue");
+        return null;
       }
     },
   },

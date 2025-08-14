@@ -54,12 +54,6 @@ const shopify = shopifyApp({
           scopes: session.scope,
         };
 
-        console.log("[SHOPIFY] Sync payload prepared:", {
-          shop: syncData.platform_domain,
-          platform: syncData.platform,
-          hasAccessToken: !!syncData.access_token,
-        });
-
         // 1. Call sync API
         const syncResponse = await apiClient.syncShop(syncData);
         console.log("[SHOPIFY] Sync API returned:", syncResponse);
