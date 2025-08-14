@@ -2,55 +2,41 @@
 import os
 from functools import lru_cache
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from shared.utils.config_loader import merged_config, flatten_config
-from shared.utils.exceptions import ConfigurationError
+from shared.utils import load_root_env, ConfigurationError
 
 
 class ServiceConfig(BaseModel):
-    """Webhook service configuration - API layer for Remix BFF"""
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    # Service Identity - from webhook-service.yml
-    service_name: str = Field(..., alias="service.name")
-    service_version: str = Field(..., alias="service.version")
-    service_description: str = Field(..., alias="service.description")
-    debug: bool = Field(..., alias="service.debug")
+    """Webhook service configuration"""
+    model_config = ConfigDict(
+        extra="ignore",
+        case_sensitive=False,
+        allow_population_by_field_name=True,
+    )
     
-    # Environment - from .env
-    environment: str = Field(..., alias="APP_ENV")  # Will come from APP_ENV
+    service_name: str = "webhook-service"
+    service_version: str = "1.0.0"
+    service_description: str = "Webhook management service"
+    debug: bool = True 
     
-    # API Configuration - from webhook-service.yml
-    api_host: str = Field(..., alias="api.host")
+    environment: str = Field(..., alias="APP_ENV")
+    
+    api_host: str = "0.0.0.0"
     api_external_port: int = Field(..., alias="WEBHOOK_API_EXTERNAL_PORT")
-    api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
     
-    # Database - from webhook-service.yml + env
     database_enabled: int = Field(..., alias="WEBHOOK_DB_ENABLED")
-    database_url: str = Field(..., alias="DATABASE_URL")  # From env
+    database_url: str = Field(..., alias="DATABASE_URL")
+    
+    logging_level: str = "INFO"
+    logging_format: str = "json"
+    logging_file_path: str = ""
+    
+    body_limit_bytes: int = 2097152 # 2MB default limit
+    idempotency_ttl_seconds: int = 259200 # 72 hours default
+    max_retries: int = 10
+    retry_delay_seconds: int = 60 # Default since missing
 
-    # Logging - from webhook-service.yml (NOT shared.yml)
-    logging_level: str = Field(..., alias="logging.level")
-    logging_format: str = Field(..., alias="logging.format")
-    logging_file_path: str = Field(..., alias="logging.file_path")
+    client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
     
-    # Monitoring - from webhook-service.yml (NOT shared.yml)
-    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
-    monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
-    
-    # Rate limiting - from webhook-service.yml (NOT shared.yml)
-    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
-    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-    
-    # Webhook specific - from webhook-service.yml
-    body_limit_bytes: int = Field(..., alias="webhook.body_limit_bytes")
-    idempotency_ttl_seconds: int = Field(..., alias="webhook.idempotency_ttl_seconds")
-    max_retries: int = Field(..., alias="webhook.max_retries")
-    retry_delay_seconds: int = Field(60, alias="webhook.retry_delay_seconds")  # Default since missing
-    
-    # Internal Authentication - from env
-    internal_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
-    
-    # Computed properties
     @property
     def nats_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
@@ -81,13 +67,10 @@ class ServiceConfig(BaseModel):
 def get_service_config() -> ServiceConfig:
     """Load config - fail if anything is missing"""
     try:
-        # Load YAML + all env vars
-        cfg_dict = merged_config("webhook-service")
-        flattened = flatten_config(cfg_dict)
-        return ServiceConfig(**flattened)
+        load_root_env()
+        return ServiceConfig(**os.environ)
     
     except Exception as e:
-        print(f"❌ Configuration error: {e}")
         raise ConfigurationError(
             f"Failed to load service configuration: {e}",
             config_key="webhook-service",

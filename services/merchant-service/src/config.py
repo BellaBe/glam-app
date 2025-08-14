@@ -6,6 +6,7 @@ import os
 
 
 class ServiceConfig(BaseModel):
+    """Merchant service configuration"""
     model_config = ConfigDict(
         extra="ignore",
         case_sensitive=False,
