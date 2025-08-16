@@ -103,7 +103,7 @@ class MerchantService:
             )
             
             # Publish installed event
-            await self.publisher.publish_merchant_installed(
+            await self.publisher.publish_merchant_created(
                 correlation_id=ctx.correlation_id,
                 merchant_id=merchant.id,
                 platform_name=merchant.platform_name,

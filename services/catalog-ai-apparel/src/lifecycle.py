@@ -1,6 +1,6 @@
-# ================================================================================================
+================
 # services/catalog-analysis/src/lifecycle.py
-# ================================================================================================
+================
 from contextlib import asynccontextmanager
 from typing import Optional, List
 import asyncio

@@ -14,3 +14,8 @@ class Subjects(str, Enum):
     EMAIL_SEND_BULK_COMPLETE = "evt.email.send.bulk.complete.v1"
     EMAIL_SEND_BULK_FAILED = "evt.email.send.bulk.failed.v1"
     
+    # Billing subjects
+    BILLING_TRIAL_STARTED = "evt.billing.trial.started.v1"
+    BILLING_TRIAL_EXPIRED = "evt.billing.trial.expired.v1"
+    BILLING_CREDITS_PURCHASED = "evt.billing.credits.purchased.v1"
+    

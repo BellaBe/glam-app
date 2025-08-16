@@ -1,324 +1,165 @@
+
 from uuid import UUID
-from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from typing import Optional
+from datetime import datetime
 import redis.asyncio as redis
 from shared.utils.logger import ServiceLogger
-from shared.api.correlation import get_correlation_context
+from shared.utils.idempotency_key import generate_idempotency_key
 from ..config import ServiceConfig
-from ..repositories.billing_plan_repository import BillingPlanRepository
-from ..repositories.merchant_billing_repository import MerchantBillingRepository
-from ..repositories.merchant_trial_repository import MerchantTrialRepository
-from ..repositories.one_time_purchase_repository import OneTimePurchaseRepository
+from ..repositories.billing_repository import BillingRepository
+from ..repositories.purchase_repository import PurchaseRepository
 from ..schemas.billing import (
-    BillingPlanOut, TrialOut, EntitlementsOut, BillingStateOut,
-    PlansListOut, TrialStatus, SubscriptionStatus, EntitlementSource, EntitlementReason
+    TrialStatusOut, TrialActivatedOut, BillingStatusOut,
+    TrialStartedPayload
 )
-from ..exceptions import (
-    InvalidDomainError, InvalidPlanError, InvalidReturnUrlError,
-    TrialAlreadyUsedError, SubscriptionExistsError
-)
+from ..exceptions import MerchantNotFoundError, TrialAlreadyUsedError
+from ..events.publishers import BillingEventPublisher
+
 
 class BillingService:
-    """Business logic for billing operations"""
+    """Service for billing operations"""
     
     def __init__(
         self,
         config: ServiceConfig,
-        plan_repo: BillingPlanRepository,
-        billing_repo: MerchantBillingRepository,
-        trial_repo: MerchantTrialRepository,
-        purchase_repo: OneTimePurchaseRepository,
+        billing_repo: BillingRepository,
+        purchase_repo: PurchaseRepository,
+        publisher: BillingEventPublisher,
         redis_client: redis.Redis,
-        logger: ServiceLogger,
+        logger: ServiceLogger
     ):
         self.config = config
-        self.plan_repo = plan_repo
         self.billing_repo = billing_repo
-        self.trial_repo = trial_repo
         self.purchase_repo = purchase_repo
+        self.publisher = publisher
         self.redis = redis_client
         self.logger = logger
     
-    def normalize_shop_domain(self, domain: str) -> str:
-        """Normalize and validate shop domain"""
-        normalized = domain.lower().strip()
-        if not normalized.endswith('.myshopify.com'):
-            raise InvalidDomainError(domain)
-        return normalized
+    async def create_billing_record(self, merchant_id: UUID) -> None:
+        """Create billing record for new merchant"""
+        try:
+            existing = await self.billing_repo.find_by_merchant_id(merchant_id)
+            if existing:
+                self.logger.info(f"Billing record already exists for merchant {merchant_id}")
+                return
+            
+            await self.billing_repo.create(merchant_id)
+            self.logger.info(f"Created billing record for merchant {merchant_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create billing record: {e}")
+            raise
     
-    async def get_plans_with_trial_status(self, shop_domain: str) -> PlansListOut:
-        """Get active billing plans and trial usage status"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
+    async def get_trial_status(self, merchant_id: UUID) -> TrialStatusOut:
+        """Get trial status for merchant"""
+        record = await self.billing_repo.find_by_merchant_id(merchant_id)
+        if not record:
+            raise MerchantNotFoundError(str(merchant_id))
         
-        # Get active plans
-        plans = await self.plan_repo.find_active_plans()
+        # Determine if trial is active
+        active = (
+            not record.trial_available and
+            record.trial_started_at is not None and
+            record.trial_ends_at is not None and
+            record.trial_ends_at > datetime.utcnow()
+        )
         
-        # Check trial status
-        trial = await self.trial_repo.find_by_shop_domain(shop_domain)
-        trial_used = trial.consumed if trial else False
-        
-        return PlansListOut(plans=plans, trialUsed=trial_used)
-    
-    async def create_checkout_redirect(
-        self, 
-        shop_domain: str, 
-        plan_id: str, 
-        return_url: Optional[str] = None
-    ) -> str:
-        """Generate Shopify managed checkout URL"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
-        
-        # Validate plan exists
-        plan = await self.plan_repo.find_by_id(plan_id)
-        if not plan:
-            raise InvalidPlanError(plan_id)
-        
-        # Validate return URL if provided
-        if return_url:
-            self._validate_return_url(str(return_url))
-        
-        # Check if already subscribed to this plan
-        billing = await self.billing_repo.find_by_shop_domain(shop_domain)
-        if (billing and 
-            billing.subscriptionStatus == SubscriptionStatus.active and
-            billing.managedPlanHandle == plan.shopifyHandle):
-            raise SubscriptionExistsError(plan_id)
-        
-        # Build checkout URL
-        return self._build_checkout_url(shop_domain, plan.shopifyHandle, return_url)
-    
-    def _validate_return_url(self, url: str) -> None:
-        """Validate return URL against allowlist"""
-        parsed = urlparse(url)
-        if parsed.hostname not in self.config.allowed_return_domains:
-            raise InvalidReturnUrlError(url)
-    
-    def _build_checkout_url(
-        self, 
-        shop_domain: str, 
-        plan_handle: str, 
-        return_url: Optional[str] = None
-    ) -> str:
-        """Build Shopify managed checkout URL"""
-        base_url = self.config.shopify_managed_checkout_base
-        app_handle = self.config.app_handle
-        
-        url = f"{base_url}/{shop_domain}/apps/{app_handle}/pricing"
-        params = [f"plan={plan_handle}"]
-        
-        if return_url:
-            params.append(f"return_to={return_url}")
-        
-        return f"{url}?{'&'.join(params)}"
+        return TrialStatusOut(
+            available=record.trial_available,
+            active=active,
+            started_at=record.trial_started_at,
+            ends_at=record.trial_ends_at
+        )
     
     async def activate_trial(
-        self, 
-        shop_domain: str, 
-        days: Optional[int] = None,
-        idempotency_key: Optional[str] = None,
-        ctx: Any = None
-    ) -> TrialOut:
+        self,
+        merchant_id: UUID,
+        idempotency_key: Optional[str] = None
+    ) -> TrialActivatedOut:
         """Activate trial for merchant"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
-        days = days or self.config.default_trial_days
-        
         # Check idempotency
         if idempotency_key:
-            cached = await self._get_idempotent_response(idempotency_key)
+            cache_key = f"trial:{idempotency_key}"
+            cached = await self.redis.get(cache_key)
             if cached:
-                return cached
+                import json
+                return TrialActivatedOut(**json.loads(cached))
         
-        trial = await self.trial_repo.find_by_shop_domain(shop_domain)
+        # Get billing record
+        record = await self.billing_repo.find_by_merchant_id(merchant_id)
+        if not record:
+            raise MerchantNotFoundError(str(merchant_id))
         
-        if not trial:
-            # Create new trial
-            trial = await self.trial_repo.create(shop_domain, days)
-            response = self._format_trial_response(trial)
-            status_code = 201
-        elif trial.consumed:
-            raise TrialAlreadyUsedError(shop_domain)
-        elif trial.status == TrialStatus.active:
-            # Return existing active trial
-            response = self._format_trial_response(trial)
-            status_code = 200
-        else:
-            # Activate never_started trial
-            trial = await self.trial_repo.activate_existing(trial.id)
-            response = self._format_trial_response(trial)
-            status_code = 201
+        # Check if trial already used
+        if not record.trial_available:
+            raise TrialAlreadyUsedError(str(merchant_id))
         
-        # Cache response
+        # Activate trial
+        updated = await self.billing_repo.activate_trial(
+            merchant_id,
+            self.config.trial_duration_days
+        )
+        
+        # Publish event
+        await self.publisher.trial_started(
+            TrialStartedPayload(
+                merchant_id=merchant_id,
+                ends_at=updated.trial_ends_at,
+                credits=self.config.trial_credits
+            )
+        )
+        
+        # Create response
+        response = TrialActivatedOut(
+            success=True,
+            ends_at=updated.trial_ends_at,
+            credits_granted=self.config.trial_credits
+        )
+        
+        # Cache for idempotency
         if idempotency_key:
-            await self._set_idempotent_response(idempotency_key, response, status_code)
+            cache_key = f"trial:{idempotency_key}"
+            await self.redis.setex(
+                cache_key,
+                86400,  # 24 hours
+                response.model_dump_json()
+            )
         
         return response
     
-    async def get_current_trial(self, shop_domain: str) -> TrialOut:
-        """Get current trial status"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
+    async def get_billing_status(self, merchant_id: UUID) -> BillingStatusOut:
+        """Get overall billing status"""
+        record = await self.billing_repo.find_by_merchant_id(merchant_id)
+        if not record:
+            raise MerchantNotFoundError(str(merchant_id))
         
-        trial = await self.trial_repo.find_by_shop_domain(shop_domain)
-        if not trial:
-            return TrialOut(status=TrialStatus.never_started)
+        # Get trial status
+        trial = await self.get_trial_status(merchant_id)
         
-        return self._format_trial_response(trial)
-    
-    def _format_trial_response(self, trial) -> TrialOut:
-        """Format trial model into response DTO"""
-        remaining_days = None
-        if trial.status == TrialStatus.active and trial.endsAt:
-            remaining = (trial.endsAt - datetime.utcnow()).days
-            remaining_days = max(0, remaining)
+        # Get recent purchases
+        purchases = await self.purchase_repo.find_by_merchant(merchant_id, limit=5)
         
-        return TrialOut(
-            status=trial.status,
-            trialEndsAt=trial.endsAt,
-            remainingDays=remaining_days
+        return BillingStatusOut(
+            trial=trial,
+            credits_purchased=record.total_credits_purchased,
+            last_purchase_at=record.last_purchase_at,
+            recent_purchases=purchases
         )
     
-    async def calculate_entitlements(self, shop_domain: str) -> EntitlementsOut:
-        """Calculate merchant entitlements"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
+    async def check_expired_trials(self) -> None:
+        """Check and process expired trials (cron job)"""
+        expired_records = await self.billing_repo.find_expired_trials()
         
-        # Check cache first
-        cache_key = f"entitlements:{shop_domain}"
-        cached = await self.redis.get(cache_key)
-        if cached:
-            import json
-            return EntitlementsOut(**json.loads(cached))
-        
-        billing = await self.billing_repo.find_by_shop_domain(shop_domain)
-        trial = await self.trial_repo.find_by_shop_domain(shop_domain)
-        
-        # Check trial status
-        trial_active = False
-        if trial and trial.status == TrialStatus.active and trial.endsAt:
-            trial_active = datetime.utcnow() < trial.endsAt
-        
-        # Check subscription status
-        subscription_active = False
-        if billing and billing.subscriptionStatus == SubscriptionStatus.active:
-            if billing.currentPeriodEnd is None or datetime.utcnow() <= billing.currentPeriodEnd:
-                subscription_active = True
-        
-        # Determine source and reason
-        if subscription_active:
-            source = EntitlementSource.subscription
-            reason = None
-        elif trial_active:
-            source = EntitlementSource.trial
-            reason = None
-        else:
-            source = EntitlementSource.none
-            if trial and trial.consumed:
-                reason = EntitlementReason.trial_expired
-            elif billing and billing.subscriptionStatus == SubscriptionStatus.cancelled:
-                reason = EntitlementReason.subscription_cancelled
-            else:
-                reason = EntitlementReason.no_subscription
-        
-        result = EntitlementsOut(
-            trialActive=trial_active,
-            subscriptionActive=subscription_active,
-            entitled=subscription_active or trial_active,
-            source=source,
-            reason=reason,
-            trialEndsAt=trial.endsAt if trial else None,
-            currentPeriodEnd=billing.currentPeriodEnd if billing else None
-        )
-        
-        # Cache result
-        await self.redis.setex(
-            cache_key,
-            self.config.entitlements_cache_ttl_seconds,
-            result.model_dump_json()
-        )
-        
-        return result
-    
-    async def get_billing_state(self, shop_domain: str) -> BillingStateOut:
-        """Get complete billing state for merchant"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
-        
-        billing = await self.billing_repo.find_by_shop_domain(shop_domain)
-        trial = await self.trial_repo.find_by_shop_domain(shop_domain)
-        
-        # Get plan details if subscribed
-        plan_name = None
-        plan_id = None
-        if billing and billing.managedPlanId:
-            plan = await self.plan_repo.find_by_id(billing.managedPlanId)
-            if plan:
-                plan_name = plan.name
-                plan_id = plan.id
-        
-        # Calculate trial info
-        trial_info = {
-            "used": trial.consumed if trial else False,
-            "remainingDays": 0,
-            "endsAt": None
-        }
-        
-        if trial and trial.status == TrialStatus.active and trial.endsAt:
-            remaining = (trial.endsAt - datetime.utcnow()).days
-            trial_info["remainingDays"] = max(0, remaining)
-            trial_info["endsAt"] = trial.endsAt.isoformat()
-        
-        return BillingStateOut(
-            status=billing.subscriptionStatus if billing else SubscriptionStatus.none,
-            planId=plan_id,
-            planName=plan_name,
-            planHandle=billing.managedPlanHandle if billing else None,
-            trial=trial_info,
-            currentPeriodEnd=billing.currentPeriodEnd if billing else None,
-            lastUpdatedAt=billing.updatedAt if billing else datetime.utcnow()
-        )
-    
-    async def extend_trial(self, shop_domain: str, days: int) -> datetime:
-        """Extend trial for support purposes"""
-        shop_domain = self.normalize_shop_domain(shop_domain)
-        
-        trial = await self.trial_repo.extend_trial(shop_domain, days)
-        
-        # Clear entitlements cache
-        await self.redis.delete(f"entitlements:{shop_domain}")
-        
-        return trial.endsAt
-    
-    async def expire_trials(self) -> List[str]:
-        """Expire trials that have ended (called by scheduler)"""
-        expired_trials = await self.trial_repo.find_expired_trials()
-        expired_domains = []
-        
-        for trial in expired_trials:
-            await self.trial_repo.expire_trial(trial.id)
-            expired_domains.append(trial.shopDomain)
-            
-            # Clear entitlements cache
-            await self.redis.delete(f"entitlements:{trial.shopDomain}")
-        
-        return expired_domains
-    
-    async def _get_idempotent_response(self, key: str) -> Optional[Any]:
-        """Get cached idempotent response"""
-        cached = await self.redis.get(f"idem:{key}")
-        if cached:
-            import json
-            data = json.loads(cached)
-            if data["status"] >= 400:
-                # Re-raise the error
-                if data["error"] == "TRIAL_ALREADY_USED":
-                    raise TrialAlreadyUsedError(data.get("shop_domain", ""))
-            return TrialOut(**data["body"])
-        return None
-    
-    async def _set_idempotent_response(self, key: str, response: Any, status_code: int) -> None:
-        """Cache idempotent response"""
-        data = {
-            "status": status_code,
-            "body": response.model_dump()
-        }
-        ttl = self.config.idempotency_ttl_hours * 3600
-        await self.redis.setex(f"idem:{key}", ttl, json.dumps(data))
+        for record in expired_records:
+            try:
+                await self.publisher.trial_expired({
+                    "merchant_id": UUID(record.merchant_id),
+                    "expired_at": record.trial_ends_at
+                })
+                
+                self.logger.info(f"Published trial expired event for merchant {record.merchant_id}")
+                
+            except Exception as e:
+                self.logger.error(f"Failed to process expired trial: {e}")
+
 

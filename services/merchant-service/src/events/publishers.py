@@ -11,7 +11,7 @@ class MerchantEventPublisher(Publisher):
     def service_name(self) -> str:
         return "merchant-service"
     
-    async def publish_merchant_installed(
+    async def publish_merchant_created(
         self,
         correlation_id: str,
         merchant_id: str,
@@ -34,7 +34,7 @@ class MerchantEventPublisher(Publisher):
         )
         
         return await self.publish_event(
-            subject="evt.merchant.installed.v1",
+            subject="evt.merchant.created.v1",
             data={
                 "merchant_id": merchant_id,
                 "platform_name": platform_name,

@@ -1,6 +1,5 @@
-# ──────────────────────────────────────────────────────────────
-# 📦  Stage 1 ─ Builder
-# ──────────────────────────────────────────────────────────────
+# services/billing-service/Dockerfile
+# Stage 1 - Builder
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -12,29 +11,27 @@ RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 RUN pip install poetry
 RUN poetry config virtualenvs.create false
 
-# ---- 1️⃣  Install shared package dependencies
+# Install shared package dependencies
 COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# ---- 2️⃣  Install service dependencies  
+# Install service dependencies  
 WORKDIR /app
 COPY services/billing-service/pyproject.toml services/billing-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
 
-# ---- 3️⃣  Copy Prisma schema and generate client
+# Copy Prisma schema and generate client
 COPY services/billing-service/prisma ./prisma
 RUN prisma generate
 
-# ---- 4️⃣  Copy service code
+# Copy service code
 COPY services/billing-service /app
 
-# ---- 5️⃣  Copy config
+# Copy config
 COPY config /app/config
 
-# ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime  
-# ──────────────────────────────────────────────────────────────
+# Stage 2 - Runtime  
 FROM python:3.11-slim
 
 # Copy everything from builder
@@ -43,7 +40,7 @@ COPY --from=builder /app /app
 COPY --from=builder /shared /shared
 
 ENV PYTHONPATH="/shared:/app"
-ENV DOCKER_CONTAINER=1  # Container detection
+ENV DOCKER_CONTAINER=1
 
 WORKDIR /app
 

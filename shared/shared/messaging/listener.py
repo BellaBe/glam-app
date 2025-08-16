@@ -1,12 +1,15 @@
 # shared/messaging/js_listener.py
 """A thin, “safe” JetStream listener with JSON decode guard and error handling."""
 
+import contextlib
 import asyncio, json
 from abc import ABC, abstractmethod
+from datetime import timedelta
 from typing import Any, Dict, Optional
 
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from nats.js.errors import NotFoundError
+from nats.errors import TimeoutError as NATSTimeoutError
 
 from shared.utils.logger import ServiceLogger
 from .jetstream_client import JetStreamClient
@@ -25,6 +28,10 @@ class Listener(ABC):
     batch_size: int = 10
     ack_wait_sec: int = 30
     max_deliver: int = 3
+    _task: Optional[asyncio.Task] = None
+    _running: bool = False
+    idle_sleep_sec: float = 0.05  # avoid spin when idle
+    poll_window_sec: float = 2.0  # server-side fetch window
 
     # ---- subclasses MUST fill these --------------------------------------
     @property
@@ -59,9 +66,16 @@ class Listener(ABC):
         await self._ensure_consumer()
         await self._create_subscription()
         self.logger.info("Listening on %s", self.subject)
-        asyncio.create_task(self._poll_loop())
+        self._running = True
+        self._task = asyncio.create_task(self._poll_loop(), name=f"{self.service_name}:{self.subject}")
 
     async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
         if self._sub:
             await self._sub.unsubscribe()
 
@@ -86,7 +100,7 @@ class Listener(ABC):
                 name=self.stream_name,
                 subjects=["evt.*", "cmd.*"],
                 retention=RetentionPolicy.LIMITS,
-                max_age=24 * 60 * 60,
+                max_age=timedelta(hours=24),
                 max_msgs=1_000_000,
                 storage=StorageType.FILE,
             )
@@ -105,7 +119,7 @@ class Listener(ABC):
                 deliver_policy=DeliverPolicy.ALL,
                 ack_policy=AckPolicy.EXPLICIT,
                 max_deliver=self.max_deliver,
-                ack_wait=self.ack_wait_sec,
+                max_ack_pending= self.batch_size * 5,   # tame inflight
                 filter_subject=self.subject,
             )
             await self._js.add_consumer(self.stream_name, cfg)
@@ -118,47 +132,77 @@ class Listener(ABC):
             stream=self.stream_name,
         )
 
-    # polling loop
     async def _poll_loop(self) -> None:
-        while True:
-            if not self._sub:
-                self.logger.error("Subscription not initialized, skipping poll")
-                await asyncio.sleep(1)
-                continue
-            msgs = await self._sub.fetch(batch=10, timeout=1)
-            for m in msgs:
-                await self._safe_handle(m)
+        try:
+            while self._running:
+                if not self._sub:
+                    self.logger.error("Subscription not initialized, skipping poll")
+                    await asyncio.sleep(1)
+                    continue
+                try:
+                    msgs = await self._sub.fetch(
+                        batch=self.batch_size,
+                        timeout=self.poll_window_sec,
+                    )
+                except (NATSTimeoutError, asyncio.TimeoutError):
+                    # Normal: no messages in window
+                    await asyncio.sleep(self.idle_sleep_sec)
+                    continue
+
+                if not msgs:
+                    await asyncio.sleep(self.idle_sleep_sec)
+                    continue
+
+                for m in msgs:
+                    await self._safe_handle(m)
+
+        except asyncio.CancelledError:
+            self.logger.info("Poll loop cancelled for %s", self.subject)
+        except Exception:
+            self.logger.critical("Poll loop crashed for %s", self.subject)
+        # no finally cleanup here; stop() handles unsubscribe
 
     # safe handler
     async def _safe_handle(self, msg) -> None:
         try:
             envelope = json.loads(msg.data.decode())
         except json.JSONDecodeError:
-            self.logger.error("Bad JSON on %s", self.subject)
+            self.logger.error("Bad JSON on %s; acking (dropping)", self.subject)
             await msg.ack()
             return
 
-        # Envelope sanity
         for f in ("event_id", "event_type", "data"):
             if f not in envelope:
-                self.logger.error("Missing %s; acking", f)
+                self.logger.error("Missing %s; acking (dropping)", f)
                 await msg.ack()
                 return
-        if envelope["event_type"] != self.subject.split(".", 1)[-1]:
+
+        if envelope.get("event_type") and envelope["event_type"] != self.subject:
+            self.logger.warning("Event-type mismatch; acking (subject=%s, event_type=%s)", self.subject, envelope["event_type"])
             await msg.ack()
             return
+        
+        md = getattr(msg, "metadata", None)
+        if md and getattr(md, "num_delivered", None) is not None:
+            if md.num_delivered >= self.max_deliver:
+                self.logger.error(
+                    "Final delivery hit; dropping msg on subject %s",
+                    self.subject
+            )
 
-        # Context vars
-        # set_correlation_id(envelope.get("correlation_id")) # TODO: figure out how to get correlation_id from context
-        # set_source_service(envelope.get("source_service"))
-
-        # Business logic
         try:
             await self.on_message(envelope["data"])
             await msg.ack()
         except Exception as exc:
             should_ack = await self.on_error(exc, envelope["data"])
-            await (msg.ack() if should_ack else msg.nack())
+            try:
+                if should_ack:
+                    await msg.ack()
+                else:
+                    await msg.nak()
+            except Exception:
+                self.logger.critical("Failed to ack/nak message")
+
 
     # default hook
     async def on_error(self, error: Exception, data: dict) -> bool:

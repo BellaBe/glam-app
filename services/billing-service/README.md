@@ -1,151 +1,143 @@
 # Billing Service
 
-The Billing Service manages Shopify managed app pricing, subscription states, and free trials for the GLAM platform.
-
 ## Overview
+The Billing Service manages trials and credit pack purchases for the GlamYouUp platform. It maintains minimal billing state while delegating actual payment processing to platform providers (Shopify, Stripe, etc.).
 
-This service is the authoritative source for billing status, maintaining a clean separation between trial management and subscription management. It enables merchants to access platform features through either paid subscriptions or time-limited trials.
-
-## Key Features
-
-- **Managed Pricing Integration**: Works with Shopify's managed pricing system
-- **Trial Management**: Independent trial system with configurable duration
-- **Subscription Management**: Tracks subscription states via webhooks
-- **Event-Driven Architecture**: Publishes billing state changes for other services
-- **Idempotency Support**: Prevents duplicate operations
-- **Dual Authentication**: Separate keys for frontend vs admin operations
+## Core Responsibilities
+- Trial management and activation
+- Credit pack purchase coordination
+- Billing record maintenance
+- Event publishing for billing activities
 
 ## Architecture
-
-- **Port**: 8016 (internal), 8116 (development)
+- **Framework**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL with Prisma ORM
-- **Cache**: Redis for idempotency and entitlements
-- **Message Bus**: NATS JetStream
-- **Authentication**: Bearer token with dual-key system
+- **Cache**: Redis for idempotency
+- **Messaging**: NATS JetStream
+- **Port**: 8016 (internal), 8116 (development)
 
 ## API Endpoints
 
-### Frontend Endpoints (Bearer: BILLING_API_KEY)
+### Trials
+- `POST /api/billing/trials` - Activate trial
+- `GET /api/billing/trials` - Get trial status
 
-- `GET /api/billing/managed/plans` - Get available plans with trial status
-- `POST /api/billing/managed/redirect` - Generate Shopify checkout URL
-- `POST /api/billing/trials` - Create or activate trial
-- `GET /api/billing/trials/current` - Get current trial status
-- `GET /api/billing/entitlements/current` - Check access entitlements
-- `GET /api/billing/state` - Get complete billing state
+### Purchases
+- `POST /api/billing/purchases` - Create credit purchase
+- `GET /api/billing/purchases` - List purchases
+- `GET /api/billing/purchases/{id}` - Get single purchase
 
-### Admin Endpoints (Bearer: BILLING_ADMIN_API_KEY)
+### Billing
+- `GET /api/billing` - Get overall billing status
 
-- `POST /internal/billing/reconcile` - Force sync with Shopify
-- `POST /internal/billing/trials/extend` - Extend trial for support
+### Health
+- `GET /health` - Health check
+- `GET /metrics` - Prometheus metrics
 
 ## Events
 
 ### Published Events
-
-- `evt.billing.trial.activated` - Trial started
+- `evt.billing.trial.started` - Trial activated
 - `evt.billing.trial.expired` - Trial ended
-- `evt.billing.subscription.changed` - Any subscription change
-- `evt.billing.subscription.activated` - First activation
-- `evt.billing.subscription.cancelled` - Cancellation
-- `evt.billing.credits.grant` - One-time purchase credits
+- `evt.billing.credits.purchased` - Purchase completed
 
 ### Consumed Events
-
-- `evt.webhook.app.subscription_updated` - Shopify subscription webhooks
-- `evt.webhook.app.purchase_updated` - One-time purchase webhooks
-- `evt.webhook.app.uninstalled` - App uninstall events
+- `evt.merchant.created` - Create billing record
+- `evt.webhook.app.purchase_updated` - Process purchase webhook
 
 ## Configuration
 
-Required environment variables:
+### Credit Packs
+- **Small**: 100 credits for $9.99
+- **Medium**: 500 credits for $39.99
+- **Large**: 1000 credits for $69.99
 
-```env
-# Authentication Keys
-BILLING_API_KEY=your-frontend-key
-BILLING_ADMIN_API_KEY=your-admin-key
+### Trial Settings
+- Duration: 14 days
+- Credits: 500
 
-# Shopify Configuration
-APP_HANDLE=your-app-handle
-SHOPIFY_MANAGED_CHECKOUT_BASE=https://checkout-base-url
-ALLOWED_RETURN_DOMAINS=domain1.com,domain2.com
+## Development Setup
 
-# Trial Settings
-DEFAULT_TRIAL_DAYS=14
-TRIAL_GRACE_HOURS=0
-
-# Cache TTLs
-IDEMPOTENCY_TTL_HOURS=24
-ENTITLEMENTS_CACHE_TTL_SECONDS=30
-```
-
-## Business Rules
-
-1. **Trial Independence**: Trials are separate from subscriptions
-2. **One Trial Per Merchant**: Once consumed, trials cannot be reused
-3. **Domain Validation**: All domains must be *.myshopify.com format
-4. **Webhook Deduplication**: Uses both Redis and database for deduplication
-5. **Entitlement Sources**: Access granted via subscription OR trial
-6. **Trial Expiry**: Hourly job marks expired trials
-
-## Development
-
-### Setup
-
+1. Install dependencies:
 ```bash
-# Install dependencies
+cd services/billing-service
 poetry install
-
-# Generate Prisma client
-prisma generate
-
-# Run migrations
-prisma migrate dev
-
-# Start service
-make dev
 ```
 
-### Testing
+2. Set up environment:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+3. Run database migrations:
+```bash
+prisma migrate dev
+```
+
+4. Start the service:
+```bash
+poetry run python src/main.py
+```
+
+## Testing
 
 ```bash
-# Run tests
-make test
+# Unit tests
+poetry run pytest tests/unit -v
 
-# Run with coverage
-make test-coverage
+# Integration tests
+poetry run pytest tests/integration -v
+
+# All tests with coverage
+poetry run pytest --cov=src --cov-report=html
 ```
 
-## Integration Points
+## Docker
 
-### Services That Consume Billing Events
+```bash
+# Build image
+docker build -t billing-service -f Dockerfile ../..
 
-- **Merchant Service**: Updates merchant billing status
-- **Credit Service**: Processes credit grants and trial events
-- **Catalog Service**: Checks entitlements before operations
-- **Analytics Service**: Tracks billing metrics
-- **Email Scheduler**: Sends billing-related emails
+# Run container
+docker run -p 8116:8000 --env-file .env billing-service
+```
 
-## ID Management
+## Error Codes
+- `TRIAL_ALREADY_USED` (409) - Trial has been activated
+- `INVALID_PACK` (400) - Invalid credit pack selected
+- `MERCHANT_NOT_FOUND` (404) - Merchant not found
+- `PURCHASE_NOT_FOUND` (404) - Purchase not found
+- `PLATFORM_ERROR` (502) - Platform checkout failed
 
-- **correlation_id**: Propagated throughout the billing flow
-- **event_id**: Unique for each published event
-- **idempotency_key**: Used for trial creation and redirects
-
-## Error Handling
-
-Common error codes:
-
-- `INVALID_DOMAIN` (400): Non-myshopify.com domain
-- `INVALID_PLAN` (400): Unknown plan ID
-- `TRIAL_ALREADY_USED` (409): Trial consumed
-- `SUBSCRIPTION_EXISTS` (409): Already subscribed
+## Dependencies on Other Services
+- **Merchant Service**: Listens for merchant creation events
+- **Webhook Service**: Listens for purchase webhook events
+- **Credit Service**: Publishes events for credit allocation
+- **Analytics Service**: Publishes events for tracking
+- **Notification Service**: Publishes events for emails
 
 ## Monitoring
+- Health endpoint: `/health`
+- Metrics endpoint: `/metrics`
+- Logs: Structured JSON logging with correlation IDs
 
-Key metrics:
+## Security
+- JWT authentication required for all endpoints except health
+- Platform validation via headers
+- Idempotency keys for critical operations
+- Redis-based deduplication
 
-- `billing_trial_started_total` - Trial activations
-- `billing_subscription_transitions_total` - Status changes
-- `billing_active_subscriptions` - Current active subs by plan
-- `billing_webhook_duplicate_total` - Deduped webhooks
+## Maintenance
+
+### Daily Cron Jobs
+- Check and expire trials
+- Expire pending purchases
+
+### Cleanup Tasks
+- Remove expired idempotency keys (24h TTL)
+- Archive old purchase records (90 days)
+
+## Contact
+Team: GlamYouUp Platform Team
+Slack: #platform-billing

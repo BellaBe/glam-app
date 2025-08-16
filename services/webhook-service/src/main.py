@@ -78,7 +78,6 @@ if __name__ == "__main__":
         host=config.api_host,
         port=port,
         reload=config.debug,
-        workers=1
     )
 
 

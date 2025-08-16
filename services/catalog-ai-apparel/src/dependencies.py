@@ -1,6 +1,6 @@
-# ================================================================================================
+================
 # services/catalog-analysis/src/dependencies.py
-# ================================================================================================
+================
 from typing import Annotated
 from fastapi import Depends
 from shared.messaging.jetstream_client import JetStreamWrapper

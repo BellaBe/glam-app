@@ -1,95 +1,56 @@
-from shared.utils.exceptions import (
-    DomainError, 
-    ValidationError, 
-    NotFoundError, 
-    ConflictError,
-    UnauthorizedError,
-    ForbiddenError,
-    InfrastructureError,
-    ServiceUnavailableError
-)
 
-class BillingError(DomainError):
-    """Base class for billing domain errors"""
-    pass
+from shared.utils.exceptions import DomainError, ConflictError, NotFoundError
 
-class InvalidDomainError(ValidationError):
-    """Invalid shop domain format"""
-    def __init__(self, domain: str):
-        super().__init__(
-            message=f"Invalid shop domain format: {domain}",
-            field="shop_domain",
-            value=domain
-        )
-
-class InvalidPlanError(ValidationError):
-    """Invalid plan ID"""
-    def __init__(self, plan_id: str):
-        super().__init__(
-            message=f"Invalid plan ID: {plan_id}",
-            field="plan",
-            value=plan_id
-        )
-
-class InvalidReturnUrlError(ValidationError):
-    """Invalid return URL"""
-    def __init__(self, url: str):
-        super().__init__(
-            message="Invalid return URL",
-            field="return_url",
-            value=url
-        )
-
-class MissingHeaderError(ValidationError):
-    """Missing required header"""
-    def __init__(self, header: str):
-        super().__init__(
-            message=f"Missing required header: {header}",
-            field="headers",
-            value=header
-        )
 
 class TrialAlreadyUsedError(ConflictError):
-    """Trial has already been used"""
-    def __init__(self, shop_domain: str):
+    """Raised when trial has already been activated"""
+    def __init__(self, merchant_id: str):
         super().__init__(
-            message="Trial has already been used for this merchant",
+            message="Trial has already been activated",
             conflicting_resource="trial",
-            current_state="consumed"
+            current_state="used"
+        )
+        self.merchant_id = merchant_id
+
+
+class InvalidCreditPackError(DomainError):
+    """Raised when invalid credit pack is selected"""
+    def __init__(self, pack: str):
+        super().__init__(
+            message=f"Invalid credit pack: {pack}",
+            code="INVALID_PACK"
+        )
+        self.pack = pack
+
+
+class MerchantNotFoundError(NotFoundError):
+    """Raised when merchant billing record not found"""
+    def __init__(self, merchant_id: str):
+        super().__init__(
+            message=f"Merchant {merchant_id} not found",
+            resource="merchant",
+            resource_id=merchant_id
         )
 
-class SubscriptionExistsError(ConflictError):
-    """Already subscribed to this plan"""
-    def __init__(self, plan_id: str):
+
+class PurchaseNotFoundError(NotFoundError):
+    """Raised when purchase not found"""
+    def __init__(self, purchase_id: str):
         super().__init__(
-            message="Already subscribed to this plan",
-            conflicting_resource="subscription",
-            current_state=plan_id
+            message=f"Purchase {purchase_id} not found",
+            resource="purchase",
+            resource_id=purchase_id
         )
 
-class PolicyBlockedError(ForbiddenError):
-    """Trial creation blocked by policy"""
-    def __init__(self, reason: str = "Trial creation blocked by policy"):
-        super().__init__(
-            message=reason,
-            required_permission="trial_creation"
-        )
 
-class TokenServiceError(ServiceUnavailableError):
-    """Failed to fetch access token"""
-    def __init__(self):
+class PlatformCheckoutError(DomainError):
+    """Raised when platform checkout creation fails"""
+    def __init__(self, platform: str, error_message: str):
         super().__init__(
-            message="Failed to fetch access token",
-            service="token-service",
-            retryable=True
+            message=f"Failed to create {platform} checkout: {error_message}",
+            code="PLATFORM_ERROR"
         )
+        self.platform = platform
+        self.error_message = error_message
 
-class ShopifyApiError(ServiceUnavailableError):
-    """Shopify API error"""
-    def __init__(self, details: str):
-        super().__init__(
-            message=f"Shopify API error: {details}",
-            service="shopify",
-            retryable=True
-        )
 

@@ -4,6 +4,7 @@
 
 import os
 from typing import List, Optional
+from datetime import timedelta
 
 import nats
 from nats.aio.client import Client
@@ -77,7 +78,7 @@ class JetStreamClient:
             name=name,
             subjects=subjects,
             retention=kw.get("retention", RetentionPolicy.LIMITS),
-            max_age=kw.get("max_age", 24 * 60 * 60),
+            max_age=kw.get("max_age", timedelta(hours=24)),
             max_msgs=kw.get("max_msgs", 1_000_000),
             storage=kw.get("storage", StorageType.FILE),
         )

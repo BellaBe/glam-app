@@ -30,9 +30,6 @@ RUN prisma generate
 # ---- 4️⃣  Copy service code
 COPY services/webhook-service /app
 
-# ---- 5️⃣  Copy config
-COPY config /app/config
-
 # ──────────────────────────────────────────────────────────────
 # 📦  Stage 2 ─ Runtime  
 # ──────────────────────────────────────────────────────────────

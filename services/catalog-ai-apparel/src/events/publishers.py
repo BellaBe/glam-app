@@ -1,6 +1,6 @@
-# ================================================================================================
+================
 # services/catalog-analysis/src/events/publishers.py
-# ================================================================================================
+================
 from shared.events import DomainEventPublisher, Streams
 
 
@@ -11,9 +11,9 @@ class CatalogAnalysisEventPublisher(DomainEventPublisher):
     service_name_override = "catalog-analysis"
 
 
-# ================================================================================================
+================
 # services/catalog-analysis/src/events/subscribers.py
-# ================================================================================================
+================
 from shared.events import DomainEventSubscriber
 from ..services.catalog_analysis_service import CatalogAnalysisService
 from ..schemas.catalog_item import CatalogItemAnalysisRequest

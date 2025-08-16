@@ -1,6 +1,6 @@
-# ================================================================================================
+================
 # tests/unit/test_catalog_analysis_service.py
-# ================================================================================================
+================
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch, AsyncMock

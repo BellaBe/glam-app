@@ -1,6 +1,6 @@
-# ================================================================================================
+================
 # services/catalog-analysis/src/events/types.py
-# ================================================================================================
+================
 class CatalogAnalysisEvents:
     """Event type constants for catalog item analysis"""
     ITEM_ANALYSIS_REQUESTED = "evt.catalog.item.analysis.requested"

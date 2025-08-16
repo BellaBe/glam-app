@@ -10,7 +10,7 @@ class ServiceConfig(BaseModel):
     model_config = ConfigDict(
         extra="ignore",
         case_sensitive=False,
-        allow_population_by_field_name=True,
+        validate_by_name=True,
     )
 
     service_name: str = "merchant-service"

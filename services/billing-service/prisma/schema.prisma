@@ -9,101 +9,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum SubscriptionStatus {
-  none
-  active
+model BillingRecord {
+  id                String   @id @default(uuid()) @db.Uuid
+  merchant_id       String   @unique @db.Uuid
+  
+  // Trial management
+  trial_available   Boolean  @default(true)
+  trial_started_at  DateTime? @db.Timestamptz(3)
+  trial_ends_at     DateTime? @db.Timestamptz(3)
+  
+  // Purchase tracking
+  total_credits_purchased Int @default(0)
+  last_purchase_at  DateTime? @db.Timestamptz(3)
+  
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+  updated_at        DateTime @updatedAt @db.Timestamptz(3)
+  
+  // Relations
+  purchases         CreditPurchase[]
+  
+  @@index([trial_ends_at])
+  @@map("billing_records")
+}
+
+enum PurchaseStatus {
   pending
-  paused
-  cancelled
+  completed
+  failed
   expired
 }
 
-enum PlanKind {
-  subscription
-  one_time
-}
-
-enum BillingInterval {
-  month
-  year
-}
-
-enum TrialStatus {
-  never_started
-  active
-  expired
-}
-
-model BillingPlan {
-  id              String           @id @default(cuid())
-  shopifyHandle   String           @unique      // Matches Shopify Partner dashboard handle
-  kind            PlanKind                      // Type of plan: subscription or one_time
-  name            String                        // Display name for UI
-  description     String                        // Plan description for UI
-  price           Decimal          @db.Decimal(10,2)
-  currency        String           @default("USD")
-  billingInterval BillingInterval?              // null for one_time plans
-  ctaLabel        String?                       // Button text for UI (e.g., "Start subscription")
-  sortOrder       Int              @default(0)  // Controls display order in UI (lower = higher)
-  active          Boolean          @default(true)
-  metadata        Json?                         // Extra data (e.g., { credits: 1000 } for packs)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  @@index([active, sortOrder])
-  @@map("billing_plans")
-}
-
-model MerchantBilling {
-  id                  String              @id @default(uuid()) @db.Uuid
-  shopDomain          String              @unique @map("shop_domain") @db.Citext  // Normalized lowercase
-  externalId          String?             @map("external_id")                     // Shopify subscription ID
-  subscriptionStatus  SubscriptionStatus  @default(none) @map("subscription_status")
-  managedPlanId       String?             @map("managed_plan_id")                 // References BillingPlan.id
-  managedPlanHandle   String?             @map("managed_plan_handle")             // Shopify plan handle
-  currentPeriodEnd    DateTime?           @map("current_period_end") @db.Timestamptz(3)
-  cancelAt            DateTime?           @map("cancel_at") @db.Timestamptz(3)
-  isTest              Boolean             @default(false) @map("is_test")
-  lastWebhookId       String?             @unique @map("last_webhook_id")         // Deduplication
-  lastWebhookAt       DateTime?           @map("last_webhook_at") @db.Timestamptz(3)
-  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  @@index([subscriptionStatus])
-  @@index([shopDomain, updatedAt(sort: Desc)])
-  @@map("merchant_billings")
-}
-
-model MerchantTrial {
-  id             String      @id @default(uuid()) @db.Uuid
-  shopDomain     String      @unique @map("shop_domain") @db.Citext    // Normalized lowercase
-  status         TrialStatus @default(never_started)
-  days           Int         @default(14)                               // Trial duration from config
-  startedAt      DateTime?   @map("started_at") @db.Timestamptz(3)
-  endsAt         DateTime?   @map("ends_at") @db.Timestamptz(3)
-  consumed       Boolean     @default(false)                            // True once expired/used
-  trialStartedBy String?     @map("trial_started_by")                   // Optional: "user_action" | "auto"
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
-
+model CreditPurchase {
+  id                String   @id @default(uuid()) @db.Uuid
+  merchant_id       String   @db.Uuid
+  
+  credits           Int
+  amount            String // Amount in the smallest currency unit (e.g., cents)
+  status            PurchaseStatus @default(pending)
+  
+  platform          String?  // shopify, stripe, etc.
+  platform_charge_id String? @unique  // Platform's charge reference
+  
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+  completed_at      DateTime? @db.Timestamptz(3)
+  expires_at        DateTime? @db.Timestamptz(3)  // For pending charges
+  
+  // Relations
+  billing_record    BillingRecord @relation(fields: [merchant_id], references: [merchant_id])
+  
+  @@index([merchant_id])
   @@index([status])
-  @@index([shopDomain, updatedAt(sort: Desc)])
-  @@map("merchant_trials")
+  @@index([platform_charge_id])
+  @@map("credit_purchases")
 }
-
-model OneTimePurchase {
-  id            String   @id @default(cuid())
-  shopDomain    String   @map("shop_domain") @db.Citext              // Normalized lowercase
-  chargeId      String   @unique @map("charge_id")                    // Shopify one-time charge ID
-  status        String                                                 // 'active' | 'pending' | 'declined' | 'cancelled'
-  isTest        Boolean  @default(false) @map("is_test")
-  credits       Int?                                                   // Credits to grant (from metadata)
-  managedPlanId String?  @map("managed_plan_id")                      // References BillingPlan.id
-  lastWebhookId String?  @unique @map("last_webhook_id")              // Deduplication
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  @@index([shopDomain, updatedAt(sort: Desc)])
-  @@map("one_time_purchases")
-}
-
