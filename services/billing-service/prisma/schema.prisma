@@ -12,22 +12,22 @@ datasource db {
 model BillingRecord {
   id                String   @id @default(uuid()) @db.Uuid
   merchant_id       String   @unique @db.Uuid
-  
+
   // Trial management
   trial_available   Boolean  @default(true)
   trial_started_at  DateTime? @db.Timestamptz(3)
   trial_ends_at     DateTime? @db.Timestamptz(3)
-  
+
   // Purchase tracking
   total_credits_purchased Int @default(0)
   last_purchase_at  DateTime? @db.Timestamptz(3)
-  
+
   created_at        DateTime @default(now()) @db.Timestamptz(3)
   updated_at        DateTime @updatedAt @db.Timestamptz(3)
-  
+
   // Relations
   purchases         CreditPurchase[]
-  
+
   @@index([trial_ends_at])
   @@map("billing_records")
 }
@@ -42,21 +42,21 @@ enum PurchaseStatus {
 model CreditPurchase {
   id                String   @id @default(uuid()) @db.Uuid
   merchant_id       String   @db.Uuid
-  
+
   credits           Int
   amount            String // Amount in the smallest currency unit (e.g., cents)
   status            PurchaseStatus @default(pending)
-  
+
   platform          String?  // shopify, stripe, etc.
   platform_charge_id String? @unique  // Platform's charge reference
-  
+
   created_at        DateTime @default(now()) @db.Timestamptz(3)
   completed_at      DateTime? @db.Timestamptz(3)
   expires_at        DateTime? @db.Timestamptz(3)  // For pending charges
-  
+
   // Relations
   billing_record    BillingRecord @relation(fields: [merchant_id], references: [merchant_id])
-  
+
   @@index([merchant_id])
   @@index([status])
   @@index([platform_charge_id])

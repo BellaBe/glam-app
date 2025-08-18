@@ -72,14 +72,12 @@ export const GET_A_METAOBJECT_BY_HANDLE = `
   }
 }`;
 
-
 export const GET_A_METAOBJECTDEFINITION_BY_TYPE = `
 {
   metaobjectDefinitionByType(type: "$app:gyu_status") {
     id
   }
 }`;
-
 
 export const CREATE_NEW_METAOBJECT_DEFINITION = `#graphql
 mutation metaobjectDefinitionCreate($definition: MetaobjectDefinitionCreateInput!) {

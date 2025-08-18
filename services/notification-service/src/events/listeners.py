@@ -1,116 +1,259 @@
-# services/notification_service/src/events/subscribers.py
-from datetime import datetime
+# services/notification-service/src/events/listeners.py
+from typing import Any
+
 from shared.messaging.listener import Listener
-from shared.messaging.jetstream_client import JetStreamClient
-from shared.utils.logger import ServiceLogger
-from ..services.notification_service import NotificationService
-from .publishers import EmailSendPublisher
-from shared.messaging.payloads.notification import (
-    EmailSendRequested,
-    EmailSendBulkRequested,
-    EmailSendComplete,
-    EmailSendFailed,
-    EmailSendBulkComplete,
-    EmailSendBulkFailed
-)
 from shared.messaging.subjects import Subjects
-from ..schemas.notification import NotificationCreate
+from shared.utils.exceptions import ValidationError
+
+from ..schemas.events import (
+    BillingSubscriptionExpiredPayload,
+    CatalogSyncCompletedPayload,
+    CreditBalanceDepletedPayload,
+    CreditBalanceLowPayload,
+    MerchantCreatedPayload,
+)
 
 
-class SendEmailListener(Listener):
-    
+class MerchantCreatedListener(Listener):
+    """Listen for merchant created events"""
+
     @property
     def subject(self) -> str:
-        return Subjects.EMAIL_SEND_REQUESTED
-    
+        return "evt.merchant.created.v1"
+
     @property
     def queue_group(self) -> str:
-        return "notification-send"
-    
+        return "notification-merchant-created"
+
     @property
     def service_name(self) -> str:
         return "notification-service"
-    
 
-    def __init__(
-        self,
-        js_client: JetStreamClient,
-        publisher: EmailSendPublisher,
-        svc: NotificationService,
-        logger: ServiceLogger,
-    ):
+    def __init__(self, js_client, notification_service, event_publisher, logger):
         super().__init__(js_client, logger)
-        self.svc = svc
-        self.pub = publisher
+        self.notification_service = notification_service
+        self.event_publisher = event_publisher
 
-    async def on_message(self, data: dict) -> None:
-        payload = EmailSendRequested(**data)  # validate & type
-        
+    async def on_message(self, data: dict[str, Any]) -> None:
+        """Process merchant created event"""
         try:
-            out = await self.svc.create_and_send_notification(
-                NotificationCreate(
-                    merchant_id=payload.merchant_id,
-                    merchant_domain=payload.merchant_domain,
-                    notification_type=payload.email_type,
-                    recipient_email=payload.recipient_email,
-                    extra_metadata=payload.extra_metadata if payload.extra_metadata else {},
-                )
-            )
-            
-            # TODO: add provider info to svc return
-            provider = "default_provider"  # Replace with actual provider logic
-            provider_message_id = "12345"  # Replace with actual provider message ID
-            sent_at = "2023-10-01T12:00:00Z"  # Replace with actual send_at timestamp
+            # Validate payload
+            payload = MerchantCreatedPayload(**data)
 
-            await self.pub.email_send_complete(
-                EmailSendComplete(
-                    notification_id=out,
-                    merchant_id=payload.merchant_id,
-                    email_type=payload.email_type,
-                    recipient_email=payload.recipient_email,
-                    provider=provider,
-                    provider_message_id=provider_message_id,
-                    sent_at=datetime.fromisoformat(sent_at)
-                ),
-            )
-        except Exception as exc:
-            self.logger.error("Failed to send email: %s", exc)
-            
-            email_failed_payload = EmailSendFailed(
-                notification_id=None,  # or the actual notification ID if available
-                merchant_id=payload.merchant_id,
-                template_name=payload.email_type,
-                recipient_email=payload.recipient_email,
-                error_message=str(exc),
-                error_code="EMAIL_SEND_FAILED",
-                retry_count=0,
-                will_retry=False
+            # Process notification
+            notification = await self.notification_service.process_event(
+                event_type=self.subject,
+                event_data=payload.model_dump(),
+                correlation_id=payload.correlation_id or "unknown",
             )
 
-            await self.pub.email_send_failed(email_failed_payload)
-            raise  # -> NACK, retry
+            # Publish result event
+            if notification:
+                if notification.status == "sent":
+                    await self.event_publisher.email_sent(notification)
+                else:
+                    await self.event_publisher.email_failed(
+                        notification,
+                        error=notification.error_message or "Unknown error",
+                    )
+
+        except ValidationError as e:
+            self.logger.error(f"Invalid merchant created event: {e}")
+            # ACK invalid messages
+            return
+        except Exception as e:
+            self.logger.error(f"Failed to process merchant created: {e}")
+            raise  # NACK for retry
 
 
-class SendBulkEmailListener(Listener):
-    
+class CatalogSyncCompletedListener(Listener):
+    """Listen for catalog sync completed events"""
+
     @property
     def subject(self) -> str:
-        return Subjects.EMAIL_SEND_BULK_REQUESTED
-    
+        return "evt.catalog.sync.completed.v1"
+
     @property
     def queue_group(self) -> str:
-        return "notification-send"
-    
+        return "notification-catalog-sync"
+
     @property
     def service_name(self) -> str:
         return "notification-service"
 
-    def __init__(self, js_client: JetStreamClient, logger: ServiceLogger, svc: NotificationService, publisher: EmailSendPublisher):
+    def __init__(self, js_client, notification_service, event_publisher, logger):
         super().__init__(js_client, logger)
-        self.svc = svc
-        self.pub = publisher
+        self.notification_service = notification_service
+        self.event_publisher = event_publisher
 
-    async def on_message(self, data: dict) -> None:
-        payload = EmailSendBulkRequested(**data)
-        
-        # TODO: Implement bulk email sending logic
+    async def on_message(self, data: dict[str, Any]) -> None:
+        """Process catalog sync completed event"""
+        try:
+            payload = CatalogSyncCompletedPayload(**data)
+
+            notification = await self.notification_service.process_event(
+                event_type=self.subject,
+                event_data=payload.model_dump(),
+                correlation_id=payload.correlation_id or "unknown",
+            )
+
+            if notification:
+                if notification.status == "sent":
+                    await self.event_publisher.email_sent(notification)
+                else:
+                    await self.event_publisher.email_failed(
+                        notification,
+                        error=notification.error_message or "Unknown error",
+                    )
+
+        except ValidationError as e:
+            self.logger.error(f"Invalid catalog sync event: {e}")
+            return
+        except Exception as e:
+            self.logger.error(f"Failed to process catalog sync: {e}")
+            raise
+
+
+# Similar listeners for billing and credit events...
+class BillingSubscriptionExpiredListener(Listener):
+    """Listen for billing subscription expired events"""
+
+    @property
+    def subject(self) -> str:
+        return "evt.billing.subscription.expired.v1"
+
+    @property
+    def queue_group(self) -> str:
+        return "notification-billing-expired"
+
+    @property
+    def service_name(self) -> str:
+        return "notification-service"
+
+    def __init__(self, js_client, notification_service, event_publisher, logger):
+        super().__init__(js_client, logger)
+        self.notification_service = notification_service
+        self.event_publisher = event_publisher
+
+    async def on_message(self, data: dict[str, Any]) -> None:
+        """Process billing expired event"""
+        try:
+            payload = BillingSubscriptionExpiredPayload(**data)
+
+            notification = await self.notification_service.process_event(
+                event_type=self.subject,
+                event_data=payload.model_dump(),
+                correlation_id=payload.correlation_id or "unknown",
+            )
+
+            if notification:
+                if notification.status == "sent":
+                    await self.event_publisher.email_sent(notification)
+                else:
+                    await self.event_publisher.email_failed(
+                        notification,
+                        error=notification.error_message or "Unknown error",
+                    )
+
+        except ValidationError as e:
+            self.logger.error(f"Invalid billing expired event: {e}")
+            return
+        except Exception as e:
+            self.logger.error(f"Failed to process billing expired: {e}")
+            raise
+
+
+class CreditBalanceLowListener(Listener):
+    """Listen for credit balance low events"""
+
+    @property
+    def subject(self) -> str:
+        return Subjects.CREDIT_BALANCE_LOW.value
+
+    @property
+    def queue_group(self) -> str:
+        return "notification-credit-low"
+
+    @property
+    def service_name(self) -> str:
+        return "notification-service"
+
+    def __init__(self, js_client, notification_service, event_publisher, logger):
+        super().__init__(js_client, logger)
+        self.notification_service = notification_service
+        self.event_publisher = event_publisher
+
+    async def on_message(self, data: dict[str, Any]) -> None:
+        """Process credit balance low event"""
+        try:
+            payload = CreditBalanceLowPayload(**data)
+
+            notification = await self.notification_service.process_event(
+                event_type=self.subject,
+                event_data=payload.model_dump(),
+                correlation_id=payload.correlation_id or "unknown",
+            )
+
+            if notification:
+                if notification.status == "sent":
+                    await self.event_publisher.email_sent(notification)
+                else:
+                    await self.event_publisher.email_failed(
+                        notification,
+                        error=notification.error_message or "Unknown error",
+                    )
+
+        except ValidationError as e:
+            self.logger.error(f"Invalid credit balance low event: {e}")
+            return
+        except Exception as e:
+            self.logger.error(f"Failed to process credit balance low: {e}")
+            raise
+
+
+class CreditBalanceDepletedListener(Listener):
+    """Listen for credit balance depleted events"""
+
+    @property
+    def subject(self) -> str:
+        return Subjects.CREDIT_BALANCE_DEPLETED.value
+
+    @property
+    def queue_group(self) -> str:
+        return "notification-credit-depleted"
+
+    @property
+    def service_name(self) -> str:
+        return "notification-service"
+
+    def __init__(self, js_client, notification_service, event_publisher, logger):
+        super().__init__(js_client, logger)
+        self.notification_service = notification_service
+        self.event_publisher = event_publisher
+
+    async def on_message(self, data: dict[str, Any]) -> None:
+        """Process credit balance depleted event"""
+        try:
+            payload = CreditBalanceDepletedPayload(**data)
+
+            notification = await self.notification_service.process_event(
+                event_type=self.subject,
+                event_data=payload.model_dump(),
+                correlation_id=payload.correlation_id or "unknown",
+            )
+
+            if notification:
+                if notification.status == "sent":
+                    await self.event_publisher.email_sent(notification)
+                else:
+                    await self.event_publisher.email_failed(
+                        notification,
+                        error=notification.error_message or "Unknown error",
+                    )
+
+        except ValidationError as e:
+            self.logger.error(f"Invalid credit depleted event: {e}")
+            return
+        except Exception as e:
+            self.logger.error(f"Failed to process credit depleted: {e}")
+            raise

@@ -17,7 +17,7 @@ COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# ---- 2️⃣  Install service dependencies  
+# ---- 2️⃣  Install service dependencies
 WORKDIR /app
 COPY services/merchant-service/pyproject.toml services/merchant-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
@@ -30,7 +30,7 @@ RUN prisma generate
 COPY services/merchant-service /app
 
 # ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime  
+# 📦  Stage 2 ─ Runtime
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
@@ -52,4 +52,3 @@ EXPOSE 8000
 
 # Run migrations and start server
 CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
-

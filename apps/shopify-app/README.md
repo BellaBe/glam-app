@@ -105,8 +105,8 @@ To configure GraphQL access scopes in a TOML file, you need to ensure that you i
 
 1. Locate the access_scopes section: In TOML configuration file, find the section where you specify access scopes. If it's not already present, you may need to add it.
 2. Define the scopes: Within the access_scopes section, specify the permissions required for your application to interact with GraphQL. These permissions typically include read and write access to various resources. Here's an example of how you can specify these scopes
-[access_scopes]
-scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
+   [access_scopes]
+   scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
 
 ### Apps special setting
 
@@ -115,18 +115,18 @@ scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobj
 1. Create a .env File: In the root directory of your React app, create a file named .env.
 2. Define Variables: Inside the .env file, define your variables like this:
 
-
-SHOPIFY_API_KEY=your_api_key_here
+SHOPIFY\*API_KEY=your_api_key_here
 SHOPIFY_API_SECRET=your_api_secret_here
-SHOPIFY_GLAMYOUUP_ID=***
-AI_SERVER_URL=***
+SHOPIFY_GLAMYOUUP_ID=\*\**
+AI*SERVER_URL=\*\*\*
 
 #### Setting up Server URLs
 
 For setting up AI server URL and Remix server URL, you'll typically follow similar steps.
 
 1. Configuration File or Environment Variables: Depending on how your React app is structured, you might have a configuration file where you define these URLs or you might directly use environment variables.
-2. Define Server URLs(AI server and Remix server): 
+2. Define Server URLs(AI server and Remix server):
+
 - extensions/glam-you-up/script.js
 
 ### Application Storage
@@ -197,7 +197,7 @@ When you're ready to set up your app in production, you can follow [our deployme
 
 When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
 
-### Upload local app's extensions and environment to live shopify app store  
+### Upload local app's extensions and environment to live shopify app store
 
 To do that, you can run the `deploy` CLI command.
 

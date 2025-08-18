@@ -54,7 +54,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-      
+
   # ----------------- S3-compatible Storage (MinIO) -----------------
   minio:
     image: minio/minio:latest
@@ -93,7 +93,7 @@ services:
       "
     networks:
       - glam-local-net
-      
+
   # ----------------- Webhook Database -----------------
   webhook-db:
     image: postgres:15-alpine
@@ -114,8 +114,8 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
- 
-  # ----------------- Merchant Database -----------------     
+
+  # ----------------- Merchant Database -----------------
   merchant-db:
     image: postgres:15-alpine
     container_name: merchant-db-local
@@ -179,7 +179,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
   # ----------------- Credit Database -----------------
   credit-db:
     image: postgres:15-alpine
@@ -222,7 +222,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-  
+
 networks:
   glam-local-net:
     driver: bridge

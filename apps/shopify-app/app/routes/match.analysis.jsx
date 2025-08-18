@@ -6,7 +6,7 @@
 // /**
 //  * This route handles requests from the storefront to the Remix server,
 //  * performing an AI-based product matching and analysis based on provided data.
-//  * 
+//  *
 //  * Expected Request Payload:
 //  * @request matchData - An object containing:
 //  *   - shop_id (string): ID of the Shopify store
@@ -42,11 +42,6 @@
 //       });
 //     }
 
-//     console.log("product sort request body -------", JSON.stringify({
-//       ...matchData,
-//       variant_id: matchedProduct.variant_id
-//     }));
-
 //     const options = {
 //       method: "POST",
 //       headers: {
@@ -80,14 +75,11 @@
 //             "Access-Control-Allow-Origin": "*",
 //           },
 //         });
-//       }      
+//       }
 //     }
 
 //     // If AI response is received, format and return the data to the storefront
 //     if (responseData) {
-//       console.log("product match response -------", JSON.stringify({
-//         responseData
-//       }));
 //       return json({
 //         score_color: (responseData.score_color) / 20,
 //         score_morph: (responseData.score_morph) / 20,

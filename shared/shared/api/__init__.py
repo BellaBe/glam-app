@@ -9,73 +9,61 @@ This module provides a single, consistent approach to API responses
 across all services.
 """
 
-from .models import (
-    # Core models
-    ApiResponse,
-    Meta,
-    Pagination,
-    Links,
-    ErrorDetail,
+from .correlation import (
+    add_correlation_header,
+    add_correlation_to_event,
+    extract_correlation_from_event,
+    get_correlation_context,
+    # Correlation utilities
+    get_correlation_id,
+    set_correlation_context,
 )
-
-from .responses import (
-    # Response helpers
-    create_response,
-    success_response,
-    error_response,
-    paginated_response,
+from .debug import (
+    setup_debug_handlers,
+    # Debugging utilities
+    setup_debug_middleware,
 )
-
 from .dependencies import (
-    # FastAPI dependencies
-    PaginationDep,
-    RequestContextDep, 
-    WebhookHeadersDep,
-    LoggerDep,
+    ClientAuthContext,
     ClientIpDep,
-    RequestIdDep,
     ContentTypeDep,
     CorrelationIdDep,
-    RequestContextDep,
+    InternalAuthDep,
+    LoggerDep,
+    # FastAPI dependencies
+    PaginationDep,
     PlatformContextDep,
+    RequestContextDep,
+    RequestIdDep,
     ShopDomainDep,
     ShopPlatformDep,
-    ClientAuthContext,
-    InternalAuthDep,
-    WebhookHeadersDep  
+    WebhookHeadersDep,
 )
-
+from .health import (
+    # Health check utilities
+    create_health_router,
+)
 from .middleware import (
     # Middleware
     APIMiddleware,
     setup_middleware,
 )
-
-from .correlation import (
-    # Correlation utilities
-    get_correlation_id,
-    set_correlation_context,
-    get_correlation_context,
-    add_correlation_header,
-    add_correlation_to_event,
-    extract_correlation_from_event, 
+from .models import (
+    # Core models
+    ApiResponse,
+    ErrorDetail,
+    Links,
+    Meta,
+    Pagination,
 )
-
-from .debug import (
-    # Debugging utilities
-    setup_debug_middleware,
-    setup_debug_handlers,
+from .responses import (
+    # Response helpers
+    create_response,
+    error_response,
+    paginated_response,
+    success_response,
 )
-
-from .health import (
-    # Health check utilities
-    create_health_router,
-)
-
-from .validation import (
-    # Validation utilities
-    validate_shop_context
-)
+from .validation import validate_shop_context
 
 __all__ = [
     # Models
@@ -84,13 +72,11 @@ __all__ = [
     "Pagination",
     "Links",
     "ErrorDetail",
-    
     # Response helpers
     "create_response",
     "success_response",
     "error_response",
     "paginated_response",
-    
     # Dependencies
     "PaginationDep",
     "RequestContextDep",
@@ -106,11 +92,9 @@ __all__ = [
     "ClientAuthContext",
     "InternalAuthDep",
     "WebhookHeadersDep",
-    
     # Debugging
     "setup_debug_middleware",
-    "setup_debug_handlers", 
-    
+    "setup_debug_handlers",
     # Correlation
     "get_correlation_id",
     "set_correlation_context",
@@ -118,14 +102,11 @@ __all__ = [
     "add_correlation_header",
     "add_correlation_to_event",
     "extract_correlation_from_event",
-    
     # Middleware
     "APIMiddleware",
     "setup_middleware",
-    
     # Health checks
     "create_health_router",
-    
     # Validation
-    "validate_shop_context"
+    "validate_shop_context",
 ]

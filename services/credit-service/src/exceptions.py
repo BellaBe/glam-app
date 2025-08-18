@@ -1,57 +1,46 @@
-from shared.utils.exceptions import (
-    GlamBaseError,
-    DomainError,
-    ValidationError,
-    NotFoundError,
-    ConflictError,
-    UnauthorizedError
-)
+# File: services/credits/src/exceptions.py
 
-class CreditServiceError(GlamBaseError):
-    """Base exception for credit service"""
-    pass
+from shared.utils.exceptions import DomainError
 
-class InvalidDomainError(ValidationError):
-    """Invalid shop domain format"""
-    def __init__(self, domain: str):
+
+class CreditAccountNotFoundError(DomainError):
+    """Credit account not found"""
+
+    code = "CREDIT_ACCOUNT_NOT_FOUND"
+    status = 404
+
+    def __init__(self, merchant_id: str):
         super().__init__(
-            message=f"Invalid shop domain format: {domain}",
-            field="shopDomain",
-            value=domain
+            message=f"Credit account not found for merchant {merchant_id}",
+            details={"merchant_id": merchant_id},
         )
 
-class InvalidAmountError(ValidationError):
-    """Invalid credit amount"""
-    def __init__(self, amount: int):
+
+class InsufficientCreditsError(DomainError):
+    """Insufficient credits for operation"""
+
+    code = "INSUFFICIENT_CREDITS"
+    status = 400
+
+    def __init__(self, merchant_id: str, balance: int, required: int):
         super().__init__(
-            message="Amount must be positive",
-            field="amount",
-            value=amount
+            message=f"Insufficient credits. Balance: {balance}, Required: {required}",
+            details={
+                "merchant_id": merchant_id,
+                "current_balance": balance,
+                "required_amount": required,
+            },
         )
 
-class MissingHeaderError(ValidationError):
-    """Missing required header"""
-    def __init__(self, header: str):
-        super().__init__(
-            message=f"Missing {header} header",
-            field=header
-        )
 
-class MerchantCreditNotFoundError(NotFoundError):
-    """Merchant credit account not found"""
-    def __init__(self, shop_domain: str):
-        super().__init__(
-            message="Merchant credit account not found",
-            resource="merchant_credit",
-            resource_id=shop_domain
-        )
+class DuplicateTransactionError(DomainError):
+    """Duplicate transaction attempted"""
 
-class DuplicateGrantError(ConflictError):
-    """Grant already processed (for internal use)"""
-    def __init__(self, external_ref: str):
-        super().__init__(
-            message="Grant already processed",
-            conflicting_resource="credit_grant",
-            current_state=external_ref
-        )
+    code = "DUPLICATE_TRANSACTION"
+    status = 409
 
+    def __init__(self, reference_type: str, reference_id: str):
+        super().__init__(
+            message=f"Transaction already processed: {reference_type}:{reference_id}",
+            details={"reference_type": reference_type, "reference_id": reference_id},
+        )

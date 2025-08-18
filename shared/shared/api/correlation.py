@@ -7,15 +7,15 @@ Focuses on the essential functionality needed for request tracing
 across services without over-engineering.
 """
 
-from typing import Optional, Annotated
-from contextvars import ContextVar
-from fastapi import Request, Depends
 import uuid
+from contextvars import ContextVar
+from typing import Annotated
+
+from fastapi import Depends, Request
 
 # Context variable for async operations
-_correlation_context: ContextVar[Optional[str]] = ContextVar(
-    "correlation_id", default=None
-)
+_correlation_context: ContextVar[str | None] = ContextVar("correlation_id", default=None)
+
 
 def get_correlation_id(request: Request) -> str:
     """
@@ -48,7 +48,7 @@ def set_correlation_context(correlation_id: str) -> None:
     _correlation_context.set(correlation_id)
 
 
-def get_correlation_context() -> Optional[str]:
+def get_correlation_context() -> str | None:
     """Get correlation ID from async context."""
     return _correlation_context.get()
 
@@ -86,6 +86,6 @@ def add_correlation_to_event(event_data: dict) -> dict:
     return event_data
 
 
-def extract_correlation_from_event(event_data: dict) -> Optional[str]:
+def extract_correlation_from_event(event_data: dict) -> str | None:
     """Extract correlation ID from event data."""
     return event_data.get("metadata", {}).get("correlation_id")

@@ -1,7 +1,15 @@
-import { Card, SkeletonBodyText, SkeletonDisplayText, BlockStack, Layout, SkeletonThumbnail, InlineStack } from "@shopify/polaris";
+import {
+  Card,
+  SkeletonBodyText,
+  SkeletonDisplayText,
+  BlockStack,
+  Layout,
+  SkeletonThumbnail,
+  InlineStack,
+} from "@shopify/polaris";
 
-export function LoadingState({ type = 'page' }) {
-  if (type === 'card') {
+export function LoadingState({ type = "page" }) {
+  if (type === "card") {
     return (
       <Card>
         <BlockStack gap="400">
@@ -12,7 +20,7 @@ export function LoadingState({ type = 'page' }) {
     );
   }
 
-  if (type === 'table') {
+  if (type === "table") {
     return (
       <Card>
         <BlockStack gap="400">
@@ -32,7 +40,7 @@ export function LoadingState({ type = 'page' }) {
     );
   }
 
-  if (type === 'stats') {
+  if (type === "stats") {
     return (
       <InlineStack gap="400">
         {[...Array(3)].map((_, i) => (

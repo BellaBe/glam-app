@@ -1,6 +1,6 @@
 # Webhook Service
 
-Receives platform webhooks from the Shopify BFF and publishes domain events into the system.  
+Receives platform webhooks from the Shopify BFF and publishes domain events into the system.
 This service **does not** accept raw Shopify calls directly — all requests are relayed from the BFF with internal JWT authentication.
 
 ---
@@ -8,7 +8,7 @@ This service **does not** accept raw Shopify calls directly — all requests are
 ## Overview
 
 ### Responsibilities
-- Accept webhook payloads from the BFF at a **single unified endpoint**:  
+- Accept webhook payloads from the BFF at a **single unified endpoint**:
   `POST /api/v1/webhooks/shopify`
 - Validate required headers and content type.
 - Enforce a payload size limit.
@@ -64,16 +64,16 @@ Receives a webhook payload from the BFF.
 
 ## Webhook Processing Flow
 
-1. **Shopify → BFF**  
-   Shopify delivers webhook to your Remix BFF endpoint.  
+1. **Shopify → BFF**
+   Shopify delivers webhook to your Remix BFF endpoint.
    The BFF validates HMAC, extracts the payload + headers, signs an internal JWT, and relays to this service.
 
-2. **BFF → Webhook Service**  
+2. **BFF → Webhook Service**
    - Calls `POST /api/v1/webhooks/shopify`
    - Passes original Shopify headers (`topic`, `shop domain`, `webhook id`).
    - Uses `Authorization: Bearer <internal-jwt>` signed with `INTERNAL_JWT_SECRET`.
 
-3. **Webhook Service**  
+3. **Webhook Service**
    - Validates JWT, headers, and payload size.
    - Stores the webhook in the database.
    - If duplicate (`webhook_id` already stored) → logs and returns success without re-publishing.
@@ -98,7 +98,7 @@ curl -X POST http://localhost:8112/api/v1/webhooks/shopify \
         "line_items": []
       }'
 
-**Note**  
+**Note**
 `jwtgen` above is a placeholder for generating a valid JWT with payload:
 ```json
 {
@@ -147,4 +147,3 @@ python scripts/test_webhook.py
 python scripts/test_webhook.py
 ```
 This way the part after the curl example won’t break the Markdown structure again.
-  

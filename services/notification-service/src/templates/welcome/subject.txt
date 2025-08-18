@@ -1,0 +1,2 @@
+# services/notification-service/templates/welcome/subject.txt
+Welcome to Glam You Up - Let's Get Started!

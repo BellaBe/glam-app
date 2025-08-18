@@ -3,5 +3,3 @@
 from .publishers import WebhookEventPublisher
 
 __all__ = ["WebhookEventPublisher", "WebhookProcessListener"]
-
-

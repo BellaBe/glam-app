@@ -1,6 +1,7 @@
 # src/events/subscribers.py
+
 from shared.events import DomainEventSubscriber
-from typing import Dict, Any
+
 from ..schemas.sync_request import SyncFetchRequestIn
 
 

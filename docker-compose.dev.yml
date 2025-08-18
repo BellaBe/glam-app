@@ -46,7 +46,7 @@ services:
       - glam-net-dev
     logging:
       driver: 'none'
-      
+
   # ----------------- Webhook Service -----------------
   webhook-db:
     image: postgres:15-alpine
@@ -136,7 +136,7 @@ services:
     networks:
       - glam-net-dev  # Fixed: consistent network
     restart: unless-stopped
-    
+
   # ----------------- Catalog Service -----------------
   catalog-db:
     image: postgres:15-alpine
@@ -181,7 +181,7 @@ services:
     networks:
       - glam-net-dev  # Fixed: ADDED missing network
     restart: unless-stopped
-      
+
   # ----------------- Credit Service -----------------
   credit-db:
     image: postgres:15-alpine
@@ -226,7 +226,7 @@ services:
     networks:
       - glam-net-dev  # Fixed: consistent network
     restart: unless-stopped
-    
+
   # ----------------- Notification Service -----------------
   notification-db:
     image: postgres:15-alpine
@@ -247,7 +247,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
   notification-service:
     build:
       context: .
@@ -276,7 +276,7 @@ services:
     networks:
       - glam-net-dev  # Fixed: consistent network
     restart: unless-stopped
-    
+
   # ----------------- Billing Service -----------------
   billing-db:
     image: postgres:15-alpine
@@ -324,7 +324,7 @@ services:
     networks:
       - glam-net-dev  # Fixed: consistent network
     restart: unless-stopped
-    
+
 networks:
   glam-net-dev:  # Fixed: single consistent network name
     driver: bridge

@@ -1,256 +1,125 @@
-from __future__ import annotations
-
-from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+# services/notification-service/src/repositories/notification_repository.py
+from datetime import datetime, timedelta
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, and_, func
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-)
+from prisma import Prisma
 
-from shared.database import Repository
-from ..models.notification import Notification, NotificationStatus, NotificationProvider
+from ..schemas.notification import NotificationOut, NotificationStats
 
 
-class NotificationRepository(Repository[Notification]):
-    """Async Notification repo that opens a fresh session per call."""
+class NotificationRepository:
+    """Repository for notification data access"""
 
-    def __init__(
+    def __init__(self, prisma: Prisma):
+        self.prisma = prisma
+
+    async def create(self, data: dict[str, Any]) -> NotificationOut:
+        """Create a new notification record"""
+        notification = await self.prisma.notification.create(data=data)
+        return NotificationOut.model_validate(notification)
+
+    async def find_by_id(self, notification_id: UUID) -> NotificationOut | None:
+        """Find notification by ID"""
+        notification = await self.prisma.notification.find_unique(where={"id": str(notification_id)})
+        return NotificationOut.model_validate(notification) if notification else None
+
+    async def find_by_idempotency_key(self, idempotency_key: str) -> NotificationOut | None:
+        """Find notification by idempotency key"""
+        notification = await self.prisma.notification.find_unique(where={"idempotency_key": idempotency_key})
+        return NotificationOut.model_validate(notification) if notification else None
+
+    async def find_many(
         self,
-        model_class: type[Notification],
-        session_factory: async_sessionmaker[AsyncSession],
-    ):
-        super().__init__(model_class, session_factory)
-
-    async def get_by_merchant_id(
-        self,
-        merchant_id: UUID,
-        limit: int = 100,
-    ) -> List[Notification]:
-        stmt = (
-            select(self.model)
-            .where(self.model.merchant_id == merchant_id)
-            .order_by(self.model.created_at.desc())
-            .limit(limit)
-        )
-        async for session in self._session():
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
-        return []
-
-    async def get_by_status(
-        self,
-        status: NotificationStatus,
-        limit: int = 100,
-    ) -> List[Notification]:
-        stmt = (
-            select(self.model)
-            .where(self.model.status == status)
-            .order_by(self.model.created_at.desc())
-            .limit(limit)
-        )
-        async for session in self._session():
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
-        return []
-
-    async def get_failed_for_retry(
-        self,
-        max_retries: int = 3,
-    ) -> List[Notification]:
-        stmt = (
-            select(self.model)
-            .where(
-                and_(
-                    self.model.status == "failed",
-                    self.model.retry_count < max_retries,
-                )
-            )
-            .order_by(self.model.created_at)
-        )
-        async for session in self._session():
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
-
-        return []
-
-    async def count_by_type_and_shop(
-        self,
-        merchant_id: UUID,
-        notification_type: str,
-        since: Optional[datetime] = None,
-    ) -> int:
-        stmt = select(func.count(self.model.id)).where(
-            and_(
-                self.model.merchant_id == merchant_id,
-                self.model.type == notification_type,
-            )
-        )
-        if since:
-            stmt = stmt.where(self.model.created_at >= since)
-
-        async for session in self._session():
-            result = await session.execute(stmt)
-            return result.scalar() or 0
-
-        return 0
-
-    async def get_stats(
-        self,
-        merchant_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
-        base_query = select(
-            self.model.status,
-            func.count(self.model.id).label("count"),
-        )
-        if merchant_id:
-            base_query = base_query.where(self.model.merchant_id == merchant_id)
-        base_query = base_query.group_by(self.model.status)
-
-        type_query = select(
-            self.model.type,
-            func.count(self.model.id).label("count"),
-        )
-        if merchant_id:
-            type_query = type_query.where(self.model.merchant_id == merchant_id)
-        type_query = type_query.group_by(self.model.type)
-
-        async for session in self._session():
-            status_rows = await session.execute(base_query)
-            stats = {row.status: row.count for row in status_rows}
-            type_rows = await session.execute(type_query)
-            type_stats = {row.type: row.count for row in type_rows}
-
-            return {
-                "by_status": stats,
-                "by_type": type_stats,
-                "total": sum(
-                    int(v) for v in stats.values() if isinstance(v, (int, float))
-                ),
-            }
-        return {}
-
-    async def get_by_id(
-        self,
-        notification_id: UUID,
-    ) -> Optional[Notification]:
-        stmt = select(self.model).where(self.model.id == notification_id)
-        async for session in self._session():
-            result = await session.execute(stmt)
-            return result.scalar_one_or_none()
-
-    async def list(
-        self,
-        merchant_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        notification_type: Optional[str] = None,
-        offset: int = 1,
+        filters: dict[str, Any] | None,
+        order_by: list[tuple] | None,
+        skip: int = 0,
         limit: int = 50,
-    ) -> tuple[list[Notification], int]:
-        """List notifications with optional filters.
-        Args:
-            merchant_id (Optional[UUID]): Filter by shop ID.
-            status (Optional[str]): Filter by notification status.
-            notification_type (Optional[str]): Filter by notification type.
-            offset (int): Pagination offset.
-            limit (int): Number of records to return.
+    ) -> list[NotificationOut]:
+        """Find multiple notifications with filters"""
+        where = filters or {}
+        order = {}
 
-        Returns:
-            total (int): Total number of notifications.
-            notifications (List[Notification]): List of notifications matching the filters.
+        if order_by:
+            for field, direction in order_by:
+                order[field] = direction
+        else:
+            order = {"created_at": "desc"}
 
-        """
-        stmt = select(self.model)
+        notifications = await self.prisma.notification.find_many(where=where, skip=skip, take=limit, order=order)
 
-        if merchant_id:
-            stmt = stmt.where(self.model.merchant_id == merchant_id)
-        if status:
-            stmt = stmt.where(self.model.status == status)
-        if notification_type:
-            stmt = stmt.where(self.model.type == notification_type)
+        return [NotificationOut.model_validate(n) for n in notifications]
 
-        stmt = stmt.order_by(self.model.created_at.desc())
-        stmt = stmt.offset((offset - 1) * limit).limit(limit)
-        total_stmt = select(func.count(self.model.id)).select_from(self.model)
+    async def count(self, filters: dict[str, Any] | None) -> int:
+        """Count notifications with filters"""
+        where = filters or {}
+        return await self.prisma.notification.count(where=where)
 
-        async for session in self._session():
-            result = await session.execute(stmt)
-            notifications = result.scalars().all()
+    async def update(self, notification_id: UUID, data: dict[str, Any]) -> NotificationOut:
+        """Update notification"""
+        notification = await self.prisma.notification.update(where={"id": str(notification_id)}, data=data)
+        return NotificationOut.model_validate(notification)
 
-            total_result = await session.execute(total_stmt)
-            total = total_result.scalar_one_or_none() or 0
+    async def get_stats(self) -> NotificationStats:
+        """Get notification statistics"""
+        # Get today's date range
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
 
-            return list(notifications), total
+        # Count by status today
+        sent_today = await self.prisma.notification.count(
+            where={
+                "status": "sent",
+                "created_at": {"gte": today_start, "lt": today_end},
+            }
+        )
 
-        return [], 0
+        failed_today = await self.prisma.notification.count(
+            where={
+                "status": "failed",
+                "created_at": {"gte": today_start, "lt": today_end},
+            }
+        )
 
-    # ---------------------------------------------------------------- updates
-    async def mark_as_sent(
-        self,
-        notification_id: UUID,
-        provider_message_id: str,
-        provider: NotificationProvider,
-    ) -> Notification:  # type: ignore[return]
+        pending_today = await self.prisma.notification.count(
+            where={
+                "status": "pending",
+                "created_at": {"gte": today_start, "lt": today_end},
+            }
+        )
 
-        async for session in self._session():
-            stmt = select(self.model).where(self.model.id == notification_id)
-            result = await session.execute(stmt)
-            notification = result.scalar_one_or_none()
+        # Get counts by template type
+        template_counts = await self.prisma.query_raw(
+            """
+            SELECT template_type, COUNT(*) as count
+            FROM notifications
+            WHERE created_at >= $1 AND created_at < $2
+            GROUP BY template_type
+            """,
+            today_start,
+            today_end,
+        )
 
-            if not notification:
-                raise ValueError(f"Notification {notification_id} not found")
+        by_template = {row["template_type"]: row["count"] for row in template_counts}
 
-            notification.status = NotificationStatus.SENT
-            notification.provider_message_id = provider_message_id
-            notification.provider = provider
-            notification.sent_at = datetime.now(timezone.utc)
+        # Get counts by status
+        status_counts = await self.prisma.query_raw(
+            """
+            SELECT status, COUNT(*) as count
+            FROM notifications
+            WHERE created_at >= $1 AND created_at < $2
+            GROUP BY status
+            """,
+            today_start,
+            today_end,
+        )
 
-            session.add(notification)
-            await session.commit()
-            return notification
+        by_status = {row["status"]: row["count"] for row in status_counts}
 
-    async def mark_as_failed(
-        self,
-        notification_id: UUID,
-        error_message: str,
-        retry_count: int,
-    ) -> Notification:  # type: ignore[return]
-
-        async for session in self._session():
-            stmt = select(self.model).where(self.model.id == notification_id)
-            result = await session.execute(stmt)
-            notification = result.scalar_one_or_none()
-
-            if not notification:
-                raise ValueError(f"Notification {notification_id} not found")
-
-            notification.status = NotificationStatus.FAILED
-            notification.error_message = error_message
-            notification.retry_count += retry_count
-            notification.sent_at = datetime.now(timezone.utc)
-
-            session.add(notification)
-            await session.commit()
-            return notification
-
-    # ------------------------------------------------------------------ create
-    async def create(
-        self,
-        notification: Notification,
-    ) -> Notification:  # type: ignore[return]
-        async for session in self._session():
-            session.add(notification)
-            await session.commit()
-            return notification
-
-    async def bulk_create(
-        self,
-        notifications: List[Notification],
-    ) -> List[Notification]:
-        async for session in self._session():
-            session.add_all(notifications)
-            await session.commit()
-            return notifications
-        return []
+        return NotificationStats(
+            sent_today=sent_today,
+            failed_today=failed_today,
+            pending_today=pending_today,
+            by_template=by_template,
+            by_status=by_status,
+        )

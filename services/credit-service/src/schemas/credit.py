@@ -1,105 +1,44 @@
-from typing import Optional, List
+# services/credit-service/src/schemas/credit.py
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from uuid import UUID
 
-# ---------- INPUT DTOs ----------
-class CreditGrantIn(BaseModel):
-    """Input DTO for granting credits"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    amount: int = Field(..., gt=0)
-    reason: str = Field(..., pattern="^(trial|subscription|manual|one_time_pack)$")
-    external_ref: Optional[str] = Field(None, alias="externalRef")
-    metadata: Optional[dict] = None
-    
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-    
-    @field_validator('shop_domain')
-    def validate_shop_domain(cls, v: str) -> str:
-        v = v.lower().strip()
-        if not v.endswith('.myshopify.com'):
-            raise ValueError("Shop domain must end with .myshopify.com")
-        return v
+from pydantic import BaseModel, ConfigDict, Field
 
-# ---------- OUTPUT DTOs ----------
-class BalanceOut(BaseModel):
-    """Output DTO for balance query"""
-    balance: int
-    updated_at: datetime = Field(..., alias="updatedAt")
-    
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-class CreditGrantOut(BaseModel):
-    """Output DTO for grant result"""
-    ok: bool
-    balance: int
-    idempotent: bool = False
-    
+# Output DTOs
+class CreditBalanceOut(BaseModel):
+    """Credit balance response"""
+
+    balance: int = Field(..., description="Current credit balance")
+    total_granted: int = Field(..., description="Total credits ever granted")
+    total_consumed: int = Field(..., description="Total credits ever consumed")
+    platform_name: str = Field(..., description="Platform name (shopify, etc)")
+    platform_domain: str = Field(..., description="Platform domain")
+
     model_config = ConfigDict(from_attributes=True)
 
-class LedgerEntryOut(BaseModel):
-    """Output DTO for ledger entry"""
-    id: str
+
+class CreditTransactionOut(BaseModel):
+    """Credit transaction history item"""
+
+    id: UUID
     amount: int
-    reason: str
-    external_ref: Optional[str] = Field(None, alias="externalRef")
-    metadata: Optional[dict] = None
-    created_at: datetime = Field(..., alias="createdAt")
-    
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    operation: str  # 'credit' or 'debit'
+    balance_before: int
+    balance_after: int
+    reference_type: str
+    reference_id: str
+    description: str | None = None
+    metadata: dict | None = None
+    created_at: datetime
 
-class LedgerOut(BaseModel):
-    """Output DTO for ledger query"""
-    entries: List[LedgerEntryOut]
-    total: int
-    
     model_config = ConfigDict(from_attributes=True)
 
-# ---------- EVENT PAYLOADS ----------
-class CreditGrantEvent(BaseModel):
-    """Event payload for credit grant"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    credits: int
-    reason: str
-    external_ref: Optional[str] = Field(None, alias="externalRef")
-    metadata: Optional[dict] = None
-    correlation_id: str
-    
-    model_config = ConfigDict(populate_by_name=True)
 
-class TrialActivatedEvent(BaseModel):
-    """Event payload for trial activation"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    ends_at: datetime = Field(..., alias="endsAt")
-    days: int
-    trial_credits: Optional[int] = Field(None, alias="trialCredits")
-    correlation_id: str
-    
-    model_config = ConfigDict(populate_by_name=True)
+class TransactionListOut(BaseModel):
+    """Paginated transaction list"""
 
-class BalanceChangedEvent(BaseModel):
-    """Event payload for balance change"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    delta: int
-    new_balance: int = Field(..., alias="newBalance")
-    reason: str
-    external_ref: Optional[str] = Field(None, alias="externalRef")
-    at: datetime
-    
-    model_config = ConfigDict(populate_by_name=True)
-
-class BalanceLowEvent(BaseModel):
-    """Event payload for low balance"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    balance: int
-    threshold: int
-    at: datetime
-    
-    model_config = ConfigDict(populate_by_name=True)
-
-class BalanceDepletedEvent(BaseModel):
-    """Event payload for depleted balance"""
-    shop_domain: str = Field(..., alias="shopDomain")
-    at: datetime
-    
-    model_config = ConfigDict(populate_by_name=True)
-
+    transactions: list[CreditTransactionOut]
+    total: int
+    page: int
+    limit: int

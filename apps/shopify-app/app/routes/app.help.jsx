@@ -1,15 +1,15 @@
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import { 
-  Page, 
-  Layout, 
-  Card, 
-  Text, 
-  Button, 
-  TextField, 
-  Select, 
-  BlockStack, 
-  InlineStack, 
-  Badge, 
+import {
+  Page,
+  Layout,
+  Card,
+  Text,
+  Button,
+  TextField,
+  Select,
+  BlockStack,
+  InlineStack,
+  Badge,
   Banner,
   Link,
   List,
@@ -18,13 +18,9 @@ import {
   CalloutCard,
   Grid,
   Box,
-  Divider
+  Divider,
 } from "@shopify/polaris";
-import { 
-  BookOpenIcon,
-  ChevronDownIcon,
-  ChevronRightIcon
-} from "@shopify/polaris-icons";
+import { BookOpenIcon, ChevronDownIcon, ChevronRightIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import { useState, useCallback } from "react";
@@ -39,9 +35,9 @@ export const loader = async ({ request }) => {
 
   return Response.json({
     shop,
-    subscription: merchantStatus.data || { plan: null, status: 'inactive' },
-    supportEmail: 'support@glamyouup.com',
-    supportPhone: '1-800-GLAM-YOU'
+    subscription: merchantStatus.data || { plan: null, status: "inactive" },
+    supportEmail: "support@glamyouup.com",
+    supportPhone: "1-800-GLAM-YOU",
   });
 };
 
@@ -57,7 +53,7 @@ export const action = async ({ request }) => {
       category: formData.get("category"),
       priority: formData.get("priority"),
       message: formData.get("message"),
-      email: formData.get("email")
+      email: formData.get("email"),
     };
 
     // Submit to external API
@@ -74,11 +70,11 @@ export default function Help() {
   const navigate = useNavigate();
 
   // Form state
-  const [subject, setSubject] = useState('');
-  const [category, setCategory] = useState('technical');
-  const [priority, setPriority] = useState('normal');
-  const [message, setMessage] = useState('');
-  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState("");
+  const [category, setCategory] = useState("technical");
+  const [priority, setPriority] = useState("normal");
+  const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
   const [errors, setErrors] = useState({});
 
   // FAQ state
@@ -86,13 +82,13 @@ export default function Help() {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!subject.trim()) newErrors.subject = 'Subject is required';
-    if (!message.trim()) newErrors.message = 'Message is required';
-    if (!email.trim()) newErrors.email = 'Email is required';
+    if (!subject.trim()) newErrors.subject = "Subject is required";
+    if (!message.trim()) newErrors.message = "Message is required";
+    if (!email.trim()) newErrors.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+      newErrors.email = "Please enter a valid email";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -100,13 +96,13 @@ export default function Help() {
   const handleSubmit = () => {
     if (validateForm()) {
       fetcher.submit(
-        { 
+        {
           action: "submit_ticket",
           subject,
           category,
           priority,
           message,
-          email
+          email,
         },
         { method: "post" }
       );
@@ -114,91 +110,96 @@ export default function Help() {
   };
 
   const toggleFaq = (id) => {
-    setExpandedFaq(prev => ({
+    setExpandedFaq((prev) => ({
       ...prev,
-      [id]: !prev[id]
+      [id]: !prev[id],
     }));
   };
 
   const faqs = [
     {
-      id: 'trial',
-      question: 'How does the 14-day free trial work?',
-      answer: 'Your free trial starts when you activate it and includes 500 credits to test our selfie-based recommendation system. No credit card required. You can upgrade to a paid plan anytime during or after the trial.'
+      id: "trial",
+      question: "How does the 14-day free trial work?",
+      answer:
+        "Your free trial starts when you activate it and includes 500 credits to test our selfie-based recommendation system. No credit card required. You can upgrade to a paid plan anytime during or after the trial.",
     },
     {
-      id: 'credits',
-      question: 'What are credits and how are they used?',
-      answer: 'Credits are consumed when processing selfies and generating recommendations. 1 selfie analysis = 1 credit. Credits reset monthly based on your billing cycle. Unused credits do not roll over.'
+      id: "credits",
+      question: "What are credits and how are they used?",
+      answer:
+        "Credits are consumed when processing selfies and generating recommendations. 1 selfie analysis = 1 credit. Credits reset monthly based on your billing cycle. Unused credits do not roll over.",
     },
     {
-      id: 'sync',
-      question: 'Why is my catalog sync failing?',
-      answer: 'Common causes include: missing product images, products without published status, or temporary API issues. Ensure all products have images and are published. Try syncing again or contact support if the issue persists.'
+      id: "sync",
+      question: "Why is my catalog sync failing?",
+      answer:
+        "Common causes include: missing product images, products without published status, or temporary API issues. Ensure all products have images and are published. Try syncing again or contact support if the issue persists.",
     },
     {
-      id: 'billing',
-      question: 'How does billing work?',
-      answer: 'We use Shopify\'s native billing system. Charges appear on your regular Shopify invoice. You can upgrade, downgrade, or cancel anytime. Changes take effect at the next billing cycle.'
+      id: "billing",
+      question: "How does billing work?",
+      answer:
+        "We use Shopify's native billing system. Charges appear on your regular Shopify invoice. You can upgrade, downgrade, or cancel anytime. Changes take effect at the next billing cycle.",
     },
     {
-      id: 'api',
-      question: 'Can I integrate with my custom storefront?',
-      answer: 'Yes! Enterprise plans include API access for custom integrations. You can use our REST API to process selfies and get recommendations programmatically.'
+      id: "api",
+      question: "Can I integrate with my custom storefront?",
+      answer:
+        "Yes! Enterprise plans include API access for custom integrations. You can use our REST API to process selfies and get recommendations programmatically.",
     },
     {
-      id: 'accuracy',
-      question: 'How accurate are the recommendations?',
-      answer: 'Our AI achieves 92% accuracy in size recommendations and 87% in style matching. We continuously improve our models based on return data and user feedback.'
+      id: "accuracy",
+      question: "How accurate are the recommendations?",
+      answer:
+        "Our AI achieves 92% accuracy in size recommendations and 87% in style matching. We continuously improve our models based on return data and user feedback.",
     },
     {
-      id: 'privacy',
-      question: 'How is customer data handled?',
-      answer: 'We take privacy seriously. Selfies are processed in real-time and deleted immediately after analysis. We never store customer photos. All data is encrypted in transit and at rest.'
+      id: "privacy",
+      question: "How is customer data handled?",
+      answer:
+        "We take privacy seriously. Selfies are processed in real-time and deleted immediately after analysis. We never store customer photos. All data is encrypted in transit and at rest.",
     },
     {
-      id: 'returns',
-      question: 'How much can this reduce returns?',
-      answer: 'Merchants typically see 25-40% reduction in size-related returns. Results vary based on product category and implementation. Fashion apparel sees the highest improvement.'
-    }
+      id: "returns",
+      question: "How much can this reduce returns?",
+      answer:
+        "Merchants typically see 25-40% reduction in size-related returns. Results vary based on product category and implementation. Fashion apparel sees the highest improvement.",
+    },
   ];
 
   const quickLinks = [
     {
-      title: 'Getting Started Guide',
-      description: 'Step-by-step setup instructions',
-      url: 'https://docs.glamyouup.com/getting-started',
-      icon: BookOpenIcon
-    },
-    {
-      title: 'API Documentation',
-      description: 'For developers and custom integrations',
-      url: 'https://docs.glamyouup.com/api',
+      title: "Getting Started Guide",
+      description: "Step-by-step setup instructions",
+      url: "https://docs.glamyouup.com/getting-started",
       icon: BookOpenIcon,
-      requiresPlan: 'enterprise'
     },
     {
-      title: 'Best Practices',
-      description: 'Optimize your recommendation accuracy',
-      url: 'https://docs.glamyouup.com/best-practices',
-      icon: BookOpenIcon
+      title: "API Documentation",
+      description: "For developers and custom integrations",
+      url: "https://docs.glamyouup.com/api",
+      icon: BookOpenIcon,
+      requiresPlan: "enterprise",
     },
     {
-      title: 'Video Tutorials',
-      description: 'Visual guides for common tasks',
-      url: 'https://glamyouup.com/tutorials',
-      icon: BookOpenIcon
-    }
+      title: "Best Practices",
+      description: "Optimize your recommendation accuracy",
+      url: "https://docs.glamyouup.com/best-practices",
+      icon: BookOpenIcon,
+    },
+    {
+      title: "Video Tutorials",
+      description: "Visual guides for common tasks",
+      url: "https://glamyouup.com/tutorials",
+      icon: BookOpenIcon,
+    },
   ];
 
   // Show success message if ticket was submitted
   const ticketSubmitted = fetcher.data?.data?.ticket_id;
 
   return (
-    <Page
-      title="Help & Support"
-      breadcrumbs={[{ content: 'Dashboard', url: '/app' }]}
-    >
+    <Page title="Help & Support" breadcrumbs={[{ content: "Dashboard", url: "/app" }]}>
       <Layout>
         {ticketSubmitted && (
           <Layout.Section>
@@ -208,8 +209,8 @@ export default function Help() {
               onDismiss={() => window.location.reload()}
             >
               <Text>
-                Your ticket #{fetcher.data.data.ticket_id} has been submitted. 
-                We'll respond within 24 hours to {email}.
+                Your ticket #{fetcher.data.data.ticket_id} has been submitted. We'll respond within
+                24 hours to {email}.
               </Text>
             </Banner>
           </Layout.Section>
@@ -222,9 +223,9 @@ export default function Help() {
                 title="Email Support"
                 illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/email.svg?v=1701930959"
                 primaryAction={{
-                  content: 'Send Email',
+                  content: "Send Email",
                   url: `mailto:${supportEmail}`,
-                  external: true
+                  external: true,
                 }}
               >
                 <Text>{supportEmail}</Text>
@@ -237,20 +238,22 @@ export default function Help() {
                 title="Priority Support"
                 illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/phone.svg?v=1701930959"
                 primaryAction={{
-                  content: subscription?.plan === 'growth' || subscription?.plan === 'enterprise' 
-                    ? 'Call Now' 
-                    : 'Upgrade for Phone Support',
-                  url: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
-                    ? `tel:${supportPhone.replace(/-/g, '')}`
-                    : '/app/billing',
-                  external: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
+                  content:
+                    subscription?.plan === "growth" || subscription?.plan === "enterprise"
+                      ? "Call Now"
+                      : "Upgrade for Phone Support",
+                  url:
+                    subscription?.plan === "growth" || subscription?.plan === "enterprise"
+                      ? `tel:${supportPhone.replace(/-/g, "")}`
+                      : "/app/billing",
+                  external: subscription?.plan === "growth" || subscription?.plan === "enterprise",
                 }}
               >
                 <Text>{supportPhone}</Text>
                 <Text tone="subdued">
-                  {subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
-                    ? 'Mon-Fri 9am-6pm EST'
-                    : 'Available on Growth & Enterprise'}
+                  {subscription?.plan === "growth" || subscription?.plan === "enterprise"
+                    ? "Mon-Fri 9am-6pm EST"
+                    : "Available on Growth & Enterprise"}
                 </Text>
               </CalloutCard>
             </Grid.Cell>
@@ -260,18 +263,14 @@ export default function Help() {
                 title="Live Chat"
                 illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/chat.svg?v=1701930959"
                 primaryAction={{
-                  content: subscription?.plan === 'enterprise' 
-                    ? 'Start Chat' 
-                    : 'Enterprise Only',
-                  disabled: subscription?.plan !== 'enterprise',
-                  url: '#'
+                  content: subscription?.plan === "enterprise" ? "Start Chat" : "Enterprise Only",
+                  disabled: subscription?.plan !== "enterprise",
+                  url: "#",
                 }}
               >
                 <Text>Instant assistance</Text>
                 <Text tone="subdued">
-                  {subscription?.plan === 'enterprise'
-                    ? 'Available now'
-                    : 'Upgrade to Enterprise'}
+                  {subscription?.plan === "enterprise" ? "Available now" : "Upgrade to Enterprise"}
                 </Text>
               </CalloutCard>
             </Grid.Cell>
@@ -282,8 +281,10 @@ export default function Help() {
           <Layout.Section oneHalf>
             <Card>
               <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">Submit Support Ticket</Text>
-                
+                <Text variant="headingMd" as="h2">
+                  Submit Support Ticket
+                </Text>
+
                 <TextField
                   label="Email"
                   value={email}
@@ -306,12 +307,12 @@ export default function Help() {
                 <Select
                   label="Category"
                   options={[
-                    { label: 'Technical Issue', value: 'technical' },
-                    { label: 'Billing Question', value: 'billing' },
-                    { label: 'Catalog Sync', value: 'catalog' },
-                    { label: 'API Integration', value: 'api' },
-                    { label: 'Feature Request', value: 'feature' },
-                    { label: 'Other', value: 'other' }
+                    { label: "Technical Issue", value: "technical" },
+                    { label: "Billing Question", value: "billing" },
+                    { label: "Catalog Sync", value: "catalog" },
+                    { label: "API Integration", value: "api" },
+                    { label: "Feature Request", value: "feature" },
+                    { label: "Other", value: "other" },
                   ]}
                   value={category}
                   onChange={setCategory}
@@ -320,10 +321,10 @@ export default function Help() {
                 <Select
                   label="Priority"
                   options={[
-                    { label: 'Low - General question', value: 'low' },
-                    { label: 'Normal - Some impact on operations', value: 'normal' },
-                    { label: 'High - Significant impact', value: 'high' },
-                    { label: 'Urgent - Service is down', value: 'urgent' }
+                    { label: "Low - General question", value: "low" },
+                    { label: "Normal - Some impact on operations", value: "normal" },
+                    { label: "High - Significant impact", value: "high" },
+                    { label: "Urgent - Service is down", value: "urgent" },
                   ]}
                   value={priority}
                   onChange={setPriority}
@@ -340,16 +341,10 @@ export default function Help() {
                 />
 
                 <InlineStack gap="200">
-                  <Button 
-                    primary 
-                    onClick={handleSubmit}
-                    loading={fetcher.state === 'submitting'}
-                  >
+                  <Button primary onClick={handleSubmit} loading={fetcher.state === "submitting"}>
                     Submit Ticket
                   </Button>
-                  {fetcher.state === 'submitting' && (
-                    <Text tone="subdued">Submitting...</Text>
-                  )}
+                  {fetcher.state === "submitting" && <Text tone="subdued">Submitting...</Text>}
                 </InlineStack>
               </BlockStack>
             </Card>
@@ -359,7 +354,9 @@ export default function Help() {
             <BlockStack gap="400">
               <Card>
                 <BlockStack gap="400">
-                  <Text variant="headingMd" as="h2">Quick Links</Text>
+                  <Text variant="headingMd" as="h2">
+                    Quick Links
+                  </Text>
                   <BlockStack gap="300">
                     {quickLinks.map((link, index) => (
                       <Box key={index}>
@@ -379,7 +376,11 @@ export default function Help() {
                             </Text>
                           </BlockStack>
                         </InlineStack>
-                        {index < quickLinks.length - 1 && <Box paddingBlockStart="300"><Divider /></Box>}
+                        {index < quickLinks.length - 1 && (
+                          <Box paddingBlockStart="300">
+                            <Divider />
+                          </Box>
+                        )}
                       </Box>
                     ))}
                   </BlockStack>
@@ -389,7 +390,9 @@ export default function Help() {
               <Card>
                 <BlockStack gap="400">
                   <InlineStack align="space-between">
-                    <Text variant="headingMd" as="h2">System Status</Text>
+                    <Text variant="headingMd" as="h2">
+                      System Status
+                    </Text>
                     <Badge tone="success">All Systems Operational</Badge>
                   </InlineStack>
                   <BlockStack gap="200">
@@ -418,7 +421,9 @@ export default function Help() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Frequently Asked Questions</Text>
+              <Text variant="headingMd" as="h2">
+                Frequently Asked Questions
+              </Text>
               <BlockStack gap="300">
                 {faqs.map((faq) => (
                   <Box key={faq.id}>
@@ -431,9 +436,7 @@ export default function Help() {
                         ariaControls={`faq-${faq.id}`}
                       >
                         <InlineStack gap="200" blockAlign="center">
-                          <Icon 
-                            source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon} 
-                          />
+                          <Icon source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon} />
                           <Text variant="bodyMd" fontWeight="semibold">
                             {faq.question}
                           </Text>
@@ -442,7 +445,7 @@ export default function Help() {
                       <Collapsible
                         open={expandedFaq[faq.id]}
                         id={`faq-${faq.id}`}
-                        transition={{ duration: '200ms', timingFunction: 'ease' }}
+                        transition={{ duration: "200ms", timingFunction: "ease" }}
                       >
                         <Box paddingInlineStart="600">
                           <Text tone="subdued">{faq.answer}</Text>
@@ -462,22 +465,29 @@ export default function Help() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Troubleshooting Tips</Text>
+              <Text variant="headingMd" as="h2">
+                Troubleshooting Tips
+              </Text>
               <List>
                 <List.Item>
-                  <Text fontWeight="semibold">Catalog not syncing?</Text> Ensure all products have images and are set to 'Active' status in your Shopify admin.
+                  <Text fontWeight="semibold">Catalog not syncing?</Text> Ensure all products have
+                  images and are set to 'Active' status in your Shopify admin.
                 </List.Item>
                 <List.Item>
-                  <Text fontWeight="semibold">Credits not resetting?</Text> Credits reset based on your billing cycle date, not calendar month.
+                  <Text fontWeight="semibold">Credits not resetting?</Text> Credits reset based on
+                  your billing cycle date, not calendar month.
                 </List.Item>
                 <List.Item>
-                  <Text fontWeight="semibold">API rate limits?</Text> Enterprise plans have higher rate limits. Check headers for X-RateLimit-Remaining.
+                  <Text fontWeight="semibold">API rate limits?</Text> Enterprise plans have higher
+                  rate limits. Check headers for X-RateLimit-Remaining.
                 </List.Item>
                 <List.Item>
-                  <Text fontWeight="semibold">Recommendations not showing?</Text> Verify the Glam You Up widget is installed on your product pages.
+                  <Text fontWeight="semibold">Recommendations not showing?</Text> Verify the Glam
+                  You Up widget is installed on your product pages.
                 </List.Item>
                 <List.Item>
-                  <Text fontWeight="semibold">Billing issues?</Text> Billing is managed through Shopify. Check your Shopify admin → Settings → Billing.
+                  <Text fontWeight="semibold">Billing issues?</Text> Billing is managed through
+                  Shopify. Check your Shopify admin → Settings → Billing.
                 </List.Item>
               </List>
             </BlockStack>
@@ -495,7 +505,9 @@ export function ErrorBoundary({ error }) {
         <Layout.Section>
           <Card>
             <BlockStack gap="300">
-              <Text variant="headingMd" as="h2">Unable to load support page</Text>
+              <Text variant="headingMd" as="h2">
+                Unable to load support page
+              </Text>
               <Text tone="critical">{error.message}</Text>
               <Button url="/app" primary>
                 Return to dashboard

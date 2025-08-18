@@ -1,6 +1,19 @@
 import { json } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { Page, Layout, Card, Text, Button, Banner, ProgressBar, Grid, BlockStack, InlineStack, Badge, DataTable } from "@shopify/polaris";
+import {
+  Page,
+  Layout,
+  Card,
+  Text,
+  Button,
+  Banner,
+  ProgressBar,
+  Grid,
+  BlockStack,
+  InlineStack,
+  Badge,
+  DataTable,
+} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import BillingPlans from "../components/BillingPlans";
@@ -12,14 +25,14 @@ export const loader = async ({ request }) => {
 
   const [merchantStatus, creditsStatus] = await Promise.all([
     apiClient.getMerchant(shop),
-    apiClient.getCreditsStatus(shop)
+    apiClient.getCreditsStatus(shop),
   ]);
 
   return json({
     shop,
     subscription: merchantStatus.data,
     credits: creditsStatus.data,
-    billing
+    billing,
   });
 };
 
@@ -32,7 +45,7 @@ export const action = async ({ request }) => {
   const planDetails = {
     starter: { price: 29, credits: 1000 },
     growth: { price: 99, credits: 5000 },
-    enterprise: { price: 299, credits: -1 } // -1 for unlimited
+    enterprise: { price: 299, credits: -1 }, // -1 for unlimited
   };
 
   const selectedPlan = planDetails[plan];
@@ -45,15 +58,11 @@ export const action = async ({ request }) => {
       plan: plan,
       amount: selectedPlan.price,
       currencyCode: "USD",
-      interval: "EVERY_30_DAYS"
+      interval: "EVERY_30_DAYS",
     });
 
     // Notify external API about subscription
-    const result = await apiClient.createSubscription(
-      session.shop,
-      plan,
-      charge.id
-    );
+    const result = await apiClient.createSubscription(session.shop, plan, charge.id);
 
     return json(result);
   } catch (error) {
@@ -66,53 +75,47 @@ export default function Billing() {
   const fetcher = useFetcher();
 
   const handleSelectPlan = (plan) => {
-    fetcher.submit(
-      { plan },
-      { method: "post" }
-    );
+    fetcher.submit({ plan }, { method: "post" });
   };
 
   const billingHistory = [
     {
-      date: '2024-01-15',
-      amount: '$99.00',
-      status: 'Paid',
-      invoice: '#INV-001'
+      date: "2024-01-15",
+      amount: "$99.00",
+      status: "Paid",
+      invoice: "#INV-001",
     },
     {
-      date: '2023-12-15',
-      amount: '$99.00',
-      status: 'Paid',
-      invoice: '#INV-002'
-    }
+      date: "2023-12-15",
+      amount: "$99.00",
+      status: "Paid",
+      invoice: "#INV-002",
+    },
   ];
 
-  const rows = billingHistory.map(item => [
+  const rows = billingHistory.map((item) => [
     item.date,
     item.amount,
-    <Badge tone={item.status === 'Paid' ? 'success' : 'warning'}>{item.status}</Badge>,
-    item.invoice
+    <Badge tone={item.status === "Paid" ? "success" : "warning"}>{item.status}</Badge>,
+    item.invoice,
   ]);
 
   return (
-    <Page
-      title="Billing & Plans"
-      breadcrumbs={[{ content: 'Dashboard', url: '/app' }]}
-    >
+    <Page title="Billing & Plans" breadcrumbs={[{ content: "Dashboard", url: "/app" }]}>
       <Layout>
-        {subscription?.status === 'trial' && (
+        {subscription?.status === "trial" && (
           <Layout.Section>
             <Banner
               title="Free trial active"
               tone="info"
               action={{
-                content: 'View plans',
-                onAction: () => document.querySelector('#plans-section').scrollIntoView()
+                content: "View plans",
+                onAction: () => document.querySelector("#plans-section").scrollIntoView(),
               }}
             >
               <Text>
-                Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}.
-                Choose a plan to continue using Glam You Up after your trial.
+                Your trial ends on {new Date(subscription.trialEndsAt).toLocaleDateString()}. Choose
+                a plan to continue using Glam You Up after your trial.
               </Text>
             </Banner>
           </Layout.Section>
@@ -124,7 +127,9 @@ export default function Billing() {
               <BlockStack gap="400">
                 <InlineStack align="space-between">
                   <BlockStack gap="200">
-                    <Text variant="headingMd" as="h2">Current Plan</Text>
+                    <Text variant="headingMd" as="h2">
+                      Current Plan
+                    </Text>
                     <InlineStack gap="200">
                       <Badge tone="success">{subscription.plan.toUpperCase()}</Badge>
                       <Text tone="subdued">
@@ -151,7 +156,7 @@ export default function Billing() {
           <BillingPlans
             currentPlan={subscription?.plan}
             onSelectPlan={handleSelectPlan}
-            loading={fetcher.state === 'submitting'}
+            loading={fetcher.state === "submitting"}
           />
         </Layout.Section>
 
@@ -159,10 +164,12 @@ export default function Billing() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">Billing History</Text>
+                <Text variant="headingMd" as="h2">
+                  Billing History
+                </Text>
                 <DataTable
-                  columnContentTypes={['text', 'text', 'text', 'text']}
-                  headings={['Date', 'Amount', 'Status', 'Invoice']}
+                  columnContentTypes={["text", "text", "text", "text"]}
+                  headings={["Date", "Amount", "Status", "Invoice"]}
                   rows={rows}
                 />
               </BlockStack>

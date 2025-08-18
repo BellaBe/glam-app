@@ -1,5 +1,17 @@
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import { Page, Layout, Card, Button, Text, Badge, CalloutCard, ProgressBar, BlockStack, InlineStack, Box } from "@shopify/polaris";
+import {
+  Page,
+  Layout,
+  Card,
+  Button,
+  Text,
+  Badge,
+  CalloutCard,
+  ProgressBar,
+  BlockStack,
+  InlineStack,
+  Box,
+} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import { useState, useEffect } from "react";
@@ -9,42 +21,41 @@ import SubscriptionStatus from "../components/SubscriptionStatus";
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
-  
-  console.log("Loader called for shop:", shop);
 
   // Fetch data from external API
   const [merchantStatus, creditsStatus, catalogStatus, analytics] = await Promise.all([
     apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop),
     apiClient.getCatalogStatus(shop),
-    apiClient.getAnalytics(shop, 
+    apiClient.getAnalytics(
+      shop,
       new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       new Date().toISOString()
-    )
+    ),
   ]);
 
   return Response.json({
     shop,
     subscription: merchantStatus.data || {
-      status: 'inactive',
+      status: "inactive",
       plan: null,
       trialEndsAt: null,
-      nextBillingDate: null
+      nextBillingDate: null,
     },
     credits: creditsStatus.data || {
       used: 0,
       limit: 0,
-      resetsAt: null
+      resetsAt: null,
     },
     catalog: catalogStatus.data || {
       productCount: 0,
       lastSyncAt: null,
-      syncStatus: 'idle'
+      syncStatus: "idle",
     },
     analytics: analytics.data || {
       selfiesToday: 0,
-      recommendationsToday: 0
-    }
+      recommendationsToday: 0,
+    },
   });
 };
 
@@ -76,15 +87,15 @@ export default function Index() {
   useEffect(() => {
     if (fetcher.data?.websocket_url) {
       const ws = new WebSocket(fetcher.data.websocket_url);
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'progress') {
+        if (data.type === "progress") {
           setSyncProgress({
             percent: (data.processed / data.total) * 100,
-            message: data.message
+            message: data.message,
           });
-        } else if (data.type === 'complete') {
+        } else if (data.type === "complete") {
           setSyncProgress(null);
           ws.close();
           // Reload page to get updated data
@@ -102,45 +113,39 @@ export default function Index() {
   }, [fetcher.data]);
 
   const handleStartTrial = () => {
-    fetcher.submit(
-      { action: "start_trial" },
-      { method: "post" }
-    );
+    fetcher.submit({ action: "start_trial" }, { method: "post" });
   };
 
   const handleSyncCatalog = () => {
-    fetcher.submit(
-      { action: "sync_catalog" },
-      { method: "post" }
-    );
+    fetcher.submit({ action: "sync_catalog" }, { method: "post" });
   };
 
   const checklistItems = [
     {
-      label: subscription.status === 'inactive' ? 'Start free trial' : 'Subscription active',
-      completed: subscription.status !== 'inactive',
-      action: subscription.status === 'inactive' ? handleStartTrial : null
+      label: subscription.status === "inactive" ? "Start free trial" : "Subscription active",
+      completed: subscription.status !== "inactive",
+      action: subscription.status === "inactive" ? handleStartTrial : null,
     },
     {
-      label: catalog.productCount > 0 ? `${catalog.productCount} products synced` : 'Sync catalog',
+      label: catalog.productCount > 0 ? `${catalog.productCount} products synced` : "Sync catalog",
       completed: catalog.productCount > 0,
-      action: catalog.productCount === 0 ? handleSyncCatalog : null
+      action: catalog.productCount === 0 ? handleSyncCatalog : null,
     },
     {
-      label: 'View analytics',
+      label: "View analytics",
       completed: analytics.selfiesToday > 0 || analytics.recommendationsToday > 0,
-      action: () => navigate('/app/analytics')
-    }
+      action: () => navigate("/app/analytics"),
+    },
   ];
 
   return (
     <Page>
       <Layout>
         <Layout.Section>
-          <SubscriptionStatus 
+          <SubscriptionStatus
             subscription={subscription}
             onStartTrial={handleStartTrial}
-            onViewPlans={() => navigate('/app/billing')}
+            onViewPlans={() => navigate("/app/billing")}
           />
         </Layout.Section>
 
@@ -157,21 +162,19 @@ export default function Index() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Getting Started</Text>
-              <ProgressBar 
+              <Text variant="headingMd" as="h2">
+                Getting Started
+              </Text>
+              <ProgressBar
                 size="small"
-                progress={checklistItems.filter(item => item.completed).length * 33.33}
+                progress={checklistItems.filter((item) => item.completed).length * 33.33}
               />
               <BlockStack gap="300">
                 {checklistItems.map((item, index) => (
                   <InlineStack key={index} align="space-between" blockAlign="center">
                     <InlineStack gap="200" blockAlign="center">
                       <Box>
-                        {item.completed ? (
-                          <Badge tone="success">✓</Badge>
-                        ) : (
-                          <Badge>Pending</Badge>
-                        )}
+                        {item.completed ? <Badge tone="success">✓</Badge> : <Badge>Pending</Badge>}
                       </Box>
                       <Text>{item.label}</Text>
                     </InlineStack>
@@ -194,7 +197,7 @@ export default function Index() {
               illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/tag.svg?v=1701930959"
               primaryAction={{
                 content: `${Math.round(syncProgress.percent)}% Complete`,
-                disabled: true
+                disabled: true,
               }}
             >
               <Text>{syncProgress.message}</Text>
@@ -213,7 +216,9 @@ export function ErrorBoundary({ error }) {
         <Layout.Section>
           <Card>
             <BlockStack gap="300">
-              <Text variant="headingMd" as="h2">Something went wrong</Text>
+              <Text variant="headingMd" as="h2">
+                Something went wrong
+              </Text>
               <Text tone="critical">{error.message}</Text>
               <Button url="/app" primary>
                 Return to dashboard

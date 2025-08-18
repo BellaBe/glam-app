@@ -11,4 +11,3 @@ Content-Type: application/json
   "include_silhouette": false,
   "save_image": true
 }
-

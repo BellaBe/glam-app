@@ -8,7 +8,7 @@ prisma/
 scripts/
 ├── __init__.py
 ├── test_webhook.py
-│   
+│
 │   ```py
 │   """Manual test script for webhook service"""
 │   import asyncio
@@ -19,8 +19,8 @@ scripts/
 │   import base64
 │   import uuid7
 │   from datetime import datetime
-│   
-│   
+│
+│
 │   def compute_hmac(body: bytes, secret: str) -> str:
 │       """Compute HMAC-SHA256 for webhook body"""
 │       hash_obj = hmac.new(
@@ -29,8 +29,8 @@ scripts/
 │           hashlib.sha256
 │       )
 │       return base64.b64encode(hash_obj.digest()).decode('utf-8')
-│   
-│   
+│
+│
 │   async def test_order_webhook():
 │       """Test order created webhook"""
 │       # Webhook payload
@@ -58,9 +58,9 @@ scripts/
 │           ],
 │           "myshopify_domain": "test-shop.myshopify.com"
 │       }
-│       
+│
 │       body = json.dumps(payload).encode()
-│       
+│
 │       # Headers
 │       headers = {
 │           "Content-Type": "application/json",
@@ -70,19 +70,19 @@ scripts/
 │           "X-Shopify-Api-Version": "2024-01",
 │           "X-Shopify-Hmac-Sha256": compute_hmac(body, "your-shopify-webhook-secret")
 │       }
-│       
+│
 │       async with httpx.AsyncClient() as client:
 │           response = await client.post(
 │               "http://localhost:8112/api/v1/shopify/webhooks/orders/create",
 │               content=body,
 │               headers=headers
 │           )
-│           
+│
 │           print(f"Status: {response.status_code}")
 │           print(f"Response: {response.json()}")
 │           print(f"Headers: {dict(response.headers)}")
-│   
-│   
+│
+│
 │   async def test_app_uninstalled_webhook():
 │       """Test app uninstalled webhook"""
 │       payload = {
@@ -93,9 +93,9 @@ scripts/
 │           "created_at": "2024-01-01T00:00:00Z",
 │           "myshopify_domain": "test-shop.myshopify.com"
 │       }
-│       
+│
 │       body = json.dumps(payload).encode()
-│       
+│
 │       headers = {
 │           "Content-Type": "application/json",
 │           "X-Shopify-Topic": "app/uninstalled",
@@ -104,24 +104,24 @@ scripts/
 │           "X-Shopify-Api-Version": "2024-01",
 │           "X-Shopify-Hmac-Sha256": compute_hmac(body, "your-shopify-webhook-secret")
 │       }
-│       
+│
 │       async with httpx.AsyncClient() as client:
 │           response = await client.post(
 │               "http://localhost:8112/api/v1/shopify/webhooks/app/uninstalled",
 │               content=body,
 │               headers=headers
 │           )
-│           
+│
 │           print(f"Status: {response.status_code}")
 │           print(f"Response: {response.json()}")
-│   
-│   
+│
+│
 │   async def test_duplicate_webhook():
 │       """Test duplicate webhook handling"""
 │       webhook_id = str(uuid7.uuid7())
 │       payload = {"test": "duplicate"}
 │       body = json.dumps(payload).encode()
-│       
+│
 │       headers = {
 │           "Content-Type": "application/json",
 │           "X-Shopify-Topic": "orders/create",
@@ -130,7 +130,7 @@ scripts/
 │           "X-Shopify-Api-Version": "2024-01",
 │           "X-Shopify-Hmac-Sha256": compute_hmac(body, "your-shopify-webhook-secret")
 │       }
-│       
+│
 │       async with httpx.AsyncClient() as client:
 │           # First request
 │           response1 = await client.post(
@@ -139,7 +139,7 @@ scripts/
 │               headers=headers
 │           )
 │           print(f"First request - Status: {response1.status_code}, Response: {response1.json()}")
-│           
+│
 │           # Second request with same webhook ID
 │           response2 = await client.post(
 │               "http://localhost:8112/api/v1/shopify/webhooks/test",
@@ -147,69 +147,69 @@ scripts/
 │               headers=headers
 │           )
 │           print(f"Second request - Status: {response2.status_code}, Response: {response2.json()}")
-│   
-│   
+│
+│
 │   async def test_health_check():
 │       """Test health endpoints"""
 │       async with httpx.AsyncClient() as client:
 │           # Basic health
 │           response = await client.get("http://localhost:8112/api/v1/health")
 │           print(f"Basic health: {response.json()}")
-│           
+│
 │           # Detailed health
 │           response = await client.get("http://localhost:8112/api/v1/health/detailed")
 │           print(f"Detailed health: {json.dumps(response.json(), indent=2)}")
-│   
-│   
+│
+│
 │   async def main():
 │       print("Testing Webhook Service...")
 │       print("\n1. Testing Order Created Webhook:")
 │       await test_order_webhook()
-│       
+│
 │       print("\n2. Testing App Uninstalled Webhook:")
 │       await test_app_uninstalled_webhook()
-│       
+│
 │       print("\n3. Testing Duplicate Webhook:")
 │       await test_duplicate_webhook()
-│       
+│
 │       print("\n4. Testing Health Checks:")
 │       await test_health_check()
-│   
-│   
+│
+│
 │   if __name__ == "__main__":
 │       asyncio.run(main())
-│   
-│   
+│
+│
 │   ```
-│   
+│
 └── validate_event_context.py
-    
+
     ```py
     """Validate proper EventContext usage across services."""
     import ast
     import sys
     from pathlib import Path
-    
-    
+
+
     def check_event_context_usage():
         """Ensure EventContext.create() calls include proper correlation handling."""
         errors = []
-        
+
         for py_file in Path("src").rglob("*.py"):
             if py_file.name.startswith("__"):
                 continue
-                
+
             with open(py_file) as f:
                 try:
                     tree = ast.parse(f.read())
                     for node in ast.walk(tree):
-                        if (isinstance(node, ast.Call) and 
-                            hasattr(node.func, 'attr') and 
+                        if (isinstance(node, ast.Call) and
+                            hasattr(node.func, 'attr') and
                             node.func.attr == 'create' and
                             hasattr(node.func, 'value') and
                             hasattr(node.func.value, 'id') and
                             node.func.value.id == 'EventContext'):
-                            
+
                             # Check if correlation_id is properly handled
                             keywords = {kw.arg for kw in node.keywords if kw.arg}
                             if 'correlation_id' not in keywords:
@@ -219,79 +219,79 @@ scripts/
                                 )
                 except SyntaxError:
                     continue
-        
+
         if errors:
             for error in errors:
                 print(error, file=sys.stderr)
             print("\nTip: Add correlation_id parameter to EventContext.create() calls", file=sys.stderr)
             print("Example: EventContext.create(..., correlation_id=get_correlation_context())", file=sys.stderr)
             sys.exit(1)
-        
+
         print("✅ All EventContext.create() calls properly handle correlation_id")
-    
-    
+
+
     def check_uuid_usage():
         """Ensure uuid7() is used instead of uuid4() for event IDs."""
         errors = []
-        
+
         for py_file in Path("src").rglob("*.py"):
             if py_file.name.startswith("__"):
                 continue
-                
+
             with open(py_file) as f:
                 content = f.read()
                 lines = content.split('\n')
                 for i, line in enumerate(lines, 1):
                     if 'uuid4()' in line and 'import' not in line:
                         errors.append(f"{py_file}:{i} - Use uuid7() instead of uuid4()")
-        
+
         if errors:
             for error in errors:
                 print(error, file=sys.stderr)
             print("\nTip: Use uuid7() for monotonic ordering in events", file=sys.stderr)
             sys.exit(1)
-        
+
         print("✅ All UUID usage follows monotonic ordering")
-    
-    
+
+
     if __name__ == "__main__":
         check_event_context_usage()
         check_uuid_usage()
-    
-    
+
+
     ```
-    
+
 src/
 ├── api/
 │   ├── v1/
 │   │   ├── __init__.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   from fastapi import APIRouter
 │   │   │   from .webhooks import router as webhooks_router
-│   │   │   
+│   │   │
 │   │   │   router = APIRouter(prefix="/v1")
-│   │   │   
+│   │   │
 │   │   │   # Include v1 API routes
 │   │   │   router.include_router(webhooks_router, tags=["webhooks"])
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   └── webhooks.py
-│   │       
+│   │
 │   │       ```py
 │   │       # services/webhook-service/src/api/v1/webhooks.py
 │   │       from fastapi import APIRouter, Body, HTTPException
 │   │       import json
-│   │       
+│   │
 │   │       from shared.api.dependencies import RequestContextDep, InternalJwtDep, ShopifyHeadersDep
 │   │       from ...dependencies import WebhookServiceDep
 │   │       from ...models import WebhookPlatform, parse_topic
 │   │       from ...exceptions import PayloadTooLargeError, MalformedPayloadError, DomainMismatchError, InvalidContentTypeError
 │   │       from ...schemas.webhooks import WebhookResponse
-│   │       
-│   │       
+│   │
+│   │
 │   │       router = APIRouter(prefix="/webhooks")
-│   │       
+│   │
 │   │       @router.post("/shopify", response_model=WebhookResponse)
 │   │       async def receive_shopify_webhook(
 │   │           svc: WebhookServiceDep,
@@ -303,46 +303,46 @@ src/
 │   │           """
 │   │           Receive webhook from Shopify BFF.
 │   │           """
-│   │           
+│   │
 │   │           ct = (ctx.content_type or "").lower()
 │   │           if "application/json" not in ct:
 │   │               raise InvalidContentTypeError(ct)
-│   │           
-│   │           
+│   │
+│   │
 │   │           # Check payload size
 │   │           if len(body) > 2097152:  # 2MB limit
 │   │               raise PayloadTooLargeError(len(body), 2097152)
-│   │           
+│   │
 │   │           # Parse the body
 │   │           try:
 │   │               payload = json.loads(body)
 │   │           except Exception:
 │   │               raise MalformedPayloadError()
-│   │           
+│   │
 │   │           # Extract headers
 │   │           shop_domain = headers.shop_domain
 │   │           topic = parse_topic(headers.topic_raw)
 │   │           webhook_id = headers.webhook_id
-│   │           
+│   │
 │   │           # Validate shop domain matches JWT
 │   │           if auth.shop != shop_domain:
 │   │               raise DomainMismatchError(
 │   │                   header_domain=shop_domain,
 │   │                   jwt_domain=auth.shop
 │   │               )
-│   │           
+│   │
 │   │           # Validate scope
 │   │           if auth.scope != "bff:call":
 │   │               raise HTTPException(
 │   │                   status_code=403,
 │   │                   detail=f"Invalid JWT scope: {auth.scope}. Expected: bff:call"
 │   │               )
-│   │           
+│   │
 │   │           payload_domain = (payload.get("myshopify_domain") or payload.get("domain") or "").lower()
 │   │           if payload_domain and payload_domain != shop_domain:
 │   │               raise DomainMismatchError(header_domain=shop_domain, payload_domain=payload_domain)
-│   │       
-│   │           
+│   │
+│   │
 │   │           # Process the webhook
 │   │           entry_id = await svc.receive_webhook(
 │   │               platform=WebhookPlatform.SHOPIFY,
@@ -352,54 +352,54 @@ src/
 │   │               payload=payload,
 │   │               correlation_id=ctx.correlation_id,
 │   │           )
-│   │           
+│   │
 │   │           return WebhookResponse(success=True, webhook_id=entry_id)
 │   │       ```
-│   │       
+│   │
 │   └── __init__.py
-│       
+│
 │       ```py
 │       from fastapi import APIRouter
 │       from .v1 import webhooks
-│       
-│       
+│
+│
 │       router = APIRouter(prefix="/api")
-│       
+│
 │       # Include v1 routers
 │       router.include_router(webhooks.router, tags=["webhooks"])
 │       ```
-│       
+│
 ├── events/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Event publishers and listeners"""
-│   │   
+│   │
 │   │   from .publishers import WebhookEventPublisher
 │   │   from .listeners import WebhookProcessListener
-│   │   
+│   │
 │   │   __all__ = ["WebhookEventPublisher", "WebhookProcessListener"]
-│   │   
-│   │   
+│   │
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── publishers.py
-│       
+│
 │       ```py
 │       import uuid7
 │       from typing import Optional, List
 │       from shared.messaging.publisher import Publisher
 │       from shared.messaging.subjects import Subjects
 │       from shared.utils.logger import ServiceLogger
-│       
-│       
+│
+│
 │       class WebhookEventPublisher(Publisher):
 │           """Publisher for webhook domain events"""
-│           
+│
 │           @property
 │           def service_name(self) -> str:
 │               return "webhook-service"
-│           
+│
 │           async def app_uninstalled(
 │               self,
 │               shop_domain: str,
@@ -415,7 +415,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def app_subscription_updated(
 │               self,
 │               shop_domain: str,
@@ -435,7 +435,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def app_purchase_updated(
 │               self,
 │               shop_domain: str,
@@ -457,7 +457,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def order_created(
 │               self,
 │               shop_domain: str,
@@ -483,7 +483,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def catalog_product_event(
 │               self,
 │               event_type: str,  # created, updated, deleted
@@ -502,13 +502,13 @@ src/
 │               }
 │               if updated_at and event_type == "updated":
 │                   data["updated_at"] = updated_at
-│                   
+│
 │               return await self.publish_event(
 │                   subject=subject,
 │                   data=data,
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def catalog_collection_event(
 │               self,
 │               event_type: str,  # created, updated, deleted
@@ -527,13 +527,13 @@ src/
 │               }
 │               if updated_at and event_type == "updated":
 │                   data["updated_at"] = updated_at
-│                   
+│
 │               return await self.publish_event(
 │                   subject=subject,
 │                   data=data,
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def inventory_updated(
 │               self,
 │               shop_domain: str,
@@ -555,7 +555,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def gdpr_data_request(
 │               self,
 │               shop_domain: str,
@@ -575,7 +575,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def gdpr_customer_redact(
 │               self,
 │               shop_domain: str,
@@ -595,7 +595,7 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│           
+│
 │           async def gdpr_shop_redact(
 │               self,
 │               shop_domain: str,
@@ -611,47 +611,47 @@ src/
 │                   },
 │                   correlation_id=correlation_id
 │               )
-│       
-│       
+│
+│
 │       ```
-│       
+│
 ├── models/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Domain models and enums"""
-│   │   
+│   │
 │   │   from .enums import (
 │   │       WebhookPlatform,
 │   │       WebhookStatus,
 │   │       ShopifyWebhookTopic,
 │   │       parse_topic
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "WebhookPlatform",
-│   │       "WebhookStatus", 
+│   │       "WebhookStatus",
 │   │       "ShopifyWebhookTopic",
 │   │       "parse_topic"
 │   │   ]
-│   │   
-│   │   
+│   │
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── enums.py
-│       
+│
 │       ```py
 │       from enum import Enum
-│       
+│
 │       class WebhookPlatform(str, Enum):
 │           SHOPIFY = "shopify"
-│       
+│
 │       class WebhookStatus(str, Enum):
 │           RECEIVED = "RECEIVED"
 │           PROCESSING = "PROCESSING"
 │           PROCESSED = "PROCESSED"
 │           FAILED = "FAILED"
-│       
+│
 │       class ShopifyWebhookTopic(str, Enum):
 │           """
 │           Canonical Shopify topics. Enum values are the *raw* Shopify topic strings.
@@ -672,7 +672,7 @@ src/
 │           CUSTOMERS_REDACT               = "customers/redact"
 │           SHOP_REDACT                    = "shop/redact"
 │           UNKNOWN                        = "__unknown__"
-│       
+│
 │       def parse_topic(raw: str) -> ShopifyWebhookTopic:
 │           """
 │           Convert raw header string → Enum. Unknown → ShopifyWebhookTopic.UNKNOWN.
@@ -682,33 +682,33 @@ src/
 │           except ValueError:
 │               return ShopifyWebhookTopic.UNKNOWN
 │       ```
-│       
+│
 ├── repositories/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Data access layer"""
-│   │   
+│   │
 │   │   from .webhook_repository import WebhookRepository
-│   │   
+│   │
 │   │   __all__ = ["WebhookRepository"]
-│   │   
-│   │   
+│   │
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── webhook_repository.py
-│       
+│
 │       ```py
 │       # services/webhook-service/src/repositories/webhook_repository.py
 │       from typing import Tuple, Optional, Any
 │       from prisma import Prisma
 │       from prisma.errors import UniqueViolationError
 │       from ..models.enums import WebhookStatus
-│       
+│
 │       class WebhookRepository:
 │           def __init__(self, prisma: Prisma):
 │               self.prisma = prisma
-│       
+│
 │           async def create_or_get_existing(
 │               self,
 │               *,
@@ -725,10 +725,10 @@ src/
 │               existing = await self.prisma.webhookentry.find_unique(
 │                   where={"webhook_id": webhook_id}
 │               )
-│               
+│
 │               if existing:
 │                   return existing, False
-│               
+│
 │               # Create new
 │               try:
 │                   webhook = await self.prisma.webhookentry.create(
@@ -748,7 +748,7 @@ src/
 │                       where={"webhook_id": webhook_id}
 │                   )
 │                   return existing, False
-│       
+│
 │           async def update_status(
 │               self,
 │               id: str,
@@ -757,20 +757,20 @@ src/
 │           ):
 │               """Update webhook processing status"""
 │               from datetime import datetime
-│               
+│
 │               update_data = {"status": status.value}
-│               
+│
 │               if status == WebhookStatus.PROCESSED:
 │                   update_data["processed_at"] = datetime.utcnow()
-│               
+│
 │               if error_message:
 │                   update_data["error_message"] = error_message
-│                   
+│
 │               return await self.prisma.webhookentry.update(
 │                   where={"id": id},
 │                   data=update_data
 │               )
-│       
+│
 │           async def increment_attempts(self, id: str):
 │               """Increment processing attempts counter"""
 │               return await self.prisma.webhookentry.update(
@@ -778,42 +778,42 @@ src/
 │                   data={"processing_attempts": {"increment": 1}}
 │               )
 │       ```
-│       
+│
 ├── schemas/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   from .webhooks import WebhookResponse
-│   │   
+│   │
 │   │   __all__ = ["WebhookResponse"]
 │   │   ```
-│   │   
+│   │
 │   └── webhooks.py
-│       
+│
 │       ```py
 │       from pydantic import BaseModel
-│       
-│       
+│
+│
 │       class WebhookResponse(BaseModel):
 │           success: bool
 │           webhook_id: str
 │       ```
-│       
+│
 ├── services/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Business logic services"""
-│   │   
+│   │
 │   │   from .webhook_service import WebhookService
-│   │   
+│   │
 │   │   __all__ = ["WebhookService"]
-│   │   
-│   │   
+│   │
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── webhook_service.py
-│       
+│
 │       ```py
 │       # services/webhook-service/src/services/webhook_service.py
 │       from typing import Dict, Any
@@ -822,7 +822,7 @@ src/
 │       from ..repositories.webhook_repository import WebhookRepository
 │       from ..events.publishers import WebhookEventPublisher
 │       from ..config import ServiceConfig
-│       
+│
 │       class WebhookService:
 │           def __init__(
 │               self,
@@ -835,7 +835,7 @@ src/
 │               self.repository = repository
 │               self.publisher = publisher
 │               self.logger = logger
-│       
+│
 │           async def receive_webhook(
 │               self,
 │               *,
@@ -850,9 +850,9 @@ src/
 │               Store webhook and publish domain events if new.
 │               Returns the webhook entry ID.
 │               """
-│       
+│
 │               if topic is ShopifyWebhookTopic.UNKNOWN:
-│       
+│
 │                   self.logger.warning(
 │                       "Received webhook with unknown topic",
 │                       extra={
@@ -863,7 +863,7 @@ src/
 │                           "correlation_id": correlation_id,
 │                       }
 │                   )
-│       
+│
 │               # Store the webhook
 │               entry, is_new = await self.repository.create_or_get_existing(
 │                   platform=platform.value,
@@ -872,7 +872,7 @@ src/
 │                   shop_domain=shop_domain,
 │                   payload=payload,
 │               )
-│       
+│
 │               if not is_new:
 │                   # Duplicate webhook - already processed
 │                   self.logger.info(
@@ -887,8 +887,8 @@ src/
 │                       },
 │                   )
 │                   return entry.id
-│               
-│               
+│
+│
 │               await self._publish_domain_event(
 │                   topic=topic,
 │                   shop_domain=shop_domain,
@@ -896,7 +896,7 @@ src/
 │                   payload=payload,
 │                   correlation_id=correlation_id,
 │               )
-│       
+│
 │               self.logger.info(
 │                   "New webhook stored & events published",
 │                   extra={
@@ -908,9 +908,9 @@ src/
 │                       "entry_id": entry.id,
 │                   },
 │               )
-│       
+│
 │               return entry.id
-│           
+│
 │           async def _publish_domain_event(
 │               self,
 │               topic: ShopifyWebhookTopic,
@@ -920,7 +920,7 @@ src/
 │               correlation_id: str,
 │           ) -> None:
 │               """Publish appropriate domain event based on webhook topic"""
-│               
+│
 │               # Map webhook topics to domain events
 │               if topic is ShopifyWebhookTopic.APP_UNINSTALLED:
 │                   await self.publisher.app_uninstalled(
@@ -928,7 +928,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│       
+│
 │               elif topic is ShopifyWebhookTopic.ORDERS_CREATE:
 │                   await self.publisher.order_created(
 │                       shop_domain=shop_domain,
@@ -940,7 +940,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│       
+│
 │               elif topic is ShopifyWebhookTopic.APP_SUBSCRIPTIONS_UPDATE:
 │                   subscription = payload.get("app_subscription", {})
 │                   await self.publisher.app_subscription_updated(
@@ -950,7 +950,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│       
+│
 │               elif topic is ShopifyWebhookTopic.APP_PURCHASES_ONE_TIME_UPDATE:
 │                   purchase = payload.get("app_purchase_one_time", {})
 │                   await self.publisher.app_purchase_updated(
@@ -961,7 +961,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic in (ShopifyWebhookTopic.PRODUCTS_CREATE, ShopifyWebhookTopic.PRODUCTS_UPDATE, ShopifyWebhookTopic.PRODUCTS_DELETE):
 │                   action_map = {
 │                       ShopifyWebhookTopic.PRODUCTS_CREATE: "created",
@@ -977,7 +977,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic in (ShopifyWebhookTopic.COLLECTIONS_CREATE, ShopifyWebhookTopic.COLLECTIONS_UPDATE, ShopifyWebhookTopic.COLLECTIONS_DELETE):
 │                   action_map = {
 │                       ShopifyWebhookTopic.COLLECTIONS_CREATE: "created",
@@ -993,7 +993,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic is ShopifyWebhookTopic.INVENTORY_LEVELS_UPDATE:
 │                   await self.publisher.inventory_updated(
 │                       shop_domain=shop_domain,
@@ -1003,7 +1003,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic is ShopifyWebhookTopic.CUSTOMERS_DATA_REQUEST:
 │                   customer = payload.get("customer", {})
 │                   await self.publisher.gdpr_data_request(
@@ -1013,7 +1013,7 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic is ShopifyWebhookTopic.CUSTOMERS_REDACT:
 │                   customer = payload.get("customer", {})
 │                   await self.publisher.gdpr_customer_redact(
@@ -1023,14 +1023,14 @@ src/
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               elif topic is ShopifyWebhookTopic.SHOP_REDACT:
 │                   await self.publisher.gdpr_shop_redact(
 │                       shop_domain=shop_domain,
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
-│                   
+│
 │               else:
 │                   self.logger.warning(
 │                       f"No domain event mapping for topic: {topic}",
@@ -1041,104 +1041,104 @@ src/
 │                       }
 │                   )
 │       ```
-│       
+│
 ├── __init__.py
-│   
+│
 │   ```py
 │   """Webhook Service - Receives and processes webhooks from external platforms"""
-│   
+│
 │   __version__ = "1.0.0"
-│   
-│   
+│
+│
 │   ```
-│   
+│
 ├── config.py
-│   
+│
 │   ```py
 │   import os
 │   from functools import lru_cache
 │   from typing import Optional, List
 │   from pydantic import BaseModel, Field, ConfigDict, model_validator
 │   from shared.utils.config_loader import merged_config, flatten_config
-│   
-│   
+│
+│
 │   class ServiceConfig(BaseModel):
 │       """Service configuration from YAML + environment"""
 │       model_config = ConfigDict(populate_by_name=True, extra="ignore")
-│       
+│
 │       # Service Identity
 │       service_name: str = Field(..., alias="service.name")
 │       service_version: str = Field(..., alias="service.version")
 │       environment: str = Field(..., alias="environment")
 │       debug: bool = Field(False, alias="service.debug")
-│       
+│
 │       # API Configuration - BOTH PORTS
 │       api_host: str = Field(..., alias="api.host")
 │       api_port: int = Field(..., alias="api.port")
 │       api_external_port: int = Field(..., alias="api.external_port")
 │       api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
-│       
+│
 │       nats_url: str = Field(..., alias="infrastructure.nats_url")
 │       redis_url: str = Field(..., alias="infrastructure.redis_url")
-│       
+│
 │       logging_level: str = Field(..., alias="logging.level")
 │       logging_format: str = Field(..., alias="logging.format")
 │       logging_file_path: str = Field(..., alias="logging.file_path")
-│       
+│
 │       monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
 │       monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
-│       
+│
 │       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
 │       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-│       
+│
 │       db_enabled: bool = Field(..., alias="database.enabled")
 │       database_url: Optional[str] = Field(default=None, alias="DATABASE_URL")
-│       
+│
 │       # Webhook specific config
 │       body_limit_bytes: int = Field(2097152, alias="webhook.body_limit_bytes")  # 2MB
 │       idempotency_ttl_seconds: int = Field(259200, alias="webhook.idempotency_ttl_seconds")  # 72h
-│       
+│
 │       # Shopify Business Deduplication
 │       shopify_dedup_products_update: int = Field(10, alias="shopify.business_dedup.products_update") # Ignore rapid product updates within 10s
 │       shopify_dedup_collections_update: int = Field(10, alias="shopify.business_dedup.collections_update") # Ignore rapid collection updates within 10s
-│   
+│
 │       shopify_dedup_inventory_levels_update: int = Field(5, alias="shopify.business_dedup.inventory_levels_update") # Ignore inventory updates within 5s
-│   
+│
 │       shopify_gdpr_requests: int = Field(86400, alias="shopify.gdpr_requests")
-│   
-│   
-│       
+│
+│
+│
 │       @property
 │       def effective_api_port(self) -> int:
 │           in_container = os.path.exists("/.dockerenv")
 │           return self.api_port if in_container else self.api_external_port
-│       
+│
 │       @model_validator(mode="after")
 │       def _require_db_url_when_enabled(self):
 │           if self.db_enabled and not self.database_url:
 │               raise ValueError("database.enabled=true requires DATABASE_URL")
 │           return self
-│   
-│   
+│
+│
 │   @lru_cache
 │   def get_service_config() -> ServiceConfig:
 │       """Load and cache service configuration"""
 │       cfg_dict = merged_config("webhook-service")
 │       flattened = flatten_config(cfg_dict)
-│       
+│
 │       # Ensure raw env vars survive
 │       env_vars = ["DATABASE_URL", "SHOPIFY_API_SECRET", "SHOPIFY_API_SECRET_NEXT"]
 │       for var in env_vars:
 │           if var not in flattened and var in os.environ:
 │               flattened[var] = os.environ[var]
-│       
+│
 │       return ServiceConfig(**flattened)
-│   
-│   
+│
+│
 │   ```
-│   
+│
 ├── dependencies.py
-│   
+│
 │   ```py
 │   from typing import Annotated
 │   from fastapi import Depends, Request, HTTPException, status
@@ -1146,7 +1146,7 @@ src/
 │   from .lifecycle import ServiceLifecycle
 │   from .config import ServiceConfig
 │   from .services import WebhookService
-│   
+│
 │   __all__ = [
 │       "RequestContextDep",
 │       "ShopifyHeadersDep",
@@ -1154,54 +1154,54 @@ src/
 │       "ConfigDep",
 │       "WebhookServiceDep",
 │   ]
-│   
+│
 │   # Core dependencies
 │   def get_lifecycle(request: Request) -> ServiceLifecycle:
 │       lc = getattr(request.app.state, "lifecycle", None)
 │       if lc is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
 │       return lc
-│   
+│
 │   def get_config(request: Request) -> ServiceConfig:
 │       cfg = getattr(request.app.state, "config", None)
 │       if cfg is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
 │       return cfg
-│   
+│
 │   # Type aliases
 │   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 │   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
-│   
+│
 │   # Service dependencies
 │   def get_webhook_service(lifecycle: LifecycleDep) -> WebhookService:
 │       """Get webhook service"""
 │       if not lifecycle.webhook_service:
 │           raise HTTPException(500, "Webhook service not initialized")
 │       return lifecycle.webhook_service
-│   
+│
 │   # Type aliases
 │   WebhookServiceDep = Annotated[WebhookService, Depends(get_webhook_service)]
-│   
-│   
+│
+│
 │   ```
-│   
+│
 ├── exceptions.py
-│   
+│
 │   ```py
 │   from typing import Optional
-│   
+│
 │   from shared.utils.exceptions import (
 │       GlamBaseError,
 │       ValidationError,
 │       UnauthorizedError,
 │   )
-│   
-│   
+│
+│
 │   class WebhookError(GlamBaseError):
 │       """Base class for webhook errors"""
 │       pass
-│   
-│   
+│
+│
 │   class InvalidContentTypeError(ValidationError):
 │       """Invalid content type for webhook"""
 │       def __init__(self, content_type: str):
@@ -1210,8 +1210,8 @@ src/
 │               field="content-type",
 │               value=content_type
 │           )
-│   
-│   
+│
+│
 │   class PayloadTooLargeError(ValidationError):
 │       """Webhook payload exceeds size limit"""
 │       def __init__(self, size: int, limit: int):
@@ -1220,8 +1220,8 @@ src/
 │               field="payload",
 │               value=f"{size} bytes"
 │           )
-│   
-│   
+│
+│
 │   class InvalidSignatureError(UnauthorizedError):
 │       """Invalid HMAC signature"""
 │       def __init__(self):
@@ -1229,8 +1229,8 @@ src/
 │               message="Invalid HMAC signature",
 │               auth_type="hmac"
 │           )
-│   
-│   
+│
+│
 │   class MissingHeadersError(ValidationError):
 │       """Required headers missing"""
 │       def __init__(self, missing_headers: list):
@@ -1239,8 +1239,8 @@ src/
 │               field="headers",
 │               value=missing_headers
 │           )
-│   
-│   
+│
+│
 │   class MalformedPayloadError(ValidationError):
 │       """Invalid JSON payload"""
 │       def __init__(self):
@@ -1248,8 +1248,8 @@ src/
 │               message="Invalid JSON payload",
 │               field="payload"
 │           )
-│   
-│   
+│
+│
 │   class InvalidShopDomainError(ValidationError):
 │       """Invalid shop domain format"""
 │       def __init__(self, domain: str):
@@ -1258,8 +1258,8 @@ src/
 │               field="shop_domain",
 │               value=domain
 │           )
-│   
-│   
+│
+│
 │   class IPNotAllowedError(UnauthorizedError):
 │       """IP not in allowlist"""
 │       def __init__(self, ip: str):
@@ -1267,8 +1267,8 @@ src/
 │               message="IP not in allowlist",
 │               auth_type="ip_allowlist"
 │           )
-│   
-│   
+│
+│
 │   # services/webhook-service/src/exceptions.py
 │   class DomainMismatchError(ValidationError):
 │       """Shop domain mismatch"""
@@ -1282,16 +1282,16 @@ src/
 │           else:
 │               message = "Shop domain mismatch"
 │               value = header_domain
-│               
+│
 │           super().__init__(
 │               message=message,
 │               field="shop_domain",
 │               value=value
 │           )
 │   ```
-│   
+│
 ├── lifecycle.py
-│   
+│
 │   ```py
 │   from typing import Optional, List
 │   import asyncio
@@ -1303,37 +1303,37 @@ src/
 │   from .repositories.webhook_repository import WebhookRepository
 │   from .services.webhook_service import WebhookService
 │   from .events.publishers import WebhookEventPublisher
-│   
-│   
+│
+│
 │   class ServiceLifecycle:
 │       """Manages service lifecycle and dependencies"""
-│       
+│
 │       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
 │           self.config = config
 │           self.logger = logger
-│           
+│
 │           # External connections
 │           self.messaging_client: Optional[JetStreamClient] = None
 │           self.prisma: Optional[Prisma] = None
 │           self.redis_client: Optional[redis.Redis] = None
 │           self._db_connected: bool = False
-│           
+│
 │           # Publisher / listeners
 │           self.event_publisher: Optional[WebhookEventPublisher] = None
 │           self._listeners: list = []
-│           
+│
 │           # Repositories / services
 │           self.webhook_repo: Optional[WebhookRepository] = None
 │           self.webhook_service: Optional[WebhookService] = None
-│           
+│
 │           # Tasks
 │           self._tasks: List[asyncio.Task] = []
 │           self._shutdown_event = asyncio.Event()
-│       
+│
 │       async def startup(self) -> None:
 │           try:
 │               self.logger.info("Starting service components...")
-│               
+│
 │               await self._init_messaging()
 │               await self._init_redis()
 │               await self._init_database()
@@ -1344,81 +1344,81 @@ src/
 │               self.logger.critical("Service failed to start", exc_info=True)
 │               await self.shutdown()
 │               raise
-│       
+│
 │       async def shutdown(self) -> None:
 │           """Graceful shutdown of all components"""
 │           self.logger.info("Shutting down %s", self.config.service_name)
-│           
+│
 │           # Cancel tasks
 │           for t in self._tasks:
 │               t.cancel()
 │           if self._tasks:
 │               await asyncio.gather(*self._tasks, return_exceptions=True)
-│           
+│
 │           # Stop listeners
 │           for lst in self._listeners:
 │               try:
 │                   await lst.stop()
 │               except Exception:
 │                   self.logger.critical("Listener stop failed", exc_info=True)
-│           
+│
 │           # Close messaging
 │           if self.messaging_client:
 │               try:
 │                   await self.messaging_client.close()
 │               except Exception:
 │                   self.logger.critical("Messaging client close failed", exc_info=True)
-│           
+│
 │           # Close Redis
 │           if self.redis_client:
 │               try:
 │                   await self.redis_client.close()
 │               except Exception:
 │                   self.logger.critical("Redis close failed", exc_info=True)
-│           
+│
 │           # Disconnect database
 │           if self.prisma and self._db_connected:
 │               try:
 │                   await self.prisma.disconnect()
 │               except Exception:
 │                   self.logger.critical("Prisma disconnect failed", exc_info=True)
-│           
+│
 │           self.logger.info("%s shutdown complete", self.config.service_name)
-│       
+│
 │       async def _init_messaging(self) -> None:
 │           self.messaging_client = JetStreamClient(self.logger)
 │           await self.messaging_client.connect([self.config.nats_url])
 │           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
-│           
+│
 │           # Initialize publisher
 │           self.event_publisher = WebhookEventPublisher(
 │               jetstream_client=self.messaging_client,
 │               logger=self.logger,
 │           )
-│           
+│
 │           self.logger.info("Messaging client and publisher initialized")
-│       
+│
 │       async def _init_redis(self) -> None:
 │           """Initialize Redis client"""
 │           self.redis_client = redis.from_url(
 │               self.config.redis_url,
 │               decode_responses=False  # We want bytes for idempotency keys
 │           )
-│           
+│
 │           # Test connection
 │           await self.redis_client.ping()
 │           self.logger.info("Redis connected")
-│       
+│
 │       async def _init_database(self) -> None:
 │           """Initialize Prisma client if database is enabled."""
 │           if not self.config.db_enabled:
 │               self.logger.info("Database disabled; skipping Prisma initialization")
 │               return
-│           
+│
 │           self.prisma = Prisma()
 │           if not self.prisma:
 │               raise RuntimeError("Prisma client not initialized")
-│           
+│
 │           try:
 │               await self.prisma.connect()
 │               self._db_connected = True
@@ -1426,25 +1426,25 @@ src/
 │           except Exception as e:
 │               self.logger.error("Prisma connect failed: %s", e, exc_info=True)
 │               raise
-│       
+│
 │       def _init_repositories(self) -> None:
 │           if self.config.db_enabled:
 │               if not (self.prisma and self._db_connected):
 │                   raise RuntimeError("Prisma client not initialized/connected")
-│               
+│
 │               self.webhook_repo = WebhookRepository(self.prisma)
 │               self.logger.info("Webhook repository initialized")
 │           else:
 │               self.webhook_repo = None
-│   
-│       
+│
+│
 │       def _init_local_services(self) -> None:
 │           """Initialize local services with proper dependencies"""
 │           if not self.webhook_repo:
 │               raise RuntimeError("Webhook repository not initialized")
 │           if not self.event_publisher:
 │               raise RuntimeError("Event publisher not initialized")
-│           
+│
 │           # Initialize webhook service with all required dependencies
 │           self.webhook_service = WebhookService(
 │               config=self.config,
@@ -1452,27 +1452,27 @@ src/
 │               publisher=self.event_publisher,
 │               logger=self.logger
 │           )
-│           
+│
 │           self.logger.info("Services initialized")
-│       
-│       
+│
+│
 │       # Convenience helpers
 │       def add_task(self, coro) -> asyncio.Task:
 │           t = asyncio.create_task(coro)
 │           self._tasks.append(t)
 │           return t
-│       
+│
 │       async def wait_for_shutdown(self) -> None:
 │           await self._shutdown_event.wait()
-│       
+│
 │       def signal_shutdown(self) -> None:
 │           self._shutdown_event.set()
-│   
-│   
+│
+│
 │   ```
-│   
+│
 └── main.py
-    
+
     ```py
     from contextlib import asynccontextmanager
     from fastapi import FastAPI
@@ -1482,14 +1482,14 @@ src/
     from .config import get_service_config
     from .lifecycle import ServiceLifecycle
     from .api.router import router
-    
-    
+
+
     # Global singletons
     config = get_service_config()
     logger = create_logger(config.service_name)
     lifecycle = ServiceLifecycle(config, logger)
-    
-    
+
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """FastAPI lifespan adapter"""
@@ -1500,18 +1500,18 @@ src/
             "api_host": config.api_host,
             "api_port": config.effective_api_port,
         })
-        
+
         app.state.lifecycle = lifecycle
         app.state.config = config
         app.state.logger = logger
-        
+
         try:
             await lifecycle.startup()
             yield
         finally:
             await lifecycle.shutdown()
-    
-    
+
+
     def create_application() -> FastAPI:
         """Create and configure the FastAPI application."""
         app = FastAPI(
@@ -1523,7 +1523,7 @@ src/
             redoc_url="/redoc",
             exception_handlers={}  # Use shared middleware for exception handling
         )
-        
+
         # Setup middleware from shared package
         setup_middleware(
             app,
@@ -1531,20 +1531,20 @@ src/
             enable_metrics=config.monitoring_metrics_enabled,
             metrics_path="/metrics"
         )
-        
+
         # Include routers
         app.include_router(router)
         app.include_router(create_health_router(config.service_name))
-        
+
         return app
-    
-    
+
+
     app = create_application()
-    
-    
+
+
     if __name__ == "__main__":
         import uvicorn
-        
+
         port = config.effective_api_port
         uvicorn.run(
             "src.main:app",
@@ -1552,37 +1552,37 @@ src/
             port=port,
             reload=config.debug
         )
-    
-    
+
+
     ```
-    
+
 tests/
 ├── integration/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Integration tests"""
 │   │   ```
-│   │   
+│   │
 │   └── test_api.py
 ├── unit/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Unit tests"""
-│   │   
-│   │   
+│   │
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── test_webhook_service.py
 ├── __init__.py
-│   
+│
 │   ```py
 │   """Test package for webhook service"""
-│   
-│   
+│
+│
 │   ```
-│   
+│
 └── conftest.py
 .env.example
 .gitignore
@@ -1597,31 +1597,31 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-  
+
   - repo: https://github.com/psf/black
     rev: 23.11.0
     hooks:
       - id: black
         args: [--line-length=100]
-  
+
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
       - id: isort
         args: [--profile=black, --line-length=100]
-  
+
   - repo: https://github.com/pycqa/flake8
     rev: 6.1.0
     hooks:
       - id: flake8
         args: [--max-line-length=100, --extend-ignore=E203,W503]
-  
+
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.7.1
     hooks:
       - id: mypy
         args: [--strict, --ignore-missing-imports]
-  
+
   # Custom hooks for ID management
   - repo: local
     hooks:
@@ -1630,7 +1630,7 @@ repos:
         entry: bash -c 'if grep -r "uuid4()" --include="*.py" --exclude-dir=tests .; then echo "Use uuid7() instead of uuid4() for event IDs"; exit 1; fi'
         language: system
         pass_filenames: false
-      
+
       - id: check-event-context-usage
         name: Verify EventContext.create() usage
         entry: python scripts/validate_event_context.py
@@ -1763,7 +1763,7 @@ COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# ---- 2️⃣  Install service dependencies  
+# ---- 2️⃣  Install service dependencies
 WORKDIR /app
 COPY services/webhook-service/pyproject.toml services/webhook-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
@@ -1779,7 +1779,7 @@ COPY services/webhook-service /app
 COPY config /app/config
 
 # ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime  
+# 📦  Stage 2 ─ Runtime
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
@@ -1919,7 +1919,7 @@ pythonpath = ["src"]
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
-    "integration: Integration tests", 
+    "integration: Integration tests",
     "e2e: End-to-end tests"
 ]
 
@@ -1948,7 +1948,7 @@ README.md
 ```md
 # Webhook Service
 
-Receives platform webhooks from the Shopify BFF and publishes domain events into the system.  
+Receives platform webhooks from the Shopify BFF and publishes domain events into the system.
 This service **does not** accept raw Shopify calls directly — all requests are relayed from the BFF with internal JWT authentication.
 
 ---
@@ -1956,7 +1956,7 @@ This service **does not** accept raw Shopify calls directly — all requests are
 ## Overview
 
 ### Responsibilities
-- Accept webhook payloads from the BFF at a **single unified endpoint**:  
+- Accept webhook payloads from the BFF at a **single unified endpoint**:
   `POST /api/v1/webhooks/shopify`
 - Validate required headers and content type.
 - Enforce a payload size limit.
@@ -2012,16 +2012,16 @@ Receives a webhook payload from the BFF.
 
 ## Webhook Processing Flow
 
-1. **Shopify → BFF**  
-   Shopify delivers webhook to your Remix BFF endpoint.  
+1. **Shopify → BFF**
+   Shopify delivers webhook to your Remix BFF endpoint.
    The BFF validates HMAC, extracts the payload + headers, signs an internal JWT, and relays to this service.
 
-2. **BFF → Webhook Service**  
+2. **BFF → Webhook Service**
    - Calls `POST /api/v1/webhooks/shopify`
    - Passes original Shopify headers (`topic`, `shop domain`, `webhook id`).
    - Uses `Authorization: Bearer <internal-jwt>` signed with `INTERNAL_JWT_SECRET`.
 
-3. **Webhook Service**  
+3. **Webhook Service**
    - Validates JWT, headers, and payload size.
    - Stores the webhook in the database.
    - If duplicate (`webhook_id` already stored) → logs and returns success without re-publishing.
@@ -2046,7 +2046,7 @@ curl -X POST http://localhost:8112/api/v1/webhooks/shopify \
         "line_items": []
       }'
 
-**Note**  
+**Note**
 `jwtgen` above is a placeholder for generating a valid JWT with payload:
 ```json
 {
@@ -2095,7 +2095,7 @@ python scripts/test_webhook.py
 python scripts/test_webhook.py
 ```
 This way the part after the curl example won’t break the Markdown structure again.
-  
+
 ```
 
 

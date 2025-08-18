@@ -1,41 +1,33 @@
 # services/merchant-service/src/repositories/merchant_repository.py
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from prisma import Prisma
-from prisma.models import Merchant
 from prisma.enums import MerchantStatus
+from prisma.models import Merchant
+
 from ..schemas.merchant import MerchantSyncIn
 
 
 class MerchantRepository:
     """Repository for Merchant operations using Prisma"""
-    
+
     def __init__(self, prisma: Prisma):
         self.prisma = prisma
-    
+
     async def find_by_platform_identity(
-        self, 
-        platform_name: str,
-        platform_domain: str,
-        platform_id: Optional[str] = None
-    ) -> Optional[Merchant]:
+        self, platform_name: str, platform_domain: str, platform_id: str | None = None
+    ) -> Merchant | None:
         """Find merchant by platform identity"""
-        conditions = [
-            {"platform_name": platform_name, "platform_domain": platform_domain.lower()}
-        ]
+        conditions = [{"platform_name": platform_name, "platform_domain": platform_domain.lower()}]
         if platform_id:
             conditions.append({"platform_name": platform_name, "platform_id": platform_id})
-        
-        return await self.prisma.merchant.find_first(
-            where={"OR": conditions}
-        )
-    
-    async def find_by_platform_domain(self, platform_domain: str) -> Optional[Merchant]:
+
+        return await self.prisma.merchant.find_first(where={"OR": conditions})
+
+    async def find_by_platform_domain(self, platform_domain: str) -> Merchant | None:
         """Find merchant by platform domain"""
-        return await self.prisma.merchant.find_first(
-            where={"platform_domain": platform_domain.lower()}
-        )
-    
+        return await self.prisma.merchant.find_first(where={"platform_domain": platform_domain.lower()})
+
     async def create(self, data: MerchantSyncIn) -> Merchant:
         """Create new merchant"""
         return await self.prisma.merchant.create(
@@ -51,11 +43,11 @@ class MerchantRepository:
                 "platform_version": data.platform_version,
                 "scopes": data.scopes,
                 "status": MerchantStatus.PENDING,
-                "installed_at": datetime.now(timezone.utc),
-                "last_sync_at": datetime.now(timezone.utc)   
+                "installed_at": datetime.now(UTC),
+                "last_sync_at": datetime.now(UTC),
             }
         )
-    
+
     async def update_for_sync(self, merchant_id: str, data: MerchantSyncIn) -> Merchant:
         """Update merchant on sync (reinstall or resync)"""
         return await self.prisma.merchant.update(
@@ -69,26 +61,16 @@ class MerchantRepository:
                 "platform_version": data.platform_version,
                 "scopes": data.scopes,
                 "last_sync_at": datetime.utcnow(),
-                "uninstalled_at": None  # Clear if reinstalling
-            }
+                "uninstalled_at": None,  # Clear if reinstalling
+            },
         )
-    
-    async def update_status(
-        self, 
-        merchant_id: str, 
-        new_status: MerchantStatus
-    ) -> Merchant:
+
+    async def update_status(self, merchant_id: str, new_status: MerchantStatus) -> Merchant:
         """Update merchant status"""
-        update_data = {
-            "status": new_status,
-            "status_changed_at": datetime.utcnow()
-        }
-        
+        update_data = {"status": new_status, "status_changed_at": datetime.utcnow()}
+
         # Set uninstalled_at if uninstalling
         if new_status == MerchantStatus.UNINSTALLED:
             update_data["uninstalled_at"] = datetime.utcnow()
-        
-        return await self.prisma.merchant.update(
-            where={"id": merchant_id},
-            data=update_data
-        )
+
+        return await self.prisma.merchant.update(where={"id": merchant_id}, data=update_data)

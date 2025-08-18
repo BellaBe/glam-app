@@ -1,50 +1,62 @@
-from shared.messaging.publisher import Publisher
-from ..schemas.catalog_sync import (
-    SyncRequestedPayload,
-    AnalysisRequestedPayload,
-    SyncStartedPayload,
-    SyncProgressPayload,
-    SyncCompletedPayload
-)
+# services/catalog-service/src/events/publishers.py
+from shared.messaging import Publisher
+
 
 class CatalogEventPublisher(Publisher):
+    """Publish catalog domain events"""
+
     @property
     def service_name(self) -> str:
         return "catalog-service"
-    
-    async def sync_requested(self, payload: SyncRequestedPayload) -> str:
+
+    async def catalog_sync_requested(
+        self,
+        merchant_id: str,
+        platform_name: str,
+        platform_id: str,
+        platform_domain: str,
+        sync_id: str,
+        sync_type: str,
+        correlation_id: str,
+    ) -> str:
         """Publish catalog sync requested event"""
         return await self.publish_event(
             subject="evt.catalog.sync.requested",
-            data=payload.model_dump(),
+            data={
+                "merchant_id": merchant_id,
+                "platform_name": platform_name,
+                "platform_id": platform_id,
+                "platform_domain": platform_domain,
+                "sync_id": sync_id,
+                "sync_type": sync_type,
+            },
+            correlation_id=correlation_id,
         )
-    
-    async def analysis_requested(self, payload: AnalysisRequestedPayload) -> str:
-        """Publish analysis requested event"""
+
+    async def catalog_analysis_requested(self, merchant_id: str, sync_id: str, items: list, correlation_id: str) -> str:
+        """Request AI analysis for catalog items"""
         return await self.publish_event(
             subject="evt.catalog.analysis.requested",
-            data=payload.model_dump(),
+            data={"merchant_id": merchant_id, "sync_id": sync_id, "items": items},
+            correlation_id=correlation_id,
         )
-    
-    async def sync_started(self, payload: SyncStartedPayload) -> str:
-        """Publish sync started event"""
-        return await self.publish_event(
-            subject="evt.catalog.sync.started",
-            data=payload.model_dump(),
-        )
-    
-    async def sync_progress(self, payload: SyncProgressPayload) -> str:
-        """Publish sync progress event"""
-        return await self.publish_event(
-            subject="evt.catalog.sync.progress",
-            data=payload.model_dump(),
-        )
-    
-    async def sync_completed(self, payload: SyncCompletedPayload) -> str:
+
+    async def catalog_sync_completed(
+        self,
+        merchant_id: str,
+        sync_id: str,
+        total_items: int,
+        duration_seconds: float,
+        correlation_id: str,
+    ) -> str:
         """Publish sync completed event"""
         return await self.publish_event(
             subject="evt.catalog.sync.completed",
-            data=payload.model_dump(),
+            data={
+                "merchant_id": merchant_id,
+                "sync_id": sync_id,
+                "total_items": total_items,
+                "duration_seconds": duration_seconds,
+            },
+            correlation_id=correlation_id,
         )
-
-# ================================================================

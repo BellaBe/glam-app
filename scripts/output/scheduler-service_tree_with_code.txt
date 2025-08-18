@@ -9,37 +9,37 @@ migrations/
 src/
 ├── config/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/config/__init__.py
 │   │   from .service_config import ServiceConfig, get_service_config
-│   │   
+│   │
 │   │   __all__ = ['ServiceConfig', 'get_service_config']
 │   │   ```
-│   │   
+│   │
 │   └── service_config.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/config/service_config.py
 │       """
 │       Service configuration for Scheduler Service.
-│       
+│
 │       This configuration extends the shared BaseServiceConfig with
 │       scheduler-specific settings.
 │       """
-│       
+│
 │       from typing import List, Optional
 │       from shared.config import BaseServiceConfig
-│       
-│       
+│
+│
 │       class ServiceConfig(BaseServiceConfig):
 │           """Configuration for Scheduler Service"""
-│           
+│
 │           # Service identification
 │           SERVICE_NAME: str = "scheduler-service"
 │           SERVICE_VERSION: str = "1.0.0"
 │           API_PORT: int = 8008
-│           
+│
 │           # Scheduler-specific configuration
 │           SCHEDULER_TIMEZONE: str = "UTC"
 │           SCHEDULER_JOB_STORE_URL: Optional[str] = None  # Will use main DB if not set
@@ -48,20 +48,20 @@ src/
 │           SCHEDULER_EXECUTOR_POOL_SIZE: int = 10  # Thread pool size
 │           SCHEDULER_COALESCE: bool = True  # Coalesce missed jobs
 │           SCHEDULER_JOB_DEFAULTS_MAX_INSTANCES: int = 1  # Default max instances per job
-│           
+│
 │           # Redis configuration for distributed locks
 │           REDIS_URL: str = "redis://localhost:6379/0"
 │           LOCK_TIMEOUT_SECONDS: int = 300  # 5 minutes
 │           LOCK_RETRY_DELAY: float = 0.1  # 100ms
 │           LOCK_MAX_RETRIES: int = 50  # Max retries for lock acquisition
-│           
+│
 │           # Operational configuration
 │           MAX_SCHEDULE_LOOKAHEAD_DAYS: int = 365
 │           DEFAULT_MAX_RETRIES: int = 3
 │           DEFAULT_RETRY_DELAY: int = 300  # 5 minutes
 │           MAX_SCHEDULES_PER_CREATOR: int = 1000  # Rate limit per creator
 │           MAX_BULK_OPERATIONS: int = 100  # Max items in bulk operations
-│           
+│
 │           # Command whitelist - allowed target commands
 │           ALLOWED_TARGET_COMMANDS: List[str] = [
 │               "cmd.notification.send.email",
@@ -72,31 +72,31 @@ src/
 │               "cmd.catalog.sync.products",
 │               "cmd.merchant.check.status",
 │           ]
-│           
+│
 │           # Performance tuning
 │           SCHEDULE_CACHE_TTL: int = 300  # 5 minutes
 │           EXECUTION_HISTORY_RETENTION_DAYS: int = 30
-│           
+│
 │           def __init__(self, **kwargs):
 │               super().__init__(**kwargs)
-│               
+│
 │               # Use main database URL for job store if not specified
 │               if not self.SCHEDULER_JOB_STORE_URL:
 │                   self.SCHEDULER_JOB_STORE_URL = self.DATABASE_URL.replace(
 │                       "postgresql+asyncpg://", "postgresql://"
 │                   )
-│       
-│       
+│
+│
 │       def get_service_config() -> ServiceConfig:
 │           """Factory function to create service configuration"""
 │           return ServiceConfig()
 │       ```
-│       
+│
 ├── events/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
-│   │   
+│   │
 │   │   # services/scheduler-service/src/events/__init__.py
 │   │   from .publishers import SchedulerEventPublisher
 │   │   from .subscribers import (
@@ -108,7 +108,7 @@ src/
 │   │       TriggerScheduleSubscriber,
 │   │       ExecuteImmediateSubscriber
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       'SchedulerEventPublisher',
 │   │       'CreateScheduleSubscriber',
@@ -120,18 +120,18 @@ src/
 │   │       'ExecuteImmediateSubscriber'
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── publishers.py
-│   │   
+│   │
 │   │   ```py
-│   │   
+│   │
 │   │   # services/scheduler-service/src/events/publishers.py
 │   │   """Event publishers for scheduler service"""
-│   │   
+│   │
 │   │   from typing import Optional, Dict, Any
 │   │   from uuid import UUID
 │   │   from datetime import datetime, timezone
-│   │   
+│   │
 │   │   from shared.events import DomainEventPublisher, EventContext, EventContextManager
 │   │   from shared.events.base import Streams
 │   │   from shared.events.scheduler.types import (
@@ -148,17 +148,17 @@ src/
 │   │       ScheduleType,
 │   │       ExecutionStatus
 │   │   )
-│   │   
-│   │   
+│   │
+│   │
 │   │   class SchedulerEventPublisher(DomainEventPublisher):
 │   │       """Publisher for scheduler service events"""
 │   │       domain_stream = Streams.SCHEDULER
 │   │       service_name_override = "scheduler-service"
-│   │       
+│   │
 │   │       def __init__(self, client, js, logger=None):
 │   │           super().__init__(client, js, logger)
 │   │           self.context_manager = EventContextManager(logger or self.logger)
-│   │       
+│   │
 │   │       async def publish_schedule_created(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -183,7 +183,7 @@ src/
 │   │                   "schedule_name": name
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           payload = ScheduleCreatedEventPayload(
 │   │               schedule_id=schedule_id,
 │   │               name=name,
@@ -193,7 +193,7 @@ src/
 │   │               created_by=created_by,
 │   │               created_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Publishing {context.subject}",
 │   │               extra={
@@ -202,14 +202,14 @@ src/
 │   │                   "schedule_type": schedule_type
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_CREATED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=context.metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_schedule_updated(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -232,7 +232,7 @@ src/
 │   │                   "fields_updated": updated_fields
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           payload = ScheduleUpdatedEventPayload(
 │   │               schedule_id=schedule_id,
 │   │               updated_fields=updated_fields,
@@ -240,14 +240,14 @@ src/
 │   │               updated_by=updated_by,
 │   │               updated_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_UPDATED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=context.metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_schedule_deleted(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -263,14 +263,14 @@ src/
 │   │               deleted_at=datetime.now(timezone.utc),
 │   │               hard_delete=hard_delete
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_DELETED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_schedule_paused(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -286,14 +286,14 @@ src/
 │   │               paused_by=paused_by,
 │   │               paused_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_PAUSED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_schedule_resumed(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -309,14 +309,14 @@ src/
 │   │               resumed_by=resumed_by,
 │   │               resumed_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_RESUMED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_schedule_triggered(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -332,14 +332,14 @@ src/
 │   │               triggered_by=triggered_by,
 │   │               triggered_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.SCHEDULE_TRIGGERED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_execution_started(
 │   │           self,
 │   │           execution_id: UUID,
@@ -365,7 +365,7 @@ src/
 │   │                   "target_command": target_command
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           payload = ExecutionStartedEventPayload(
 │   │               execution_id=execution_id,
 │   │               schedule_id=schedule_id,
@@ -375,7 +375,7 @@ src/
 │   │               started_at=datetime.now(timezone.utc),
 │   │               attempt_number=attempt_number
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Publishing {context.subject}",
 │   │               extra={
@@ -384,14 +384,14 @@ src/
 │   │                   "attempt": attempt_number
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.EXECUTION_STARTED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=context.metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_execution_completed(
 │   │           self,
 │   │           execution_id: UUID,
@@ -417,7 +417,7 @@ src/
 │   │                   "duration_ms": duration_ms
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           payload = ExecutionCompletedEventPayload(
 │   │               execution_id=execution_id,
 │   │               schedule_id=schedule_id,
@@ -426,7 +426,7 @@ src/
 │   │               completed_at=datetime.now(timezone.utc),
 │   │               next_run_at=next_run_at
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Publishing {context.subject}",
 │   │               extra={
@@ -435,14 +435,14 @@ src/
 │   │                   "duration_ms": duration_ms
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.EXECUTION_COMPLETED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=context.metadata
 │   │           )
-│   │       
+│   │
 │   │       async def publish_execution_failed(
 │   │           self,
 │   │           execution_id: UUID,
@@ -470,7 +470,7 @@ src/
 │   │                   "attempt": attempt_number
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           payload = ExecutionFailedEventPayload(
 │   │               execution_id=execution_id,
 │   │               schedule_id=schedule_id,
@@ -481,7 +481,7 @@ src/
 │   │               attempt_number=attempt_number,
 │   │               failed_at=datetime.now(timezone.utc)
 │   │           )
-│   │           
+│   │
 │   │           self.logger.error(
 │   │               f"Publishing {context.subject}",
 │   │               extra={
@@ -490,32 +490,32 @@ src/
 │   │                   "will_retry": will_retry
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               SchedulerEvents.EXECUTION_FAILED,
 │   │               payload.model_dump(),
 │   │               correlation_id=correlation_id,
 │   │               metadata=context.metadata
 │   │           )
-│   │   
-│   │   
+│   │
+│   │
 │   │   def get_publishers():
 │   │       """Get all publishers for this service"""
 │   │       return [SchedulerEventPublisher]
 │   │   ```
-│   │   
+│   │
 │   └── subscribers.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/events/subscribers.py
 │       """Event subscribers for scheduler service"""
-│       
+│
 │       import time
 │       from typing import Optional, Dict, Any
 │       from uuid import UUID
 │       from datetime import datetime
 │       from pydantic import ValidationError
-│       
+│
 │       from shared.events import DomainEventSubscriber, EventContextManager, EventContext
 │       from shared.events.scheduler.types import (
 │           SchedulerCommands,
@@ -528,48 +528,48 @@ src/
 │           ExecuteImmediateCommandPayload
 │       )
 │       from shared.messaging.publisher import JetStreamEventPublisher
-│       
+│
 │       from ..services.schedule_service import ScheduleService
 │       from ..services.job_executor import JobExecutor
-│       
-│       
+│
+│
 │       class SchedulerEventSubscriber(DomainEventSubscriber):
 │           """Base class for scheduler event subscribers"""
-│           
+│
 │           def __init__(self):
 │               super().__init__()
 │               self.context_manager = EventContextManager(self.logger)
 │               self.schedule_service: Optional[ScheduleService] = None
 │               self.job_executor: Optional[JobExecutor] = None
 │               self.base_publisher: Optional[JetStreamEventPublisher] = None
-│           
+│
 │           def set_schedule_service(self, service: ScheduleService):
 │               """Inject schedule service"""
 │               self.schedule_service = service
-│           
+│
 │           def set_job_executor(self, executor: JobExecutor):
 │               """Inject job executor"""
 │               self.job_executor = executor
-│           
+│
 │           def set_base_publisher(self, publisher: JetStreamEventPublisher):
 │               """Inject base publisher for sending commands to other services"""
 │               self.base_publisher = publisher
-│       
-│       
+│
+│
 │       class CreateScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule creation commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_CREATE
 │           queue_group = "scheduler-service-create"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule creation command"""
 │               start_time = time.time()
-│               
+│
 │               try:
 │                   # Parse and validate payload
 │                   payload = CreateScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Creating schedule: {payload.name}",
 │                       extra={
@@ -578,14 +578,14 @@ src/
 │                           "schedule_type": payload.schedule_type
 │                       }
 │                   )
-│                   
+│
 │                   # Create schedule
 │                   schedule = await self.schedule_service.create_schedule(
 │                       create_data=payload,
 │                       created_by=context.source_service,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   duration_ms = int((time.time() - start_time) * 1000)
 │                   self.logger.info(
 │                       f"Schedule created: {schedule.id}",
@@ -595,7 +595,7 @@ src/
 │                           "duration_ms": duration_ms
 │                       }
 │                   )
-│                   
+│
 │               except ValidationError as e:
 │                   self.logger.error(
 │                       f"Invalid payload for {self.subject}",
@@ -614,19 +614,19 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class UpdateScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule update commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_UPDATE
 │           queue_group = "scheduler-service-update"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule update command"""
 │               try:
 │                   payload = UpdateScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Updating schedule: {payload.schedule_id}",
 │                       extra={
@@ -634,7 +634,7 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │                   # Update schedule
 │                   schedule = await self.schedule_service.update_schedule(
 │                       schedule_id=payload.schedule_id,
@@ -642,7 +642,7 @@ src/
 │                       updated_by=context.source_service,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   self.logger.info(
 │                       f"Schedule updated: {schedule.id}",
 │                       extra={
@@ -650,7 +650,7 @@ src/
 │                           "schedule_id": str(schedule.id)
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to update schedule",
@@ -660,19 +660,19 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class DeleteScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule deletion commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_DELETE
 │           queue_group = "scheduler-service-delete"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule deletion command"""
 │               try:
 │                   payload = DeleteScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Deleting schedule: {payload.schedule_id}",
 │                       extra={
@@ -681,7 +681,7 @@ src/
 │                           "hard_delete": payload.hard_delete
 │                       }
 │                   )
-│                   
+│
 │                   # Delete schedule
 │                   await self.schedule_service.delete_schedule(
 │                       schedule_id=payload.schedule_id,
@@ -689,7 +689,7 @@ src/
 │                       hard_delete=payload.hard_delete,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   self.logger.info(
 │                       f"Schedule deleted: {payload.schedule_id}",
 │                       extra={
@@ -697,7 +697,7 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to delete schedule",
@@ -707,19 +707,19 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class PauseScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule pause commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_PAUSE
 │           queue_group = "scheduler-service-pause"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule pause command"""
 │               try:
 │                   payload = PauseScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Pausing schedule: {payload.schedule_id}",
 │                       extra={
@@ -728,7 +728,7 @@ src/
 │                           "reason": payload.reason
 │                       }
 │                   )
-│                   
+│
 │                   # Pause schedule
 │                   await self.schedule_service.pause_schedule(
 │                       schedule_id=payload.schedule_id,
@@ -736,7 +736,7 @@ src/
 │                       reason=payload.reason,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   self.logger.info(
 │                       f"Schedule paused: {payload.schedule_id}",
 │                       extra={
@@ -744,7 +744,7 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to pause schedule",
@@ -754,19 +754,19 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class ResumeScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule resume commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_RESUME
 │           queue_group = "scheduler-service-resume"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule resume command"""
 │               try:
 │                   payload = ResumeScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Resuming schedule: {payload.schedule_id}",
 │                       extra={
@@ -774,14 +774,14 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │                   # Resume schedule
 │                   await self.schedule_service.resume_schedule(
 │                       schedule_id=payload.schedule_id,
 │                       resumed_by=context.source_service,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   self.logger.info(
 │                       f"Schedule resumed: {payload.schedule_id}",
 │                       extra={
@@ -789,7 +789,7 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to resume schedule",
@@ -799,19 +799,19 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class TriggerScheduleSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for schedule trigger commands"""
-│           
+│
 │           subject = SchedulerCommands.SCHEDULE_TRIGGER
 │           queue_group = "scheduler-service-trigger"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle schedule trigger command"""
 │               try:
 │                   payload = TriggerScheduleCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Triggering schedule: {payload.schedule_id}",
 │                       extra={
@@ -819,7 +819,7 @@ src/
 │                           "schedule_id": str(payload.schedule_id)
 │                       }
 │                   )
-│                   
+│
 │                   # Trigger schedule execution
 │                   execution_id = await self.schedule_service.trigger_schedule(
 │                       schedule_id=payload.schedule_id,
@@ -827,7 +827,7 @@ src/
 │                       override_payload=payload.override_payload,
 │                       correlation_id=context.correlation_id
 │                   )
-│                   
+│
 │                   self.logger.info(
 │                       f"Schedule triggered: {payload.schedule_id}",
 │                       extra={
@@ -836,7 +836,7 @@ src/
 │                           "execution_id": str(execution_id)
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to trigger schedule",
@@ -846,21 +846,21 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       class ExecuteImmediateSubscriber(SchedulerEventSubscriber):
 │           """Subscriber for immediate execution commands"""
-│           
+│
 │           subject = SchedulerCommands.EXECUTE_IMMEDIATE
 │           queue_group = "scheduler-service-immediate"
-│           
+│
 │           async def handle(self, data: Dict[str, Any], context: EventContext) -> None:
 │               """Handle immediate execution command"""
 │               start_time = time.time()
-│               
+│
 │               try:
 │                   payload = ExecuteImmediateCommandPayload(**data)
-│                   
+│
 │                   self.logger.info(
 │                       f"Executing immediate command: {payload.target_command}",
 │                       extra={
@@ -868,7 +868,7 @@ src/
 │                           "target_command": payload.target_command
 │                       }
 │                   )
-│                   
+│
 │                   # Execute command immediately
 │                   await self.job_executor.execute_command(
 │                       target_command=payload.target_command,
@@ -876,7 +876,7 @@ src/
 │                       correlation_id=context.correlation_id,
 │                       priority=payload.priority
 │                   )
-│                   
+│
 │                   duration_ms = int((time.time() - start_time) * 1000)
 │                   self.logger.info(
 │                       f"Immediate command executed: {payload.target_command}",
@@ -886,7 +886,7 @@ src/
 │                           "duration_ms": duration_ms
 │                       }
 │                   )
-│                   
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       f"Failed to execute immediate command",
@@ -896,8 +896,8 @@ src/
 │                       }
 │                   )
 │                   raise
-│       
-│       
+│
+│
 │       def get_subscribers():
 │           """Get all subscribers for this service"""
 │           return [
@@ -910,66 +910,66 @@ src/
 │               ExecuteImmediateSubscriber
 │           ]
 │       ```
-│       
+│
 ├── mappers/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/mappers/__init__.py
 │   │   from .schedule_mapper import ScheduleMapper
 │   │   from .execution_mapper import ExecutionMapper
-│   │   
+│   │
 │   │   __all__ = ['ScheduleMapper', 'ExecutionMapper']
 │   │   ```
-│   │   
+│   │
 │   ├── base.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/mappers/base.py
 │   │   """Base mapper for scheduler service"""
-│   │   
+│   │
 │   │   from typing import TypeVar, Generic, List, Optional, Type
 │   │   from abc import ABC, abstractmethod
-│   │   
+│   │
 │   │   ModelType = TypeVar("ModelType")
 │   │   CreateSchemaType = TypeVar("CreateSchemaType")
 │   │   UpdateSchemaType = TypeVar("UpdateSchemaType")
 │   │   ResponseSchemaType = TypeVar("ResponseSchemaType")
-│   │   
-│   │   
+│   │
+│   │
 │   │   class BaseMapper(Generic[ModelType, CreateSchemaType, UpdateSchemaType, ResponseSchemaType], ABC):
 │   │       """Base mapper for converting between models and schemas"""
-│   │       
+│   │
 │   │       @abstractmethod
 │   │       def create_to_model(self, create_schema: CreateSchemaType, **kwargs) -> ModelType:
 │   │           """Convert create schema to model"""
 │   │           pass
-│   │       
+│   │
 │   │       @abstractmethod
 │   │       def update_to_model(self, model: ModelType, update_schema: UpdateSchemaType) -> ModelType:
 │   │           """Apply update schema to model"""
 │   │           pass
-│   │       
+│   │
 │   │       @abstractmethod
 │   │       def model_to_response(self, model: ModelType) -> ResponseSchemaType:
 │   │           """Convert model to response schema"""
 │   │           pass
-│   │       
+│   │
 │   │       def models_to_responses(self, models: List[ModelType]) -> List[ResponseSchemaType]:
 │   │           """Convert list of models to response schemas"""
 │   │           return [self.model_to_response(model) for model in models]
-│   │   
+│   │
 │   │   ```
-│   │   
+│   │
 │   ├── execution_mapper.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/mappers/execution_mapper.py
 │   │   """Mapper for execution schemas and models"""
-│   │   
+│   │
 │   │   from typing import Dict, Any, Optional
 │   │   from uuid import UUID
-│   │   
+│   │
 │   │   from ..models.execution import ScheduleExecution, ExecutionStatus
 │   │   from ..schemas.execution import (
 │   │       ExecutionResponse,
@@ -977,11 +977,11 @@ src/
 │   │       ExecutionStats
 │   │   )
 │   │   from .base import BaseMapper
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionMapper:
 │   │       """Maps between execution models and schemas"""
-│   │       
+│   │
 │   │       def model_to_response(self, model: ScheduleExecution) -> ExecutionResponse:
 │   │           """Convert model to response schema"""
 │   │           return ExecutionResponse(
@@ -996,7 +996,7 @@ src/
 │   │               error_message=model.error_message,
 │   │               error_type=model.error_type
 │   │           )
-│   │       
+│   │
 │   │       def model_to_detail_response(self, model: ScheduleExecution) -> ExecutionDetailResponse:
 │   │           """Convert model to detailed response schema"""
 │   │           return ExecutionDetailResponse(
@@ -1017,7 +1017,7 @@ src/
 │   │               correlation_id=model.correlation_id,
 │   │               lock_id=model.lock_id
 │   │           )
-│   │       
+│   │
 │   │       def stats_to_response(
 │   │           self,
 │   │           stats: Dict[str, Any],
@@ -1025,15 +1025,15 @@ src/
 │   │           next_run_at: Optional[datetime] = None
 │   │       ) -> ExecutionStats:
 │   │           """Convert stats dictionary to response schema"""
-│   │           
+│   │
 │   │           # Calculate time period stats (would need to be implemented in repository)
 │   │           executions_last_hour = stats.get('executions_last_hour', 0)
 │   │           executions_last_24h = stats.get('executions_last_24h', 0)
 │   │           executions_last_7d = stats.get('executions_last_7d', 0)
-│   │           
+│   │
 │   │           # Get most common error (would need to be implemented)
 │   │           most_common_error = stats.get('most_common_error')
-│   │           
+│   │
 │   │           return ExecutionStats(
 │   │               schedule_id=schedule_id,
 │   │               total_executions=stats['total_executions'],
@@ -1053,18 +1053,18 @@ src/
 │   │               consecutive_failures=stats['consecutive_failures']
 │   │           )
 │   │   ```
-│   │   
+│   │
 │   └── schedule_mapper.py
-│       
+│
 │       ```py
-│       
+│
 │       # services/scheduler-service/src/mappers/schedule_mapper.py
 │       """Mapper for schedule schemas and models"""
-│       
+│
 │       from typing import Dict, Any, Optional, List
 │       from uuid import UUID
 │       from datetime import datetime
-│       
+│
 │       from shared.api.correlation import get_correlation_context
 │       from ..models.schedule import Schedule, ScheduleType, ScheduleStatus
 │       from ..schemas.schedule import (
@@ -1074,8 +1074,8 @@ src/
 │           ScheduleDetailResponse
 │       )
 │       from .base import BaseMapper
-│       
-│       
+│
+│
 │       class ScheduleMapper(BaseMapper[
 │           Schedule,
 │           ScheduleCreate,
@@ -1083,7 +1083,7 @@ src/
 │           ScheduleResponse
 │       ]):
 │           """Maps between schedule schemas and models"""
-│           
+│
 │           def create_to_model(
 │               self,
 │               create_schema: ScheduleCreate,
@@ -1092,12 +1092,12 @@ src/
 │               correlation_id: Optional[str] = None
 │           ) -> Schedule:
 │               """Convert ScheduleCreate schema to Schedule model"""
-│               
+│
 │               # Get correlation ID from context if not provided
 │               if not correlation_id:
 │                   ctx = get_correlation_context()
 │                   correlation_id = ctx.correlation_id if ctx else None
-│               
+│
 │               # Create model instance
 │               schedule = Schedule(
 │                   name=create_schema.name,
@@ -1119,9 +1119,9 @@ src/
 │                   is_active=True,
 │                   is_paused=False
 │               )
-│               
+│
 │               return schedule
-│           
+│
 │           def update_to_model(
 │               self,
 │               model: Schedule,
@@ -1130,80 +1130,80 @@ src/
 │               updated_by: str
 │           ) -> Schedule:
 │               """Apply update schema to model"""
-│               
+│
 │               # Track updated fields for event
 │               updated_fields = []
-│               
+│
 │               # Update basic fields
 │               if update_schema.name is not None:
 │                   model.name = update_schema.name
 │                   updated_fields.append("name")
-│               
+│
 │               if update_schema.description is not None:
 │                   model.description = update_schema.description
 │                   updated_fields.append("description")
-│               
+│
 │               # Update scheduling configuration
 │               if update_schema.schedule_type is not None:
 │                   model.schedule_type = update_schema.schedule_type
 │                   updated_fields.append("schedule_type")
-│               
+│
 │               if update_schema.cron_expression is not None:
 │                   model.cron_expression = update_schema.cron_expression
 │                   updated_fields.append("cron_expression")
-│               
+│
 │               if update_schema.interval_seconds is not None:
 │                   model.interval_seconds = update_schema.interval_seconds
 │                   updated_fields.append("interval_seconds")
-│               
+│
 │               if update_schema.scheduled_at is not None:
 │                   model.scheduled_at = update_schema.scheduled_at
 │                   updated_fields.append("scheduled_at")
-│               
+│
 │               if update_schema.timezone is not None:
 │                   model.timezone = update_schema.timezone
 │                   updated_fields.append("timezone")
-│               
+│
 │               # Update execution configuration
 │               if update_schema.target_command is not None:
 │                   model.target_command = update_schema.target_command
 │                   updated_fields.append("target_command")
-│               
+│
 │               if update_schema.command_payload is not None:
 │                   model.command_payload = update_schema.command_payload
 │                   updated_fields.append("command_payload")
-│               
+│
 │               # Update metadata
 │               if update_schema.tags is not None:
 │                   model.tags = update_schema.tags
 │                   updated_fields.append("tags")
-│               
+│
 │               if update_schema.priority is not None:
 │                   model.priority = update_schema.priority
 │                   updated_fields.append("priority")
-│               
+│
 │               if update_schema.max_retries is not None:
 │                   model.max_retries = update_schema.max_retries
 │                   updated_fields.append("max_retries")
-│               
+│
 │               if update_schema.retry_delay_seconds is not None:
 │                   model.retry_delay_seconds = update_schema.retry_delay_seconds
 │                   updated_fields.append("retry_delay_seconds")
-│               
+│
 │               # Update state
 │               if update_schema.is_active is not None:
 │                   model.is_active = update_schema.is_active
 │                   updated_fields.append("is_active")
-│               
+│
 │               # Update tracking
 │               model.updated_by = updated_by
 │               model.updated_at = datetime.utcnow()
-│               
+│
 │               # Store updated fields for event publishing
 │               model._updated_fields = updated_fields
-│               
+│
 │               return model
-│           
+│
 │           def model_to_response(self, model: Schedule) -> ScheduleResponse:
 │               """Convert model to response schema"""
 │               return ScheduleResponse(
@@ -1227,7 +1227,7 @@ src/
 │                   created_at=model.created_at,
 │                   updated_at=model.updated_at
 │               )
-│           
+│
 │           def model_to_detail_response(self, model: Schedule) -> ScheduleDetailResponse:
 │               """Convert model to detailed response schema"""
 │               return ScheduleDetailResponse(
@@ -1262,15 +1262,15 @@ src/
 │                   correlation_id=model.correlation_id
 │               )
 │       ```
-│       
+│
 ├── models/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/models/__init__.py
 │   │   from .schedule import Schedule, ScheduleType, ScheduleStatus
 │   │   from .execution import ScheduleExecution, ExecutionStatus
-│   │   
+│   │
 │   │   __all__ = [
 │   │       'Schedule',
 │   │       'ScheduleType',
@@ -1279,27 +1279,27 @@ src/
 │   │       'ExecutionStatus'
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── database.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/models/database.py
 │   │   """Database initialization for scheduler service"""
-│   │   
+│   │
 │   │   from shared.database.base import Base
 │   │   from .schedule import Schedule
 │   │   from .execution import ScheduleExecution
-│   │   
+│   │
 │   │   # Import all models to ensure they're registered with SQLAlchemy
 │   │   __all__ = ['Base', 'Schedule', 'ScheduleExecution']
 │   │   ```
-│   │   
+│   │
 │   ├── execution.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/models/execution.py
 │   │   """Execution model for tracking schedule executions"""
-│   │   
+│   │
 │   │   from sqlalchemy import (
 │   │       Column, String, Integer, DateTime, JSON, ForeignKey,
 │   │       Index, Text, Enum as SQLEnum
@@ -1310,10 +1310,10 @@ src/
 │   │   from datetime import datetime
 │   │   from typing import Optional, Dict, Any
 │   │   from enum import Enum
-│   │   
+│   │
 │   │   from shared.database.base import Base
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionStatus(str, Enum):
 │   │       """Execution status enumeration"""
 │   │       PENDING = "pending"
@@ -1322,11 +1322,11 @@ src/
 │   │       FAILED = "failed"
 │   │       SKIPPED = "skipped"
 │   │       CANCELLED = "cancelled"
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ScheduleExecution(Base):
 │   │       """Execution records for schedule runs"""
-│   │       
+│   │
 │   │       __tablename__ = "schedule_executions"
 │   │       __table_args__ = (
 │   │           Index('ix_execution_schedule_status', 'schedule_id', 'status'),
@@ -1334,10 +1334,10 @@ src/
 │   │           Index('ix_execution_started_at', 'started_at'),
 │   │           Index('ix_execution_correlation', 'correlation_id'),
 │   │       )
-│   │       
+│   │
 │   │       # Primary key
 │   │       id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-│   │       
+│   │
 │   │       # Reference to schedule
 │   │       schedule_id = Column(
 │   │           UUID(as_uuid=True),
@@ -1345,12 +1345,12 @@ src/
 │   │           nullable=False,
 │   │           index=True
 │   │       )
-│   │       
+│   │
 │   │       # Timing
 │   │       scheduled_for = Column(DateTime(timezone=True), nullable=False)
 │   │       started_at = Column(DateTime(timezone=True), nullable=True)
 │   │       completed_at = Column(DateTime(timezone=True), nullable=True)
-│   │       
+│   │
 │   │       # Status
 │   │       status = Column(
 │   │           SQLEnum(ExecutionStatus, native_enum=False),
@@ -1359,40 +1359,40 @@ src/
 │   │           index=True
 │   │       )
 │   │       attempt_number = Column(Integer, nullable=False, default=1)
-│   │       
+│   │
 │   │       # Command information
 │   │       command_sent = Column(String(255), nullable=True)  # Actual command sent
 │   │       command_payload = Column(JSON, nullable=True)  # Payload sent
-│   │       
+│   │
 │   │       # Response/Result
 │   │       response_event = Column(String(255), nullable=True)  # Response event type
 │   │       response_payload = Column(JSON, nullable=True)  # Response data
 │   │       error_message = Column(Text, nullable=True)
 │   │       error_type = Column(String(255), nullable=True)
-│   │       
+│   │
 │   │       # Performance
 │   │       duration_ms = Column(Integer, nullable=True)  # Execution duration
-│   │       
+│   │
 │   │       # Tracking
 │   │       correlation_id = Column(String(255), nullable=False)
 │   │       lock_id = Column(String(255), nullable=True)  # Distributed lock ID
-│   │       
+│   │
 │   │       # Relationship
 │   │       schedule = relationship("Schedule", backref="executions")
-│   │       
+│   │
 │   │       def __repr__(self) -> str:
 │   │           return f"<ScheduleExecution(id={self.id}, schedule_id={self.schedule_id}, status={self.status})>"
 │   │   ```
-│   │   
+│   │
 │   └── schedule.py
-│       
+│
 │       ```py
-│       
+│
 │       # services/scheduler-service/src/models/schedule.py
 │       """Schedule model for storing schedule configurations"""
-│       
+│
 │       from sqlalchemy import (
-│           Column, String, Integer, Boolean, DateTime, JSON, 
+│           Column, String, Integer, Boolean, DateTime, JSON,
 │           UniqueConstraint, Index, Text, Enum as SQLEnum
 │       )
 │       from sqlalchemy.dialects.postgresql import UUID
@@ -1400,19 +1400,19 @@ src/
 │       from datetime import datetime
 │       from typing import Optional, Dict, Any, List
 │       from enum import Enum
-│       
+│
 │       from shared.database.base import Base
 │       from shared.database.mixins import TimestampMixin
-│       
-│       
+│
+│
 │       class ScheduleType(str, Enum):
 │           """Schedule type enumeration"""
 │           CRON = "cron"
 │           INTERVAL = "interval"
 │           ONE_TIME = "one_time"
 │           IMMEDIATE = "immediate"
-│       
-│       
+│
+│
 │       class ScheduleStatus(str, Enum):
 │           """Schedule status enumeration"""
 │           ACTIVE = "active"
@@ -1420,11 +1420,11 @@ src/
 │           COMPLETED = "completed"  # For one-time schedules
 │           FAILED = "failed"
 │           DELETED = "deleted"  # Soft delete
-│       
-│       
+│
+│
 │       class Schedule(Base, TimestampMixin):
 │           """Schedule model for storing job schedules"""
-│           
+│
 │           __tablename__ = "schedules"
 │           __table_args__ = (
 │               UniqueConstraint('name', 'created_by', name='uq_schedule_name_creator'),
@@ -1433,14 +1433,14 @@ src/
 │               Index('ix_schedule_created_by', 'created_by'),
 │               Index('ix_schedule_tags', 'tags', postgresql_using='gin'),
 │           )
-│           
+│
 │           # Primary key
 │           id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-│           
+│
 │           # Basic information
 │           name = Column(String(255), nullable=False)
 │           description = Column(Text, nullable=True)
-│           
+│
 │           # Scheduling configuration
 │           schedule_type = Column(
 │               SQLEnum(ScheduleType, native_enum=False),
@@ -1451,17 +1451,17 @@ src/
 │           interval_seconds = Column(Integer, nullable=True)  # For INTERVAL type
 │           scheduled_at = Column(DateTime(timezone=True), nullable=True)  # For ONE_TIME type
 │           timezone = Column(String(50), nullable=False, default="UTC")
-│           
+│
 │           # Execution configuration
 │           target_command = Column(String(255), nullable=False, index=True)
 │           command_payload = Column(JSON, nullable=False, default=dict)
-│           
+│
 │           # Metadata
 │           tags = Column(JSON, nullable=False, default=list)  # List of tags
 │           priority = Column(Integer, nullable=False, default=5)  # 1-10
 │           max_retries = Column(Integer, nullable=False, default=3)
 │           retry_delay_seconds = Column(Integer, nullable=False, default=300)
-│           
+│
 │           # State
 │           status = Column(
 │               SQLEnum(ScheduleStatus, native_enum=False),
@@ -1472,69 +1472,69 @@ src/
 │           is_active = Column(Boolean, nullable=False, default=True, index=True)
 │           is_paused = Column(Boolean, nullable=False, default=False)
 │           pause_reason = Column(Text, nullable=True)
-│           
+│
 │           # Execution tracking
 │           last_run_at = Column(DateTime(timezone=True), nullable=True)
 │           next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
 │           run_count = Column(Integer, nullable=False, default=0)
 │           success_count = Column(Integer, nullable=False, default=0)
 │           failure_count = Column(Integer, nullable=False, default=0)
-│           
+│
 │           # APScheduler integration
 │           job_id = Column(String(255), nullable=True, unique=True, index=True)
-│           
+│
 │           # Tracking
 │           created_by = Column(String(255), nullable=False)  # Service or user
 │           updated_by = Column(String(255), nullable=True)
 │           deleted_at = Column(DateTime(timezone=True), nullable=True)  # Soft delete
 │           deleted_by = Column(String(255), nullable=True)
-│           
+│
 │           # Correlation for tracing
 │           correlation_id = Column(String(255), nullable=True, index=True)
-│           
+│
 │           def __repr__(self) -> str:
 │               return f"<Schedule(id={self.id}, name={self.name}, type={self.schedule_type})>"
 │       ```
-│       
+│
 ├── repositories/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/repositories/__init__.py
 │   │   from .schedule_repository import ScheduleRepository
 │   │   from .execution_repository import ExecutionRepository
-│   │   
+│   │
 │   │   __all__ = ['ScheduleRepository', 'ExecutionRepository']
 │   │   ```
-│   │   
+│   │
 │   ├── base.py
-│   │   
+│   │
 │   │   ```py
-│   │   
+│   │
 │   │   # services/scheduler-service/src/repositories/base.py
 │   │   """Base repository with common functionality"""
-│   │   
+│   │
 │   │   from typing import TypeVar, Generic, Type, Optional, List, Any, Dict
 │   │   from uuid import UUID
 │   │   from sqlalchemy.ext.asyncio import AsyncSession
 │   │   from sqlalchemy import select, func, and_, or_
 │   │   from shared.database.session import DatabaseSessionManager
-│   │   
+│   │
 │   │   ModelType = TypeVar("ModelType")
-│   │   
-│   │   
+│   │
+│   │
 │   │   class BaseRepository(Generic[ModelType]):
 │   │       """Base repository with common CRUD operations"""
-│   │       
+│   │
 │   │       def __init__(self, model: Type[ModelType], db_manager: DatabaseSessionManager):
 │   │           self.model = model
 │   │           self.db_manager = db_manager
-│   │       
+│   │
 │   │       async def _session(self):
 │   │           """Get database session"""
 │   │           async with self.db_manager.get_session() as session:
 │   │               yield session
-│   │       
+│   │
 │   │       async def get_by_id(self, id: UUID) -> Optional[ModelType]:
 │   │           """Get entity by ID"""
 │   │           async for session in self._session():
@@ -1542,7 +1542,7 @@ src/
 │   │                   select(self.model).where(self.model.id == id)
 │   │               )
 │   │               return result.scalar_one_or_none()
-│   │       
+│   │
 │   │       async def get_all(
 │   │           self,
 │   │           offset: int = 0,
@@ -1552,25 +1552,25 @@ src/
 │   │           """Get all entities with pagination"""
 │   │           async for session in self._session():
 │   │               query = select(self.model)
-│   │               
+│   │
 │   │               if filters:
 │   │                   query = query.where(and_(*filters))
-│   │               
+│   │
 │   │               query = query.offset(offset).limit(limit)
 │   │               result = await session.execute(query)
 │   │               return list(result.scalars().all())
-│   │       
+│   │
 │   │       async def count(self, filters: Optional[List[Any]] = None) -> int:
 │   │           """Count entities"""
 │   │           async for session in self._session():
 │   │               query = select(func.count()).select_from(self.model)
-│   │               
+│   │
 │   │               if filters:
 │   │                   query = query.where(and_(*filters))
-│   │               
+│   │
 │   │               result = await session.execute(query)
 │   │               return result.scalar() or 0
-│   │       
+│   │
 │   │       async def create(self, entity: ModelType) -> ModelType:
 │   │           """Create entity"""
 │   │           async for session in self._session():
@@ -1578,7 +1578,7 @@ src/
 │   │               await session.commit()
 │   │               await session.refresh(entity)
 │   │               return entity
-│   │       
+│   │
 │   │       async def update(self, entity: ModelType) -> ModelType:
 │   │           """Update entity"""
 │   │           async for session in self._session():
@@ -1586,7 +1586,7 @@ src/
 │   │               await session.commit()
 │   │               await session.refresh(entity)
 │   │               return entity
-│   │       
+│   │
 │   │       async def delete(self, id: UUID) -> bool:
 │   │           """Delete entity"""
 │   │           async for session in self._session():
@@ -1597,29 +1597,29 @@ src/
 │   │                   return True
 │   │               return False
 │   │   ```
-│   │   
+│   │
 │   ├── execution_repository.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/repositories/execution_repository.py
 │   │   """Repository for execution operations"""
-│   │   
+│   │
 │   │   from typing import Optional, List, Dict, Any
 │   │   from uuid import UUID
 │   │   from datetime import datetime, timedelta
 │   │   from sqlalchemy import select, func, and_, or_, update, desc
 │   │   from sqlalchemy.orm import selectinload
-│   │   
+│   │
 │   │   from .base import BaseRepository
 │   │   from ..models.execution import ScheduleExecution, ExecutionStatus
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionRepository(BaseRepository[ScheduleExecution]):
 │   │       """Repository for execution database operations"""
-│   │       
+│   │
 │   │       def __init__(self, db_manager):
 │   │           super().__init__(ScheduleExecution, db_manager)
-│   │       
+│   │
 │   │       async def get_by_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -1631,7 +1631,7 @@ src/
 │   │           filters = [ScheduleExecution.schedule_id == schedule_id]
 │   │           if status:
 │   │               filters.append(ScheduleExecution.status == status)
-│   │           
+│   │
 │   │           async for session in self._session():
 │   │               result = await session.execute(
 │   │                   select(ScheduleExecution)
@@ -1641,7 +1641,7 @@ src/
 │   │                   .limit(limit)
 │   │               )
 │   │               return list(result.scalars().all())
-│   │       
+│   │
 │   │       async def get_running_executions(
 │   │           self,
 │   │           schedule_id: Optional[UUID] = None
@@ -1650,9 +1650,9 @@ src/
 │   │           filters = [ScheduleExecution.status == ExecutionStatus.RUNNING]
 │   │           if schedule_id:
 │   │               filters.append(ScheduleExecution.schedule_id == schedule_id)
-│   │           
+│   │
 │   │           return await self.get_all(filters=filters)
-│   │       
+│   │
 │   │       async def get_by_correlation_id(
 │   │           self,
 │   │           correlation_id: str
@@ -1665,7 +1665,7 @@ src/
 │   │                   )
 │   │               )
 │   │               return result.scalar_one_or_none()
-│   │       
+│   │
 │   │       async def update_status(
 │   │           self,
 │   │           execution_id: UUID,
@@ -1675,14 +1675,14 @@ src/
 │   │           """Update execution status"""
 │   │           async for session in self._session():
 │   │               values = {'status': status}
-│   │               
+│   │
 │   │               if status == ExecutionStatus.RUNNING:
 │   │                   values['started_at'] = datetime.utcnow()
 │   │               elif status in [ExecutionStatus.SUCCESS, ExecutionStatus.FAILED]:
 │   │                   values['completed_at'] = datetime.utcnow()
-│   │               
+│   │
 │   │               values.update(kwargs)
-│   │               
+│   │
 │   │               result = await session.execute(
 │   │                   update(ScheduleExecution)
 │   │                   .where(ScheduleExecution.id == execution_id)
@@ -1690,7 +1690,7 @@ src/
 │   │               )
 │   │               await session.commit()
 │   │               return result.rowcount > 0
-│   │       
+│   │
 │   │       async def get_stats(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -1701,13 +1701,13 @@ src/
 │   │               base_query = select(ScheduleExecution).where(
 │   │                   ScheduleExecution.schedule_id == schedule_id
 │   │               )
-│   │               
+│   │
 │   │               if time_window:
 │   │                   cutoff = datetime.utcnow() - time_window
 │   │                   base_query = base_query.where(
 │   │                       ScheduleExecution.scheduled_for >= cutoff
 │   │                   )
-│   │               
+│   │
 │   │               # Get status counts
 │   │               status_counts = await session.execute(
 │   │                   select(
@@ -1717,9 +1717,9 @@ src/
 │   │                       ScheduleExecution.schedule_id == schedule_id
 │   │                   ).group_by(ScheduleExecution.status)
 │   │               )
-│   │               
+│   │
 │   │               counts = {row.status: row.count for row in status_counts}
-│   │               
+│   │
 │   │               # Get duration stats for successful executions
 │   │               duration_stats = await session.execute(
 │   │                   select(
@@ -1734,9 +1734,9 @@ src/
 │   │                       )
 │   │                   )
 │   │               )
-│   │               
+│   │
 │   │               duration_row = duration_stats.one()
-│   │               
+│   │
 │   │               # Get last execution
 │   │               last_execution = await session.execute(
 │   │                   select(ScheduleExecution.completed_at)
@@ -1751,17 +1751,17 @@ src/
 │   │                   ).order_by(desc(ScheduleExecution.completed_at))
 │   │                   .limit(1)
 │   │               )
-│   │               
+│   │
 │   │               last_at = last_execution.scalar()
-│   │               
+│   │
 │   │               # Get consecutive failures
 │   │               consecutive_failures = await self._get_consecutive_failures(
 │   │                   session, schedule_id
 │   │               )
-│   │               
+│   │
 │   │               total = sum(counts.values())
 │   │               success_rate = counts.get(ExecutionStatus.SUCCESS, 0) / total if total > 0 else 0
-│   │               
+│   │
 │   │               return {
 │   │                   'total_executions': total,
 │   │                   'successful_executions': counts.get(ExecutionStatus.SUCCESS, 0),
@@ -1774,7 +1774,7 @@ src/
 │   │                   'success_rate': success_rate,
 │   │                   'consecutive_failures': consecutive_failures
 │   │               }
-│   │       
+│   │
 │   │       async def _get_consecutive_failures(
 │   │           self,
 │   │           session: AsyncSession,
@@ -1788,16 +1788,16 @@ src/
 │   │               .order_by(desc(ScheduleExecution.scheduled_for))
 │   │               .limit(100)  # Reasonable limit
 │   │           )
-│   │           
+│   │
 │   │           consecutive = 0
 │   │           for row in result:
 │   │               if row.status == ExecutionStatus.FAILED:
 │   │                   consecutive += 1
 │   │               else:
 │   │                   break
-│   │           
+│   │
 │   │           return consecutive
-│   │       
+│   │
 │   │       async def cleanup_old_executions(
 │   │           self,
 │   │           older_than: datetime,
@@ -1806,7 +1806,7 @@ src/
 │   │           """Delete old execution records"""
 │   │           async for session in self._session():
 │   │               total_deleted = 0
-│   │               
+│   │
 │   │               while True:
 │   │                   # Get IDs to delete
 │   │                   result = await session.execute(
@@ -1814,46 +1814,46 @@ src/
 │   │                       .where(ScheduleExecution.completed_at < older_than)
 │   │                       .limit(batch_size)
 │   │                   )
-│   │                   
+│   │
 │   │                   ids_to_delete = [row.id for row in result]
-│   │                   
+│   │
 │   │                   if not ids_to_delete:
 │   │                       break
-│   │                   
+│   │
 │   │                   # Delete batch
 │   │                   await session.execute(
 │   │                       delete(ScheduleExecution)
 │   │                       .where(ScheduleExecution.id.in_(ids_to_delete))
 │   │                   )
-│   │                   
+│   │
 │   │                   await session.commit()
 │   │                   total_deleted += len(ids_to_delete)
-│   │               
+│   │
 │   │               return total_deleted
 │   │   ```
-│   │   
+│   │
 │   └── schedule_repository.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/repositories/schedule_repository.py
 │       """Repository for schedule operations"""
-│       
+│
 │       from typing import Optional, List, Dict, Any
 │       from uuid import UUID
 │       from datetime import datetime
 │       from sqlalchemy import select, func, and_, or_, update
 │       from sqlalchemy.orm import selectinload
-│       
+│
 │       from .base import BaseRepository
 │       from ..models.schedule import Schedule, ScheduleStatus, ScheduleType
-│       
-│       
+│
+│
 │       class ScheduleRepository(BaseRepository[Schedule]):
 │           """Repository for schedule database operations"""
-│           
+│
 │           def __init__(self, db_manager):
 │               super().__init__(Schedule, db_manager)
-│           
+│
 │           async def get_by_name_and_creator(
 │               self,
 │               name: str,
@@ -1871,7 +1871,7 @@ src/
 │                       )
 │                   )
 │                   return result.scalar_one_or_none()
-│           
+│
 │           async def get_active_schedules(
 │               self,
 │               offset: int = 0,
@@ -1885,7 +1885,7 @@ src/
 │                   Schedule.deleted_at.is_(None)
 │               ]
 │               return await self.get_all(offset, limit, filters)
-│           
+│
 │           async def get_schedules_to_run(
 │               self,
 │               before: datetime,
@@ -1905,7 +1905,7 @@ src/
 │                       ).order_by(Schedule.next_run_at).limit(limit)
 │                   )
 │                   return list(result.scalars().all())
-│           
+│
 │           async def get_by_job_id(self, job_id: str) -> Optional[Schedule]:
 │               """Get schedule by APScheduler job ID"""
 │               async for session in self._session():
@@ -1913,7 +1913,7 @@ src/
 │                       select(Schedule).where(Schedule.job_id == job_id)
 │                   )
 │                   return result.scalar_one_or_none()
-│           
+│
 │           async def get_by_tags(
 │               self,
 │               tags: List[str],
@@ -1932,7 +1932,7 @@ src/
 │                       ).offset(offset).limit(limit)
 │                   )
 │                   return list(result.scalars().all())
-│           
+│
 │           async def get_by_creator(
 │               self,
 │               created_by: str,
@@ -1944,9 +1944,9 @@ src/
 │               filters = [Schedule.created_by == created_by]
 │               if not include_deleted:
 │                   filters.append(Schedule.deleted_at.is_(None))
-│               
+│
 │               return await self.get_all(offset, limit, filters)
-│           
+│
 │           async def count_by_creator(
 │               self,
 │               created_by: str,
@@ -1956,9 +1956,9 @@ src/
 │               filters = [Schedule.created_by == created_by]
 │               if not include_deleted:
 │                   filters.append(Schedule.deleted_at.is_(None))
-│               
+│
 │               return await self.count(filters)
-│           
+│
 │           async def soft_delete(
 │               self,
 │               schedule_id: UUID,
@@ -1978,7 +1978,7 @@ src/
 │                   )
 │                   await session.commit()
 │                   return result.rowcount > 0
-│           
+│
 │           async def update_last_run(
 │               self,
 │               schedule_id: UUID,
@@ -1992,15 +1992,15 @@ src/
 │                       'last_run_at': last_run_at,
 │                       'run_count': Schedule.run_count + 1
 │                   }
-│                   
+│
 │                   if next_run_at:
 │                       values['next_run_at'] = next_run_at
-│                   
+│
 │                   if increment_success:
 │                       values['success_count'] = Schedule.success_count + 1
 │                   else:
 │                       values['failure_count'] = Schedule.failure_count + 1
-│                   
+│
 │                   result = await session.execute(
 │                       update(Schedule)
 │                       .where(Schedule.id == schedule_id)
@@ -2008,7 +2008,7 @@ src/
 │                   )
 │                   await session.commit()
 │                   return result.rowcount > 0
-│           
+│
 │           async def bulk_update_status(
 │               self,
 │               schedule_ids: List[UUID],
@@ -2019,7 +2019,7 @@ src/
 │               async for session in self._session():
 │                   values = {'status': status, 'updated_at': datetime.utcnow()}
 │                   values.update(kwargs)
-│                   
+│
 │                   result = await session.execute(
 │                       update(Schedule)
 │                       .where(Schedule.id.in_(schedule_ids))
@@ -2027,7 +2027,7 @@ src/
 │                   )
 │                   await session.commit()
 │                   return result.rowcount
-│           
+│
 │           async def get_stats_by_type(self) -> Dict[str, int]:
 │               """Get schedule counts by type"""
 │               async for session in self._session():
@@ -2040,30 +2040,30 @@ src/
 │                       ).group_by(Schedule.schedule_type)
 │                   )
 │                   return {row.schedule_type: row.count for row in result}
-│       
+│
 │       ```
-│       
+│
 ├── routers/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/routers/__init__.py
 │   │   from . import health, schedules, executions
-│   │   
+│   │
 │   │   __all__ = ['health', 'schedules', 'executions']
 │   │   ```
-│   │   
+│   │
 │   ├── executions.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/routers/executions.py
 │   │   """Execution history endpoints"""
-│   │   
+│   │
 │   │   from fastapi import APIRouter, Query, HTTPException
 │   │   from typing import Optional
 │   │   from uuid import UUID
 │   │   from datetime import datetime, timedelta
-│   │   
+│   │
 │   │   from shared.api import (
 │   │       ApiResponse,
 │   │       success_response,
@@ -2072,7 +2072,7 @@ src/
 │   │       RequestContextDep,
 │   │       PaginationDep
 │   │   )
-│   │   
+│   │
 │   │   from ..dependencies import ExecutionRepoDep, ScheduleRepoDep
 │   │   from ..schemas import (
 │   │       ExecutionResponse,
@@ -2082,10 +2082,10 @@ src/
 │   │   )
 │   │   from ..mappers.execution_mapper import ExecutionMapper
 │   │   from ..exceptions import ExecutionNotFoundError
-│   │   
+│   │
 │   │   router = APIRouter()
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get(
 │   │       "",
 │   │       response_model=ApiResponse[ExecutionListResponse],
@@ -2101,15 +2101,15 @@ src/
 │   │   ):
 │   │       """
 │   │       List all executions across all schedules.
-│   │       
+│   │
 │   │       Supports filtering by schedule, status, and start time.
 │   │       """
 │   │       filters = []
-│   │       
+│   │
 │   │       if schedule_id:
 │   │           from ..models.execution import ScheduleExecution
 │   │           filters.append(ScheduleExecution.schedule_id == schedule_id)
-│   │       
+│   │
 │   │       if status:
 │   │           from ..models.execution import ScheduleExecution, ExecutionStatus
 │   │           try:
@@ -2117,24 +2117,24 @@ src/
 │   │               filters.append(ScheduleExecution.status == status_enum)
 │   │           except ValueError:
 │   │               raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
-│   │       
+│   │
 │   │       if started_after:
 │   │           from ..models.execution import ScheduleExecution
 │   │           filters.append(ScheduleExecution.started_at >= started_after)
-│   │       
+│   │
 │   │       # Get executions
 │   │       executions = await execution_repo.get_all(
 │   │           offset=pagination.offset,
 │   │           limit=pagination.limit,
 │   │           filters=filters if filters else None
 │   │       )
-│   │       
+│   │
 │   │       total = await execution_repo.count(filters if filters else None)
-│   │       
+│   │
 │   │       # Map to responses
 │   │       mapper = ExecutionMapper()
 │   │       execution_responses = [mapper.model_to_response(e) for e in executions]
-│   │       
+│   │
 │   │       return paginated_response(
 │   │           data=execution_responses,
 │   │           page=pagination.page,
@@ -2147,8 +2147,8 @@ src/
 │   │           status=status,
 │   │           started_after=started_after
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get(
 │   │       "/{execution_id}",
 │   │       response_model=ApiResponse[ExecutionDetailResponse],
@@ -2161,13 +2161,13 @@ src/
 │   │   ):
 │   │       """Get detailed information about a specific execution."""
 │   │       execution = await execution_repo.get_by_id(execution_id)
-│   │       
+│   │
 │   │       if not execution:
 │   │           raise HTTPException(status_code=404, detail="Execution not found")
-│   │       
+│   │
 │   │       mapper = ExecutionMapper()
 │   │       response = mapper.model_to_detail_response(execution)
-│   │       
+│   │
 │   │       return success_response(
 │   │           data=response,
 │   │           request_id=ctx.request_id,
@@ -2177,8 +2177,8 @@ src/
 │   │               schedule=f"/api/v1/schedules/{execution.schedule_id}"
 │   │           )
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get(
 │   │       "/stats/{schedule_id}",
 │   │       response_model=ApiResponse[ExecutionStats],
@@ -2196,27 +2196,27 @@ src/
 │   │   ):
 │   │       """
 │   │       Get execution statistics for a specific schedule.
-│   │       
+│   │
 │   │       Includes success rate, duration stats, and failure analysis.
 │   │       """
 │   │       # Check schedule exists
 │   │       schedule = await schedule_repo.get_by_id(schedule_id)
 │   │       if not schedule:
 │   │           raise HTTPException(status_code=404, detail="Schedule not found")
-│   │       
+│   │
 │   │       # Calculate time window
 │   │       time_window = None
 │   │       if time_window_hours:
 │   │           time_window = timedelta(hours=time_window_hours)
-│   │       
+│   │
 │   │       # Get stats
 │   │       stats = await execution_repo.get_stats(schedule_id, time_window)
-│   │       
+│   │
 │   │       # Add time period stats (simplified - would need proper implementation)
 │   │       stats['executions_last_hour'] = 0
 │   │       stats['executions_last_24h'] = 0
 │   │       stats['executions_last_7d'] = 0
-│   │       
+│   │
 │   │       # Map to response
 │   │       mapper = ExecutionMapper()
 │   │       response = mapper.stats_to_response(
@@ -2224,7 +2224,7 @@ src/
 │   │           schedule_id,
 │   │           schedule.next_run_at
 │   │       )
-│   │       
+│   │
 │   │       return success_response(
 │   │           data=response,
 │   │           request_id=ctx.request_id,
@@ -2234,8 +2234,8 @@ src/
 │   │               executions=f"/api/v1/schedules/{schedule_id}/executions"
 │   │           )
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get(
 │   │       "/running",
 │   │       response_model=ApiResponse[List[ExecutionResponse]],
@@ -2247,17 +2247,17 @@ src/
 │   │   ):
 │   │       """Get all currently running executions."""
 │   │       executions = await execution_repo.get_running_executions()
-│   │       
+│   │
 │   │       mapper = ExecutionMapper()
 │   │       execution_responses = [mapper.model_to_response(e) for e in executions]
-│   │       
+│   │
 │   │       return success_response(
 │   │           data=execution_responses,
 │   │           request_id=ctx.request_id,
 │   │           correlation_id=ctx.correlation_id
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get(
 │   │       "/by-correlation/{correlation_id}",
 │   │       response_model=ApiResponse[ExecutionDetailResponse],
@@ -2270,16 +2270,16 @@ src/
 │   │   ):
 │   │       """Get execution by correlation ID for tracing."""
 │   │       execution = await execution_repo.get_by_correlation_id(correlation_id)
-│   │       
+│   │
 │   │       if not execution:
 │   │           raise HTTPException(
 │   │               status_code=404,
 │   │               detail=f"No execution found with correlation ID: {correlation_id}"
 │   │           )
-│   │       
+│   │
 │   │       mapper = ExecutionMapper()
 │   │       response = mapper.model_to_detail_response(execution)
-│   │       
+│   │
 │   │       return success_response(
 │   │           data=response,
 │   │           request_id=ctx.request_id,
@@ -2290,13 +2290,13 @@ src/
 │   │           )
 │   │       )
 │   │   ```
-│   │   
+│   │
 │   ├── health.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/routers/health.py
 │   │   """Health check endpoints"""
-│   │   
+│   │
 │   │   from fastapi import APIRouter, Depends
 │   │   from typing import Annotated
 │   │   from datetime import datetime, timezone
@@ -2305,10 +2305,10 @@ src/
 │   │   from ..dependencies import get_scheduler_manager, get_schedule_repository
 │   │   from ..services.scheduler_manager import SchedulerManager
 │   │   from ..repositories.schedule_repository import ScheduleRepository
-│   │   
+│   │
 │   │   router = APIRouter()
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get("/health")
 │   │   async def health_check(
 │   │       ctx: RequestContextDep
@@ -2323,8 +2323,8 @@ src/
 │   │           request_id=ctx.request_id,
 │   │           correlation_id=ctx.correlation_id
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get("/health/detailed")
 │   │   async def detailed_health_check(
 │   │       ctx: RequestContextDep,
@@ -2338,7 +2338,7 @@ src/
 │   │           "timestamp": datetime.utcnow().isoformat(),
 │   │           "dependencies": {}
 │   │       }
-│   │       
+│   │
 │   │       # Check database
 │   │       try:
 │   │           db_health = await get_database_health(schedule_repo.db_manager)
@@ -2349,7 +2349,7 @@ src/
 │   │               "error": str(e)
 │   │           }
 │   │           health_data["status"] = "degraded"
-│   │       
+│   │
 │   │       # Check scheduler
 │   │       try:
 │   │           scheduler_running = scheduler_manager._started
@@ -2365,14 +2365,14 @@ src/
 │   │               "error": str(e)
 │   │           }
 │   │           health_data["status"] = "degraded"
-│   │       
+│   │
 │   │       return success_response(
 │   │           data=health_data,
 │   │           request_id=ctx.request_id,
 │   │           correlation_id=ctx.correlation_id
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get("/ready")
 │   │   async def readiness_check(
 │   │       ctx: RequestContextDep
@@ -2383,8 +2383,8 @@ src/
 │   │           request_id=ctx.request_id,
 │   │           correlation_id=ctx.correlation_id
 │   │       )
-│   │   
-│   │   
+│   │
+│   │
 │   │   @router.get("/live")
 │   │   async def liveness_check(
 │   │       ctx: RequestContextDep
@@ -2396,17 +2396,17 @@ src/
 │   │           correlation_id=ctx.correlation_id
 │   │       )
 │   │   ```
-│   │   
+│   │
 │   └── schedules.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/routers/schedules.py
 │       """Schedule management endpoints"""
-│       
+│
 │       from fastapi import APIRouter, Query, HTTPException, Header
 │       from typing import List, Optional
 │       from uuid import UUID
-│       
+│
 │       from shared.api import (
 │           ApiResponse,
 │           success_response,
@@ -2416,7 +2416,7 @@ src/
 │           PaginationDep
 │       )
 │       from shared.api.correlation import get_correlation_context
-│       
+│
 │       from ..dependencies import ScheduleServiceDep, ScheduleRepoDep
 │       from ..schemas import (
 │           ScheduleCreate,
@@ -2430,10 +2430,10 @@ src/
 │       )
 │       from ..mappers.schedule_mapper import ScheduleMapper
 │       from ..exceptions import ScheduleNotFoundError, ScheduleAlreadyExistsError
-│       
+│
 │       router = APIRouter()
-│       
-│       
+│
+│
 │       @router.post(
 │           "",
 │           response_model=ApiResponse[ScheduleDetailResponse],
@@ -2448,42 +2448,42 @@ src/
 │       ):
 │           """
 │           Create a new schedule.
-│           
+│
 │           The schedule will be automatically registered with the scheduler
 │           and will start executing according to its configuration.
 │           """
 │           # Get creator from header or context
 │           created_by = x_created_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               # Convert to command payload
 │               from shared.events.scheduler.types import CreateScheduleCommandPayload
 │               command_payload = CreateScheduleCommandPayload(**schedule_data.model_dump())
-│               
+│
 │               # Create schedule
 │               schedule = await svc.create_schedule(
 │                   create_data=command_payload,
 │                   created_by=created_by,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               # Map to response
 │               mapper = ScheduleMapper()
 │               response = mapper.model_to_detail_response(schedule)
-│               
+│
 │               return success_response(
 │                   data=response,
 │                   request_id=ctx.request_id,
 │                   correlation_id=ctx.correlation_id,
 │                   links=Links(self=f"/api/v1/schedules/{schedule.id}")
 │               )
-│               
+│
 │           except ScheduleAlreadyExistsError as e:
 │               raise HTTPException(status_code=409, detail=str(e))
 │           except Exception as e:
 │               raise HTTPException(status_code=400, detail=str(e))
-│       
-│       
+│
+│
 │       @router.get(
 │           "",
 │           response_model=ApiResponse[ScheduleListResponse],
@@ -2500,7 +2500,7 @@ src/
 │       ):
 │           """
 │           List schedules with optional filters.
-│           
+│
 │           Supports filtering by creator, tags, status, and active state.
 │           """
 │           # Get schedules
@@ -2512,11 +2512,11 @@ src/
 │               status=status,
 │               is_active=is_active
 │           )
-│           
+│
 │           # Map to responses
 │           mapper = ScheduleMapper()
 │           schedule_responses = [mapper.model_to_response(s) for s in schedules]
-│           
+│
 │           return paginated_response(
 │               data=schedule_responses,
 │               page=pagination.page,
@@ -2530,8 +2530,8 @@ src/
 │               status=status,
 │               is_active=is_active
 │           )
-│       
-│       
+│
+│
 │       @router.get(
 │           "/{schedule_id}",
 │           response_model=ApiResponse[ScheduleDetailResponse],
@@ -2545,10 +2545,10 @@ src/
 │           """Get detailed information about a specific schedule."""
 │           try:
 │               schedule = await svc.get_schedule(schedule_id)
-│               
+│
 │               mapper = ScheduleMapper()
 │               response = mapper.model_to_detail_response(schedule)
-│               
+│
 │               return success_response(
 │                   data=response,
 │                   request_id=ctx.request_id,
@@ -2560,8 +2560,8 @@ src/
 │               )
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│       
-│       
+│
+│
 │       @router.put(
 │           "/{schedule_id}",
 │           response_model=ApiResponse[ScheduleDetailResponse],
@@ -2576,13 +2576,13 @@ src/
 │       ):
 │           """
 │           Update an existing schedule.
-│           
+│
 │           Only provided fields will be updated. If schedule timing is changed,
 │           it will be re-registered with the scheduler.
 │           """
 │           # Get updater from header or context
 │           updated_by = x_updated_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               # Convert to command payload
 │               from shared.events.scheduler.types import UpdateScheduleCommandPayload
@@ -2590,7 +2590,7 @@ src/
 │                   schedule_id=schedule_id,
 │                   **update_data.model_dump(exclude_unset=True)
 │               )
-│               
+│
 │               # Update schedule
 │               schedule = await svc.update_schedule(
 │                   schedule_id=schedule_id,
@@ -2598,24 +2598,24 @@ src/
 │                   updated_by=updated_by,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               # Map to response
 │               mapper = ScheduleMapper()
 │               response = mapper.model_to_detail_response(schedule)
-│               
+│
 │               return success_response(
 │                   data=response,
 │                   request_id=ctx.request_id,
 │                   correlation_id=ctx.correlation_id,
 │                   links=Links(self=f"/api/v1/schedules/{schedule_id}")
 │               )
-│               
+│
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
 │           except Exception as e:
 │               raise HTTPException(status_code=400, detail=str(e))
-│       
-│       
+│
+│
 │       @router.delete(
 │           "/{schedule_id}",
 │           status_code=204,
@@ -2630,12 +2630,12 @@ src/
 │       ):
 │           """
 │           Delete a schedule.
-│           
+│
 │           By default performs a soft delete. Set hard_delete=true to permanently remove.
 │           """
 │           # Get deleter from header or context
 │           deleted_by = x_deleted_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               await svc.delete_schedule(
 │                   schedule_id=schedule_id,
@@ -2645,8 +2645,8 @@ src/
 │               )
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│       
-│       
+│
+│
 │       @router.post(
 │           "/{schedule_id}/pause",
 │           response_model=ApiResponse[ScheduleDetailResponse],
@@ -2661,7 +2661,7 @@ src/
 │       ):
 │           """Pause schedule execution."""
 │           paused_by = x_paused_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               schedule = await svc.pause_schedule(
 │                   schedule_id=schedule_id,
@@ -2669,10 +2669,10 @@ src/
 │                   reason=reason,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               mapper = ScheduleMapper()
 │               response = mapper.model_to_detail_response(schedule)
-│               
+│
 │               return success_response(
 │                   data=response,
 │                   request_id=ctx.request_id,
@@ -2681,8 +2681,8 @@ src/
 │               )
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│       
-│       
+│
+│
 │       @router.post(
 │           "/{schedule_id}/resume",
 │           response_model=ApiResponse[ScheduleDetailResponse],
@@ -2696,17 +2696,17 @@ src/
 │       ):
 │           """Resume a paused schedule."""
 │           resumed_by = x_resumed_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               schedule = await svc.resume_schedule(
 │                   schedule_id=schedule_id,
 │                   resumed_by=resumed_by,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               mapper = ScheduleMapper()
 │               response = mapper.model_to_detail_response(schedule)
-│               
+│
 │               return success_response(
 │                   data=response,
 │                   request_id=ctx.request_id,
@@ -2715,8 +2715,8 @@ src/
 │               )
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│       
-│       
+│
+│
 │       @router.post(
 │           "/{schedule_id}/trigger",
 │           response_model=ApiResponse[dict],
@@ -2731,7 +2731,7 @@ src/
 │       ):
 │           """Trigger a schedule to run immediately."""
 │           triggered_by = x_triggered_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               execution_id = await svc.trigger_schedule(
 │                   schedule_id=schedule_id,
@@ -2739,7 +2739,7 @@ src/
 │                   override_payload=trigger_data.override_payload if trigger_data else None,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               return success_response(
 │                   data={
 │                       "execution_id": str(execution_id),
@@ -2753,8 +2753,8 @@ src/
 │               )
 │           except ScheduleNotFoundError:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│       
-│       
+│
+│
 │       # Bulk operations
 │       @router.post(
 │           "/bulk/create",
@@ -2769,21 +2769,21 @@ src/
 │       ):
 │           """Create multiple schedules in a single request."""
 │           created_by = x_created_by or ctx.user_id or "unknown"
-│           
+│
 │           # Convert to command payloads
 │           from shared.events.scheduler.types import CreateScheduleCommandPayload
 │           command_payloads = [
 │               CreateScheduleCommandPayload(**schedule.model_dump())
 │               for schedule in bulk_data.schedules
 │           ]
-│           
+│
 │           try:
 │               created_schedules = await svc.bulk_create(
 │                   schedules=command_payloads,
 │                   created_by=created_by,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               return success_response(
 │                   data={
 │                       "created": len(created_schedules),
@@ -2794,8 +2794,8 @@ src/
 │               )
 │           except Exception as e:
 │               raise HTTPException(status_code=400, detail=str(e))
-│       
-│       
+│
+│
 │       @router.post(
 │           "/bulk/operation",
 │           response_model=ApiResponse[dict],
@@ -2809,11 +2809,11 @@ src/
 │       ):
 │           """
 │           Perform a bulk operation on multiple schedules.
-│           
+│
 │           Supported operations: pause, resume, delete
 │           """
 │           performed_by = x_performed_by or ctx.user_id or "unknown"
-│           
+│
 │           try:
 │               results = await svc.bulk_operation(
 │                   schedule_ids=bulk_op.schedule_ids,
@@ -2822,7 +2822,7 @@ src/
 │                   reason=bulk_op.reason,
 │                   correlation_id=ctx.correlation_id
 │               )
-│               
+│
 │               return success_response(
 │                   data=results,
 │                   request_id=ctx.request_id,
@@ -2830,8 +2830,8 @@ src/
 │               )
 │           except Exception as e:
 │               raise HTTPException(status_code=400, detail=str(e))
-│       
-│       
+│
+│
 │       # Schedule executions sub-resource
 │       @router.get(
 │           "/{schedule_id}/executions",
@@ -2849,27 +2849,27 @@ src/
 │           # Import here to avoid circular dependency
 │           from ..repositories.execution_repository import ExecutionRepository
 │           from ..mappers.execution_mapper import ExecutionMapper
-│           
+│
 │           # Check schedule exists
 │           schedule = await schedule_repo.get_by_id(schedule_id)
 │           if not schedule:
 │               raise HTTPException(status_code=404, detail="Schedule not found")
-│           
+│
 │           # Get executions through repository directly
 │           # (In a real implementation, this would be injected)
 │           execution_repo = ExecutionRepository(schedule_repo.db_manager)
-│           
+│
 │           executions = await execution_repo.get_by_schedule(
 │               schedule_id=schedule_id,
 │               offset=pagination.offset,
 │               limit=pagination.limit,
 │               status=status
 │           )
-│           
+│
 │           # Map to responses
 │           mapper = ExecutionMapper()
 │           execution_responses = [mapper.model_to_response(e) for e in executions]
-│           
+│
 │           return paginated_response(
 │               data=execution_responses,
 │               page=pagination.page,
@@ -2881,10 +2881,10 @@ src/
 │               status=status
 │           )
 │       ```
-│       
+│
 ├── schemas/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/schemas/__init__.py
 │   │   from .schedule import (
@@ -2903,7 +2903,7 @@ src/
 │   │       ExecutionListResponse,
 │   │       ExecutionStats
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       # Schedule schemas
 │   │       'ScheduleCreate',
@@ -2921,19 +2921,19 @@ src/
 │   │       'ExecutionStats'
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── base.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/schemas/base.py
 │   │   """Base schemas for scheduler service"""
-│   │   
+│   │
 │   │   from pydantic import BaseModel, ConfigDict
 │   │   from datetime import datetime
 │   │   from typing import Optional
 │   │   from uuid import UUID
-│   │   
-│   │   
+│   │
+│   │
 │   │   class BaseSchema(BaseModel):
 │   │       """Base schema with common configuration"""
 │   │       model_config = ConfigDict(
@@ -2945,22 +2945,22 @@ src/
 │   │           }
 │   │       )
 │   │   ```
-│   │   
+│   │
 │   ├── execution.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/schemas/execution.py
 │   │   """Execution-related schemas"""
-│   │   
+│   │
 │   │   from pydantic import BaseModel, Field
 │   │   from typing import Dict, List, Any, Optional
 │   │   from datetime import datetime
 │   │   from uuid import UUID
 │   │   from enum import Enum
-│   │   
+│   │
 │   │   from .base import BaseSchema
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionStatus(str, Enum):
 │   │       """Execution status enumeration"""
 │   │       PENDING = "pending"
@@ -2969,53 +2969,53 @@ src/
 │   │       FAILED = "failed"
 │   │       SKIPPED = "skipped"
 │   │       CANCELLED = "cancelled"
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionResponse(BaseSchema):
 │   │       """Response schema for execution"""
 │   │       id: UUID
 │   │       schedule_id: UUID
-│   │       
+│   │
 │   │       # Timing
 │   │       scheduled_for: datetime
 │   │       started_at: Optional[datetime]
 │   │       completed_at: Optional[datetime]
-│   │       
+│   │
 │   │       # Status
 │   │       status: ExecutionStatus
 │   │       attempt_number: int
-│   │       
+│   │
 │   │       # Performance
 │   │       duration_ms: Optional[int]
-│   │       
+│   │
 │   │       # Error info (if failed)
 │   │       error_message: Optional[str]
 │   │       error_type: Optional[str]
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionDetailResponse(ExecutionResponse):
 │   │       """Detailed response schema for execution"""
 │   │       # Command details
 │   │       command_sent: Optional[str]
 │   │       command_payload: Optional[Dict[str, Any]]
-│   │       
+│   │
 │   │       # Response details
 │   │       response_event: Optional[str]
 │   │       response_payload: Optional[Dict[str, Any]]
-│   │       
+│   │
 │   │       # Tracking
 │   │       correlation_id: str
 │   │       lock_id: Optional[str]
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionListResponse(BaseSchema):
 │   │       """Response for execution list"""
 │   │       executions: List[ExecutionResponse]
 │   │       total: int
 │   │       page: int
 │   │       limit: int
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ExecutionStats(BaseSchema):
 │   │       """Execution statistics for a schedule"""
 │   │       schedule_id: UUID
@@ -3028,26 +3028,26 @@ src/
 │   │       max_duration_ms: Optional[int]
 │   │       last_execution_at: Optional[datetime]
 │   │       next_execution_at: Optional[datetime]
-│   │       
+│   │
 │   │       # Time period stats
 │   │       executions_last_hour: int
 │   │       executions_last_24h: int
 │   │       executions_last_7d: int
-│   │       
+│   │
 │   │       # Success rate
 │   │       success_rate: float = Field(ge=0, le=1)
-│   │       
+│   │
 │   │       # Failure analysis
 │   │       most_common_error: Optional[str]
 │   │       consecutive_failures: int
 │   │   ```
-│   │   
+│   │
 │   └── schedule.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/schemas/schedule.py
 │       """Schedule-related schemas"""
-│       
+│
 │       from pydantic import BaseModel, Field, field_validator
 │       from typing import Dict, List, Any, Optional
 │       from datetime import datetime
@@ -3055,18 +3055,18 @@ src/
 │       from enum import Enum
 │       import re
 │       from croniter import croniter
-│       
+│
 │       from .base import BaseSchema
-│       
-│       
+│
+│
 │       class ScheduleType(str, Enum):
 │           """Schedule type enumeration"""
 │           CRON = "cron"
 │           INTERVAL = "interval"
 │           ONE_TIME = "one_time"
 │           IMMEDIATE = "immediate"
-│       
-│       
+│
+│
 │       class ScheduleStatus(str, Enum):
 │           """Schedule status enumeration"""
 │           ACTIVE = "active"
@@ -3074,37 +3074,37 @@ src/
 │           COMPLETED = "completed"
 │           FAILED = "failed"
 │           DELETED = "deleted"
-│       
-│       
+│
+│
 │       class ScheduleCreate(BaseModel):
 │           """Schema for creating a schedule"""
 │           name: str = Field(..., min_length=1, max_length=255)
 │           description: Optional[str] = Field(None, max_length=1000)
-│           
+│
 │           # Scheduling configuration
 │           schedule_type: ScheduleType
 │           cron_expression: Optional[str] = Field(None, max_length=255)
 │           interval_seconds: Optional[int] = Field(None, gt=0, le=31536000)  # Max 1 year
 │           scheduled_at: Optional[datetime] = None
 │           timezone: str = Field(default="UTC", max_length=50)
-│           
+│
 │           # Execution configuration
 │           target_command: str = Field(..., min_length=1, max_length=255)
 │           command_payload: Dict[str, Any] = Field(default_factory=dict)
-│           
+│
 │           # Metadata
 │           tags: List[str] = Field(default_factory=list, max_items=20)
 │           priority: int = Field(default=5, ge=1, le=10)
 │           max_retries: int = Field(default=3, ge=0, le=10)
 │           retry_delay_seconds: int = Field(default=300, ge=0, le=3600)
-│           
+│
 │           @field_validator('cron_expression')
 │           def validate_cron(cls, v: Optional[str], values) -> Optional[str]:
 │               if v and values.data.get('schedule_type') == ScheduleType.CRON:
 │                   if not croniter.is_valid(v):
 │                       raise ValueError('Invalid cron expression')
 │               return v
-│           
+│
 │           @field_validator('scheduled_at')
 │           def validate_scheduled_at(cls, v: Optional[datetime], values) -> Optional[datetime]:
 │               if values.data.get('schedule_type') == ScheduleType.ONE_TIME and not v:
@@ -3112,13 +3112,13 @@ src/
 │               if v and v < datetime.utcnow():
 │                   raise ValueError('scheduled_at must be in the future')
 │               return v
-│           
+│
 │           @field_validator('interval_seconds')
 │           def validate_interval(cls, v: Optional[int], values) -> Optional[int]:
 │               if values.data.get('schedule_type') == ScheduleType.INTERVAL and not v:
 │                   raise ValueError('interval_seconds is required for INTERVAL schedules')
 │               return v
-│           
+│
 │           @field_validator('target_command')
 │           def validate_command_format(cls, v: str) -> str:
 │               # Ensure command follows pattern: cmd.domain.action
@@ -3126,67 +3126,67 @@ src/
 │               if not re.match(pattern, v):
 │                   raise ValueError('Invalid command format. Must be cmd.domain.action')
 │               return v
-│       
-│       
+│
+│
 │       class ScheduleUpdate(BaseModel):
 │           """Schema for updating a schedule"""
 │           name: Optional[str] = Field(None, min_length=1, max_length=255)
 │           description: Optional[str] = Field(None, max_length=1000)
-│           
+│
 │           # Scheduling configuration
 │           schedule_type: Optional[ScheduleType] = None
 │           cron_expression: Optional[str] = Field(None, max_length=255)
 │           interval_seconds: Optional[int] = Field(None, gt=0, le=31536000)
 │           scheduled_at: Optional[datetime] = None
 │           timezone: Optional[str] = Field(None, max_length=50)
-│           
+│
 │           # Execution configuration
 │           target_command: Optional[str] = Field(None, min_length=1, max_length=255)
 │           command_payload: Optional[Dict[str, Any]] = None
-│           
+│
 │           # Metadata
 │           tags: Optional[List[str]] = Field(None, max_items=20)
 │           priority: Optional[int] = Field(None, ge=1, le=10)
 │           max_retries: Optional[int] = Field(None, ge=0, le=10)
 │           retry_delay_seconds: Optional[int] = Field(None, ge=0, le=3600)
-│           
+│
 │           # State
 │           is_active: Optional[bool] = None
-│       
-│       
+│
+│
 │       class ScheduleResponse(BaseSchema):
 │           """Response schema for schedule"""
 │           id: UUID
 │           name: str
 │           description: Optional[str]
-│           
+│
 │           # Scheduling
 │           schedule_type: ScheduleType
 │           cron_expression: Optional[str]
 │           interval_seconds: Optional[int]
 │           scheduled_at: Optional[datetime]
 │           timezone: str
-│           
+│
 │           # Execution
 │           target_command: str
-│           
+│
 │           # State
 │           status: ScheduleStatus
 │           is_active: bool
 │           is_paused: bool
 │           next_run_at: Optional[datetime]
 │           last_run_at: Optional[datetime]
-│           
+│
 │           # Stats
 │           run_count: int
 │           success_count: int
 │           failure_count: int
-│           
+│
 │           # Timestamps
 │           created_at: datetime
 │           updated_at: datetime
-│       
-│       
+│
+│
 │       class ScheduleDetailResponse(ScheduleResponse):
 │           """Detailed response schema for schedule"""
 │           command_payload: Dict[str, Any]
@@ -3194,64 +3194,64 @@ src/
 │           priority: int
 │           max_retries: int
 │           retry_delay_seconds: int
-│           
+│
 │           # Additional details
 │           pause_reason: Optional[str]
 │           created_by: str
 │           updated_by: Optional[str]
 │           job_id: Optional[str]
 │           correlation_id: Optional[str]
-│       
-│       
+│
+│
 │       class ScheduleListResponse(BaseSchema):
 │           """Response for schedule list"""
 │           schedules: List[ScheduleResponse]
 │           total: int
 │           page: int
 │           limit: int
-│       
-│       
+│
+│
 │       class ScheduleBulkCreate(BaseModel):
 │           """Schema for bulk schedule creation"""
 │           schedules: List[ScheduleCreate] = Field(..., max_items=100)
-│       
-│       
+│
+│
 │       class ScheduleBulkOperation(BaseModel):
 │           """Schema for bulk operations on schedules"""
 │           schedule_ids: List[UUID] = Field(..., max_items=100)
 │           operation: str = Field(..., regex="^(pause|resume|delete)$")
 │           reason: Optional[str] = Field(None, max_length=500)  # For pause operation
-│       
-│       
+│
+│
 │       class ScheduleTrigger(BaseModel):
 │           """Schema for triggering a schedule"""
 │           override_payload: Optional[Dict[str, Any]] = None
 │       ```
-│       
+│
 ├── services/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/services/__init__.py
 │   │   from .schedule_service import ScheduleService
 │   │   from .job_executor import JobExecutor
 │   │   from .scheduler_manager import SchedulerManager
-│   │   
+│   │
 │   │   __all__ = ['ScheduleService', 'JobExecutor', 'SchedulerManager']
 │   │   ```
-│   │   
+│   │
 │   ├── job_executor.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/services/job_executor.py
 │   │   """Job execution service"""
-│   │   
+│   │
 │   │   import asyncio
 │   │   import time
 │   │   from typing import Dict, Any, Optional
 │   │   from uuid import UUID, uuid4
 │   │   from datetime import datetime
-│   │   
+│   │
 │   │   from shared.utils.logger import ServiceLogger
 │   │   from shared.messaging.publisher import JetStreamEventPublisher
 │   │   from ..config import ServiceConfig
@@ -3260,11 +3260,11 @@ src/
 │   │   from ..repositories.execution_repository import ExecutionRepository
 │   │   from ..events.publishers import SchedulerEventPublisher
 │   │   from ..utils.distributed_lock import DistributedLock
-│   │   
-│   │   
+│   │
+│   │
 │   │   class JobExecutor:
 │   │       """Handles job execution logic"""
-│   │       
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           config: ServiceConfig,
@@ -3282,20 +3282,20 @@ src/
 │   │           self.event_publisher = event_publisher
 │   │           self.distributed_lock = distributed_lock
 │   │           self.logger = logger
-│   │       
+│   │
 │   │       async def execute_job(
 │   │           self,
 │   │           schedule_id: UUID,
 │   │           **kwargs
 │   │       ) -> None:
 │   │           """Execute a scheduled job"""
-│   │           
+│   │
 │   │           # Get schedule details
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
 │   │               self.logger.error(f"Schedule not found: {schedule_id}")
 │   │               return
-│   │           
+│   │
 │   │           # Check if schedule is active
 │   │           if not schedule.is_active or schedule.is_paused:
 │   │               self.logger.info(
@@ -3306,7 +3306,7 @@ src/
 │   │                   }
 │   │               )
 │   │               return
-│   │           
+│   │
 │   │           # Create execution record
 │   │           execution = ScheduleExecution(
 │   │               schedule_id=schedule_id,
@@ -3317,23 +3317,23 @@ src/
 │   │               command_payload=schedule.command_payload
 │   │           )
 │   │           execution = await self.execution_repo.create(execution)
-│   │           
+│   │
 │   │           # Acquire distributed lock
 │   │           lock_key = f"schedule:{schedule_id}:execution"
 │   │           lock_acquired = False
-│   │           
+│   │
 │   │           try:
 │   │               lock_acquired = await self.distributed_lock.acquire(
 │   │                   lock_key,
 │   │                   ttl=self.config.LOCK_TIMEOUT_SECONDS
 │   │               )
-│   │               
+│   │
 │   │               if not lock_acquired:
 │   │                   self.logger.warning(
 │   │                       f"Could not acquire lock for schedule: {schedule_id}",
 │   │                       extra={"lock_key": lock_key}
 │   │                   )
-│   │                   
+│   │
 │   │                   # Mark as skipped
 │   │                   await self.execution_repo.update_status(
 │   │                       execution.id,
@@ -3341,10 +3341,10 @@ src/
 │   │                       error_message="Could not acquire execution lock"
 │   │                   )
 │   │                   return
-│   │               
+│   │
 │   │               # Update lock ID
 │   │               execution.lock_id = self.distributed_lock.get_lock_id(lock_key)
-│   │               
+│   │
 │   │               # Start execution
 │   │               start_time = time.time()
 │   │               await self.execution_repo.update_status(
@@ -3352,7 +3352,7 @@ src/
 │   │                   ExecutionStatus.RUNNING,
 │   │                   started_at=datetime.utcnow()
 │   │               )
-│   │               
+│   │
 │   │               # Publish execution started event
 │   │               await self.event_publisher.publish_execution_started(
 │   │                   execution_id=execution.id,
@@ -3363,7 +3363,7 @@ src/
 │   │                   attempt_number=execution.attempt_number,
 │   │                   correlation_id=execution.correlation_id
 │   │               )
-│   │               
+│   │
 │   │               # Execute the command
 │   │               try:
 │   │                   await self._send_command(
@@ -3376,10 +3376,10 @@ src/
 │   │                           "schedule_name": schedule.name
 │   │                       }
 │   │                   )
-│   │                   
+│   │
 │   │                   # Calculate duration
 │   │                   duration_ms = int((time.time() - start_time) * 1000)
-│   │                   
+│   │
 │   │                   # Mark as successful
 │   │                   await self.execution_repo.update_status(
 │   │                       execution.id,
@@ -3387,17 +3387,17 @@ src/
 │   │                       completed_at=datetime.utcnow(),
 │   │                       duration_ms=duration_ms
 │   │                   )
-│   │                   
+│   │
 │   │                   # Update schedule stats
 │   │                   await self.schedule_repo.update_last_run(
 │   │                       schedule_id,
 │   │                       last_run_at=datetime.utcnow(),
 │   │                       increment_success=True
 │   │                   )
-│   │                   
+│   │
 │   │                   # Get next run time (from APScheduler)
 │   │                   next_run_at = kwargs.get('next_run_at')
-│   │                   
+│   │
 │   │                   # Publish completion event
 │   │                   await self.event_publisher.publish_execution_completed(
 │   │                       execution_id=execution.id,
@@ -3407,7 +3407,7 @@ src/
 │   │                       next_run_at=next_run_at,
 │   │                       correlation_id=execution.correlation_id
 │   │                   )
-│   │                   
+│   │
 │   │                   self.logger.info(
 │   │                       f"Successfully executed schedule: {schedule_id}",
 │   │                       extra={
@@ -3416,7 +3416,7 @@ src/
 │   │                           "correlation_id": execution.correlation_id
 │   │                       }
 │   │                   )
-│   │                   
+│   │
 │   │               except Exception as e:
 │   │                   # Handle execution failure
 │   │                   await self._handle_execution_failure(
@@ -3425,12 +3425,12 @@ src/
 │   │                       error=e,
 │   │                       start_time=start_time
 │   │                   )
-│   │                   
+│   │
 │   │           finally:
 │   │               # Release lock
 │   │               if lock_acquired:
 │   │                   await self.distributed_lock.release(lock_key)
-│   │       
+│   │
 │   │       async def execute_command(
 │   │           self,
 │   │           target_command: str,
@@ -3439,10 +3439,10 @@ src/
 │   │           priority: int = 5
 │   │       ) -> None:
 │   │           """Execute a command immediately without scheduling"""
-│   │           
+│   │
 │   │           if not correlation_id:
 │   │               correlation_id = str(uuid4())
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Executing immediate command: {target_command}",
 │   │               extra={
@@ -3451,7 +3451,7 @@ src/
 │   │                   "priority": priority
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           await self._send_command(
 │   │               target_command=target_command,
 │   │               command_payload=command_payload,
@@ -3461,7 +3461,7 @@ src/
 │   │                   "priority": priority
 │   │               }
 │   │           )
-│   │       
+│   │
 │   │       async def _send_command(
 │   │           self,
 │   │           target_command: str,
@@ -3470,11 +3470,11 @@ src/
 │   │           metadata: Optional[Dict[str, Any]] = None
 │   │       ) -> None:
 │   │           """Send command to target service"""
-│   │           
+│   │
 │   │           # Validate command is allowed
 │   │           if target_command not in self.config.ALLOWED_TARGET_COMMANDS:
 │   │               raise ValueError(f"Command not allowed: {target_command}")
-│   │           
+│   │
 │   │           # Send command
 │   │           await self.base_publisher.publish_command(
 │   │               command_type=target_command,
@@ -3482,7 +3482,7 @@ src/
 │   │               correlation_id=correlation_id,
 │   │               metadata=metadata
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Sent command: {target_command}",
 │   │               extra={
@@ -3491,7 +3491,7 @@ src/
 │   │                   "metadata": metadata
 │   │               }
 │   │           )
-│   │       
+│   │
 │   │       async def _handle_execution_failure(
 │   │           self,
 │   │           schedule,
@@ -3500,11 +3500,11 @@ src/
 │   │           start_time: float
 │   │       ) -> None:
 │   │           """Handle execution failure"""
-│   │           
+│   │
 │   │           duration_ms = int((time.time() - start_time) * 1000)
 │   │           error_message = str(error)
 │   │           error_type = type(error).__name__
-│   │           
+│   │
 │   │           # Update execution status
 │   │           await self.execution_repo.update_status(
 │   │               execution.id,
@@ -3514,23 +3514,23 @@ src/
 │   │               error_message=error_message,
 │   │               error_type=error_type
 │   │           )
-│   │           
+│   │
 │   │           # Update schedule failure count
 │   │           await self.schedule_repo.update_last_run(
 │   │               schedule.id,
 │   │               last_run_at=datetime.utcnow(),
 │   │               increment_success=False
 │   │           )
-│   │           
+│   │
 │   │           # Check if we should retry
 │   │           will_retry = execution.attempt_number < schedule.max_retries
 │   │           retry_at = None
-│   │           
+│   │
 │   │           if will_retry:
 │   │               retry_at = datetime.utcnow() + timedelta(
 │   │                   seconds=schedule.retry_delay_seconds
 │   │               )
-│   │               
+│   │
 │   │               # Create retry execution
 │   │               retry_execution = ScheduleExecution(
 │   │                   schedule_id=schedule.id,
@@ -3542,9 +3542,9 @@ src/
 │   │                   attempt_number=execution.attempt_number + 1
 │   │               )
 │   │               await self.execution_repo.create(retry_execution)
-│   │               
+│   │
 │   │               # TODO: Schedule retry with APScheduler
-│   │           
+│   │
 │   │           # Publish failure event
 │   │           await self.event_publisher.publish_execution_failed(
 │   │               execution_id=execution.id,
@@ -3556,7 +3556,7 @@ src/
 │   │               attempt_number=execution.attempt_number,
 │   │               correlation_id=execution.correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.error(
 │   │               f"Failed to execute schedule: {schedule.id}",
 │   │               extra={
@@ -3568,17 +3568,17 @@ src/
 │   │               }
 │   │           )
 │   │   ```
-│   │   
+│   │
 │   ├── schedule_service.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/services/schedule_service.py
 │   │   """Schedule management service"""
-│   │   
+│   │
 │   │   from typing import List, Optional, Dict, Any, Tuple
 │   │   from uuid import UUID, uuid4
 │   │   from datetime import datetime
-│   │   
+│   │
 │   │   from shared.utils.logger import ServiceLogger
 │   │   from shared.events.scheduler.types import (
 │   │       CreateScheduleCommandPayload,
@@ -3597,11 +3597,11 @@ src/
 │   │       InvalidScheduleError
 │   │   )
 │   │   from .scheduler_manager import SchedulerManager
-│   │   
-│   │   
+│   │
+│   │
 │   │   class ScheduleService:
 │   │       """Service for managing schedules"""
-│   │       
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           config: ServiceConfig,
@@ -3617,7 +3617,7 @@ src/
 │   │           self.event_publisher = event_publisher
 │   │           self.scheduler_manager = scheduler_manager
 │   │           self.logger = logger
-│   │       
+│   │
 │   │       async def create_schedule(
 │   │           self,
 │   │           create_data: CreateScheduleCommandPayload,
@@ -3625,7 +3625,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> Schedule:
 │   │           """Create a new schedule"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Creating schedule: {create_data.name}",
 │   │               extra={
@@ -3635,13 +3635,13 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Validate command is allowed
 │   │           if create_data.target_command not in self.config.ALLOWED_TARGET_COMMANDS:
 │   │               raise InvalidScheduleError(
 │   │                   f"Target command not allowed: {create_data.target_command}"
 │   │               )
-│   │           
+│   │
 │   │           # Check if schedule with same name exists for creator
 │   │           existing = await self.schedule_repo.get_by_name_and_creator(
 │   │               create_data.name,
@@ -3652,7 +3652,7 @@ src/
 │   │                   f"Schedule with name '{create_data.name}' already exists",
 │   │                   schedule_name=create_data.name
 │   │               )
-│   │           
+│   │
 │   │           # Check schedule limit for creator
 │   │           count = await self.schedule_repo.count_by_creator(created_by)
 │   │           if count >= self.config.MAX_SCHEDULES_PER_CREATOR:
@@ -3660,14 +3660,14 @@ src/
 │   │                   f"Schedule limit exceeded for {created_by}",
 │   │                   limit=self.config.MAX_SCHEDULES_PER_CREATOR
 │   │               )
-│   │           
+│   │
 │   │           # Map to model
 │   │           schedule = self.schedule_mapper.create_to_model(
 │   │               create_data,
 │   │               created_by=created_by or create_data.created_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           # Calculate next run time based on schedule type
 │   │           if schedule.schedule_type == ScheduleType.IMMEDIATE:
 │   │               # Immediate schedules run once and complete
@@ -3678,10 +3678,10 @@ src/
 │   │               job_id = self.scheduler_manager.add_schedule(schedule)
 │   │               schedule.job_id = job_id
 │   │               schedule.next_run_at = self.scheduler_manager.get_next_run_time(schedule.id)
-│   │           
+│   │
 │   │           # Save to database
 │   │           schedule = await self.schedule_repo.create(schedule)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_created(
 │   │               schedule_id=schedule.id,
@@ -3692,7 +3692,7 @@ src/
 │   │               created_by=created_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule created: {schedule.id}",
 │   │               extra={
@@ -3701,9 +3701,9 @@ src/
 │   │                   "next_run_at": schedule.next_run_at
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return schedule
-│   │       
+│   │
 │   │       async def update_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -3712,7 +3712,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> Schedule:
 │   │           """Update a schedule"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Updating schedule: {schedule_id}",
 │   │               extra={
@@ -3721,7 +3721,7 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Get existing schedule
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
@@ -3729,35 +3729,35 @@ src/
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           # Validate command if updating
 │   │           if update_data.target_command and update_data.target_command not in self.config.ALLOWED_TARGET_COMMANDS:
 │   │               raise InvalidScheduleError(
 │   │                   f"Target command not allowed: {update_data.target_command}"
 │   │               )
-│   │           
+│   │
 │   │           # Apply updates
 │   │           schedule = self.schedule_mapper.update_to_model(
 │   │               schedule,
 │   │               update_data,
 │   │               updated_by=updated_by
 │   │           )
-│   │           
+│   │
 │   │           # If schedule configuration changed, update APScheduler
 │   │           schedule_fields = ['schedule_type', 'cron_expression', 'interval_seconds', 'scheduled_at', 'timezone']
 │   │           if any(field in schedule._updated_fields for field in schedule_fields):
 │   │               # Remove old job
 │   │               self.scheduler_manager.remove_schedule(schedule_id)
-│   │               
+│   │
 │   │               # Add updated job
 │   │               if schedule.is_active and not schedule.is_paused:
 │   │                   job_id = self.scheduler_manager.add_schedule(schedule)
 │   │                   schedule.job_id = job_id
 │   │                   schedule.next_run_at = self.scheduler_manager.get_next_run_time(schedule_id)
-│   │           
+│   │
 │   │           # Save to database
 │   │           schedule = await self.schedule_repo.update(schedule)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_updated(
 │   │               schedule_id=schedule.id,
@@ -3766,7 +3766,7 @@ src/
 │   │               updated_by=updated_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule updated: {schedule.id}",
 │   │               extra={
@@ -3774,9 +3774,9 @@ src/
 │   │                   "updated_fields": schedule._updated_fields
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return schedule
-│   │       
+│   │
 │   │       async def delete_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -3785,7 +3785,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> None:
 │   │           """Delete a schedule"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Deleting schedule: {schedule_id}",
 │   │               extra={
@@ -3795,7 +3795,7 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Get schedule
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
@@ -3803,16 +3803,16 @@ src/
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           # Remove from APScheduler
 │   │           self.scheduler_manager.remove_schedule(schedule_id)
-│   │           
+│   │
 │   │           # Delete from database
 │   │           if hard_delete:
 │   │               await self.schedule_repo.delete(schedule_id)
 │   │           else:
 │   │               await self.schedule_repo.soft_delete(schedule_id, deleted_by)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_deleted(
 │   │               schedule_id=schedule_id,
@@ -3820,7 +3820,7 @@ src/
 │   │               hard_delete=hard_delete,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule deleted: {schedule_id}",
 │   │               extra={
@@ -3828,7 +3828,7 @@ src/
 │   │                   "hard_delete": hard_delete
 │   │               }
 │   │           )
-│   │       
+│   │
 │   │       async def pause_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -3837,7 +3837,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> Schedule:
 │   │           """Pause a schedule"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Pausing schedule: {schedule_id}",
 │   │               extra={
@@ -3847,7 +3847,7 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Get schedule
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
@@ -3855,19 +3855,19 @@ src/
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           # Update state
 │   │           schedule.is_paused = True
 │   │           schedule.pause_reason = reason
 │   │           schedule.updated_by = paused_by
 │   │           schedule.updated_at = datetime.utcnow()
-│   │           
+│   │
 │   │           # Pause in APScheduler
 │   │           self.scheduler_manager.pause_schedule(schedule_id)
-│   │           
+│   │
 │   │           # Save to database
 │   │           schedule = await self.schedule_repo.update(schedule)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_paused(
 │   │               schedule_id=schedule_id,
@@ -3875,14 +3875,14 @@ src/
 │   │               paused_by=paused_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule paused: {schedule_id}",
 │   │               extra={"schedule_id": str(schedule_id)}
 │   │           )
-│   │           
+│   │
 │   │           return schedule
-│   │       
+│   │
 │   │       async def resume_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -3890,7 +3890,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> Schedule:
 │   │           """Resume a paused schedule"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Resuming schedule: {schedule_id}",
 │   │               extra={
@@ -3899,7 +3899,7 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Get schedule
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
@@ -3907,20 +3907,20 @@ src/
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           # Update state
 │   │           schedule.is_paused = False
 │   │           schedule.pause_reason = None
 │   │           schedule.updated_by = resumed_by
 │   │           schedule.updated_at = datetime.utcnow()
-│   │           
+│   │
 │   │           # Resume in APScheduler
 │   │           self.scheduler_manager.resume_schedule(schedule_id)
 │   │           schedule.next_run_at = self.scheduler_manager.get_next_run_time(schedule_id)
-│   │           
+│   │
 │   │           # Save to database
 │   │           schedule = await self.schedule_repo.update(schedule)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_resumed(
 │   │               schedule_id=schedule_id,
@@ -3928,7 +3928,7 @@ src/
 │   │               resumed_by=resumed_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule resumed: {schedule_id}",
 │   │               extra={
@@ -3936,9 +3936,9 @@ src/
 │   │                   "next_run_at": schedule.next_run_at
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return schedule
-│   │       
+│   │
 │   │       async def trigger_schedule(
 │   │           self,
 │   │           schedule_id: UUID,
@@ -3947,7 +3947,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> UUID:
 │   │           """Trigger a schedule to run immediately"""
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Triggering schedule: {schedule_id}",
 │   │               extra={
@@ -3956,7 +3956,7 @@ src/
 │   │                   "correlation_id": correlation_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Get schedule
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
@@ -3964,13 +3964,13 @@ src/
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           # Create execution ID
 │   │           execution_id = uuid4()
-│   │           
+│   │
 │   │           # Trigger in APScheduler
 │   │           self.scheduler_manager.trigger_now(schedule_id)
-│   │           
+│   │
 │   │           # Publish event
 │   │           await self.event_publisher.publish_schedule_triggered(
 │   │               schedule_id=schedule_id,
@@ -3978,7 +3978,7 @@ src/
 │   │               triggered_by=triggered_by,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               f"Schedule triggered: {schedule_id}",
 │   │               extra={
@@ -3986,9 +3986,9 @@ src/
 │   │                   "execution_id": str(execution_id)
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           return execution_id
-│   │       
+│   │
 │   │       async def list_schedules(
 │   │           self,
 │   │           offset: int = 0,
@@ -3999,21 +3999,21 @@ src/
 │   │           is_active: Optional[bool] = None
 │   │       ) -> Tuple[List[Schedule], int]:
 │   │           """List schedules with filters"""
-│   │           
+│   │
 │   │           filters = []
-│   │           
+│   │
 │   │           if creator:
 │   │               filters.append(Schedule.created_by == creator)
-│   │           
+│   │
 │   │           if status:
 │   │               filters.append(Schedule.status == status)
-│   │           
+│   │
 │   │           if is_active is not None:
 │   │               filters.append(Schedule.is_active == is_active)
-│   │           
+│   │
 │   │           # Add default filter for non-deleted
 │   │           filters.append(Schedule.deleted_at.is_(None))
-│   │           
+│   │
 │   │           # Get schedules
 │   │           if tags:
 │   │               schedules = await self.schedule_repo.get_by_tags(tags, offset, limit)
@@ -4022,21 +4022,21 @@ src/
 │   │           else:
 │   │               schedules = await self.schedule_repo.get_all(offset, limit, filters)
 │   │               total = await self.schedule_repo.count(filters)
-│   │           
+│   │
 │   │           return schedules, total
-│   │       
+│   │
 │   │       async def get_schedule(self, schedule_id: UUID) -> Schedule:
 │   │           """Get a schedule by ID"""
-│   │           
+│   │
 │   │           schedule = await self.schedule_repo.get_by_id(schedule_id)
 │   │           if not schedule:
 │   │               raise ScheduleNotFoundError(
 │   │                   f"Schedule not found: {schedule_id}",
 │   │                   schedule_id=schedule_id
 │   │               )
-│   │           
+│   │
 │   │           return schedule
-│   │       
+│   │
 │   │       async def bulk_create(
 │   │           self,
 │   │           schedules: List[CreateScheduleCommandPayload],
@@ -4044,14 +4044,14 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> List[Schedule]:
 │   │           """Bulk create schedules"""
-│   │           
+│   │
 │   │           if len(schedules) > self.config.MAX_BULK_OPERATIONS:
 │   │               raise InvalidScheduleError(
 │   │                   f"Bulk operation limit exceeded: {len(schedules)} > {self.config.MAX_BULK_OPERATIONS}"
 │   │               )
-│   │           
+│   │
 │   │           created_schedules = []
-│   │           
+│   │
 │   │           for schedule_data in schedules:
 │   │               try:
 │   │                   schedule = await self.create_schedule(
@@ -4069,9 +4069,9 @@ src/
 │   │                       }
 │   │                   )
 │   │                   # Continue with other schedules
-│   │           
+│   │
 │   │           return created_schedules
-│   │       
+│   │
 │   │       async def bulk_operation(
 │   │           self,
 │   │           schedule_ids: List[UUID],
@@ -4081,17 +4081,17 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> Dict[str, Any]:
 │   │           """Perform bulk operation on schedules"""
-│   │           
+│   │
 │   │           if len(schedule_ids) > self.config.MAX_BULK_OPERATIONS:
 │   │               raise InvalidScheduleError(
 │   │                   f"Bulk operation limit exceeded: {len(schedule_ids)} > {self.config.MAX_BULK_OPERATIONS}"
 │   │               )
-│   │           
+│   │
 │   │           results = {
 │   │               "success": [],
 │   │               "failed": []
 │   │           }
-│   │           
+│   │
 │   │           for schedule_id in schedule_ids:
 │   │               try:
 │   │                   if operation == "pause":
@@ -4102,9 +4102,9 @@ src/
 │   │                       await self.delete_schedule(schedule_id, performed_by, False, correlation_id)
 │   │                   else:
 │   │                       raise ValueError(f"Invalid operation: {operation}")
-│   │                   
+│   │
 │   │                   results["success"].append(str(schedule_id))
-│   │                   
+│   │
 │   │               except Exception as e:
 │   │                   self.logger.error(
 │   │                       f"Failed bulk operation on schedule: {schedule_id}",
@@ -4118,22 +4118,22 @@ src/
 │   │                       "schedule_id": str(schedule_id),
 │   │                       "error": str(e)
 │   │                   })
-│   │           
+│   │
 │   │           return results
 │   │   ```
-│   │   
+│   │
 │   └── scheduler_manager.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/services/scheduler_manager.py
 │       """APScheduler integration manager"""
-│       
+│
 │       import asyncio
 │       from typing import Optional, Dict, Any, Callable
 │       from datetime import datetime, timedelta
 │       from uuid import UUID
 │       import pytz
-│       
+│
 │       from apscheduler.schedulers.asyncio import AsyncIOScheduler
 │       from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 │       from apscheduler.executors.asyncio import AsyncIOExecutor
@@ -4147,15 +4147,15 @@ src/
 │           EVENT_JOB_MISSED,
 │           JobExecutionEvent
 │       )
-│       
+│
 │       from shared.utils.logger import ServiceLogger
 │       from ..config import ServiceConfig
 │       from ..models.schedule import Schedule, ScheduleType
-│       
-│       
+│
+│
 │       class SchedulerManager:
 │           """Manages APScheduler integration"""
-│           
+│
 │           def __init__(
 │               self,
 │               config: ServiceConfig,
@@ -4167,12 +4167,12 @@ src/
 │               self.logger = logger
 │               self._scheduler: Optional[AsyncIOScheduler] = None
 │               self._started = False
-│           
+│
 │           async def start(self):
 │               """Start the scheduler"""
 │               if self._started:
 │                   return
-│               
+│
 │               # Configure job stores
 │               jobstores = {
 │                   'default': SQLAlchemyJobStore(
@@ -4180,19 +4180,19 @@ src/
 │                       tablename='apscheduler_jobs'
 │                   )
 │               }
-│               
+│
 │               # Configure executors
 │               executors = {
 │                   'default': AsyncIOExecutor()
 │               }
-│               
+│
 │               # Configure job defaults
 │               job_defaults = {
 │                   'coalesce': self.config.SCHEDULER_COALESCE,
 │                   'max_instances': self.config.SCHEDULER_JOB_DEFAULTS_MAX_INSTANCES,
 │                   'misfire_grace_time': self.config.SCHEDULER_MISFIRE_GRACE_TIME
 │               }
-│               
+│
 │               # Create scheduler
 │               self._scheduler = AsyncIOScheduler(
 │                   jobstores=jobstores,
@@ -4200,34 +4200,34 @@ src/
 │                   job_defaults=job_defaults,
 │                   timezone=pytz.timezone(self.config.SCHEDULER_TIMEZONE)
 │               )
-│               
+│
 │               # Add event listeners
 │               self._scheduler.add_listener(
 │                   self._handle_job_event,
 │                   EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED
 │               )
-│               
+│
 │               # Start scheduler
 │               self._scheduler.start()
 │               self._started = True
-│               
+│
 │               self.logger.info("Scheduler manager started")
-│           
+│
 │           async def stop(self):
 │               """Stop the scheduler"""
 │               if self._scheduler and self._started:
 │                   self._scheduler.shutdown(wait=True)
 │                   self._started = False
 │                   self.logger.info("Scheduler manager stopped")
-│           
+│
 │           def add_schedule(self, schedule: Schedule) -> str:
 │               """Add a schedule to APScheduler"""
 │               if not self._scheduler:
 │                   raise RuntimeError("Scheduler not started")
-│               
+│
 │               # Create trigger based on schedule type
 │               trigger = self._create_trigger(schedule)
-│               
+│
 │               # Add job
 │               job = self._scheduler.add_job(
 │                   func=self.job_callback,
@@ -4243,7 +4243,7 @@ src/
 │                   replace_existing=True,
 │                   max_instances=self.config.SCHEDULER_MAX_INSTANCES
 │               )
-│               
+│
 │               self.logger.info(
 │                   f"Added schedule to APScheduler",
 │                   extra={
@@ -4252,14 +4252,14 @@ src/
 │                       "next_run": job.next_run_time
 │                   }
 │               )
-│               
+│
 │               return job.id
-│           
+│
 │           def remove_schedule(self, schedule_id: UUID) -> bool:
 │               """Remove a schedule from APScheduler"""
 │               if not self._scheduler:
 │                   raise RuntimeError("Scheduler not started")
-│               
+│
 │               try:
 │                   self._scheduler.remove_job(str(schedule_id))
 │                   self.logger.info(f"Removed schedule from APScheduler: {schedule_id}")
@@ -4270,12 +4270,12 @@ src/
 │                       extra={"error": str(e)}
 │                   )
 │                   return False
-│           
+│
 │           def pause_schedule(self, schedule_id: UUID) -> bool:
 │               """Pause a schedule in APScheduler"""
 │               if not self._scheduler:
 │                   raise RuntimeError("Scheduler not started")
-│               
+│
 │               try:
 │                   self._scheduler.pause_job(str(schedule_id))
 │                   self.logger.info(f"Paused schedule in APScheduler: {schedule_id}")
@@ -4286,12 +4286,12 @@ src/
 │                       extra={"error": str(e)}
 │                   )
 │                   return False
-│           
+│
 │           def resume_schedule(self, schedule_id: UUID) -> bool:
 │               """Resume a schedule in APScheduler"""
 │               if not self._scheduler:
 │                   raise RuntimeError("Scheduler not started")
-│               
+│
 │               try:
 │                   self._scheduler.resume_job(str(schedule_id))
 │                   self.logger.info(f"Resumed schedule in APScheduler: {schedule_id}")
@@ -4302,20 +4302,20 @@ src/
 │                       extra={"error": str(e)}
 │                   )
 │                   return False
-│           
+│
 │           def get_next_run_time(self, schedule_id: UUID) -> Optional[datetime]:
 │               """Get next run time for a schedule"""
 │               if not self._scheduler:
 │                   return None
-│               
+│
 │               job = self._scheduler.get_job(str(schedule_id))
 │               return job.next_run_time if job else None
-│           
+│
 │           def trigger_now(self, schedule_id: UUID) -> bool:
 │               """Trigger a schedule to run immediately"""
 │               if not self._scheduler:
 │                   raise RuntimeError("Scheduler not started")
-│               
+│
 │               try:
 │                   self._scheduler.modify_job(
 │                       str(schedule_id),
@@ -4329,20 +4329,20 @@ src/
 │                       extra={"error": str(e)}
 │                   )
 │                   return False
-│           
+│
 │           def _create_trigger(self, schedule: Schedule):
 │               """Create APScheduler trigger from schedule"""
 │               tz = pytz.timezone(schedule.timezone)
-│               
+│
 │               if schedule.schedule_type == ScheduleType.CRON:
 │                   if not schedule.cron_expression:
 │                       raise ValueError("Cron expression required for CRON schedule")
-│                   
+│
 │                   # Parse cron expression
 │                   parts = schedule.cron_expression.split()
 │                   if len(parts) != 5:
 │                       raise ValueError("Invalid cron expression")
-│                   
+│
 │                   return CronTrigger(
 │                       minute=parts[0],
 │                       hour=parts[1],
@@ -4351,29 +4351,29 @@ src/
 │                       day_of_week=parts[4],
 │                       timezone=tz
 │                   )
-│               
+│
 │               elif schedule.schedule_type == ScheduleType.INTERVAL:
 │                   if not schedule.interval_seconds:
 │                       raise ValueError("Interval seconds required for INTERVAL schedule")
-│                   
+│
 │                   return IntervalTrigger(
 │                       seconds=schedule.interval_seconds,
 │                       timezone=tz,
 │                       start_date=datetime.now(tz) + timedelta(seconds=1)
 │                   )
-│               
+│
 │               elif schedule.schedule_type == ScheduleType.ONE_TIME:
 │                   if not schedule.scheduled_at:
 │                       raise ValueError("Scheduled time required for ONE_TIME schedule")
-│                   
+│
 │                   return DateTrigger(
 │                       run_date=schedule.scheduled_at,
 │                       timezone=tz
 │                   )
-│               
+│
 │               else:
 │                   raise ValueError(f"Unsupported schedule type: {schedule.schedule_type}")
-│           
+│
 │           def _handle_job_event(self, event: JobExecutionEvent):
 │               """Handle APScheduler job events"""
 │               if event.exception:
@@ -4394,42 +4394,42 @@ src/
 │                       }
 │                   )
 │       ```
-│       
+│
 ├── utils/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/utils/__init__.py
 │   │   from .distributed_lock import DistributedLock
 │   │   from .scheduler_factory import create_scheduler_callback
-│   │   
+│   │
 │   │   __all__ = ['DistributedLock', 'create_scheduler_callback']
 │   │   ```
-│   │   
+│   │
 │   ├── distributed_lock.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/scheduler-service/src/utils/distributed_lock.py
 │   │   """Distributed lock implementation using Redis"""
-│   │   
+│   │
 │   │   import asyncio
 │   │   import time
 │   │   from typing import Optional, Dict
 │   │   from uuid import uuid4
-│   │   
+│   │
 │   │   import redis.asyncio as redis
 │   │   from shared.utils.logger import ServiceLogger
-│   │   
-│   │   
+│   │
+│   │
 │   │   class DistributedLock:
 │   │       """Redis-based distributed lock for preventing duplicate job execution"""
-│   │       
+│   │
 │   │       def __init__(self, redis_url: str, logger: ServiceLogger):
 │   │           self.redis_url = redis_url
 │   │           self.logger = logger
 │   │           self._redis_client: Optional[redis.Redis] = None
 │   │           self._locks: Dict[str, str] = {}  # key -> lock_id mapping
-│   │       
+│   │
 │   │       async def connect(self):
 │   │           """Connect to Redis"""
 │   │           self._redis_client = await redis.from_url(
@@ -4437,14 +4437,14 @@ src/
 │   │               decode_responses=True
 │   │           )
 │   │           self.logger.info("Connected to Redis for distributed locking")
-│   │       
+│   │
 │   │       async def disconnect(self):
 │   │           """Disconnect from Redis"""
 │   │           if self._redis_client:
 │   │               await self._redis_client.close()
 │   │               self._redis_client = None
 │   │           self.logger.info("Disconnected from Redis")
-│   │       
+│   │
 │   │       async def acquire(
 │   │           self,
 │   │           key: str,
@@ -4454,21 +4454,21 @@ src/
 │   │       ) -> bool:
 │   │           """
 │   │           Acquire a distributed lock
-│   │           
+│   │
 │   │           Args:
 │   │               key: Lock key
 │   │               ttl: Time to live in seconds
 │   │               retry_delay: Delay between retries in seconds
 │   │               max_retries: Maximum number of retries
-│   │               
+│   │
 │   │           Returns:
 │   │               True if lock acquired, False otherwise
 │   │           """
 │   │           if not self._redis_client:
 │   │               raise RuntimeError("Redis client not connected")
-│   │           
+│   │
 │   │           lock_id = str(uuid4())
-│   │           
+│   │
 │   │           for attempt in range(max_retries):
 │   │               try:
 │   │                   # Try to set the lock with NX (only if not exists)
@@ -4478,7 +4478,7 @@ src/
 │   │                       nx=True,
 │   │                       ex=ttl
 │   │                   )
-│   │                   
+│   │
 │   │                   if acquired:
 │   │                       self._locks[key] = lock_id
 │   │                       self.logger.debug(
@@ -4486,46 +4486,46 @@ src/
 │   │                           extra={"lock_id": lock_id, "ttl": ttl}
 │   │                       )
 │   │                       return True
-│   │                   
+│   │
 │   │                   # Lock exists, check if it's ours (in case of reconnection)
 │   │                   current_lock = await self._redis_client.get(key)
 │   │                   if current_lock == lock_id:
 │   │                       self._locks[key] = lock_id
 │   │                       return True
-│   │                   
+│   │
 │   │               except Exception as e:
 │   │                   self.logger.error(
 │   │                       f"Error acquiring lock: {key}",
 │   │                       extra={"error": str(e), "attempt": attempt}
 │   │                   )
-│   │               
+│   │
 │   │               # Wait before retrying
 │   │               if attempt < max_retries - 1:
 │   │                   await asyncio.sleep(retry_delay)
-│   │           
+│   │
 │   │           self.logger.warning(
 │   │               f"Failed to acquire lock after {max_retries} attempts: {key}"
 │   │           )
 │   │           return False
-│   │       
+│   │
 │   │       async def release(self, key: str) -> bool:
 │   │           """
 │   │           Release a distributed lock
-│   │           
+│   │
 │   │           Args:
 │   │               key: Lock key
-│   │               
+│   │
 │   │           Returns:
 │   │               True if lock released, False otherwise
 │   │           """
 │   │           if not self._redis_client:
 │   │               raise RuntimeError("Redis client not connected")
-│   │           
+│   │
 │   │           lock_id = self._locks.get(key)
 │   │           if not lock_id:
 │   │               self.logger.warning(f"Attempted to release lock we don't own: {key}")
 │   │               return False
-│   │           
+│   │
 │   │           try:
 │   │               # Use Lua script to ensure we only delete our own lock
 │   │               lua_script = """
@@ -4535,14 +4535,14 @@ src/
 │   │                   return 0
 │   │               end
 │   │               """
-│   │               
+│   │
 │   │               result = await self._redis_client.eval(
 │   │                   lua_script,
 │   │                   1,
 │   │                   key,
 │   │                   lock_id
 │   │               )
-│   │               
+│   │
 │   │               if result:
 │   │                   del self._locks[key]
 │   │                   self.logger.debug(
@@ -4556,33 +4556,33 @@ src/
 │   │                       extra={"lock_id": lock_id}
 │   │                   )
 │   │                   return False
-│   │                   
+│   │
 │   │           except Exception as e:
 │   │               self.logger.error(
 │   │                   f"Error releasing lock: {key}",
 │   │                   extra={"error": str(e), "lock_id": lock_id}
 │   │               )
 │   │               return False
-│   │       
+│   │
 │   │       async def extend(self, key: str, ttl: int) -> bool:
 │   │           """
 │   │           Extend the TTL of a lock
-│   │           
+│   │
 │   │           Args:
 │   │               key: Lock key
 │   │               ttl: New TTL in seconds
-│   │               
+│   │
 │   │           Returns:
 │   │               True if lock extended, False otherwise
 │   │           """
 │   │           if not self._redis_client:
 │   │               raise RuntimeError("Redis client not connected")
-│   │           
+│   │
 │   │           lock_id = self._locks.get(key)
 │   │           if not lock_id:
 │   │               self.logger.warning(f"Attempted to extend lock we don't own: {key}")
 │   │               return False
-│   │           
+│   │
 │   │           try:
 │   │               # Use Lua script to ensure we only extend our own lock
 │   │               lua_script = """
@@ -4592,7 +4592,7 @@ src/
 │   │                   return 0
 │   │               end
 │   │               """
-│   │               
+│   │
 │   │               result = await self._redis_client.eval(
 │   │                   lua_script,
 │   │                   1,
@@ -4600,7 +4600,7 @@ src/
 │   │                   lock_id,
 │   │                   ttl
 │   │               )
-│   │               
+│   │
 │   │               if result:
 │   │                   self.logger.debug(
 │   │                       f"Extended lock: {key}",
@@ -4613,23 +4613,23 @@ src/
 │   │                       extra={"lock_id": lock_id}
 │   │                   )
 │   │                   return False
-│   │                   
+│   │
 │   │           except Exception as e:
 │   │               self.logger.error(
 │   │                   f"Error extending lock: {key}",
 │   │                   extra={"error": str(e), "lock_id": lock_id}
 │   │               )
 │   │               return False
-│   │       
+│   │
 │   │       def get_lock_id(self, key: str) -> Optional[str]:
 │   │           """Get the lock ID for a key we own"""
 │   │           return self._locks.get(key)
-│   │       
+│   │
 │   │       async def is_locked(self, key: str) -> bool:
 │   │           """Check if a key is locked (by anyone)"""
 │   │           if not self._redis_client:
 │   │               raise RuntimeError("Redis client not connected")
-│   │           
+│   │
 │   │           try:
 │   │               result = await self._redis_client.exists(key)
 │   │               return bool(result)
@@ -4640,56 +4640,56 @@ src/
 │   │               )
 │   │               return False
 │   │   ```
-│   │   
+│   │
 │   └── scheduler_factory.py
-│       
+│
 │       ```py
 │       # services/scheduler-service/src/utils/scheduler_factory.py
 │       """Factory for creating scheduler callback function"""
-│       
+│
 │       import asyncio
 │       from typing import Callable
 │       from uuid import UUID
-│       
+│
 │       from ..services.job_executor import JobExecutor
-│       
-│       
+│
+│
 │       def create_scheduler_callback(job_executor: JobExecutor) -> Callable:
 │           """
 │           Create a callback function for APScheduler
-│           
+│
 │           APScheduler expects a synchronous function, so we create a wrapper
 │           that runs the async job executor in the event loop.
 │           """
-│           
+│
 │           def scheduler_callback(schedule_id: UUID, **kwargs):
 │               """Callback function that APScheduler will call"""
 │               # Get the event loop
 │               loop = asyncio.get_event_loop()
-│               
+│
 │               # Schedule the async job execution
 │               loop.create_task(
 │                   job_executor.execute_job(schedule_id, **kwargs)
 │               )
-│           
+│
 │           return scheduler_callback
 │       ```
-│       
+│
 ├── __init__.py
 ├── dependencies.py
-│   
+│
 │   ```py
 │   # services/scheduler-service/src/dependencies.py
 │   """
 │   FastAPI dependency injection for scheduler service.
-│   
+│
 │   This module provides dependency functions for accessing service
 │   components within API routes.
 │   """
-│   
+│
 │   from typing import Annotated, Any
 │   from fastapi import Depends, HTTPException, Request
-│   
+│
 │   from shared.messaging import JetStreamWrapper
 │   from .lifecycle import ServiceLifecycle
 │   from .events.publishers import SchedulerEventPublisher
@@ -4698,95 +4698,95 @@ src/
 │   from .services.scheduler_manager import SchedulerManager
 │   from .repositories.schedule_repository import ScheduleRepository
 │   from .repositories.execution_repository import ExecutionRepository
-│   
-│   
+│
+│
 │   # ------------------------------- core -------------------------------------- #
 │   def get_lifecycle(request: Request) -> ServiceLifecycle:
 │       return request.app.state.lifecycle
-│   
-│   
+│
+│
 │   def get_config(request: Request):
 │       return request.app.state.config
-│   
-│   
+│
+│
 │   # Type aliases for core dependencies
 │   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 │   ConfigDep = Annotated[Any, Depends(get_config)]  # Replace Any with your Config type
-│   
-│   
+│
+│
 │   # ------------------------------- messaging --------------------------------- #
 │   def get_messaging_wrapper(lifecycle: LifecycleDep) -> JetStreamWrapper:
 │       if not lifecycle.messaging_wrapper:
 │           raise HTTPException(500, "Messaging not initialized")
 │       return lifecycle.messaging_wrapper
-│   
-│   
+│
+│
 │   def get_publisher(wrapper: "MessagingDep") -> SchedulerEventPublisher:
 │       pub = wrapper.get_publisher(SchedulerEventPublisher)
 │       if not pub:
 │           raise HTTPException(500, "SchedulerEventPublisher not initialized")
 │       return pub
-│   
-│   
+│
+│
 │   # Type aliases for messaging
 │   MessagingDep = Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]
 │   PublisherDep = Annotated[SchedulerEventPublisher, Depends(get_publisher)]
-│   
-│   
+│
+│
 │   # ----------------------------- repositories -------------------------------- #
 │   def get_schedule_repository(lifecycle: LifecycleDep) -> ScheduleRepository:
 │       if not lifecycle.schedule_repo:
 │           raise HTTPException(500, "ScheduleRepository not initialized")
 │       return lifecycle.schedule_repo
-│   
-│   
+│
+│
 │   def get_execution_repository(lifecycle: LifecycleDep) -> ExecutionRepository:
 │       if not lifecycle.execution_repo:
 │           raise HTTPException(500, "ExecutionRepository not initialized")
 │       return lifecycle.execution_repo
-│   
-│   
+│
+│
 │   # Type aliases for repositories
 │   ScheduleRepoDep = Annotated[ScheduleRepository, Depends(get_schedule_repository)]
 │   ExecutionRepoDep = Annotated[ExecutionRepository, Depends(get_execution_repository)]
-│   
-│   
+│
+│
 │   # --------------------------- domain services ------------------------------- #
 │   def get_schedule_service(lifecycle: LifecycleDep) -> ScheduleService:
 │       if not lifecycle.schedule_service:
 │           raise HTTPException(500, "ScheduleService not initialized")
 │       return lifecycle.schedule_service
-│   
-│   
+│
+│
 │   def get_job_executor(lifecycle: LifecycleDep) -> JobExecutor:
 │       if not lifecycle.job_executor:
 │           raise HTTPException(500, "JobExecutor not initialized")
 │       return lifecycle.job_executor
-│   
-│   
+│
+│
 │   def get_scheduler_manager(lifecycle: LifecycleDep) -> SchedulerManager:
 │       if not lifecycle.scheduler_manager:
 │           raise HTTPException(500, "SchedulerManager not initialized")
 │       return lifecycle.scheduler_manager
-│   
-│   
+│
+│
 │   # Type aliases for domain services
 │   ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]
 │   JobExecutorDep = Annotated[JobExecutor, Depends(get_job_executor)]
 │   SchedulerManagerDep = Annotated[SchedulerManager, Depends(get_scheduler_manager)]
 │   ```
-│   
+│
 ├── exceptions.py
-│   
+│
 │   ```py
 │   # services/scheduler-service/src/exceptions.py
 │   """
 │   Scheduler service exceptions using shared error classes.
-│   
+│
 │   All exceptions are re-exported from shared.errors for consistency
 │   across the platform.
 │   """
-│   
+│
 │   from shared.errors.base import (
 │       NotFoundError,
 │       ConflictError,
@@ -4794,7 +4794,7 @@ src/
 │       DomainError,
 │       RateLimitedError
 │   )
-│   
+│
 │   # Re-export base exceptions for convenience
 │   __all__ = [
 │       # Schedule errors
@@ -4802,14 +4802,14 @@ src/
 │       'ScheduleAlreadyExistsError',
 │       'InvalidScheduleError',
 │       'ScheduleLimitExceededError',
-│       
+│
 │       # Execution errors
 │       'ExecutionNotFoundError',
 │       'ExecutionFailedError',
-│       
+│
 │       # Lock errors
 │       'LockAcquisitionError',
-│       
+│
 │       # From shared.errors.base
 │       'NotFoundError',
 │       'ConflictError',
@@ -4817,44 +4817,44 @@ src/
 │       'DomainError',
 │       'RateLimitedError'
 │   ]
-│   
-│   
+│
+│
 │   # Schedule-specific errors
 │   class ScheduleNotFoundError(NotFoundError):
 │       """Schedule not found"""
-│       
+│
 │       def __init__(self, message: str, schedule_id: str):
 │           super().__init__(
 │               message,
 │               resource_type="schedule",
 │               resource_id=schedule_id
 │           )
-│   
-│   
+│
+│
 │   class ScheduleAlreadyExistsError(ConflictError):
 │       """Schedule already exists"""
-│       
+│
 │       def __init__(self, message: str, schedule_name: str):
 │           super().__init__(
 │               message,
 │               conflicting_resource="schedule",
 │               current_state=f"Schedule with name '{schedule_name}' already exists"
 │           )
-│   
-│   
+│
+│
 │   class InvalidScheduleError(ValidationError):
 │       """Invalid schedule configuration"""
-│       
+│
 │       def __init__(self, message: str, field: Optional[str] = None):
 │           super().__init__(
 │               message,
 │               field_errors=[{"field": field, "message": message}] if field else []
 │           )
-│   
-│   
+│
+│
 │   class ScheduleLimitExceededError(RateLimitedError):
 │       """Schedule limit exceeded for creator"""
-│       
+│
 │       def __init__(self, message: str, limit: int):
 │           super().__init__(
 │               message,
@@ -4862,23 +4862,23 @@ src/
 │               limit=limit,
 │               window="per_creator"
 │           )
-│   
-│   
+│
+│
 │   # Execution-specific errors
 │   class ExecutionNotFoundError(NotFoundError):
 │       """Execution not found"""
-│       
+│
 │       def __init__(self, message: str, execution_id: str):
 │           super().__init__(
 │               message,
 │               resource_type="execution",
 │               resource_id=execution_id
 │           )
-│   
-│   
+│
+│
 │   class ExecutionFailedError(DomainError):
 │       """Execution failed"""
-│       
+│
 │       def __init__(self, message: str, execution_id: str, error_type: Optional[str] = None):
 │           super().__init__(
 │               message=message,
@@ -4889,12 +4889,12 @@ src/
 │                   "error_type": error_type
 │               }
 │           )
-│   
-│   
+│
+│
 │   # Lock-specific errors
 │   class LockAcquisitionError(DomainError):
 │       """Failed to acquire distributed lock"""
-│       
+│
 │       def __init__(self, message: str, lock_key: str):
 │           super().__init__(
 │               message=message,
@@ -4903,29 +4903,29 @@ src/
 │               details={"lock_key": lock_key}
 │           )
 │   ```
-│   
+│
 ├── lifecycle.py
-│   
+│
 │   ```py
 │   # services/scheduler-service/src/lifecycle.py
 │   """
 │   Process-wide lifecycle manager for the Scheduler Service.
-│   
+│
 │   Responsible for:
 │   - Initializing all service components
 │   - Managing startup/shutdown sequence
 │   - Handling graceful shutdown
 │   - Managing background tasks
 │   """
-│   
+│
 │   import asyncio
 │   from typing import Optional, List
-│   
+│
 │   from shared.utils.logger import create_logger, ServiceLogger
 │   from shared.messaging import JetStreamWrapper, StreamConfig
 │   from shared.database import DatabaseSessionManager
 │   from shared.messaging.publisher import JetStreamEventPublisher
-│   
+│
 │   from .config import ServiceConfig
 │   from .repositories import ScheduleRepository, ExecutionRepository
 │   from .mappers import ScheduleMapper, ExecutionMapper
@@ -4941,40 +4941,40 @@ src/
 │       ExecuteImmediateSubscriber
 │   )
 │   from .utils import DistributedLock, create_scheduler_callback
-│   
-│   
+│
+│
 │   class ServiceLifecycle:
 │       """Manages the lifecycle of all service components"""
-│   
+│
 │       def __init__(self, config: ServiceConfig) -> None:
 │           self.config = config
 │           self.logger: ServiceLogger = create_logger(config.SERVICE_NAME)
-│   
+│
 │           # External connections
 │           self.messaging_wrapper: Optional[JetStreamWrapper] = None
 │           self.db_manager: Optional[DatabaseSessionManager] = None
 │           self.distributed_lock: Optional[DistributedLock] = None
-│   
+│
 │           # Repositories
 │           self.schedule_repo: Optional[ScheduleRepository] = None
 │           self.execution_repo: Optional[ExecutionRepository] = None
-│   
+│
 │           # Mappers
 │           self.schedule_mapper: Optional[ScheduleMapper] = None
 │           self.execution_mapper: Optional[ExecutionMapper] = None
-│   
+│
 │           # Services
 │           self.scheduler_manager: Optional[SchedulerManager] = None
 │           self.job_executor: Optional[JobExecutor] = None
 │           self.schedule_service: Optional[ScheduleService] = None
-│   
+│
 │           # Publishers
 │           self.base_publisher: Optional[JetStreamEventPublisher] = None
-│   
+│
 │           # Bookkeeping
 │           self._tasks: List[asyncio.Task] = []
 │           self._shutdown_event = asyncio.Event()
-│   
+│
 │       # ─────────────────────────── FastAPI lifespan hooks ────────────────────
 │       async def startup(self) -> None:
 │           try:
@@ -4991,20 +4991,20 @@ src/
 │               self.logger.critical("Service failed to start")
 │               await self.shutdown()
 │               raise
-│   
+│
 │       async def shutdown(self) -> None:
 │           self.logger.info("Shutting down %s", self.config.SERVICE_NAME)
-│   
+│
 │           # Cancel all tasks
 │           for t in self._tasks:
 │               t.cancel()
 │           if self._tasks:
 │               await asyncio.gather(*self._tasks, return_exceptions=True)
-│   
+│
 │           # Stop scheduler
 │           if self.scheduler_manager:
 │               await self.scheduler_manager.stop()
-│   
+│
 │           # Close connections
 │           if self.distributed_lock:
 │               await self.distributed_lock.disconnect()
@@ -5012,15 +5012,15 @@ src/
 │               await self.messaging_wrapper.close()
 │           if self.db_manager:
 │               await self.db_manager.close()
-│   
+│
 │           self.logger.info("%s shutdown complete", self.config.SERVICE_NAME)
-│   
+│
 │       # ───────────────────────────── init helpers ────────────────────────────
 │       async def _init_messaging(self) -> None:
 │           self.messaging_wrapper = JetStreamWrapper(self.logger)
 │           await self.messaging_wrapper.connect(self.config.NATS_SERVERS)
 │           self.logger.info("Connected to NATS %s", self.config.NATS_SERVERS)
-│   
+│
 │           js = self.messaging_wrapper.js
 │           cfg = StreamConfig(
 │               name="SCHEDULER",
@@ -5034,17 +5034,17 @@ src/
 │               discard="old"
 │           )
 │           await self.messaging_wrapper.ensure_stream(cfg)
-│   
+│
 │           # Initialize publishers
 │           await self.messaging_wrapper.init_publishers([SchedulerEventPublisher])
-│   
+│
 │           # Get base publisher for sending commands to other services
 │           self.base_publisher = JetStreamEventPublisher(
 │               self.messaging_wrapper.client,
 │               self.messaging_wrapper.js,
 │               self.logger
 │           )
-│   
+│
 │       async def _init_database(self) -> None:
 │           self.db_manager = DatabaseSessionManager(
 │               database_url=self.config.DATABASE_URL,
@@ -5052,7 +5052,7 @@ src/
 │           )
 │           await self.db_manager.init()
 │           self.logger.info("Database initialized")
-│   
+│
 │       async def _init_distributed_lock(self) -> None:
 │           self.distributed_lock = DistributedLock(
 │               redis_url=self.config.REDIS_URL,
@@ -5060,18 +5060,18 @@ src/
 │           )
 │           await self.distributed_lock.connect()
 │           self.logger.info("Distributed lock initialized")
-│   
+│
 │       def _init_repositories(self) -> None:
 │           if not self.db_manager:
 │               raise RuntimeError("Database manager is not initialized")
-│   
+│
 │           self.schedule_repo = ScheduleRepository(self.db_manager)
 │           self.execution_repo = ExecutionRepository(self.db_manager)
-│   
+│
 │       def _init_mappers(self) -> None:
 │           self.schedule_mapper = ScheduleMapper()
 │           self.execution_mapper = ExecutionMapper()
-│   
+│
 │       async def _init_services(self) -> None:
 │           if not all([
 │               self.messaging_wrapper,
@@ -5081,12 +5081,12 @@ src/
 │               self.base_publisher
 │           ]):
 │               raise RuntimeError("Required dependencies not initialized")
-│   
+│
 │           # Get event publisher
 │           publisher = self.messaging_wrapper.get_publisher(SchedulerEventPublisher)
 │           if not publisher:
 │               raise RuntimeError("SchedulerEventPublisher is not initialized")
-│   
+│
 │           # Create job executor first (needed by scheduler manager)
 │           self.job_executor = JobExecutor(
 │               config=self.config,
@@ -5097,7 +5097,7 @@ src/
 │               distributed_lock=self.distributed_lock,
 │               logger=self.logger
 │           )
-│   
+│
 │           # Create scheduler manager with callback
 │           callback = create_scheduler_callback(self.job_executor)
 │           self.scheduler_manager = SchedulerManager(
@@ -5105,7 +5105,7 @@ src/
 │               job_callback=callback,
 │               logger=self.logger
 │           )
-│   
+│
 │           # Create schedule service
 │           self.schedule_service = ScheduleService(
 │               config=self.config,
@@ -5115,11 +5115,11 @@ src/
 │               scheduler_manager=self.scheduler_manager,
 │               logger=self.logger
 │           )
-│   
+│
 │       async def _start_subscribers(self) -> None:
 │           if not self.messaging_wrapper:
 │               raise RuntimeError("Messaging wrapper is not initialized")
-│   
+│
 │           # Initialize subscribers
 │           subscribers = [
 │               CreateScheduleSubscriber,
@@ -5130,7 +5130,7 @@ src/
 │               TriggerScheduleSubscriber,
 │               ExecuteImmediateSubscriber
 │           ]
-│   
+│
 │           # Inject dependencies into subscribers
 │           for sub_cls in subscribers:
 │               subscriber = sub_cls()
@@ -5140,30 +5140,30 @@ src/
 │                   subscriber.set_job_executor(self.job_executor)
 │               if hasattr(subscriber, 'set_base_publisher'):
 │                   subscriber.set_base_publisher(self.base_publisher)
-│               
+│
 │               await self.messaging_wrapper.start_subscriber(sub_cls)
-│   
+│
 │       async def _start_scheduler(self) -> None:
 │           """Start the APScheduler"""
 │           if not self.scheduler_manager:
 │               raise RuntimeError("Scheduler manager is not initialized")
-│   
+│
 │           await self.scheduler_manager.start()
-│   
+│
 │           # Load existing active schedules
 │           await self._load_existing_schedules()
-│   
+│
 │       async def _load_existing_schedules(self) -> None:
 │           """Load existing schedules into APScheduler on startup"""
 │           if not all([self.schedule_repo, self.scheduler_manager]):
 │               return
-│   
+│
 │           try:
 │               # Get all active schedules
 │               schedules = await self.schedule_repo.get_active_schedules(limit=1000)
-│               
+│
 │               self.logger.info(f"Loading {len(schedules)} active schedules")
-│               
+│
 │               for schedule in schedules:
 │                   try:
 │                       job_id = self.scheduler_manager.add_schedule(schedule)
@@ -5177,63 +5177,63 @@ src/
 │                               "error": str(e)
 │                           }
 │                       )
-│               
+│
 │               self.logger.info("Finished loading existing schedules")
-│               
+│
 │           except Exception as e:
 │               self.logger.error(
 │                   "Failed to load existing schedules",
 │                   extra={"error": str(e)}
 │               )
-│   
+│
 │       # ──────────────────────────── convenience tools ───────────────────────
 │       def add_task(self, coro) -> asyncio.Task:
 │           t = asyncio.create_task(coro)
 │           self._tasks.append(t)
 │           return t
-│   
+│
 │       async def wait_for_shutdown(self) -> None:
 │           await self._shutdown_event.wait()
-│   
+│
 │       def signal_shutdown(self) -> None:
 │           self._shutdown_event.set()
 │   ```
-│   
+│
 ├── main.py
-│   
+│
 │   ```py
 │   # services/scheduler-service/src/main.py
 │   """Main entry point for the Scheduler Service"""
-│   
+│
 │   from fastapi import FastAPI
 │   from contextlib import asynccontextmanager
 │   from shared.api import setup_middleware
 │   from .config import get_service_config
 │   from .lifecycle import ServiceLifecycle
 │   from .routers import health, schedules, executions
-│   
+│
 │   # Global singletons
 │   config = get_service_config()
 │   lifecycle = ServiceLifecycle(config)
-│   
-│   
+│
+│
 │   @asynccontextmanager
 │   async def lifespan(app: FastAPI):
 │       """FastAPI lifespan adapter"""
 │       # Store lifecycle in app state for access in dependencies
 │       app.state.lifecycle = lifecycle
 │       app.state.config = config
-│       
+│
 │       await lifecycle.startup()
 │       try:
 │           yield
 │       finally:
 │           await lifecycle.shutdown()
-│   
-│   
+│
+│
 │   def create_application() -> FastAPI:
 │       """Create and configure the FastAPI application."""
-│       
+│
 │       app = FastAPI(
 │           title=config.SERVICE_NAME,
 │           version=config.SERVICE_VERSION,
@@ -5242,14 +5242,14 @@ src/
 │           # Disable default exception handlers as shared middleware handles them
 │           exception_handlers={}
 │       )
-│       
+│
 │       # Set up all standard middleware (metrics + API)
 │       setup_middleware(
 │           app,
 │           service_name=config.SERVICE_NAME,
 │           enable_metrics=True,  # Enable Prometheus metrics
 │       )
-│       
+│
 │       # Include routers
 │       app.include_router(health.router, tags=["health"])
 │       app.include_router(
@@ -5262,12 +5262,12 @@ src/
 │           prefix="/api/v1/executions",
 │           tags=["executions"]
 │       )
-│   
+│
 │       return app
-│   
-│   
+│
+│
 │   app = create_application()
-│   
+│
 │   if __name__ == "__main__":
 │       import uvicorn
 │       uvicorn.run(
@@ -5277,104 +5277,104 @@ src/
 │           reload=config.DEBUG
 │       )
 │   ```
-│   
+│
 └── metrics.py
-    
+
     ```py
     # services/scheduler-service/src/metrics.py
     """
     Scheduler service specific metrics.
-    
+
     This module defines domain-specific metrics for the scheduler service
     that extend the standard HTTP metrics from shared.
     """
-    
+
     from prometheus_client import Counter, Histogram, Gauge
     from typing import Optional
-    
+
     # Schedule metrics
     schedules_total = Gauge(
         'schedules_total',
         'Total number of schedules',
         ['type', 'status']
     )
-    
+
     schedules_created_total = Counter(
         'schedules_created_total',
         'Total schedules created',
         ['type', 'creator']
     )
-    
+
     schedules_deleted_total = Counter(
         'schedules_deleted_total',
         'Total schedules deleted',
         ['type', 'hard_delete']
     )
-    
+
     # Execution metrics
     schedule_executions_total = Counter(
         'schedule_executions_total',
         'Total schedule executions',
         ['schedule_type', 'status']
     )
-    
+
     schedule_execution_duration_seconds = Histogram(
         'schedule_execution_duration_seconds',
         'Schedule execution duration in seconds',
         ['schedule_type', 'status'],
         buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0)
     )
-    
+
     schedule_misfires_total = Counter(
         'schedule_misfires_total',
         'Total missed schedule executions',
         ['schedule_type']
     )
-    
+
     # Queue metrics
     schedule_queue_depth = Gauge(
         'schedule_queue_depth',
         'Number of pending schedule executions'
     )
-    
+
     active_executions = Gauge(
         'active_executions',
         'Number of currently running executions'
     )
-    
+
     # Lock metrics
     distributed_locks_acquired_total = Counter(
         'distributed_locks_acquired_total',
         'Total distributed locks acquired',
         ['lock_type']
     )
-    
+
     distributed_locks_failed_total = Counter(
         'distributed_locks_failed_total',
         'Total distributed lock acquisition failures',
         ['lock_type', 'reason']
     )
-    
+
     distributed_lock_hold_duration_seconds = Histogram(
         'distributed_lock_hold_duration_seconds',
         'Duration locks are held in seconds',
         ['lock_type']
     )
-    
+
     # Retry metrics
     schedule_retries_total = Counter(
         'schedule_retries_total',
         'Total schedule execution retries',
         ['schedule_type', 'attempt']
     )
-    
+
     # APScheduler metrics
     apscheduler_jobs_total = Gauge(
         'apscheduler_jobs_total',
         'Total jobs in APScheduler',
         ['state']
     )
-    
+
     # Helper functions for easier metric updates
     def increment_schedule_created(schedule_type: str, creator: str):
         """Increment schedule created counter"""
@@ -5382,46 +5382,46 @@ src/
             type=schedule_type,
             creator=creator
         ).inc()
-    
-    
+
+
     def increment_schedule_deleted(schedule_type: str, hard_delete: bool):
         """Increment schedule deleted counter"""
         schedules_deleted_total.labels(
             type=schedule_type,
             hard_delete=str(hard_delete)
         ).inc()
-    
-    
+
+
     def increment_execution(schedule_type: str, status: str):
         """Increment execution counter"""
         schedule_executions_total.labels(
             schedule_type=schedule_type,
             status=status
         ).inc()
-    
-    
+
+
     def observe_execution_duration(schedule_type: str, status: str, duration_seconds: float):
         """Record execution duration"""
         schedule_execution_duration_seconds.labels(
             schedule_type=schedule_type,
             status=status
         ).observe(duration_seconds)
-    
-    
+
+
     def increment_misfire(schedule_type: str):
         """Increment misfire counter"""
         schedule_misfires_total.labels(
             schedule_type=schedule_type
         ).inc()
-    
-    
+
+
     def update_schedule_counts(type_counts: dict, status_counts: dict):
         """Update schedule gauge metrics"""
         # Reset all metrics first
         for schedule_type in ['cron', 'interval', 'one_time', 'immediate']:
             for status in ['active', 'paused', 'completed', 'failed', 'deleted']:
                 schedules_total.labels(type=schedule_type, status=status).set(0)
-        
+
         # Update with current values
         for schedule_type, count in type_counts.items():
             for status, status_count in status_counts.items():
@@ -5430,28 +5430,28 @@ src/
                         type=schedule_type.lower(),
                         status=status.lower()
                     ).set(status_count)
-    
-    
+
+
     def increment_lock_acquired(lock_type: str = "schedule_execution"):
         """Increment lock acquired counter"""
         distributed_locks_acquired_total.labels(lock_type=lock_type).inc()
-    
-    
+
+
     def increment_lock_failed(lock_type: str = "schedule_execution", reason: str = "timeout"):
         """Increment lock failed counter"""
         distributed_locks_failed_total.labels(
             lock_type=lock_type,
             reason=reason
         ).inc()
-    
-    
+
+
     def observe_lock_duration(lock_type: str, duration_seconds: float):
         """Record lock hold duration"""
         distributed_lock_hold_duration_seconds.labels(
             lock_type=lock_type
         ).observe(duration_seconds)
-    
-    
+
+
     def increment_retry(schedule_type: str, attempt: int):
         """Increment retry counter"""
         schedule_retries_total.labels(
@@ -5459,7 +5459,7 @@ src/
             attempt=str(attempt)
         ).inc()
     ```
-    
+
 tests/
 └── __init__.py
 .env.example
@@ -5604,18 +5604,18 @@ Generic job scheduling service for the GlamYouUp platform. Manages time-based an
   - Fixed intervals
   - One-time scheduled executions
   - Immediate execution
-  
+
 - **Robust Execution**
   - Distributed locking to prevent duplicate executions
   - Automatic retry with exponential backoff
   - Misfire handling
   - Execution history tracking
-  
+
 - **Flexible Command Routing**
   - Send commands to any service via NATS
   - Dynamic payload configuration
   - Command whitelisting for security
-  
+
 - **Management Features**
   - Pause/resume schedules
   - Bulk operations

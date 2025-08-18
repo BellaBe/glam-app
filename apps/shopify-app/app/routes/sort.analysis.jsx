@@ -6,12 +6,12 @@
 
 // /**
 //  * Processes product sorting requests from the storefront to the Remix server.
-//  * 
+//  *
 //  * @request Multipart form data with:
 //  * - `selfie_id` (string): The ID for the selfie image.
 //  * - `shop_id` (string): The shop's unique ID.
 //  * - `gyu_products` (stringified JSON): Array of products to check against the database.
-//  * 
+//  *
 //  * @returns JSON response:
 //  * - `{ sorted_products }` with sorted products and CORS headers if sorting succeeds.
 //  * - `{ success: "no update" }` if no update is needed.
@@ -24,7 +24,7 @@
 //     const form = await request.formData();
 //     const isValid = await isValidBilling(String(form.get("shop_id")));
 //     const selfie_id = form.get("selfie_id");
-//     const shop_id = form.get("shop_id");   
+//     const shop_id = form.get("shop_id");
 //     if (!isValid) {
 //       return json({ error: "billing failed" }, {
 //         headers: {
@@ -33,7 +33,7 @@
 //       });
 //     }
 //     // Compares the firebase products registered in the 'Analyzed' status with the cache products obtained from the ai server.
-//     const gyuProducts = JSON.parse(form.get("gyu_products"));    
+//     const gyuProducts = JSON.parse(form.get("gyu_products"));
 //     const variants = await getRegistered(shop_id);
 //     let fDifferent = false;
 //     const cntGyuProducts = getDistinctProducts(gyuProducts).length;
@@ -79,7 +79,6 @@
 //       },
 //     );
 //     let responseData = await response.json();
-//     console.log({sort: responseData});
 //     if (responseData) {
 //       const sorted_products = responseData.sorted_products;
 //       if (sorted_products.length == 0) {

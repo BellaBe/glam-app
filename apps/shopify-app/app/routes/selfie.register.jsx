@@ -7,12 +7,12 @@
 
 // /**
 //  * Uploads a file or a captured image URL to Firebase Storage and returns the download URL.
-//  * 
+//  *
 //  * @param {File | null} file - The file to be uploaded (if available).
 //  * @param {string} selfie_id - A unique identifier for the storage reference (e.g., user ID or selfie ID).
 //  * @param {string} capturedURL - A data URL string representing the captured image, used if file is not provided.
 //  * @returns {Promise<string>} - A promise that resolves to the download URL of the uploaded file.
-//  * 
+//  *
 //  */
 // async function uploadFile(file, selfie_id, capturedURL) {
 //   const storage = getStorage(firebase);
@@ -28,10 +28,10 @@
 
 // /**
 //  * Processes a request from the storefront to the Remix server to upload a selfie, validate billing, and register the selfie via an AI server.
-//  * 
+//  *
 //  * @param {Object} request - Incoming request containing multipart form data (selfie_id, shop_id, jpegFile, capturedURL).
 //  * @param {Object} params - Additional parameters from the route.
-//  * 
+//  *
 //  * @returns {Response} - JSON response with either the registered selfie details or an error status.
 //  */
 // export const action = async ({ request, params }) => {
@@ -80,9 +80,7 @@
 //       }),
 //     };
 
-//     console.log({selfie: options});
-
-//     let responseData, response;  
+//     let responseData, response;
 //     try {
 //       response = await fetchWithTimeout(ai_server_selfie_register, options, 20000); // 5000 ms timeout
 //       if (!response.ok) {
@@ -102,9 +100,8 @@
 //             "Access-Control-Allow-Origin": "*",
 //           },
 //         });
-//       }      
+//       }
 //     }
-//     console.log("responseData error: ", {responseData});
 //     if (responseData) {
 //       if (responseData.status == "fail") {
 //         return json({ error: responseData.error, fail: "fail" }, {
@@ -120,7 +117,7 @@
 //           description: responseData.description,
 //           recommendation: responseData.recommendation
 //         };
-//       }      
+//       }
 //     } else {
 //       return json({ error: "ai response failed" }, {
 //         headers: {

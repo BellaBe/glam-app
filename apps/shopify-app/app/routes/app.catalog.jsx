@@ -1,6 +1,19 @@
 import { json } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { Page, Layout, Card, Button, Text, Badge, Banner, DataTable, BlockStack, InlineStack, ProgressBar, SkeletonBodyText } from "@shopify/polaris";
+import {
+  Page,
+  Layout,
+  Card,
+  Button,
+  Text,
+  Badge,
+  Banner,
+  DataTable,
+  BlockStack,
+  InlineStack,
+  ProgressBar,
+  SkeletonBodyText,
+} from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import apiClient from "../lib/apiClient";
 import { useState, useEffect } from "react";
@@ -18,8 +31,8 @@ export const loader = async ({ request }) => {
       productCount: 0,
       lastSyncAt: null,
       syncHistory: [],
-      syncStatus: 'idle'
-    }
+      syncStatus: "idle",
+    },
   });
 };
 
@@ -46,22 +59,22 @@ export default function Catalog() {
     if (fetcher.data?.websocket_url) {
       setSyncing(true);
       const ws = new WebSocket(fetcher.data.websocket_url);
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'progress') {
+        if (data.type === "progress") {
           setSyncProgress({
             percent: (data.processed / data.total) * 100,
             message: data.message,
             processed: data.processed,
-            total: data.total
+            total: data.total,
           });
-        } else if (data.type === 'complete') {
+        } else if (data.type === "complete") {
           setSyncing(false);
           setSyncProgress(null);
           ws.close();
           window.location.reload();
-        } else if (data.type === 'error') {
+        } else if (data.type === "error") {
           setSyncing(false);
           setSyncProgress(null);
           ws.close();
@@ -79,44 +92,46 @@ export default function Catalog() {
   }, [fetcher.data]);
 
   const handleSync = () => {
-    fetcher.submit(
-      { action: "sync" },
-      { method: "post" }
-    );
+    fetcher.submit({ action: "sync" }, { method: "post" });
   };
 
-  const syncHistoryRows = (catalog.syncHistory || []).map(sync => [
+  const syncHistoryRows = (catalog.syncHistory || []).map((sync) => [
     new Date(sync.date).toLocaleString(),
     sync.productCount.toString(),
     `${sync.duration}s`,
-    <Badge tone={sync.status === 'success' ? 'success' : sync.status === 'partial' ? 'warning' : 'critical'}>
+    <Badge
+      tone={
+        sync.status === "success" ? "success" : sync.status === "partial" ? "warning" : "critical"
+      }
+    >
       {sync.status}
-    </Badge>
+    </Badge>,
   ]);
 
   return (
     <Page
       title="Catalog Management"
-      breadcrumbs={[{ content: 'Dashboard', url: '/app' }]}
+      breadcrumbs={[{ content: "Dashboard", url: "/app" }]}
       primaryAction={{
-        content: 'View Products',
+        content: "View Products",
         url: `https://${shop}/admin/products`,
-        external: true
+        external: true,
       }}
     >
       <Layout>
-        {catalog.syncStatus === 'error' && (
+        {catalog.syncStatus === "error" && (
           <Layout.Section>
             <Banner
               title="Last sync failed"
               tone="critical"
               action={{
-                content: 'Retry sync',
-                onAction: handleSync
+                content: "Retry sync",
+                onAction: handleSync,
               }}
             >
               <Text>
-                The previous catalog sync encountered an error. Please retry or contact support if the issue persists.
+                The previous catalog sync encountered an error. Please retry or contact support if
+                the issue persists.
               </Text>
             </Banner>
           </Layout.Section>
@@ -136,7 +151,9 @@ export default function Catalog() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">Sync Progress</Text>
+                <Text variant="headingMd" as="h2">
+                  Sync Progress
+                </Text>
                 <ProgressBar progress={syncProgress.percent} />
                 <InlineStack align="space-between">
                   <Text>{syncProgress.message}</Text>
@@ -154,17 +171,21 @@ export default function Catalog() {
             <Card>
               <BlockStack gap="400">
                 <InlineStack align="space-between">
-                  <Text variant="headingMd" as="h2">Catalog Statistics</Text>
+                  <Text variant="headingMd" as="h2">
+                    Catalog Statistics
+                  </Text>
                   <Badge tone="success">{catalog.productCount} Products</Badge>
                 </InlineStack>
                 <BlockStack gap="200">
                   <InlineStack gap="400">
                     <Text tone="subdued">Last synced:</Text>
-                    <Text>{catalog.lastSyncAt ? new Date(catalog.lastSyncAt).toLocaleString() : 'Never'}</Text>
+                    <Text>
+                      {catalog.lastSyncAt ? new Date(catalog.lastSyncAt).toLocaleString() : "Never"}
+                    </Text>
                   </InlineStack>
                   <InlineStack gap="400">
                     <Text tone="subdued">Sync status:</Text>
-                    <Badge tone={catalog.syncStatus === 'idle' ? 'info' : 'success'}>
+                    <Badge tone={catalog.syncStatus === "idle" ? "info" : "success"}>
                       {catalog.syncStatus}
                     </Badge>
                   </InlineStack>
@@ -178,10 +199,12 @@ export default function Catalog() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">Sync History</Text>
+                <Text variant="headingMd" as="h2">
+                  Sync History
+                </Text>
                 <DataTable
-                  columnContentTypes={['text', 'numeric', 'text', 'text']}
-                  headings={['Date', 'Products', 'Duration', 'Status']}
+                  columnContentTypes={["text", "numeric", "text", "text"]}
+                  headings={["Date", "Products", "Duration", "Status"]}
                   rows={syncHistoryRows}
                 />
               </BlockStack>

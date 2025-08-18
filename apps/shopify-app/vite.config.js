@@ -7,15 +7,13 @@ import tsconfigPaths from "vite-tsconfig-paths";
 // stop passing in HOST, so we can remove this workaround after the next major release.
 if (
   process.env.HOST &&
-  (!process.env.SHOPIFY_APP_URL ||
-    process.env.SHOPIFY_APP_URL === process.env.HOST)
+  (!process.env.SHOPIFY_APP_URL || process.env.SHOPIFY_APP_URL === process.env.HOST)
 ) {
   process.env.SHOPIFY_APP_URL = process.env.HOST;
   delete process.env.HOST;
 }
 
-const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost")
-  .hostname;
+const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost").hostname;
 let hmrConfig;
 
 if (host === "localhost") {
@@ -48,14 +46,14 @@ export default defineConfig({
         v3_lazyRouteDiscovery: true,
         v3_relativeSplatPath: true,
         v3_singleFetch: true,
-      }
+      },
     }),
     tsconfigPaths(),
   ],
   build: {
     assetsInlineLimit: 0,
     rollupOptions: {
-      external: ['tiny-invariant', 'qrcode'],
+      external: ["tiny-invariant", "qrcode"],
     },
   },
 });

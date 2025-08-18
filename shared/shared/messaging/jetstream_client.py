@@ -3,13 +3,12 @@
 """
 
 import os
-from typing import List, Optional
 from datetime import timedelta
 
 import nats
 from nats.aio.client import Client
 from nats.js import JetStreamContext
-from nats.js.api import StreamConfig, RetentionPolicy, StorageType
+from nats.js.api import RetentionPolicy, StorageType, StreamConfig
 from nats.js.errors import NotFoundError
 
 from shared.utils.logger import ServiceLogger
@@ -19,13 +18,16 @@ class JetStreamClient:
     """Pure JetStream client - only connection + stream management."""
 
     def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
-        self._client: Optional[Client] = None
-        self._js: Optional[JetStreamContext] = None
+        self._client: Client | None = None
+        self._js: JetStreamContext | None = None
         self.logger = logger
 
     # context-manager helpers --------------------------------------------------
-    async def __aenter__(self): return self
-    async def __aexit__(self, exc_t, exc, tb): await self.close()
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_t, exc, tb):
+        await self.close()
 
     # public accessors ---------------------------------------------------------
     @property
@@ -41,7 +43,7 @@ class JetStreamClient:
         return self._js
 
     # connection ---------------------------------------------------------------
-    async def connect(self, servers: List[str]) -> None:
+    async def connect(self, servers: list[str]) -> None:
         opts = {
             "servers": servers,
             "max_reconnect_attempts": -1,
@@ -68,12 +70,12 @@ class JetStreamClient:
     async def ensure_stream(
         self,
         name: str,
-        subjects: List[str],
+        subjects: list[str],
         **kw,
     ) -> None:
         if not self._js:
             raise RuntimeError("JetStream not initialized")
-        
+
         cfg = StreamConfig(
             name=name,
             subjects=subjects,
@@ -87,11 +89,11 @@ class JetStreamClient:
             await self._js.stream_info(name)
             if self.logger:
                 self.logger.debug("Using existing stream: %s", name)
-        except NotFoundError:  
+        except NotFoundError:
             await self._js.add_stream(cfg)
             if self.logger:
                 self.logger.info("Created new stream: %s", name)
-            
+
     async def delete_stream(self, name: str) -> None:
         if not self._js:
             raise RuntimeError("JetStream not initialized")

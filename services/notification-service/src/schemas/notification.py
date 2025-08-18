@@ -1,115 +1,41 @@
-# File: services/notification-service/src/schemas/notification.py
-
-"""Notification-related request and response schemas."""
-
+# services/notification-service/src/schemas/notification.py
 from datetime import datetime
-from typing import Optional, Dict, List, Any
-from pydantic import BaseModel, Field, EmailStr, field_validator, ConfigDict, conlist
 from uuid import UUID
 
-from ..models.notification import NotificationStatus, NotificationProvider
-from .common import ShopInfo, DateRangeFilter, SortOrder
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class NotificationCreate(BaseModel):
-    """Create a new notification request."""
-    merchant_id: UUID
-    merchant_domain: str
-    recipient_email: EmailStr
-    notification_type: str = Field(..., min_length=1, max_length=50)
-    extra_metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator(
-        "merchant_id", "merchant_domain", "recipient_email", "unsubscribe_token"
-    )
-    def validate_content_source(cls, v):
-        """Ensure required fields are provided."""
-        if not v:
-            raise ValueError("This field is required")
-        return v
-
-
-class BulkNotificationCreate(BaseModel):
-    """Create multiple notifications at once."""
-
-    notification_type: str = Field(..., min_length=1, max_length=50)
-    recipients: List[ShopInfo] = Field(..., min_length=1, max_length=100)
-
-    @field_validator("recipients")
-    def validate_recipients(cls, v):
-        """Validate recipients list size and required fields."""
-        if not (1 <= len(v) <= 100):
-            raise ValueError("Recipients list must have between 1 and 100 items")
-        for recipient in v:
-            if (
-                not recipient.merchant_id
-                or not recipient.merchant_domain
-                or not recipient.shop_email
-                or not recipient.unsubscribe_token
-            ):
-                raise ValueError(
-                    "Each recipient must have merchant_id, merchant_domain, shop_email, and unsubscribe_token"
-                )
-        return v
-
-
-class NotificationUpdate(BaseModel):
-    """Update notification status."""
-
-    status: NotificationStatus
-    provider_message_id: Optional[str] = None
-    error_message: Optional[str] = None
-    sent_at: Optional[datetime] = None
-
-
-class NotificationFilter(BaseModel):
-    """Filter parameters for notification queries."""
-
-    merchant_id: Optional[UUID] = None
-    recipient_email: Optional[EmailStr] = None
-    type: Optional[str] = None
-    status: Optional[NotificationStatus] = None
-    provider: Optional[NotificationProvider] = None
-    date_range: Optional[DateRangeFilter] = None
-    sort_by: str = Field("created_at", pattern="^(created_at|sent_at|status|type)$")
-    sort_order: SortOrder = SortOrder.DESC
-
-
-# Response Schemas
-
-class NotificationResponse(BaseModel):
-    """Basic notification response."""
+# Output DTOs
+class NotificationOut(BaseModel):
+    """DTO for notification response"""
 
     id: UUID
     merchant_id: UUID
-    merchant_domain: str
-    shop_email: str
-    type: str
-    status: NotificationStatus
-    sent_at: Optional[datetime] = None
+    platform_name: str
+    platform_id: str
+    platform_domain: str
+    recipient_email: str
+    template_type: str
+    subject: str
+    status: str
+    provider: str | None = None
+    provider_message_id: str | None = None
+    error_message: str | None = None
+    retry_count: int
+    trigger_event: str
+    trigger_event_id: str | None = None
     created_at: datetime
-    updated_at: datetime
+    sent_at: datetime | None = None
+    failed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class NotificationDetailResponse(NotificationResponse):
-    """Detailed notification response with full information."""
+class NotificationStats(BaseModel):
+    """DTO for notification statistics"""
 
-    content: str
-    provider: Optional[NotificationProvider] = None
-    provider_message_id: Optional[str] = None
-    error_message: Optional[str] = None
-    retry_count: int
-    extra_metadata: Optional[Dict[str, Any]] = None
-
-
-class NotificationListResponse(BaseModel):
-    """Paginated list of notifications."""
-
-    notifications: List[NotificationResponse]
-    total: int
-    page: int
-    limit: int
-    has_next: bool
-    has_previous: bool
+    sent_today: int = 0
+    failed_today: int = 0
+    pending_today: int = 0
+    by_template: dict[str, int] = Field(default_factory=dict)
+    by_status: dict[str, int] = Field(default_factory=dict)

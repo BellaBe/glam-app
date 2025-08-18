@@ -59,6 +59,34 @@ help:
 # Infrastructure Management (Local Development)
 # ─────────────────────────────────────────────────
 
+clean-venv:
+	@echo "🧹 Cleaning all virtual environments..."
+	@for dir in services/*; do \
+		if [ -d "$$dir/.venv" ]; then \
+			echo "Removing $$dir/.venv"; \
+			rm -rf "$$dir/.venv"; \
+		fi \
+	done
+
+update-locks:
+	@echo "🔄 Updating all lock files..."
+	@for dir in services/*; do \
+		if [ -f "$$dir/pyproject.toml" ]; then \
+			echo "Updating lock for $$dir..."; \
+			(cd "$$dir" && poetry lock --no-update); \
+		fi \
+	done
+
+reinstall-all: clean-venv update-locks
+	@echo "📦 Installing all services..."
+	@for dir in services/*; do \
+		if [ -f "$$dir/pyproject.toml" ]; then \
+			echo "Installing $$dir..."; \
+			(cd "$$dir" && poetry install); \
+		fi \
+	done
+	@echo "✅ All services reinstalled"
+
 dev:
 	@echo "$(GREEN)🚀 Starting local infrastructure...$(NC)"
 	@docker compose -f $(LOCAL_COMPOSE) --env-file $(ENV_FILE) up -d
@@ -134,7 +162,6 @@ run:
 	cd services/$(SERVICE) && \
 		DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" \
 		APP_ENV=local \
-		PYTHONPATH="../../shared:../../config" \
 		poetry run python -m src.main
 
 run-all:
@@ -185,7 +212,7 @@ db-reset:
 		DATABASE_URL="$$DATABASE_URL" \
 		poetry run prisma migrate reset --force --skip-seed --schema=prisma/schema.prisma
 	@echo "$(GREEN)✅ Database reset complete$(NC)"
-	
+
 db-clean-reset:
 	@test -n "$(SERVICE)" || { echo "$(RED)❌ Usage: make db-clean-reset SERVICE=merchant-service$(NC)"; exit 1; }
 	@echo "$(YELLOW)⚠️  WARNING: This will delete all data and migrations in $(SERVICE)!$(NC)"

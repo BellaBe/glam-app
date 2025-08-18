@@ -1,39 +1,60 @@
+// services/credit-service/prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 generator client {
   provider             = "prisma-client-py"
   interface            = "asyncio"
   recursive_type_depth = 5
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+model CreditAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  merchant_id       String   @unique @db.Uuid
+
+  // Platform context (immutable after creation)
+  platform_name     String   // 'shopify', 'woocommerce', etc
+  platform_id       String   // Platform-specific ID (e.g., shop_gid for Shopify)
+  platform_domain   String   // e.g., 'example.myshopify.com'
+
+  // Balance tracking
+  balance           Int      @default(0)  // Current credits (never negative)
+  total_granted     Int      @default(0)  // Lifetime credits received
+  total_consumed    Int      @default(0)  // Lifetime credits used
+
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+  updated_at        DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([merchant_id])
+  @@index([platform_domain])
+  @@index([platform_name, platform_id])
+  @@map("credit_accounts")
 }
 
-model MerchantCredit {
-  shopDomain  String    @id @db.Citext
-  balance     Int       @default(0)          // credits (integer units)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+model CreditTransaction {
+  id                String   @id @default(uuid()) @db.Uuid
+  account_id        String   @db.Uuid
+  merchant_id       String   @db.Uuid
 
-  ledger      CreditLedger[]
-  
-  @@index([updatedAt])
-  @@map("merchant_credits")
+  // Transaction details
+  amount            Int      // Always positive
+  operation         String   // 'credit' or 'debit'
+  balance_before    Int      // Balance before transaction
+  balance_after     Int      // Balance after transaction
+
+  // Reference for idempotency
+  reference_type    String   // 'trial', 'purchase', 'match', etc
+  reference_id      String   // Unique ID from source
+
+  // Metadata
+  description       String?
+  metadata          Json?    // Additional context (match_id, shopper_id, etc)
+
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([merchant_id, created_at])
+  @@unique([reference_type, reference_id])  // Prevents duplicates
+  @@map("credit_transactions")
 }
-
-model CreditLedger {
-  id           String    @id @default(cuid())
-  shopDomain   String    @map("shop_domain") @db.Citext
-  amount       Int                             // positive only for now
-  reason       String                           // 'trial' | 'subscription' | 'manual' | 'one_time_pack'
-  externalRef  String?   @unique @map("external_ref")              // e.g., subscriptionId/chargeId/eventId
-  metadata     Json?                           // additional context
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-
-  merchant     MerchantCredit @relation(fields: [shopDomain], references: [shopDomain])
-
-  @@index([shopDomain, createdAt(sort: Desc)])
-  @@index([reason])
-  @@map("credit_ledger")
-}
-

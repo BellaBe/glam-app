@@ -6,10 +6,10 @@ credit-service/
 .github/
 └── workfows/
     └── credit_service.yml
-        
+
         ```yml
         # name: Credit Service CI/CD
-        
+
         # on:
         #   push:
         #     branches: [ main, develop ]
@@ -19,15 +19,15 @@ credit-service/
         #     branches: [ main ]
         #     paths:
         #       - 'services/credit-service/**'
-        
+
         # defaults:
         #   run:
         #     working-directory: services/credit-service
-        
+
         # jobs:
         #   test:
         #     runs-on: ubuntu-latest
-            
+
         #     services:
         #       postgres:
         #         image: postgres:15
@@ -41,7 +41,7 @@ credit-service/
         #           --health-retries 5
         #         ports:
         #           - 5432:5432
-              
+
         #       redis:
         #         image: redis:7
         #         options: >-
@@ -51,73 +51,73 @@ credit-service/
         #           --health-retries 5
         #         ports:
         #           - 6379:6379
-        
+
         #     steps:
         #     - uses: actions/checkout@v4
-            
+
         #     - name: Set up Python
         #       uses: actions/setup-python@v4
         #       with:
         #         python-version: '3.11'
-            
+
         #     - name: Install Poetry
         #       uses: snok/install-poetry@v1
         #       with:
         #         version: latest
         #         virtualenvs-create: true
         #         virtualenvs-in-project: true
-            
+
         #     - name: Load cached venv
         #       id: cached-poetry-dependencies
         #       uses: actions/cache@v3
         #       with:
         #         path: services/credit-service/.venv
         #         key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-            
+
         #     - name: Install dependencies
         #       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         #       run: poetry install --no-interaction --no-root
-            
+
         #     - name: Install project
         #       run: poetry install --no-interaction
-            
+
         #     - name: Run linting
         #       run: |
         #         poetry run flake8 src tests
         #         poetry run black --check src tests
         #         poetry run isort --check src tests
         #         poetry run mypy src
-            
+
         #     - name: Run tests
         #       run: poetry run pytest -v --cov=src --cov-report=xml
         #       env:
         #         DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test_credit_db
         #         REDIS_URL: redis://localhost:6379
-            
+
         #     - name: Upload coverage to Codecov
         #       uses: codecov/codecov-action@v3
         #       with:
         #         file: services/credit-service/coverage.xml
         #         flags: credit-service
-        
+
         #   docker:
         #     runs-on: ubuntu-latest
         #     needs: test
         #     if: github.ref == 'refs/heads/main'
-            
+
         #     steps:
         #     - uses: actions/checkout@v4
-            
+
         #     - name: Set up Docker Buildx
         #       uses: docker/setup-buildx-action@v3
-            
+
         #     - name: Login to Container Registry
         #       uses: docker/login-action@v3
         #       with:
         #         registry: ghcr.io
         #         username: ${{ github.actor }}
         #         password: ${{ secrets.GITHUB_TOKEN }}
-            
+
         #     - name: Build and push Docker image
         #       uses: docker/build-push-action@v5
         #       with:
@@ -129,56 +129,56 @@ credit-service/
         #         cache-from: type=gha
         #         cache-to: type=gha,mode=max
         ```
-        
+
 alembic/
 ├── versions/
 └── env.py
-    
+
     ```py
     """Alembic environment configuration for credit service."""
-    
+
     import asyncio
     from logging.config import fileConfig
     from sqlalchemy import pool
     from sqlalchemy.engine import Connection
     from sqlalchemy.ext.asyncio import async_engine_from_config
-    
+
     from alembic import context
-    
+
     # Import all models to ensure they're registered
     from src.models import *  # noqa
     from shared.database.base import Base
-    
+
     # this is the Alembic Config object, which provides
     # access to the values within the .ini file in use.
     config = context.config
-    
+
     # Interpret the config file for Python logging.
     # This line sets up loggers basically.
     if config.config_file_name is not None:
         fileConfig(config.config_file_name)
-    
+
     # add your model's MetaData object here
     # for 'autogenerate' support
     target_metadata = Base.metadata
-    
+
     # other values from the config, defined by the needs of env.py,
     # can be acquired:
     # my_important_option = config.get_main_option("my_important_option")
     # ... etc.
-    
-    
+
+
     def run_migrations_offline() -> None:
         """Run migrations in 'offline' mode.
-    
+
         This configures the context with just a URL
         and not an Engine, though an Engine is acceptable
         here as well.  By skipping the Engine creation
         we don't even need a DBAPI to be available.
-    
+
         Calls to context.execute() here emit the given string to the
         script output.
-    
+
         """
         url = config.get_main_option("sqlalchemy.url")
         context.configure(
@@ -189,141 +189,141 @@ alembic/
             compare_type=True,
             compare_server_default=True,
         )
-    
+
         with context.begin_transaction():
             context.run_migrations()
-    
-    
+
+
     def do_run_migrations(connection: Connection) -> None:
         context.configure(
-            connection=connection, 
+            connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
         )
-    
+
         with context.begin_transaction():
             context.run_migrations()
-    
-    
+
+
     async def run_async_migrations() -> None:
         """In this scenario we need to create an Engine
         and associate a connection with the context.
-    
+
         """
-    
+
         connectable = async_engine_from_config(
             config.get_section(config.config_ini_section, {}),
             prefix="sqlalchemy.",
             poolclass=pool.NullPool,
         )
-    
+
         async with connectable.connect() as connection:
             await connection.run_sync(do_run_migrations)
-    
+
         await connectable.dispose()
-    
-    
+
+
     def run_migrations_online() -> None:
         """Run migrations in 'online' mode."""
-    
+
         asyncio.run(run_async_migrations())
-    
-    
+
+
     if context.is_offline_mode():
         run_migrations_offline()
     else:
         run_migrations_online()
     ```
-    
+
 logs/
 monitoring/
 └── prometheus.yml
-    
+
     ```yml
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
-    
+
     rule_files:
       # - "first_rules.yml"
       # - "second_rules.yml"
-    
+
     scrape_configs:
       - job_name: 'credit-service'
         static_configs:
           - targets: ['credit-service:9090']
         metrics_path: '/metrics'
         scrape_interval: 10s
-        
+
       - job_name: 'prometheus'
         static_configs:
           - targets: ['localhost:9090']
     ```
-    
+
 scripts/
 └── test_credits.py
-    
+
     ```py
     #!/usr/bin/env python3
     """
     Test script for credit service API endpoints.
-    
+
     Usage:
         python scripts/test_credit.py
     """
-    
+
     import asyncio
     import json
     import uuid
     from typing import Dict, Any
-    
+
     import httpx
-    
-    
+
+
     class CreditServiceTester:
         """Test credit service functionality"""
-        
+
         def __init__(self, base_url: str = "http://localhost:8015"):
             self.base_url = base_url
             self.client = httpx.AsyncClient(timeout=30.0)
             self.test_merchant_id = str(uuid.uuid4())
-        
+
         async def test_health(self) -> Dict[str, Any]:
             """Test health endpoint"""
             print("Testing health endpoint...")
-            
+
             response = await self.client.get(f"{self.base_url}/api/v1/health")
-            
+
             print(f"Health Status: {response.status_code}")
             print(f"Response: {response.json()}")
-            
+
             return response.json()
-        
+
         async def test_plugin_status(self, merchant_id: str) -> Dict[str, Any]:
             """Test plugin status endpoint"""
             print(f"\nTesting plugin status for merchant {merchant_id}...")
-            
+
             response = await self.client.get(
                 f"{self.base_url}/api/v1/credits/plugin-status/{merchant_id}"
             )
-            
+
             print(f"Plugin Status: {response.status_code}")
             data = response.json()
             print(f"Response: {json.dumps(data, indent=2)}")
-            
+
             return data
-        
+
         async def test_get_account(self, merchant_id: str) -> Dict[str, Any]:
             """Test get account endpoint"""
             print(f"\nTesting get account for merchant {merchant_id}...")
-            
+
             response = await self.client.get(
                 f"{self.base_url}/api/v1/credits/accounts/{merchant_id}"
             )
-            
+
             print(f"Get Account Status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 print(f"Response: {json.dumps(data, indent=2)}")
@@ -331,17 +331,17 @@ scripts/
             else:
                 print(f"Error: {response.text}")
                 return {}
-        
+
         async def test_get_balance(self, merchant_id: str) -> Dict[str, Any]:
             """Test get balance endpoint"""
             print(f"\nTesting get balance for merchant {merchant_id}...")
-            
+
             response = await self.client.get(
                 f"{self.base_url}/api/v1/credits/accounts/{merchant_id}/balance"
             )
-            
+
             print(f"Get Balance Status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 print(f"Response: {json.dumps(data, indent=2)}")
@@ -349,18 +349,18 @@ scripts/
             else:
                 print(f"Error: {response.text}")
                 return {}
-        
+
         async def test_get_transactions(self, merchant_id: str) -> Dict[str, Any]:
             """Test get transactions endpoint"""
             print(f"\nTesting get transactions for merchant {merchant_id}...")
-            
+
             response = await self.client.get(
                 f"{self.base_url}/api/v1/credits/transactions",
                 params={"merchant_id": merchant_id, "page": 1, "limit": 10}
             )
-            
+
             print(f"Get Transactions Status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 print(f"Response: {json.dumps(data, indent=2)}")
@@ -368,104 +368,104 @@ scripts/
             else:
                 print(f"Error: {response.text}")
                 return {}
-        
+
         async def run_all_tests(self):
             """Run all tests"""
             try:
                 print("=" * 60)
                 print("CREDIT SERVICE API TESTS")
                 print("=" * 60)
-                
+
                 # Test health
                 await self.test_health()
-                
+
                 # Test with new merchant (should trigger account creation)
                 await self.test_plugin_status(self.test_merchant_id)
-                
+
                 # Test account operations
                 await self.test_get_account(self.test_merchant_id)
                 await self.test_get_balance(self.test_merchant_id)
                 await self.test_get_transactions(self.test_merchant_id)
-                
+
                 # Test with different merchant
                 other_merchant_id = str(uuid.uuid4())
                 await self.test_plugin_status(other_merchant_id)
-                
+
                 print("\n" + "=" * 60)
                 print("ALL TESTS COMPLETED")
                 print("=" * 60)
-                
+
             except Exception as e:
                 print(f"Test failed with error: {e}")
                 raise
             finally:
                 await self.client.aclose()
-    
-    
+
+
     async def main():
         """Main test function"""
         tester = CreditServiceTester()
         await tester.run_all_tests()
-    
-    
+
+
     if __name__ == "__main__":
         asyncio.run(main())
     ```
-    
+
 src/
 ├── api/
 │   ├── v1/
 │   │   ├── __init__.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   # services/credit-service/src/api/v1/__init__.py
 │   │   │   """API v1 package for credit service."""
-│   │   │   
+│   │   │
 │   │   │   from fastapi import APIRouter
 │   │   │   from . import health, credits, transactions, plugin_status
-│   │   │   
+│   │   │
 │   │   │   # Create main v1 router
 │   │   │   router = APIRouter()
-│   │   │   
+│   │   │
 │   │   │   # Include all v1 routers
 │   │   │   router.include_router(health.router)
-│   │   │   router.include_router(credits.router, prefix="/credits") 
+│   │   │   router.include_router(credits.router, prefix="/credits")
 │   │   │   router.include_router(transactions.router, prefix="/credits")
 │   │   │   router.include_router(plugin_status.router, prefix="/credits")
-│   │   │   
+│   │   │
 │   │   │   __all__ = ["router"]
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   ├── credits.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   """Credit account API endpoints."""
-│   │   │   
+│   │   │
 │   │   │   from uuid import UUID
 │   │   │   from typing import List
 │   │   │   from fastapi import APIRouter, HTTPException, status
-│   │   │   
+│   │   │
 │   │   │   from shared.api import (
 │   │   │       ApiResponse,
 │   │   │       success_response,
 │   │   │       RequestContextDep,
 │   │   │   )
-│   │   │   
+│   │   │
 │   │   │   from ...dependencies import CreditServiceDep
 │   │   │   from ...schemas.credit import CreditResponse
-│   │   │   
+│   │   │
 │   │   │   router = APIRouter(prefix="", tags=["credits"])
-│   │   │   
-│   │   │   
-│   │   │   @router.get("/{merchant_id}", 
-│   │   │               response_model=ApiResponse[CreditResponse], 
+│   │   │
+│   │   │
+│   │   │   @router.get("/{merchant_id}",
+│   │   │               response_model=ApiResponse[CreditResponse],
 │   │   │               summary="Get credits status for merchant",
 │   │   │               status_code=status.HTTP_200_OK
 │   │   │               )
 │   │   │   async def get_credit(
 │   │   │       merchant_id: UUID,
 │   │   │       svc: CreditServiceDep,
-│   │   │       ctx: RequestContextDep  
+│   │   │       ctx: RequestContextDep
 │   │   │   ):
 │   │   │       """Get credit account for merchant"""
 │   │   │       credit = await svc.get_credit(merchant_id)
@@ -479,9 +479,9 @@ src/
 │   │   │           request_id=ctx.request_id,
 │   │   │           correlation_id=ctx.correlation_id,
 │   │   │       )
-│   │   │   
-│   │   │   @router.get("admin/zero-balance", 
-│   │   │               response_model=ApiResponse[List[CreditResponse]], 
+│   │   │
+│   │   │   @router.get("admin/zero-balance",
+│   │   │               response_model=ApiResponse[List[CreditResponse]],
 │   │   │               summary="Get all merchants with zero balance",
 │   │   │               status_code=status.HTTP_200_OK
 │   │   │               )
@@ -497,47 +497,47 @@ src/
 │   │   │           correlation_id=ctx.correlation_id
 │   │   │       )
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   ├── health.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   # glam-app/services/credit-service/src/api/v1/health.py
-│   │   │   
+│   │   │
 │   │   │   from fastapi import APIRouter
 │   │   │   from shared.api.health import create_health_router
-│   │   │   
+│   │   │
 │   │   │   router = APIRouter()
-│   │   │   
+│   │   │
 │   │   │   # Include reusable shared health routes for this service
 │   │   │   health_router = create_health_router("credit-service")
 │   │   │   router.include_router(health_router)
-│   │   │   
-│   │   │   
+│   │   │
+│   │   │
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   ├── plugin_status.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   # services/credit-service/src/api/v1/plugin_status.py
 │   │   │   """Plugin status API endpoints."""
-│   │   │   
+│   │   │
 │   │   │   from uuid import UUID
 │   │   │   from fastapi import APIRouter
-│   │   │   
+│   │   │
 │   │   │   from shared.api.responses import success_response
-│   │   │   
+│   │   │
 │   │   │   from shared.api import (
 │   │   │       ApiResponse,
 │   │   │       success_response,
 │   │   │       RequestContextDep,
 │   │   │   )
-│   │   │   
+│   │   │
 │   │   │   from ...dependencies import PluginStatusServiceDep
 │   │   │   from ...schemas.plugin_status import PluginStatusResponse
-│   │   │   
+│   │   │
 │   │   │   router = APIRouter(prefix="/plugin-status", tags=["plugin-status"])
-│   │   │   
-│   │   │   
+│   │   │
+│   │   │
 │   │   │   @router.get("/{merchant_id}", response_model=ApiResponse[PluginStatusResponse], summary="Get plugin status for merchant")
 │   │   │   async def get_plugin_status(
 │   │   │       merchant_id: UUID,
@@ -549,32 +549,32 @@ src/
 │   │   │       Returns whether the plugin/widget is enabled or disabled based on credit balance.
 │   │   │       Always returns 200 OK with status information.
 │   │   │       """
-│   │   │       
+│   │   │
 │   │   │       status = await svc.get_plugin_status(merchant_id)
-│   │   │       
+│   │   │
 │   │   │       return success_response(
 │   │   │           data=status,
 │   │   │           request_id=ctx.request_id,
 │   │   │           correlation_id=ctx.correlation_id,
 │   │   │       )
-│   │   │           
-│   │   │               
-│   │   │           
-│   │   │           
+│   │   │
+│   │   │
+│   │   │
+│   │   │
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   └── transactions.py
-│   │       
+│   │
 │   │       ```py
 │   │       # services/credit-service/src/api/v1/transactions.py
 │   │       """Credit transaction API endpoints."""
-│   │       
+│   │
 │   │       from uuid import UUID
 │   │       from typing import Optional
 │   │       from datetime import datetime
 │   │       from fastapi import APIRouter, HTTPException, Query, status
 │   │       from fastapi.security import HTTPBearer
-│   │       
+│   │
 │   │       from shared.api import (
 │   │           ApiResponse,
 │   │           success_response,
@@ -582,24 +582,24 @@ src/
 │   │           RequestContextDep,
 │   │           PaginationDep,
 │   │       )
-│   │       
+│   │
 │   │       from ...dependencies import (
 │   │           CreditTransactionServiceDep,
 │   │       )
 │   │       from ...schemas.credit_transaction import (
-│   │           CreditTransactionResponse, 
+│   │           CreditTransactionResponse,
 │   │           CreditTransactionListResponse,
 │   │           TransactionStatsByMerchantIdResponse,
 │   │       )
 │   │       from ...models.credit_transaction import TransactionType, OperationType
-│   │       
+│   │
 │   │       router = APIRouter(prefix="/transactions", tags=["transactions"])
 │   │       security = HTTPBearer()
-│   │       
-│   │       
-│   │       @router.get("/{transaction_id}", 
-│   │                   response_model=ApiResponse[CreditTransactionResponse], 
-│   │                   tags=["transactions"], 
+│   │
+│   │
+│   │       @router.get("/{transaction_id}",
+│   │                   response_model=ApiResponse[CreditTransactionResponse],
+│   │                   tags=["transactions"],
 │   │                   status_code=status.HTTP_200_OK,
 │   │                   summary="Get specific credit transaction by ID")
 │   │       async def get_transaction(
@@ -608,25 +608,25 @@ src/
 │   │           ctx: RequestContextDep
 │   │       ):
 │   │           """Get specific credit transaction by ID"""
-│   │           
+│   │
 │   │           transaction = await transaction_service.get_transaction_by_id(transaction_id)
-│   │           
+│   │
 │   │           if not transaction:
 │   │               raise HTTPException(
 │   │                   status_code=status.HTTP_404_NOT_FOUND,
 │   │                   detail=f"Transaction with ID {transaction_id} not found."
 │   │               )
-│   │           
+│   │
 │   │           return success_response(
 │   │               data=transaction,
 │   │               request_id=ctx.request_id,
 │   │               correlation_id=ctx.correlation_id
 │   │           )
-│   │       
-│   │       
-│   │       @router.get("/merchant/{merchant_id}", 
-│   │                   response_model=ApiResponse[CreditTransactionListResponse], 
-│   │                   tags=["transactions"], 
+│   │
+│   │
+│   │       @router.get("/merchant/{merchant_id}",
+│   │                   response_model=ApiResponse[CreditTransactionListResponse],
+│   │                   tags=["transactions"],
 │   │                   status_code=status.HTTP_200_OK,
 │   │                   summary="List credit transactions for a merchant with pagination and filtering")
 │   │       async def list_transactions_by_merchant_id(
@@ -640,7 +640,7 @@ src/
 │   │           end_date: Optional[datetime] = Query(None, description="Filter by end date"),
 │   │       ):
 │   │           """Get credit transactions with pagination and filtering"""
-│   │           
+│   │
 │   │           # Get transactions with filtering
 │   │           total, transactions = await svc.list_transactions_by_merchant_id(
 │   │               merchant_id=merchant_id,
@@ -651,14 +651,14 @@ src/
 │   │               start_date=start_date,
 │   │               end_date=end_date
 │   │           )
-│   │           
+│   │
 │   │           if not transactions:
 │   │               raise HTTPException(
 │   │                   status_code=status.HTTP_404_NOT_FOUND,
 │   │                   detail=f"No transactions found for merchant {merchant_id} with the specified filters."
 │   │               )
-│   │           
-│   │           
+│   │
+│   │
 │   │           return paginated_response(
 │   │               data=transactions,
 │   │               page=pagination.page,
@@ -668,30 +668,30 @@ src/
 │   │               request_id=ctx.request_id,
 │   │               correlation_id=ctx.correlation_id,
 │   │           )
-│   │               
-│   │               
-│   │       @router.get("/merchant/{merchant_id}/stats", 
-│   │                   response_model=ApiResponse[TransactionStatsByMerchantIdResponse], tags=["transactions"], 
+│   │
+│   │
+│   │       @router.get("/merchant/{merchant_id}/stats",
+│   │                   response_model=ApiResponse[TransactionStatsByMerchantIdResponse], tags=["transactions"],
 │   │                   status_code=status.HTTP_200_OK)
 │   │       async def get_merchant_transaction_stats(
 │   │           merchant_id: UUID,
 │   │           svc: CreditTransactionServiceDep,
 │   │           ctx: RequestContextDep,
-│   │       
+│   │
 │   │       ):
 │   │           """Get transaction statistics for a merchant"""
-│   │           
+│   │
 │   │           stats = await svc.get_merchant_stats(merchant_id=merchant_id)
-│   │           
+│   │
 │   │           return success_response(
 │   │               data=stats,
 │   │               request_id=ctx.request_id,
 │   │               correlation_id=ctx.correlation_id
 │   │           )
-│   │       
+│   │
 │   │       # Admin endpoints
-│   │       @router.post("/admin/manual-adjustment", 
-│   │                   response_model=ApiResponse[dict], 
+│   │       @router.post("/admin/manual-adjustment",
+│   │                   response_model=ApiResponse[dict],
 │   │                   tags=["admin"],
 │   │                   status_code=status.HTTP_201_CREATED,
 │   │                   summary="[ADMIN] Create manual credit adjustment")
@@ -706,12 +706,12 @@ src/
 │   │       ):
 │   │           """
 │   │           [ADMIN ONLY] Create a manual credit adjustment for a merchant.
-│   │           
+│   │
 │   │           This endpoint allows administrators to manually increase or decrease
 │   │           a merchant's credit balance with proper audit trail.
 │   │           """
-│   │       
-│   │           
+│   │
+│   │
 │   │           transaction = await svc.process_manual_adjustment(
 │   │               merchant_id=merchant_id,
 │   │               operation_type=operation_type,
@@ -719,29 +719,29 @@ src/
 │   │               reason=reason,
 │   │               admin_id=admin_id
 │   │           )
-│   │           
+│   │
 │   │           return success_response(
 │   │               data=transaction,
 │   │               request_id=ctx.request_id,
 │   │               correlation_id=ctx.correlation_id
 │   │           )
 │   │       ```
-│   │       
+│   │
 │   └── __init__.py
 ├── events/
 │   ├── __init__.py
 │   ├── publishers.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/events/publishers.py
 │   │   """Event publishers for separated credit services."""
-│   │   
-│   │   
-│   │   
+│   │
+│   │
+│   │
 │   │   from datetime import datetime, timezone
 │   │   from typing import Dict, Any, Optional
 │   │   from uuid import UUID
-│   │   
+│   │
 │   │   from shared.events import (
 │   │       Streams,
 │   │       DomainEventPublisher,
@@ -749,17 +749,17 @@ src/
 │   │       EventContext,
 │   │   )
 │   │   from shared.events.base_publisher import DomainEventPublisher
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditEventPublisher(DomainEventPublisher):
 │   │       """Publisher for credit domain events"""
 │   │       domain_stream = Streams.CREDIT
 │   │       service_name_override = "credit-service"
-│   │       
+│   │
 │   │       def __init__(self, client, js, logger=None):
 │   │           super().__init__(client, js, logger)
 │   │           self.context_manager = EventContextManager(logger or self.logger)
-│   │   
+│   │
 │   │       # Credit Account Events
 │   │       async def publish_credit_record_created(
 │   │           self,
@@ -772,15 +772,15 @@ src/
 │   │               "merchant_id": str(merchant_id),
 │   │               "initial_balance": float(initial_balance)
 │   │           }
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               subject="evt.credits.account.created",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id,
 │   │               idempotency_key=f"account_created_{merchant_id}"
 │   │           )
-│   │   
-│   │   
+│   │
+│   │
 │   │       # Transaction Events
 │   │       async def publish_credits_updated(
 │   │           self,
@@ -804,18 +804,18 @@ src/
 │   │               "reference_id": reference_id,
 │   │               "transaction_id": transaction_id
 │   │           }
-│   │           
+│   │
 │   │           if metadata:
 │   │               payload.update(metadata)
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               subject="evt.credits.recharged",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id,
 │   │               idempotency_key=f"recharge_{merchant_id}_{reference_id}"
 │   │           )
-│   │   
-│   │   
+│   │
+│   │
 │   │       async def publish_low_balance_reached(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -829,14 +829,14 @@ src/
 │   │               "balance": float(balance),
 │   │               "threshold": float(threshold)
 │   │           }
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               subject="evt.credits.low_balance_reached",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │   
-│   │   
+│   │
+│   │
 │   │       async def publish_balance_exhausted(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -846,13 +846,13 @@ src/
 │   │           payload = {
 │   │               "merchant_id": str(merchant_id)
 │   │           }
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               subject="evt.credits.balance_exhausted",
 │   │               payload=payload,
 │   │               correlation_id=correlation_id
 │   │           )
-│   │   
+│   │
 │   │       async def publish_plugin_status_changed(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -868,70 +868,70 @@ src/
 │   │               "reason": reason,
 │   │               "timestamp": datetime.now(timezone.utc).isoformat()
 │   │           }
-│   │           
+│   │
 │   │           return await self.publish_event_response(
 │   │               subject="evt.credits.plugin_status_changed",
 │   │               payload=payload,
 │   │           )
 │   │   ```
-│   │   
+│   │
 │   └── subscribers.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/events/subscribers.py
 │       from shared.events.base_subscriber import DomainEventSubscriber
 │       from shared.events.credit.types import CreditEvents
 │       from uuid import UUID
-│       
+│
 │       class OrderUpdatedSubscriber(DomainEventSubscriber):
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.ORDER_UPDATED
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.ORDER_UPDATED
-│           
+│
 │           @property
 │           def durable_name(self) -> str:
 │               return "credit-order-updated"
-│       
+│
 │           async def on_event(self, event: dict, headers=None):
 │               # Type-safe keys - IDE shows valid options, mypy catches typos
 │               credit_transaction_service = self.get_dependency("credit_transaction_service")
-│               
+│
 │               payload = event.get("payload", {})
 │               merchant_id = UUID(payload["merchant_id"])
 │               order_items = payload.get("order_items", [])
-│               
+│
 │               await credit_transaction_service.process_order_paid(
 │                   merchant_id=merchant_id,
 │                   order_items=order_items
 │               )
-│       
+│
 │       class TrialCreditsSubscriber(DomainEventSubscriber):
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.ACCOUNT_CREATED
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.ACCOUNT_CREATED
-│           
+│
 │           @property
 │           def durable_name(self) -> str:
 │               return "credit-trial-credits"
-│       
+│
 │           async def on_event(self, event: dict, headers=None):
 │               credit_transaction_service = self.get_dependency("credit_transaction_service")
-│               
+│
 │               payload = event.get("payload", {})
 │               trial_id = UUID(payload["trial_id"])
 │               merchant_id = UUID(payload["merchant_id"])
 │               credits_to_use = int(payload["credits_to_use"])
-│               
+│
 │               from ..services.credit_transaction_service import Trial
 │               trial = Trial(
 │                   trial_id=trial_id,
@@ -939,29 +939,29 @@ src/
 │                   credits_to_use=credits_to_use
 │               )
 │               await credit_transaction_service.process_trial_credits(trial=trial)
-│       
+│
 │       class SubscriptionSubscriber(DomainEventSubscriber):
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.SUBSCRIPTION_RENEWED
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.SUBSCRIPTION_RENEWED
-│           
+│
 │           @property
 │           def durable_name(self) -> str:
 │               return "credit-subscription-renewed"
-│       
+│
 │           async def on_event(self, event: dict, headers=None):
 │               credit_transaction_service = self.get_dependency("credit_transaction_service")
-│               
+│
 │               payload = event.get("payload", {})
 │               subscription_id = UUID(payload["subscription_id"])
 │               merchant_id = UUID(payload["merchant_id"])
 │               credits_used = int(payload["credits_used"])
-│               
+│
 │               from ..services.credit_transaction_service import Subscription
 │               subscription = Subscription(
 │                   id=subscription_id,
@@ -969,62 +969,62 @@ src/
 │                   credits_used=credits_used
 │               )
 │               await credit_transaction_service.process_subscription(subscription=subscription)
-│       
+│
 │       class MerchantCreatedSubscriber(DomainEventSubscriber):
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.MERCHANT_CREATED
-│           
+│
 │           @property
 │           def subject(self) -> str:
 │               return CreditEvents.MERCHANT_CREATED
-│           
+│
 │           @property
 │           def durable_name(self) -> str:
 │               return "credit-merchant-created"
-│       
+│
 │           async def on_event(self, event: dict, headers=None):
 │               credit_service = self.get_dependency("credit_service")
-│               
+│
 │               payload = event.get("payload", {})
 │               merchant_id = UUID(payload["merchant_id"])
 │               await credit_service.create_credit(merchant_id=merchant_id)
 │       ```
-│       
+│
 ├── mappers/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/mappers/__init__.py
 │   │   """Mappers for credit service."""
-│   │   
+│   │
 │   │   from .credit_mapper import CreditMapper
 │   │   from .credit_transaction_mapper import CreditTransactionMapper
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "CreditMapper",
 │   │       "CreditTransactionMapper",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── credit_mapper.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/mappers/credit_mapper.py
 │   │   """Mapper for credit account model to response schemas."""
-│   │   
+│   │
 │   │   from typing import List
 │   │   from uuid import UUID
 │   │   from shared.mappers import BaseMapper
 │   │   from ..models.credit import Credit
 │   │   from ..schemas.credit import CreditResponse, CreateCredit
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditMapper(BaseMapper[Credit, CreateCredit, None, CreditResponse]): #type: ignore
 │   │       """Maps between credit account model and response schemas"""
 │   │       __slots__ = () # Memory optimization
-│   │       
+│   │
 │   │       def create_to_model(self, create_schema: CreateCredit, **kwargs) -> Credit:
 │   │           return Credit(
 │   │               id=UUID(),
@@ -1032,7 +1032,7 @@ src/
 │   │               balance=0,
 │   │               last_transaction_id=None,
 │   │           )
-│   │       
+│   │
 │   │       def model_to_response(self, model: Credit) -> CreditResponse:
 │   │           return CreditResponse(
 │   │               id = model.id,
@@ -1041,22 +1041,22 @@ src/
 │   │               last_transaction_id=model.last_transaction_id,
 │   │               created_at=model.created_at,
 │   │               updated_at=model.updated_at
-│   │               
+│   │
 │   │           )
-│   │       
+│   │
 │   │       def models_to_responses(self, models: List[Credit]) -> List[CreditResponse]:
 │   │           return super().models_to_responses(models)
 │   │   ```
-│   │   
+│   │
 │   └── credit_transaction_mapper.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/mappers/credit_transaction_mapper.py
 │       """Mapper for credit transaction model to response schemas."""
-│       
+│
 │       from typing import Dict, Any
 │       from uuid import UUID
-│       
+│
 │       from shared.mappers import BaseMapper
 │       from ..models.credit_transaction import CreditTransaction
 │       from ..schemas.credit_transaction import (
@@ -1064,46 +1064,46 @@ src/
 │           CreditTransactionResponse,
 │           TransactionStatsByMerchantIdResponse
 │       )
-│       
-│       
+│
+│
 │       class CreditTransactionMapper(BaseMapper[CreditTransaction, CreditTransactionCreate, None, CreditTransactionResponse]): # type: ignore
 │           """
 │           Maps between credit transaction model and response schemas.
 │           """
 │           __slots__ = ()  # Memory optimization
-│           
+│
 │           def create_to_model(
-│               self, 
+│               self,
 │               create_schema: CreditTransactionCreate,
 │               **kwargs: Any  # Additional arguments for model creation (if needed)
 │           ) -> CreditTransaction:
 │               """
 │               Convert create schema to credit transaction model.
-│               
+│
 │               Args:
 │                   create_schema: The create request schema
 │                   **kwargs: Additional arguments for model creation
-│                   
+│
 │               Returns:
 │                   CreditTransaction model instance
 │               """
-│               
+│
 │               balance_before = kwargs.get("balance_before", None)
 │               balance_after = kwargs.get("balance_after", None)
 │               credit_id = kwargs.get("credit_id", None)
 │               idempotency_key = kwargs.get("idempotency_key", None)
-│       
+│
 │               if credit_id is None:
 │                   raise ValueError("credit_id must be provided")
-│               
+│
 │               if balance_before is None or balance_after is None:
 │                   raise ValueError("balance_before and balance_after must be provided")
-│               
+│
 │               if not idempotency_key:
 │                   raise ValueError("idempotency_key must be provided")
-│               
+│
 │               extra_metadata = kwargs.get("extra_metadata", {})
-│               
+│
 │               return CreditTransaction(
 │                   merchant_id=create_schema.merchant_id,
 │                   credit_id=UUID(),
@@ -1115,14 +1115,14 @@ src/
 │                   idempotency_key=idempotency_key,
 │                   extra_metadata=extra_metadata,
 │               )
-│           
+│
 │           def model_to_response(self, model: CreditTransaction) -> CreditTransactionResponse:
 │               """
 │               Convert credit transaction model to response schema.
-│               
+│
 │               Args:
 │                   model: The credit transaction model instance
-│                   
+│
 │               Returns:
 │                   Credit transaction response schema
 │               """
@@ -1140,8 +1140,8 @@ src/
 │                   created_at=model.created_at,
 │                   updated_at=model.updated_at
 │               )
-│       
-│           
+│
+│
 │           def to_stats_response(
 │               self,
 │               merchant_id: UUID,
@@ -1149,11 +1149,11 @@ src/
 │           ) -> TransactionStatsByMerchantIdResponse:
 │               """
 │               Convert stats dictionary to response schema.
-│               
+│
 │               Args:
 │                   merchant_id: The merchant identifier
 │                   stats_data: Dictionary containing transaction statistics
-│                   
+│
 │               Returns:
 │                   Transaction statistics response schema
 │               """
@@ -1164,7 +1164,7 @@ src/
 │               else:
 │                   # Assume already converted or empty
 │                   transaction_responses = transactions
-│                   
+│
 │               return TransactionStatsByMerchantIdResponse(
 │                   merchant_id=merchant_id,
 │                   total_increases=stats_data.get("total_increases", 0),
@@ -1173,19 +1173,19 @@ src/
 │                   last_transaction_at=stats_data.get("last_transaction_at"),
 │               )
 │       ```
-│       
+│
 ├── models/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/models/__init__.py
 │   │   """Database models for credit service."""
-│   │   
+│   │
 │   │   from shared.database.base import Base, TimestampedMixin
 │   │   from shared.database.base import MerchantMixin
 │   │   from .credit import Credit
 │   │   from .credit_transaction import CreditTransaction, TransactionType
-│   │   
+│   │
 │   │   __all__ = [
 │   │       # Base (from shared)
 │   │       "Base",
@@ -1199,30 +1199,30 @@ src/
 │   │       "TransactionType",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── credit.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/models/credit.py
 │   │   """Credit account model for managing merchant credit balances."""
-│   │   
+│   │
 │   │   from uuid import UUID, uuid4
 │   │   from sqlalchemy import Index, Integer
 │   │   from sqlalchemy.orm import Mapped, mapped_column
 │   │   from sqlalchemy.dialects.postgresql import UUID as PGUUID
-│   │   
+│   │
 │   │   from shared.database.base import TimestampedMixin, MerchantMixin, Base
-│   │   
-│   │   
+│   │
+│   │
 │   │   class Credit(Base, TimestampedMixin, MerchantMixin):
 │   │       """Credit account for each merchant"""
-│   │   
+│   │
 │   │       __tablename__ = "credits"
-│   │   
+│   │
 │   │       id: Mapped[UUID] = mapped_column(
 │   │           PGUUID(as_uuid=True), primary_key=True, default=uuid4
 │   │       )
-│   │   
+│   │
 │   │       # Credit balances
 │   │       balance: Mapped[int] = mapped_column(
 │   │           Integer,
@@ -1230,96 +1230,96 @@ src/
 │   │           default=0,
 │   │           index=True,
 │   │       )
-│   │       
+│   │
 │   │       last_transaction_id: Mapped[UUID | None] = mapped_column(
 │   │           PGUUID(as_uuid=True), nullable=True, index=True
 │   │       )
-│   │   
+│   │
 │   │       __table_args__ = (
 │   │       Index("idx_credits_merchant_balance", "merchant_id", "balance"),
 │   │       Index("idx_credits_merchant_created", "merchant_id", "created_at"),
 │   │   )
 │   │   ```
-│   │   
+│   │
 │   └── credit_transaction.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/models/credit_transaction.py
 │       """Simplified credit transaction model."""
-│       
+│
 │       from enum import Enum
 │       from uuid import UUID, uuid4
 │       from sqlalchemy import String, Integer, JSON, Enum as SQLEnum, Index
 │       from sqlalchemy.orm import Mapped, mapped_column
 │       from sqlalchemy.dialects.postgresql import UUID as PGUUID
-│       
+│
 │       from shared.database.base import TimestampedMixin, MerchantMixin, Base
-│       
-│       
+│
+│
 │       class OperationType(str, Enum):
 │           """Types of credit transactions"""
 │           INCREASE = "INCREASE"
 │           DECREASE = "DECREASE"
-│       
-│       
+│
+│
 │       class TransactionType(str, Enum):
 │           """Reference types for transactions"""
 │           ORDER_PAID = "ORDER_PAID"
-│           SUBSCRIPTION = "SUBSCRIPTION" 
+│           SUBSCRIPTION = "SUBSCRIPTION"
 │           TRIAL = "TRIAL"
 │           MANUAL = "MANUAL"
-│       
-│       
+│
+│
 │       class CreditTransaction(Base, TimestampedMixin, MerchantMixin):
 │           """Record of all credit operations for audit trail"""
-│           
+│
 │           __tablename__ = "credit_transactions"
-│           
+│
 │           id: Mapped[UUID] = mapped_column(
-│               PGUUID(as_uuid=True), 
-│               primary_key=True, 
+│               PGUUID(as_uuid=True),
+│               primary_key=True,
 │               default=uuid4
 │           )
-│           
+│
 │           credit_id: Mapped[UUID] = mapped_column(
 │               PGUUID(as_uuid=True),
 │               nullable=False,
 │               index=True
 │           )
-│           
+│
 │           # Transaction details
 │           operation_type: Mapped[OperationType] = mapped_column(
 │               SQLEnum(OperationType),
 │               nullable=False,
 │               index=True
 │           )
-│           
+│
 │           credits_used: Mapped[int] = mapped_column(
 │               Integer,
 │               nullable=False
 │           )
-│       
+│
 │           balance_before: Mapped[int] = mapped_column(
 │               Integer,
 │               nullable=False
 │           )
-│       
+│
 │           balance_after: Mapped[int] = mapped_column(
 │               Integer,
 │               nullable=False
 │           )
-│           
+│
 │           transaction_type: Mapped[TransactionType] = mapped_column(
 │               SQLEnum(TransactionType),
 │               nullable=False,
 │               index=True
 │           )
-│           
+│
 │           extra_metadata: Mapped[dict | None] = mapped_column(
 │               JSON,
 │               nullable=True
 │           )
-│           
+│
 │           idempotency_key: Mapped[str] = mapped_column(
 │               String(255),
 │               nullable=False,
@@ -1327,7 +1327,7 @@ src/
 │               index=True,
 │               comment="Unique reference ID that serves as idempotency key"
 │           )
-│           
+│
 │           # Performance indexes
 │           __table_args__ = (
 │           Index("idx_credit_tx_merchant_type", "merchant_id", "transaction_type"),
@@ -1335,61 +1335,61 @@ src/
 │           Index("idx_credit_tx_credit_created", "credit_id", "created_at"),
 │       )
 │       ```
-│       
+│
 ├── repositories/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/repositories/__init__.py
 │   │   """Repositories for credit service."""
-│   │   
+│   │
 │   │   from .credit_repository import CreditRepository
 │   │   from .credit_transaction_repository import CreditTransactionRepository
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "CreditRepository",
 │   │       "CreditTransactionRepository",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── credit_repository.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/repositories/credit_repository.py
 │   │   """Repository for credit account operations."""
-│   │   
+│   │
 │   │   from typing import Optional, Dict
 │   │   from uuid import UUID
 │   │   from sqlalchemy import select, update
 │   │   from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-│   │   
+│   │
 │   │   from shared.database.repository import Repository
 │   │   from ..models.credit import Credit
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditRepository(Repository[Credit]):
 │   │       """Repository for credit account operations"""
-│   │   
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           model_class: type[Credit],
 │   │           session_factory: async_sessionmaker[AsyncSession],
 │   │       ):
 │   │           super().__init__(model_class, session_factory)
-│   │   
+│   │
 │   │       async def find_by_merchant_id(self, merchant_id: UUID) -> Optional[Credit]:
 │   │           """Find credit account by merchant ID"""
-│   │   
+│   │
 │   │           stmt = select(Credit).where(Credit.merchant_id == merchant_id)
 │   │           async with self.session_factory() as session:
 │   │               result = await session.execute(stmt)
 │   │               return result.scalar_one_or_none()
-│   │   
+│   │
 │   │       async def create_credit(
 │   │           self, merchant_id: UUID, initial_balance: int = 0
 │   │       ) -> Credit:
 │   │           """Create a new credit account"""
-│   │   
+│   │
 │   │           account = Credit(
 │   │               merchant_id=merchant_id,
 │   │               balance=initial_balance,
@@ -1398,9 +1398,9 @@ src/
 │   │               session.add(account)
 │   │               await session.commit()
 │   │               await session.refresh(account)
-│   │   
+│   │
 │   │               return account
-│   │   
+│   │
 │   │       async def update_balance(
 │   │           self,
 │   │           credit_record_id: UUID,
@@ -1408,70 +1408,70 @@ src/
 │   │           transaction_id: UUID
 │   │       ) -> bool:
 │   │           """Update account balance"""
-│   │   
+│   │
 │   │           update_data: Dict[str, int |UUID] = {"balance": new_balance, "last_transaction_id": transaction_id}
-│   │   
+│   │
 │   │           stmt = update(Credit).where(Credit.id == credit_record_id).values(**update_data)
 │   │           async with self.session_factory() as session:
 │   │               result = await session.execute(stmt)
 │   │               await session.commit()
 │   │               return result.rowcount > 0
-│   │   
+│   │
 │   │       async def get_merchants_with_zero_balance(self) -> list[Credit]:
 │   │           """Get all merchants with zero balance"""
 │   │           stmt = select(Credit).where(Credit.balance == 0)
 │   │           async with self.session_factory() as session:
 │   │               result = await session.execute(stmt)
 │   │               return list(result.scalars().all())
-│   │   
-│   │               
-│   │   
+│   │
+│   │
+│   │
 │   │       async def get_merchants_with_low_balance(
 │   │           self, threshold: int
 │   │       ) -> list[tuple[UUID, int]]:
 │   │           """Get merchants with balance below threshold"""
-│   │   
+│   │
 │   │           stmt = select(Credit.merchant_id, Credit.balance).where(
 │   │               Credit.balance <= threshold, Credit.balance > 0
 │   │           )
 │   │           async with self.session_factory() as session:
-│   │   
+│   │
 │   │               result = await session.execute(stmt)
 │   │               return [(row[0], row[1]) for row in result.fetchall()]
 │   │   ```
-│   │   
+│   │
 │   └── credit_transaction_repository.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/repositories/credit_transaction_repository.py
 │       """Repository for credit transaction operations."""
-│       
+│
 │       from typing import Optional, List
 │       from uuid import UUID
 │       from datetime import datetime
 │       from sqlalchemy import select, and_, desc, func
 │       from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-│       
+│
 │       from shared.database.repository import Repository
 │       from shared.api.dependencies import PaginationParams
 │       from ..models.credit_transaction import CreditTransaction, TransactionType, OperationType
-│       
-│       
+│
+│
 │       class CreditTransactionRepository(Repository[CreditTransaction]):
 │           """Repository for credit transaction data access only"""
-│           
-│           def __init__(self, 
+│
+│           def __init__(self,
 │                       model_class: type[CreditTransaction],
 │                       session_factory: async_sessionmaker[AsyncSession]):
 │               super().__init__(model_class, session_factory)
-│               
+│
 │           async def get_by_id(self, transaction_id: UUID) -> Optional[CreditTransaction]:
 │               """Get transaction by ID"""
 │               stmt = select(CreditTransaction).where(CreditTransaction.id == transaction_id)
 │               async with self.session_factory() as session:
 │                   result = await session.execute(stmt)
 │                   return result.scalar_one_or_none()
-│       
+│
 │           async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[CreditTransaction]:
 │               """Find transaction by idempotency key"""
 │               stmt = select(CreditTransaction).where(
@@ -1480,7 +1480,7 @@ src/
 │               async with self.session_factory() as session:
 │                   result = await session.execute(stmt)
 │                   return result.scalar_one_or_none()
-│           
+│
 │           async def get_by_merchant_id(
 │               self,
 │               merchant_id: UUID,
@@ -1492,25 +1492,25 @@ src/
 │               end_date: Optional[datetime] = None
 │           ) -> List[CreditTransaction]:
 │               """Get transactions for a merchant with optional filtering"""
-│               
+│
 │               async with self.session_factory() as session:
 │                   stmt = select(CreditTransaction).where(
 │                       CreditTransaction.merchant_id == merchant_id
 │                   )
-│                   
+│
 │                   # Add filters
 │                   if operation_type:
 │                       stmt = stmt.where(CreditTransaction.operation_type == operation_type)
-│                   
+│
 │                   if transaction_type:
 │                       stmt = stmt.where(CreditTransaction.transaction_type == transaction_type)
-│                   
+│
 │                   if start_date:
 │                       stmt = stmt.where(CreditTransaction.created_at >= start_date)
-│                   
+│
 │                   if end_date:
 │                       stmt = stmt.where(CreditTransaction.created_at <= end_date)
-│                   
+│
 │                   # Order and paginate
 │                   stmt = (
 │                       stmt
@@ -1518,30 +1518,30 @@ src/
 │                       .offset(offset)
 │                       .limit(limit)
 │                   )
-│                   
+│
 │                   result = await session.execute(stmt)
 │                   return list(result.scalars().all())
-│           
+│
 │           async def get_by_credit_id(
 │               self,
 │               credit_id: UUID,
 │               limit: Optional[int] = None
 │           ) -> List[CreditTransaction]:
 │               """Get recent transactions for a credit account"""
-│               
+│
 │               stmt = (
 │                   select(CreditTransaction)
 │                   .where(CreditTransaction.credit_id == credit_id)
 │                   .order_by(desc(CreditTransaction.created_at))
 │               )
-│               
+│
 │               if limit:
 │                   stmt = stmt.limit(limit)
-│               
+│
 │               async with self.session_factory() as session:
 │                   result = await session.execute(stmt)
 │                   return list(result.scalars().all())
-│           
+│
 │           async def count_by_merchant_id(
 │               self,
 │               merchant_id: UUID,
@@ -1551,28 +1551,28 @@ src/
 │               end_date: Optional[datetime] = None
 │           ) -> int:
 │               """Count transactions for a merchant with optional filtering"""
-│               
+│
 │               async with self.session_factory() as session:
 │                   stmt = select(func.count(CreditTransaction.id)).where(
 │                       CreditTransaction.merchant_id == merchant_id
 │                   )
-│                   
+│
 │                   # Add same filters as get_by_merchant_id
 │                   if operation_type:
 │                       stmt = stmt.where(CreditTransaction.operation_type == operation_type)
-│                   
+│
 │                   if transaction_type:
 │                       stmt = stmt.where(CreditTransaction.transaction_type == transaction_type)
-│                   
+│
 │                   if start_date:
 │                       stmt = stmt.where(CreditTransaction.created_at >= start_date)
-│                   
+│
 │                   if end_date:
 │                       stmt = stmt.where(CreditTransaction.created_at <= end_date)
-│                   
+│
 │                   result = await session.execute(stmt)
 │                   return result.scalar() or 0
-│           
+│
 │           async def get_merchant_stats(
 │               self,
 │               merchant_id: UUID,
@@ -1581,22 +1581,22 @@ src/
 │           ) -> dict:
 │               """
 │               Get transaction statistics for a merchant.
-│               
+│
 │               Since increases/decreases are always by 1 credit:
 │               - total_increases = count of increase transactions = total credits increased
 │               - total_decreases = count of decrease transactions = total credits decreased
 │               """
-│               
+│
 │               async with self.session_factory() as session:
 │                   # Base filters
 │                   base_filters = [CreditTransaction.merchant_id == merchant_id]
-│                   
+│
 │                   if start_date:
 │                       base_filters.append(CreditTransaction.created_at >= start_date)
-│                   
+│
 │                   if end_date:
 │                       base_filters.append(CreditTransaction.created_at <= end_date)
-│                   
+│
 │                   # Count increases (no need to sum since each is +1)
 │                   increase_stmt = select(
 │                       func.count(CreditTransaction.id)
@@ -1606,7 +1606,7 @@ src/
 │                           CreditTransaction.operation_type == OperationType.INCREASE
 │                       )
 │                   )
-│                   
+│
 │                   # Count decreases (no need to sum since each is -1)
 │                   decrease_stmt = select(
 │                       func.count(CreditTransaction.id)
@@ -1616,7 +1616,7 @@ src/
 │                           CreditTransaction.operation_type == OperationType.DECREASE
 │                       )
 │                   )
-│                   
+│
 │                   # Get latest transaction timestamp
 │                   latest_stmt = (
 │                       select(CreditTransaction.created_at)
@@ -1624,45 +1624,45 @@ src/
 │                       .order_by(desc(CreditTransaction.created_at))
 │                       .limit(1)
 │                   )
-│                   
+│
 │                   # Execute all queries
 │                   increase_result = await session.execute(increase_stmt)
 │                   decrease_result = await session.execute(decrease_stmt)
 │                   latest_result = await session.execute(latest_stmt)
-│                   
+│
 │                   # Extract results
 │                   total_increases = increase_result.scalar() or 0
 │                   total_decreases = decrease_result.scalar() or 0
 │                   last_transaction_at = latest_result.scalar_one_or_none()
-│                   
+│
 │                   return {
-│                       "total_increases": total_increases,          
-│                       "total_decreases": total_decreases,         
+│                       "total_increases": total_increases,
+│                       "total_decreases": total_decreases,
 │                       "transaction_count": total_increases + total_decreases,
 │                       "last_transaction_at": last_transaction_at
 │                   }
-│           
-│           
+│
+│
 │           async def create_transaction(
 │               self,
 │               transaction: CreditTransaction
 │           ) -> CreditTransaction:
 │               """Create a new credit transaction"""
-│               
+│
 │               async with self.session_factory() as session:
 │                   session.add(transaction)
 │                   await session.commit()
 │                   await session.refresh(transaction)
 │                   return transaction
 │       ```
-│       
+│
 ├── schemas/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/schemas/__init__.py
 │   │   """Schemas for credit service API."""
-│   │   
+│   │
 │   │   from .credit import CreditResponse
 │   │   from .credit_transaction import (
 │   │       CreditTransactionResponse,
@@ -1673,7 +1673,7 @@ src/
 │   │       BatchPluginStatusResponse,
 │   │       PluginStatusMetrics,
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       # Credit Account
 │   │       "CreditResponse",
@@ -1686,60 +1686,60 @@ src/
 │   │       "PluginStatusMetrics",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── credit.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/schemas/credit.py
 │   │   """Credit account schemas for API requests and responses."""
-│   │   
+│   │
 │   │   from datetime import datetime
 │   │   from uuid import UUID
 │   │   from typing import Optional
 │   │   from pydantic import BaseModel, Field, ConfigDict
-│   │   
+│   │
 │   │   class CreateCredit(BaseModel):
 │   │       """Create credit record schema"""
 │   │       merchant_id: UUID
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditResponse(BaseModel):
 │   │       """Credit response schema"""
-│   │   
+│   │
 │   │       id: UUID
 │   │       merchant_id: UUID
 │   │       balance: int = Field(..., description="Current available credits")
 │   │       last_transaction_id: Optional[UUID]
 │   │       created_at: datetime
 │   │       updated_at: datetime
-│   │   
+│   │
 │   │       model_config = ConfigDict(from_attributes=True)
 │   │   ```
-│   │   
+│   │
 │   ├── credit_transaction.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/schemas/credit_transaction.py
 │   │   """Credit transaction schemas for API requests and responses."""
-│   │   
+│   │
 │   │   from datetime import datetime
 │   │   from uuid import UUID
 │   │   from typing import Optional, Dict, Any
 │   │   from pydantic import BaseModel, Field
-│   │   
+│   │
 │   │   from ..models.credit_transaction import TransactionType, OperationType
-│   │   
+│   │
 │   │   class CreditTransactionCreate(BaseModel):
 │   │       """Request schema for creating a credit transaction"""
-│   │       
+│   │
 │   │       merchant_id: UUID
 │   │       operation_type: OperationType = Field(..., description="INCREASE or DECREASE")
 │   │       transaction_type: TransactionType = Field(..., description="Type of transaction")
 │   │       credits_to_use: int = Field(..., gt=0, description="Credits used for transaction")
-│   │   
+│   │
 │   │   class CreditTransactionResponse(BaseModel):
 │   │       """Credit transaction response schema"""
-│   │       
+│   │
 │   │       id: UUID
 │   │       merchant_id: UUID
 │   │       credit_id: UUID
@@ -1752,74 +1752,74 @@ src/
 │   │       extra_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional context")
 │   │       created_at: datetime
 │   │       updated_at: datetime
-│   │       
+│   │
 │   │       class Config:
 │   │           from_attributes = True
-│   │   
+│   │
 │   │   class CreditTransactionListResponse(BaseModel):
 │   │       """Response schema for listing credit transactions"""
-│   │       
+│   │
 │   │       transactions: list[CreditTransactionResponse]
 │   │       total: int
 │   │       page: int
 │   │       limit: int
 │   │       has_next: bool
 │   │       has_previous: bool
-│   │   
-│   │   
+│   │
+│   │
 │   │   class TransactionStatsByMerchantIdResponse(BaseModel):
 │   │       """Response schema for transaction statistics"""
-│   │       
+│   │
 │   │       merchant_id: UUID
 │   │       total_increases: int
 │   │       total_decreases: int
 │   │       transaction_count: int
 │   │       last_transaction_at: Optional[datetime]
-│   │      
+│   │
 │   │   ```
-│   │   
+│   │
 │   └── plugin_status.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/schemas/plugin_status.py
 │       """Plugin status schemas."""
-│       
+│
 │       from enum import Enum
 │       from uuid import UUID
 │       from typing import Literal, Dict, List
 │       from pydantic import BaseModel, Field
-│       
-│       
+│
+│
 │       class PluginStatus(Enum):
 │           """Enum for plugin status"""
 │           ENABLED = "enabled"
 │           DISABLED = "disabled"
-│       
-│       
+│
+│
 │       class PluginStatusResponse(BaseModel):
 │           """Plugin status response schema"""
-│           
+│
 │           status: PluginStatus = Field(..., description="Current status of the plugin")
-│       
+│
 │       class PluginStatusRequest(BaseModel):
 │           """Plugin status check request"""
 │           merchant_id: UUID
-│           
+│
 │       class BatchPluginStatusRequest(BaseModel):
 │           """Batch plugin status check request"""
-│           
+│
 │           merchant_ids:List[UUID] = Field(..., description="List of merchant IDs to check status for")
-│           
-│           
+│
+│
 │       class BatchPluginStatusResponse(BaseModel):
 │           """Batch plugin status response"""
-│           
+│
 │           statuses: Dict[UUID, PluginStatusResponse] = Field(..., description="Status by merchant ID")
-│           
-│           
+│
+│
 │       class PluginStatusMetrics(BaseModel):
 │           """Plugin status metrics"""
-│           
+│
 │           total_merchants: int
 │           enabled_count: int
 │           disabled_count: int
@@ -1827,43 +1827,43 @@ src/
 │           average_balance: int
 │           zero_balance_count: int
 │       ```
-│       
+│
 ├── services/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   """Business services for credit service."""
-│   │   
+│   │
 │   │   from .credit_service import CreditService
 │   │   from .balance_monitor_service import BalanceMonitorService
 │   │   from .plugin_status_service import PluginStatusService
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "CreditService",
 │   │       "BalanceMonitorService",
 │   │       "PluginStatusService",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   ├── balance_monitor_service.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/services/balance_monitor_service.py
 │   │   """Service for monitoring credit balance thresholds."""
-│   │   
+│   │
 │   │   from uuid import UUID
 │   │   from typing import Optional
-│   │   
+│   │
 │   │   from shared.utils.logger import ServiceLogger
-│   │   
+│   │
 │   │   from ..config import CreditServiceConfig
 │   │   from ..events.publishers import CreditEventPublisher
 │   │   from ..metrics import increment_event_published
-│   │   
-│   │   
+│   │
+│   │
 │   │   class BalanceMonitorService:
 │   │       """Monitors credit balance changes and publishes threshold events"""
-│   │       
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           config: CreditServiceConfig,
@@ -1873,12 +1873,12 @@ src/
 │   │           self.config = config
 │   │           self.publisher = publisher
 │   │           self.logger = logger
-│   │           
+│   │
 │   │           # Calculate threshold
 │   │           self.low_threshold = (
 │   │               self.config.credit_trial_credits * self.config.low_balance_threshold_percent / 100
 │   │           )
-│   │       
+│   │
 │   │       async def check_balance_thresholds(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -1887,7 +1887,7 @@ src/
 │   │           correlation_id: Optional[str] = None
 │   │       ) -> None:
 │   │           """Check if balance crosses any thresholds and publish events"""
-│   │           
+│   │
 │   │           try:
 │   │               # Low balance crossed downward
 │   │               if old_balance > self.low_threshold and new_balance <= self.low_threshold:
@@ -1898,15 +1898,15 @@ src/
 │   │                       correlation_id=correlation_id
 │   │                   )
 │   │                   increment_event_published("low_balance_reached")
-│   │                   
+│   │
 │   │                   self.logger.warning(
 │   │                       "Low balance threshold reached",
 │   │                       merchant_id=str(merchant_id),
 │   │                       balance=float(new_balance),
 │   │                       threshold=float(self.low_threshold)
 │   │                   )
-│   │               
-│   │               
+│   │
+│   │
 │   │               # Balance exhausted
 │   │               if old_balance > 0 and new_balance == 0:
 │   │                   await self.publisher.publish_balance_exhausted(
@@ -1914,18 +1914,18 @@ src/
 │   │                       correlation_id=correlation_id
 │   │                   )
 │   │                   increment_event_published("balance_exhausted")
-│   │                   
+│   │
 │   │                   self.logger.warning(
 │   │                       "Balance exhausted",
 │   │                       merchant_id=str(merchant_id)
 │   │                   )
-│   │               
+│   │
 │   │               # Plugin status change
 │   │               if (old_balance > 0 and new_balance == 0) or (old_balance == 0 and new_balance > 0):
 │   │                   previous_status = "disabled" if new_balance > 0 else "enabled"
 │   │                   current_status = "enabled" if new_balance > 0 else "disabled"
 │   │                   reason = "Sufficient credits" if new_balance > 0 else "Insufficient credits"
-│   │                   
+│   │
 │   │                   await self.publisher.publish_plugin_status_changed(
 │   │                       merchant_id=merchant_id,
 │   │                       previous_status=previous_status,
@@ -1933,7 +1933,7 @@ src/
 │   │                       reason=reason,
 │   │                   )
 │   │                   increment_event_published("plugin_status_changed")
-│   │                   
+│   │
 │   │                   self.logger.info(
 │   │                       "Plugin status changed",
 │   │                       merchant_id=str(merchant_id),
@@ -1941,7 +1941,7 @@ src/
 │   │                       current_status=current_status,
 │   │                       balance=float(new_balance)
 │   │                   )
-│   │                   
+│   │
 │   │           except Exception as e:
 │   │               self.logger.error(
 │   │                   "Failed to check balance thresholds",
@@ -1953,19 +1953,19 @@ src/
 │   │               )
 │   │               # Don't re-raise - threshold checking is not critical for transaction success
 │   │   ```
-│   │   
+│   │
 │   ├── credit_service.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/services/credit_service.py
 │   │   """Core credit service - Account state management only."""
-│   │   
+│   │
 │   │   from uuid import UUID
 │   │   from typing import List
-│   │   
+│   │
 │   │   from shared.utils.logger import ServiceLogger
 │   │   from shared.errors import NotFoundError, DomainError
-│   │   
+│   │
 │   │   from ..config import CreditServiceConfig
 │   │   from ..events.publishers import CreditEventPublisher
 │   │   from ..repositories.credit_repository import CreditRepository
@@ -1977,11 +1977,11 @@ src/
 │   │       increment_balance_updated,
 │   │       set_merchant_balance_gauge,
 │   │   )
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditService:
 │   │       """Credits state management service - NO transaction processing"""
-│   │       
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           config: CreditServiceConfig,
@@ -1997,42 +1997,42 @@ src/
 │   │           self.balance_monitor = balance_monitor
 │   │           self.credit_mapper = credit_mapper
 │   │           self.logger = logger
-│   │       
+│   │
 │   │       async def create_credit(self, merchant_id: UUID) -> CreditResponse:
 │   │           """Create a new credit record for merchant"""
 │   │           existing_credit = await self.credit_repo.find_by_merchant_id(merchant_id)
-│   │           
+│   │
 │   │           if existing_credit:
 │   │               raise DomainError(f"Credit record already exists for merchant {merchant_id}")
-│   │   
+│   │
 │   │           credit = await self.credit_repo.create_credit(
 │   │               merchant_id=merchant_id,
 │   │               initial_balance=self.config.credit_trial_credits
 │   │           )
-│   │   
+│   │
 │   │           # Publish account created event
 │   │           await self.publisher.publish_credit_record_created(
 │   │               merchant_id=merchant_id,
 │   │               initial_balance=self.config.credit_trial_credits
 │   │           )
-│   │   
+│   │
 │   │           self.logger.info(
 │   │               "Created new credit account",
 │   │               merchant_id=str(merchant_id),
 │   │               initial_balance=float(self.config.credit_trial_credits)
 │   │           )
-│   │   
+│   │
 │   │           return self.credit_mapper.model_to_response(credit)
-│   │   
+│   │
 │   │       async def get_credit(self, merchant_id: UUID) -> CreditResponse:
 │   │           """Get credit account for merchant"""
 │   │           credit = await self.credit_repo.find_by_merchant_id(merchant_id)
-│   │           
+│   │
 │   │           if not credit:
 │   │               raise NotFoundError(f"Credit account not found for merchant {merchant_id}")
-│   │           
+│   │
 │   │           return self.credit_mapper.model_to_response(credit)
-│   │   
+│   │
 │   │       async def update_balance_from_transaction(
 │   │           self,
 │   │           credit_transaction: CreditTransaction
@@ -2044,36 +2044,36 @@ src/
 │   │           credit_record = await self.credit_repo.find_by_merchant_id(credit_transaction.merchant_id)
 │   │           if not credit_record:
 │   │               raise NotFoundError(f"Credit account not found for merchant {credit_transaction.merchant_id}")
-│   │   
+│   │
 │   │           old_balance = credit_record.balance
-│   │           
+│   │
 │   │           if credit_transaction.operation_type == OperationType.INCREASE:
 │   │               new_balance: int = old_balance + 1
 │   │           else:
 │   │               new_balance: int = old_balance - 1
-│   │   
+│   │
 │   │           # Update balance and last transaction timestamp
 │   │           await self.credit_repo.update_balance(
 │   │               credit_record_id=credit_record.id,
 │   │               new_balance=new_balance,
 │   │               transaction_id=credit_transaction.id
 │   │           )
-│   │   
-│   │   
+│   │
+│   │
 │   │           # Check balance thresholds
 │   │           await self.balance_monitor.check_balance_thresholds(
 │   │               merchant_id=credit_transaction.merchant_id,
 │   │               old_balance=old_balance,
 │   │               new_balance=new_balance,
 │   │           )
-│   │   
+│   │
 │   │           # Update metrics
 │   │           increment_balance_updated()
 │   │           set_merchant_balance_gauge(str(credit_transaction.merchant_id), float(new_balance))
-│   │   
+│   │
 │   │           # Get updated credit
 │   │           await self.credit_repo.find_by_merchant_id(credit_transaction.merchant_id)
-│   │   
+│   │
 │   │           self.logger.info(
 │   │               "Balance updated from transaction",
 │   │               merchant_id=str(credit_transaction.merchant_id),
@@ -2082,48 +2082,48 @@ src/
 │   │               transaction_id=credit_transaction.id,
 │   │               transaction_type=credit_transaction.transaction_type
 │   │           )
-│   │           
+│   │
 │   │       async def get_merchants_with_zero_balance(self) -> List[CreditResponse]:
 │   │           """Get all merchant with zero balance"""
-│   │           
+│   │
 │   │           credits = await self.credit_repo.get_merchants_with_zero_balance()
-│   │           
+│   │
 │   │           items = self.credit_mapper.models_to_responses(credits)
-│   │   
+│   │
 │   │           return items
 │   │   ```
-│   │   
+│   │
 │   ├── credit_transaction_service.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/services/credit_transaction_service.py
 │   │   """Credit transaction service - Transaction processing and audit trail."""
-│   │   
+│   │
 │   │   from typing import Optional, Dict, Any, List
 │   │   from uuid import UUID
 │   │   from datetime import datetime
-│   │   
+│   │
 │   │   from pydantic import BaseModel
 │   │   from shared.utils.logger import ServiceLogger
 │   │   from shared.utils.idempotency_key_generator import generate_idempotency_key
 │   │   from shared.errors import DomainError, NotFoundError, ConflictError, ValidationError
-│   │   
+│   │
 │   │   from ..models.credit_transaction import CreditTransaction, TransactionType, OperationType
 │   │   from ..repositories.credit_transaction_repository import CreditTransactionRepository
 │   │   from ..mappers.credit_transaction_mapper import CreditTransactionMapper
 │   │   from ..schemas.credit_transaction import CreditTransactionResponse, CreditTransactionListResponse, TransactionStatsByMerchantIdResponse
-│   │   
+│   │
 │   │   from ..services.credit_service import CreditService
-│   │   
-│   │   
+│   │
+│   │
 │   │   # TODO: Move the model to a separate file/service where it belongs (probably shared)
 │   │   class Trial(BaseModel):
 │   │       """Trial credits for new merchants"""
 │   │       trial_id: UUID
 │   │       merchant_id: UUID
 │   │       credits_to_use: int
-│   │       
-│   │       
+│   │
+│   │
 │   │   class ManualAdjustment(BaseModel):
 │   │       """Manual credit adjustment by admin"""
 │   │       admin_id: str
@@ -2132,25 +2132,25 @@ src/
 │   │       operation_type: OperationType
 │   │       credits_used: int
 │   │       reason: Optional[str] = None
-│   │       
+│   │
 │   │   class Subscription(BaseModel):
 │   │       """Subscription renewal details"""
 │   │       id: UUID
 │   │       merchant_id: UUID
 │   │       credits_used: int
-│   │   
-│   │   
+│   │
+│   │
 │   │   class CreditTransactionService:
 │   │       """
 │   │       Credit transaction processing service - Updates credit through credit service
-│   │       
+│   │
 │   │       Transaction Types & Operations:
 │   │       - ORDER_PAID: DECREASE (customer uses credits to pay for order)
-│   │       - SUBSCRIPTION: INCREASE (subscription renewal adds credits)  
+│   │       - SUBSCRIPTION: INCREASE (subscription renewal adds credits)
 │   │       - TRIAL: INCREASE (trial credits for new merchants)
 │   │       - MANUAL: INCREASE/DECREASE (admin adjustments or service usage)
 │   │       """
-│   │       
+│   │
 │   │       def __init__(
 │   │           self,
 │   │           transaction_repo: CreditTransactionRepository,
@@ -2162,26 +2162,26 @@ src/
 │   │           self.transaction_mapper = transaction_mapper
 │   │           self.credit_service = credit_service  # Injected credit service
 │   │           self.logger = logger or ServiceLogger(__name__)
-│   │   
+│   │
 │   │       async def process_order_paid(
 │   │           self,
 │   │           merchant_id: UUID,
 │   │           order_items: List[Dict[str, Any]],
 │   │       ) -> None:
 │   │           """Process order paid event - customer uses credits to pay for order (DECREASE)"""
-│   │           
+│   │
 │   │           credit_record = await self.credit_service.get_credit(merchant_id)
-│   │               
+│   │
 │   │           if not credit_record:
 │   │               raise NotFoundError(f"Credit record not found for merchant {merchant_id}")
-│   │           
+│   │
 │   │           for order_item in order_items:
 │   │               order_id = order_item.get("order_id")
 │   │               order_metadata = order_item
-│   │   
+│   │
 │   │               # Generate idempotency key
 │   │               idempotency_key = generate_idempotency_key("SHOPIFY", "ORDER", UUID(order_id))
-│   │   
+│   │
 │   │               # Check if already processed
 │   │               existing = await self.transaction_repo.get_by_idempotency_key(idempotency_key)
 │   │               if existing:
@@ -2190,9 +2190,9 @@ src/
 │   │                       extra={"order_id": order_id, "merchant_id": str(merchant_id)}
 │   │                   )
 │   │                   continue
-│   │               
+│   │
 │   │               current_balance = credit_record.balance
-│   │   
+│   │
 │   │               # Create transaction (ORDER_PAID is DECREASE - customer uses credits)
 │   │               transaction = CreditTransaction(
 │   │                   merchant_id=merchant_id,
@@ -2207,15 +2207,15 @@ src/
 │   │                       **(order_metadata)
 │   │                   }
 │   │               )
-│   │               
+│   │
 │   │               # Save transaction first
 │   │               created_transaction = await self.transaction_repo.create_transaction(transaction)
-│   │               
+│   │
 │   │               # Update credit balance through credit service
 │   │               await self.credit_service.update_balance_from_transaction(
 │   │                   credit_transaction=created_transaction,
 │   │               )
-│   │               
+│   │
 │   │               self.logger.info(
 │   │                   "Order transaction processed",
 │   │                   extra={
@@ -2224,30 +2224,30 @@ src/
 │   │                       "transaction_id": str(created_transaction.id)
 │   │                   }
 │   │               )
-│   │               
+│   │
 │   │       async def process_subscription(
 │   │           self,
 │   │           subscription: Subscription
 │   │       ) -> None:
 │   │           """Process subscription renewal to create credit increase transaction"""
-│   │           
+│   │
 │   │           # Generate idempotency key
 │   │           idempotency_key = generate_idempotency_key("SUBSCRIPTION", "RENEWAL", subscription.id)
-│   │           
+│   │
 │   │           merchant_id = subscription.merchant_id
-│   │           
+│   │
 │   │           # Check if already processed
 │   │           existing = await self.transaction_repo.get_by_idempotency_key(idempotency_key)
 │   │           if existing:
 │   │               return
-│   │           
+│   │
 │   │           # Get existing credit record
 │   │           credit_record = await self.credit_service.get_credit(merchant_id)
 │   │           if not credit_record:
 │   │               raise NotFoundError(f"Credit account not found for merchant {merchant_id}")
-│   │           
+│   │
 │   │           current_balance = credit_record.balance
-│   │           
+│   │
 │   │           # Create transaction
 │   │           transaction = CreditTransaction(
 │   │               merchant_id=merchant_id,
@@ -2262,15 +2262,15 @@ src/
 │   │                   **(subscription.model_dump()),
 │   │               }
 │   │           )
-│   │       
-│   │           
+│   │
+│   │
 │   │           # Save transaction and update balance
 │   │           created_transaction = await self.transaction_repo.create_transaction(transaction)
-│   │           
+│   │
 │   │           await self.credit_service.update_balance_from_transaction(
 │   │               credit_transaction=created_transaction
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               "Subscription transaction processed",
 │   │               extra={
@@ -2280,28 +2280,28 @@ src/
 │   │                   "transaction_id": str(created_transaction.id)
 │   │               }
 │   │           )
-│   │   
+│   │
 │   │       async def process_trial_credits(
 │   │               self,
 │   │               trial: Trial,
 │   │           ) -> None:
 │   │               """Process trial credits for new merchants"""
-│   │               
+│   │
 │   │               # Generate idempotency key
 │   │               idempotency_key = generate_idempotency_key("TRIAL", "MERCHANT", trial.merchant_id)
-│   │               
+│   │
 │   │               # Check if already processed
 │   │               existing = await self.transaction_repo.get_by_idempotency_key(idempotency_key)
 │   │               if existing:
 │   │                   return
-│   │               
+│   │
 │   │               # Get existing credit record
 │   │               credit_record = await self.credit_service.get_credit(trial.merchant_id)
 │   │               if not credit_record:
 │   │                   raise NotFoundError(f"Credit record not found for merchant {trial.merchant_id}")
-│   │   
+│   │
 │   │               current_balance = credit_record.balance
-│   │               
+│   │
 │   │               # Create transaction
 │   │               transaction = CreditTransaction(
 │   │                   merchant_id=trial.merchant_id,
@@ -2316,14 +2316,14 @@ src/
 │   │                       **(trial.model_dump()),
 │   │                   }
 │   │               )
-│   │               
+│   │
 │   │               # Save transaction and update balance
 │   │               created_transaction = await self.transaction_repo.create_transaction(transaction)
-│   │               
+│   │
 │   │               await self.credit_service.update_balance_from_transaction(
 │   │                   credit_transaction=created_transaction
 │   │               )
-│   │               
+│   │
 │   │               self.logger.info(
 │   │                   "Trial credits processed",
 │   │                   extra={
@@ -2332,7 +2332,7 @@ src/
 │   │                       "transaction_id": str(created_transaction.id)
 │   │                   }
 │   │           )
-│   │   
+│   │
 │   │       async def process_manual_adjustment(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -2340,21 +2340,21 @@ src/
 │   │           credits_to_use: int,
 │   │           reason: str,
 │   │           admin_id: str
-│   │          
+│   │
 │   │       ) -> CreditTransactionResponse:
 │   │           """Process manual credit adjustment (increase or decrease)"""
-│   │           
-│   │           
+│   │
+│   │
 │   │           # Generate idempotency key
 │   │           idempotency_key = generate_idempotency_key("MANUAL", operation_type, UUID())
-│   │           
+│   │
 │   │           # Get existing credit record
 │   │           credit_record = await self.credit_service.get_credit(merchant_id)
 │   │           if not credit_record:
 │   │               raise NotFoundError(f"Credit record not found for merchant {merchant_id}")
-│   │           
+│   │
 │   │           current_balance = credit_record.balance
-│   │           
+│   │
 │   │           # Calculate new balance
 │   │           if operation_type == OperationType.INCREASE:
 │   │               new_balance = current_balance + credits_to_use
@@ -2364,7 +2364,7 @@ src/
 │   │               new_balance = current_balance - credits_to_use
 │   │           else:
 │   │               raise ValidationError(f"Invalid operation type: {operation_type}")
-│   │           
+│   │
 │   │           # Create transaction
 │   │           transaction = CreditTransaction(
 │   │               merchant_id=merchant_id,
@@ -2380,14 +2380,14 @@ src/
 │   │                   "admin_id": admin_id
 │   │               }
 │   │           )
-│   │           
+│   │
 │   │           # Save transaction and update balance
 │   │           created_transaction = await self.transaction_repo.create_transaction(transaction)
-│   │           
+│   │
 │   │           await self.credit_service.update_balance_from_transaction(
 │   │               credit_transaction=created_transaction
 │   │           )
-│   │           
+│   │
 │   │           self.logger.info(
 │   │               "Manual adjustment processed",
 │   │               extra={
@@ -2400,7 +2400,7 @@ src/
 │   │               }
 │   │           )
 │   │           return self.transaction_mapper.model_to_response(created_transaction)
-│   │   
+│   │
 │   │       async def list_transactions_by_merchant_id(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -2412,7 +2412,7 @@ src/
 │   │           end_date: Optional[datetime] = None
 │   │       ) -> tuple[int, List[CreditTransactionResponse]]:
 │   │           """List transactions with pagination and filtering"""
-│   │           
+│   │
 │   │           transactions = await self.transaction_repo.get_by_merchant_id(
 │   │               merchant_id=merchant_id,
 │   │               limit=limit,
@@ -2422,7 +2422,7 @@ src/
 │   │               start_date=start_date,
 │   │               end_date=end_date
 │   │           )
-│   │           
+│   │
 │   │           total_count = await self.transaction_repo.count_by_merchant_id(
 │   │               merchant_id=merchant_id,
 │   │               operation_type=operation_type,
@@ -2430,17 +2430,17 @@ src/
 │   │               start_date=start_date,
 │   │               end_date=end_date
 │   │           )
-│   │           
+│   │
 │   │           return total_count, self.transaction_mapper.models_to_responses(transactions)
-│   │   
-│   │       
+│   │
+│   │
 │   │       async def get_transaction_by_id(self, transaction_id: UUID) -> Optional[CreditTransactionResponse]:
 │   │           """Get specific transaction by ID"""
 │   │           transaction = await self.transaction_repo.get_by_id(transaction_id)
 │   │           if not transaction:
 │   │               return None
 │   │           return self.transaction_mapper.model_to_response(transaction)
-│   │   
+│   │
 │   │       async def get_merchant_stats(
 │   │           self,
 │   │           merchant_id: UUID,
@@ -2448,30 +2448,30 @@ src/
 │   │           end_date: Optional[datetime] = None
 │   │       ) -> TransactionStatsByMerchantIdResponse:
 │   │           """Get transaction statistics for a merchant"""
-│   │           
+│   │
 │   │           stats = await self.transaction_repo.get_merchant_stats(
 │   │               merchant_id=merchant_id,
 │   │               start_date=start_date,
 │   │               end_date=end_date
 │   │           )
-│   │           
+│   │
 │   │           return self.transaction_mapper.to_stats_response(merchant_id, stats)
 │   │   ```
-│   │   
+│   │
 │   └── plugin_status_service.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/services/plugin_status_service.py
 │       """Service for checking plugin status based on credit balance."""
-│       
+│
 │       import json
 │       from uuid import UUID
-│       
-│       
+│
+│
 │       import redis.asyncio as redis
 │       from shared.utils.logger import ServiceLogger
 │       from shared.errors import NotFoundError
-│       
+│
 │       from ..config import CreditServiceConfig
 │       from ..repositories.credit_repository import CreditRepository
 │       from ..schemas.plugin_status import (
@@ -2480,11 +2480,11 @@ src/
 │           BatchPluginStatusResponse,
 │       )
 │       from ..metrics import increment_plugin_status_check
-│       
-│       
+│
+│
 │       class PluginStatusService:
 │           """Service for checking plugin status based on credits"""
-│       
+│
 │           def __init__(
 │               self,
 │               config: CreditServiceConfig,
@@ -2496,12 +2496,12 @@ src/
 │               self.credit_repo = credit_repo
 │               self.redis = redis_client
 │               self.logger = logger
-│       
+│
 │           async def get_plugin_status(self, merchant_id: UUID) -> PluginStatusResponse:
 │               """Get plugin status for merchant with caching"""
-│       
+│
 │               cache_key = f"plugin_status:{merchant_id}"
-│       
+│
 │               try:
 │                   # Check cache first
 │                   cached = await self.redis.get(cache_key)
@@ -2510,15 +2510,15 @@ src/
 │                       status = PluginStatusResponse(**data)
 │                       increment_plugin_status_check(status.status)
 │                       return status
-│       
+│
 │                   # Get account from database
 │                   account = await self.credit_repo.find_by_merchant_id(merchant_id)
-│       
+│
 │                   if not account:
 │                       raise NotFoundError(
 │                           f"Credit account not found for merchant {merchant_id}"
 │                       )
-│       
+│
 │                   else:
 │                       # Determine status based on balance
 │                       result = (
@@ -2526,23 +2526,23 @@ src/
 │                           if account.balance > 0
 │                           else PluginStatusResponse(status=PluginStatus.DISABLED)
 │                       )
-│       
+│
 │                   # # Cache result
 │                   # await self.redis.setex(
 │                   #     cache_key, self.config.PLUGIN_STATUS_CACHE_TTL, result.model_dump_json()
 │                   # )
-│       
+│
 │                   increment_plugin_status_check(result.status)
-│       
+│
 │                   self.logger.debug(
 │                       "Plugin status checked",
 │                       merchant_id=str(merchant_id),
 │                       status=result.status,
 │                       balance=float(account.balance),
 │                   )
-│       
+│
 │                   return result
-│       
+│
 │               except Exception as e:
 │                   self.logger.error(
 │                       "Failed to get plugin status",
@@ -2550,15 +2550,15 @@ src/
 │                       error=str(e),
 │                       exc_info=True,
 │                   )
-│       
+│
 │                   # Return disabled status on error to avoid breaking plugins
 │                   increment_plugin_status_check(PluginStatus.DISABLED)
 │                   return PluginStatusResponse(status=PluginStatus.DISABLED)
-│       
+│
 │           async def invalidate_cache(self, merchant_id: UUID) -> None:
 │               """Invalidate plugin status cache for merchant"""
 │               cache_key = f"plugin_status:{merchant_id}"
-│       
+│
 │               try:
 │                   await self.redis.delete(cache_key)
 │                   self.logger.debug(
@@ -2570,14 +2570,14 @@ src/
 │                       merchant_id=str(merchant_id),
 │                       error=str(e),
 │                   )
-│       
+│
 │           async def bulk_get_plugin_status(
 │               self, merchant_ids: list[UUID]
 │           ) -> BatchPluginStatusResponse:
 │               """Get plugin status for multiple merchants"""
-│       
+│
 │               results = {}
-│       
+│
 │               for merchant_id in merchant_ids:
 │                   try:
 │                       status = await self.get_plugin_status(merchant_id)
@@ -2591,43 +2591,43 @@ src/
 │                       results[str(merchant_id)] = PluginStatusResponse(
 │                           status=PluginStatus.DISABLED
 │                       )
-│       
+│
 │               return BatchPluginStatusResponse(statuses=results)
 │       ```
-│       
+│
 ├── utils/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/credit-service/src/utils/__init__.py
 │   │   """Utilities for credit service."""
-│   │   
+│   │
 │   │   from .credit_calculations import (
 │   │       calculate_order_credits,
-│   │       calculate_refund_credits, 
+│   │       calculate_refund_credits,
 │   │       calculate_low_balance_threshold,
 │   │       format_credit_amount,
 │   │       validate_credit_amount
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "calculate_order_credits",
 │   │       "calculate_refund_credits",
-│   │       "calculate_low_balance_threshold", 
+│   │       "calculate_low_balance_threshold",
 │   │       "format_credit_amount",
 │   │       "validate_credit_amount",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   └── credit_calculations.py
-│       
+│
 │       ```py
 │       # services/credit-service/src/utils/credit_calculations.py
 │       """Utilities for credit calculations."""
-│       
+│
 │       from typing import Union
-│       
-│       
+│
+│
 │       def calculate_order_credits(
 │           order_total: int,
 │           fixed_amount: Decimal,
@@ -2636,29 +2636,29 @@ src/
 │       ) -> Decimal:
 │           """
 │           Calculate credits for an order based on configuration.
-│           
+│
 │           Args:
 │               order_total: Total order amount
 │               fixed_amount: Fixed credit amount per order
 │               percentage: Percentage of order total to give as credits
 │               minimum: Minimum credits to award
-│           
+│
 │           Returns:
 │               Credit amount to award
 │           """
 │           # Calculate percentage-based credits
 │           percentage_credits = order_total * percentage
-│           
+│
 │           # Use the higher of fixed amount or percentage
 │           credits = max(fixed_amount, percentage_credits)
-│           
+│
 │           # Ensure minimum
 │           credits = max(credits, minimum)
-│           
+│
 │           # Round to 2 decimal places
 │           return credits.quantize(Decimal('0.01'))
-│       
-│       
+│
+│
 │       def calculate_refund_credits(
 │           original_credits: Decimal,
 │           refund_amount: Decimal,
@@ -2666,78 +2666,78 @@ src/
 │       ) -> Decimal:
 │           """
 │           Calculate credits to refund based on refund amount.
-│           
+│
 │           Args:
 │               original_credits: Credits originally awarded
 │               refund_amount: Amount being refunded
 │               original_order_total: Original order total
-│           
+│
 │           Returns:
 │               Credits to refund (proportional to refund amount)
 │           """
 │           if original_order_total == 0:
 │               return Decimal("0.00")
-│           
+│
 │           # Calculate proportional refund
 │           refund_ratio = refund_amount / original_order_total
-│           
+│
 │           # Apply ratio to original credits
 │           refund_credits = original_credits * refund_ratio
-│           
+│
 │           # Ensure we don't refund more than originally awarded
 │           refund_credits = min(refund_credits, original_credits)
-│           
+│
 │           # Round to 2 decimal places
 │           return refund_credits.quantize(Decimal('0.01'))
-│       
-│       
+│
+│
 │       def calculate_low_balance_threshold(
 │           trial_credits: Decimal,
 │           threshold_percentage: int
 │       ) -> Decimal:
 │           """
 │           Calculate low balance threshold.
-│           
+│
 │           Args:
 │               trial_credits: Initial trial credits amount
 │               threshold_percentage: Percentage threshold (e.g., 20 for 20%)
-│           
+│
 │           Returns:
 │               Low balance threshold amount
 │           """
 │           threshold = trial_credits * Decimal(str(threshold_percentage / 100))
 │           return threshold.quantize(Decimal('0.01'))
-│       
-│       
+│
+│
 │       def format_credit_amount(amount: Union[Decimal, float]) -> str:
 │           """
 │           Format credit amount for display.
-│           
+│
 │           Args:
 │               amount: Credit amount
-│           
+│
 │           Returns:
 │               Formatted string
 │           """
 │           if isinstance(amount, float):
 │               amount = Decimal(str(amount))
-│           
+│
 │           # Format with 2 decimal places, no trailing zeros
 │           formatted = f"{amount:.2f}".rstrip('0').rstrip('.')
-│           
+│
 │           return formatted
-│       
-│       
+│
+│
 │       def validate_credit_amount(amount: Union[Decimal, float, str]) -> Decimal:
 │           """
 │           Validate and convert credit amount to Decimal.
-│           
+│
 │           Args:
 │               amount: Amount to validate
-│           
+│
 │           Returns:
 │               Validated Decimal amount
-│           
+│
 │           Raises:
 │               ValueError: If amount is invalid
 │           """
@@ -2750,83 +2750,83 @@ src/
 │                   decimal_amount = amount
 │               else:
 │                   raise ValueError(f"Invalid amount type: {type(amount)}")
-│               
+│
 │               # Validate positive
 │               if decimal_amount < 0:
 │                   raise ValueError("Amount cannot be negative")
-│               
+│
 │               # Validate precision (max 2 decimal places)
 │               if decimal_amount.as_tuple().exponent < -2:
 │                   raise ValueError("Amount cannot have more than 2 decimal places")
-│               
+│
 │               return decimal_amount.quantize(Decimal('0.01'))
-│               
+│
 │           except (ValueError, TypeError, ArithmeticError) as e:
 │               raise ValueError(f"Invalid credit amount: {amount}") from e
 │       ```
-│       
+│
 ├── __init__.py
 ├── config.py
-│   
+│
 │   ```py
 │   from functools import lru_cache
 │   from pydantic import BaseModel, Field
 │   from shared.config.loader import merged_config, flatten_config
 │   from shared.database import DatabaseConfig, create_database_config
 │   import os
-│   
-│   
+│
+│
 │   class CreditServiceConfig(BaseModel):
 │       # Service Identity (from shared + service YAML)
 │       service_name: str = Field(..., alias="service.name")
 │       service_version: str = Field(..., alias="service.version")
 │       environment: str
 │       debug: bool
-│       
+│
 │       # API Configuration - BOTH PORTS
 │       api_host: str = Field(..., alias="api.host")
 │       api_port: int = Field(..., alias="api.port")                    # Internal/container port
 │       api_external_port: int = Field(..., alias="api.external_port")  # Local development port
 │       api_cors_origins: list = Field(..., alias="api.cors_origins")
-│       
+│
 │       # Infrastructure (from shared YAML)
 │       infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
 │       infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
-│       
+│
 │       # Database Configuration
 │       db_enabled: bool = Field(..., alias="database.enabled")
-│       
+│
 │       # Logging (from shared YAML)
 │       logging_level: str = Field(..., alias="logging.level")
 │       logging_format: str = Field(..., alias="logging.format")
-│       
+│
 │       # Rate Limiting (from shared YAML)
 │       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
 │       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-│   
+│
 │       # Monitoring (from shared YAML)
 │       monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
 │       monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
-│       
+│
 │       # Cache (service override of shared defaults)
 │       cache_ttl_seconds: int = Field(..., alias="cache.ttl_seconds")
-│       
+│
 │       # Credit Configuration (service-specific)
 │       credit_trial_credits: int = Field(..., alias="credit.trial_credits")
 │       low_balance_threshold_percent: int = Field(..., alias="credit.low_balance_threshold_percent")
-│   
-│   
+│
+│
 │       @property
 │       def database_config(self) -> DatabaseConfig:
 │           """Get database configuration"""
 │           cfg = create_database_config(prefix="CREDIT_")
 │           return cfg
-│   
+│
 │       @property
 │       def effective_port(self) -> int:
 │           """
 │           Get the effective port to use based on environment.
-│           
+│
 │           Logic:
 │           - Local development (not in Docker): use external_port
 │           - Docker/container environment: use internal port
@@ -2834,83 +2834,83 @@ src/
 │           """
 │           # Check if explicitly requested to use external port
 │           use_external = os.getenv("CREDIT_USE_EXTERNAL_PORT", "false").lower() == "true"
-│           
+│
 │           # Check if running in container (common Docker environment variables)
 │           in_container = any([
 │               os.getenv("DOCKER_CONTAINER"),
 │               os.getenv("HOSTNAME", "").startswith("credit-service"),
 │               os.path.exists("/.dockerenv")
 │           ])
-│           
+│
 │           if use_external or (not in_container and self.environment == "development"):
 │               return self.api_external_port
 │           else:
 │               return self.api_port
-│   
-│   
+│
+│
 │   @lru_cache
 │   def get_service_config() -> CreditServiceConfig:
 │       """Load and cache service configuration"""
-│       cfg_dict = merged_config("credit", env_prefix="CREDIT") 
+│       cfg_dict = merged_config("credit", env_prefix="CREDIT")
 │       flattened = flatten_config(cfg_dict)
 │       return CreditServiceConfig(**flattened)
 │   ```
-│   
+│
 ├── dependencies.py
-│   
+│
 │   ```py
 │   # services/credit-service/src/dependencies.py
 │   """
 │   FastAPI dependencies for credit service.
-│   
+│
 │   Follows the same pattern as notification service.
 │   """
-│   
+│
 │   from typing import Annotated, Any
 │   from fastapi import Depends, Request, HTTPException
 │   import redis.asyncio as redis
-│   
+│
 │   from shared.database.dependencies import DBSessionDep
 │   from shared.messaging.jetstream_wrapper import JetStreamWrapper
-│   
+│
 │   from .lifecycle import ServiceLifecycle
 │   from .services.credit_service import CreditService
 │   from .services.balance_monitor_service import BalanceMonitorService
 │   from .services.plugin_status_service import PluginStatusService
 │   from .services.credit_transaction_service import CreditTransactionService
-│   
+│
 │   from .repositories.credit_repository import CreditRepository
 │   from .repositories.credit_transaction_repository import CreditTransactionRepository
-│   
+│
 │   from .events.publishers import CreditEventPublisher
 │   from .mappers.credit_mapper import CreditMapper
 │   from .mappers.credit_transaction_mapper import CreditTransactionMapper
-│   
-│   
+│
+│
 │   # Core dependencies
 │   def get_lifecycle(request: Request) -> ServiceLifecycle:
 │       """Get service lifecycle from app state"""
 │       return request.app.state.lifecycle
-│   
-│   
+│
+│
 │   def get_config(request: Request):
 │       """Get service config from app state"""
 │       return request.app.state.config
-│   
-│   
+│
+│
 │   # Type aliases for core dependencies
 │   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 │   ConfigDep = Annotated[Any, Depends(get_config)]
-│   
-│   
+│
+│
 │   # Messaging dependencies
 │   def get_messaging_wrapper(lifecycle: LifecycleDep) -> JetStreamWrapper:
 │       """Get messaging wrapper"""
 │       if not lifecycle.messaging_wrapper:
 │           raise HTTPException(500, "Messaging not initialized")
 │       return lifecycle.messaging_wrapper
-│   
-│   
+│
+│
 │   def get_publisher(
 │       wrapper: Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)],
 │   ) -> CreditEventPublisher:
@@ -2919,57 +2919,57 @@ src/
 │       if not pub:
 │           raise HTTPException(500, "CreditEventPublisher not initialized")
 │       return pub
-│   
-│   
+│
+│
 │   # Type aliases for messaging
 │   MessagingDep = Annotated[JetStreamWrapper, Depends(get_messaging_wrapper)]
 │   PublisherDep = Annotated[CreditEventPublisher, Depends(get_publisher)]
-│   
-│   
+│
+│
 │   # Repository dependencies
 │   def get_credit_repo(lifecycle: LifecycleDep) -> CreditRepository:
 │       """Get credit account repository"""
 │       if not lifecycle.credit_repo:
 │           raise HTTPException(500, "CreditRepository not initialized")
 │       return lifecycle.credit_repo
-│   
-│   
+│
+│
 │   def get_credit_transaction_repo(lifecycle: LifecycleDep) -> CreditTransactionRepository:
 │       """Get credit transaction repository"""
 │       if not lifecycle.credit_transaction_repo:
 │           raise HTTPException(500, "CreditTransactionRepository not initialized")
 │       return lifecycle.credit_transaction_repo
-│   
-│   
+│
+│
 │   # Type aliases for repositories
 │   CreditRepoDep = Annotated[CreditRepository, Depends(get_credit_repo)]
 │   CreditTransactionRepoDep = Annotated[
 │       CreditTransactionRepository, Depends(get_credit_transaction_repo)
 │   ]
-│   
-│   
+│
+│
 │   # Service dependencies
 │   def get_credit_service(lifecycle: LifecycleDep) -> CreditService:
 │       """Get credit service"""
 │       if not lifecycle.credit_service:
 │           raise HTTPException(500, "CreditService not initialized")
 │       return lifecycle.credit_service
-│   
-│   
+│
+│
 │   def get_balance_monitor_service(lifecycle: LifecycleDep) -> BalanceMonitorService:
 │       """Get balance monitor service"""
 │       if not lifecycle.balance_monitor_service:
 │           raise HTTPException(500, "BalanceMonitorService not initialized")
 │       return lifecycle.balance_monitor_service
-│   
-│   
+│
+│
 │   def get_plugin_status_service(lifecycle: LifecycleDep) -> PluginStatusService:
 │       """Get plugin status service"""
 │       if not lifecycle.plugin_status_service:
 │           raise HTTPException(500, "PluginStatusService not initialized")
 │       return lifecycle.plugin_status_service
-│   
-│   
+│
+│
 │   def get_credit_transaction_service(
 │       lifecycle: LifecycleDep,
 │   ) -> CreditTransactionService:
@@ -2977,8 +2977,8 @@ src/
 │       if not lifecycle.credit_transaction_service:
 │           raise HTTPException(500, "CreditTransactionService not initialized")
 │       return lifecycle.credit_transaction_service
-│   
-│   
+│
+│
 │   # Type aliases for services
 │   CreditServiceDep = Annotated[CreditService, Depends(get_credit_service)]
 │   BalanceMonitorServiceDep = Annotated[
@@ -2987,34 +2987,34 @@ src/
 │   PluginStatusServiceDep = Annotated[
 │       PluginStatusService, Depends(get_plugin_status_service)
 │   ]
-│   
+│
 │   CreditTransactionServiceDep = Annotated[
 │       CreditTransactionService, Depends(get_credit_transaction_service)
 │   ]
-│   
-│   
+│
+│
 │   # Utility dependencies
 │   def get_redis_client(lifecycle: LifecycleDep) -> redis.Redis:
 │       """Get Redis client"""
 │       if not lifecycle.redis_client:
 │           raise HTTPException(500, "Redis client not initialized")
 │       return lifecycle.redis_client
-│   
-│   
+│
+│
 │   def get_credit_mapper(lifecycle: LifecycleDep) -> CreditMapper:
 │       """Get credit account mapper"""
 │       if not lifecycle.credit_mapper:
 │           raise HTTPException(500, "CreditMapper not initialized")
 │       return lifecycle.credit_mapper
-│   
-│   
+│
+│
 │   def get_credit_transaction_mapper(lifecycle: LifecycleDep) -> CreditTransactionMapper:
 │       """Get credit transaction mapper"""
 │       if not lifecycle.credit_transaction_mapper:
 │           raise HTTPException(500, "CreditTransactionMapper not initialized")
 │       return lifecycle.credit_transaction_mapper
-│   
-│   
+│
+│
 │   # Type aliases for utilities
 │   RedisClientDep = Annotated[redis.Redis, Depends(get_redis_client)]
 │   CreditMapperDep = Annotated[CreditMapper, Depends(get_credit_mapper)]
@@ -3022,18 +3022,18 @@ src/
 │       CreditTransactionMapper, Depends(get_credit_transaction_mapper)
 │   ]
 │   ```
-│   
+│
 ├── exceptions.py
-│   
+│
 │   ```py
 │   # services/credit-service/src/exceptions.py
 │   """
 │   Credit service exceptions using shared error classes.
-│   
+│
 │   All exceptions are re-exported from shared.errors for consistency
 │   across the platform.
 │   """
-│   
+│
 │   # Re-export all shared exceptions
 │   from shared.errors import (
 │       # Base exceptions
@@ -3042,74 +3042,74 @@ src/
 │       ValidationError,
 │       NotFoundError,
 │       ConflictError,
-│       
+│
 │       # HTTP exceptions
 │       BadRequestError,
 │       UnauthorizedError,
 │       ForbiddenError,
 │       InternalServerError,
 │       ServiceUnavailableError,
-│       
+│
 │       # Database exceptions
 │       DatabaseError,
 │       IntegrityError,
-│       
+│
 │       # External service exceptions
 │       ExternalServiceError,
 │       RateLimitError,
 │   )
-│   
+│
 │   # Credit-specific exceptions
 │   class InsufficientCreditsError(BusinessError):
 │       """Raised when merchant has insufficient credits"""
 │       pass
-│   
-│   
+│
+│
 │   class InvalidCreditAmountError(ValidationError):
 │       """Raised when credit amount is invalid"""
 │       pass
-│   
-│   
+│
+│
 │   class DuplicateTransactionError(ConflictError):
 │       """Raised when attempting to create duplicate transaction"""
 │       pass
-│   
-│   
+│
+│
 │   class AccountNotFoundError(NotFoundError):
 │       """Raised when credit account is not found"""
 │       pass
-│   
-│   
+│
+│
 │   class TransactionNotFoundError(NotFoundError):
 │       """Raised when transaction is not found"""
 │       pass
-│   
-│   
+│
+│
 │   class BalanceCalculationError(BusinessError):
 │       """Raised when balance calculation fails"""
 │       pass
-│   
-│   
+│
+│
 │   class ThresholdConfigurationError(ValidationError):
 │       """Raised when threshold configuration is invalid"""
 │       pass
-│   
-│   
+│
+│
 │   class PluginStatusError(BusinessError):
 │       """Raised when plugin status cannot be determined"""
 │       pass
-│   
-│   
+│
+│
 │   # Export all exceptions
 │   __all__ = [
 │       # Shared exceptions
 │       "CreditServiceError",
-│       "BusinessError", 
+│       "BusinessError",
 │       "ValidationError",
 │       "NotFoundError",
 │       "ConflictError",
 │       "BadRequestError",
-│       "UnauthorizedError", 
+│       "UnauthorizedError",
 │       "ForbiddenError",
 │       "InternalServerError",
 │       "ServiceUnavailableError",
@@ -3117,10 +3117,10 @@ src/
 │       "IntegrityError",
 │       "ExternalServiceError",
 │       "RateLimitError",
-│       
+│
 │       # Credit-specific exceptions
 │       "InsufficientCreditsError",
-│       "InvalidCreditAmountError", 
+│       "InvalidCreditAmountError",
 │       "DuplicateTransactionError",
 │       "AccountNotFoundError",
 │       "TransactionNotFoundError",
@@ -3129,43 +3129,43 @@ src/
 │       "PluginStatusError",
 │   ]
 │   ```
-│   
+│
 ├── lifecycle.py
-│   
+│
 │   ```py
 │   """
 │   Service lifecycle management for credit service.
-│   
+│
 │   Manages startup and shutdown of all service components following
 │   the same pattern as notification service.
 │   """
-│   
+│
 │   from __future__ import annotations
-│   
+│
 │   import asyncio
 │   from typing import Optional, List, cast
-│   
+│
 │   import redis.asyncio as redis
 │   from nats.js.api import StreamConfig, RetentionPolicy, StorageType
-│   
+│
 │   from shared.utils.logger import ServiceLogger
 │   from shared.database import DatabaseSessionManager, set_database_manager
 │   from shared.messaging.jetstream_wrapper import JetStreamWrapper
-│   
+│
 │   from .config import CreditServiceConfig
 │   from .services.credit_service import CreditService
 │   from .services.balance_monitor_service import BalanceMonitorService
 │   from .services.plugin_status_service import PluginStatusService
 │   from .services.credit_transaction_service import CreditTransactionService
-│   
+│
 │   # Repositories
 │   from .repositories.credit_repository import CreditRepository
 │   from .repositories.credit_transaction_repository import CreditTransactionRepository
-│   
+│
 │   # Models
 │   from .models.credit import Credit
 │   from .models.credit_transaction import CreditTransaction
-│   
+│
 │   # Events
 │   from .events.publishers import CreditEventPublisher
 │   from .events.subscribers import (
@@ -3174,90 +3174,90 @@ src/
 │       SubscriptionSubscriber,
 │       MerchantCreatedSubscriber,
 │   )
-│   
+│
 │   # Mappers
 │   from .mappers.credit_mapper import CreditMapper
 │   from .mappers.credit_transaction_mapper import CreditTransactionMapper
-│   
-│   
+│
+│
 │   class ServiceLifecycle:
 │       """Manages service lifecycle and dependencies"""
-│       
+│
 │       def __init__(self, config: CreditServiceConfig, logger: ServiceLogger):
 │           self.config = config
 │           self.logger = logger
-│           
+│
 │           # External connections
 │           self.messaging_wrapper: Optional[JetStreamWrapper] = None
 │           self.db_manager: Optional[DatabaseSessionManager] = None
 │           self.redis_client: Optional[redis.Redis] = None
-│           
-│           
+│
+│
 │           # Repositories
 │           self.credit_repo: Optional[CreditRepository] = None
 │           self.credit_transaction_repo: Optional[CreditTransactionRepository] = None
-│           
+│
 │           # Mappers
 │           self.credit_mapper: Optional[CreditMapper] = None
 │           self.credit_transaction_mapper: Optional[CreditTransactionMapper] = None
-│           
+│
 │           # Services
 │           self.credit_service: Optional[CreditService] = None
 │           self.balance_monitor_service: Optional[BalanceMonitorService] = None
 │           self.plugin_status_service: Optional[PluginStatusService] = None
 │           self.credit_transaction_service: Optional[CreditTransactionService] = None
-│           
-│           
+│
+│
 │           # bookkeeping
 │           self._tasks: List[asyncio.Task] = []
 │           self._shutdown_event = asyncio.Event()
-│           
-│   
+│
+│
 │       async def startup(self) -> None:
 │           """Start all service components"""
-│           
+│
 │           try:
 │               self.logger.info("Starting service components...")
-│               
+│
 │               # 1. Initialize database
 │               await self._init_database()
-│               
+│
 │               # 2. Initialize Redis
 │               await self._init_redis()
-│   
+│
 │               # 3. Initialize messaging
 │               await self._init_messaging()
-│               
+│
 │               # 4. Initialize repositories
 │               self._init_repositories()
-│               
+│
 │               # 5. Initialize mappers
 │               self._init_mappers()
-│   
+│
 │               # 6. Initialize services
 │               self._init_local_services()
-│               
+│
 │               # 7. Start subscribers
 │               await self._init_subscribers()
-│               
+│
 │               self.logger.info("All service components started successfully")
-│               
+│
 │           except Exception as e:
 │               self.logger.error(f"Failed to start service: {e}", exc_info=True)
 │               await self.shutdown()
 │               raise
-│       
+│
 │       async def shutdown(self) -> None:
 │           """Shutdown all service components"""
-│           
+│
 │           self.logger.info("Shutting down service components...")
-│           
+│
 │           # Stop background tasks
 │           for t in self._tasks:
 │               t.cancel()
 │           if self._tasks:
 │               await asyncio.gather(*self._tasks, return_exceptions=True)
-│           
+│
 │           # Close Redis
 │           if self.redis_client:
 │               try:
@@ -3265,7 +3265,7 @@ src/
 │                   self.logger.info("Redis connection closed")
 │               except Exception as e:
 │                   self.logger.warning(f"Error closing Redis: {e}")
-│           
+│
 │           # Close messaging
 │           if self.messaging_wrapper:
 │               try:
@@ -3273,7 +3273,7 @@ src/
 │                   self.logger.info("Messaging connection closed")
 │               except Exception as e:
 │                   self.logger.warning(f"Error closing messaging: {e}")
-│           
+│
 │           # Close database
 │           if self.db_manager:
 │               try:
@@ -3281,14 +3281,14 @@ src/
 │                   self.logger.info("Database connection closed")
 │               except Exception as e:
 │                   self.logger.warning(f"Error closing database: {e}")
-│           
+│
 │           self.logger.info("Service shutdown complete")
-│       
+│
 │       async def _init_messaging(self) -> None:
 │           self.messaging_wrapper = JetStreamWrapper(self.logger)
 │           await self.messaging_wrapper.connect([self.config.infrastructure_nats_url])
 │           self.logger.info("Connected to NATS %s", self.config.infrastructure_nats_url)
-│   
+│
 │           js = self.messaging_wrapper.js
 │           cfg = StreamConfig(
 │               name      = "CREDIT",
@@ -3305,15 +3305,15 @@ src/
 │           except Exception:
 │               await js.add_stream(cfg)
 │               self.logger.info("Created CREDIT stream")
-│       
-│     
+│
+│
 │       async def _init_database(self) -> None:
 │           if not (self.config.db_enabled and self.config.database_config):
 │               self.logger.warning("DB disabled; repositories will not be initialised")
 │               return
-│           
+│
 │           print("Database URL:", self.config.database_config.database_url)
-│   
+│
 │           self.db_manager = DatabaseSessionManager(
 │               database_url=self.config.database_config.database_url,
 │               echo=self.config.database_config.DB_ECHO,
@@ -3323,23 +3323,23 @@ src/
 │           await self.db_manager.init()
 │           set_database_manager(self.db_manager)
 │           self.logger.info("Connected to DB")
-│   
+│
 │           from shared.database.base import Base
 │           async with self.db_manager.engine.begin() as conn:
 │               await conn.run_sync(Base.metadata.create_all)
-│       
-│       
+│
+│
 │       def _init_repositories(self) -> None:
 │           """Initialize repositories"""
-│           
+│
 │           if not self.db_manager:
 │               self.logger.warning("DB manager not initialized, repositories will not be set up")
 │               return
-│           
+│
 │           self.logger.info("Setting up repositories...")
-│           
+│
 │           session_factory = self.db_manager.session_factory
-│           
+│
 │           self.credit_repo = CreditRepository(
 │               model_class=Credit,
 │               session_factory=session_factory
@@ -3348,76 +3348,76 @@ src/
 │               model_class=CreditTransaction,
 │               session_factory=session_factory
 │           )
-│           
+│
 │           self.logger.info("Repositories setup complete")
-│       
+│
 │       async def _init_redis(self) -> None:
 │           """Initialize Redis connection"""
-│           
+│
 │           self.logger.info("Setting up Redis...")
-│           
+│
 │           if not self.config.infrastructure_redis_url:
 │               self.logger.warning("INFRASTRUCTURE_REDIS_URL not configured, skipping Redis setup")
 │               return
-│           
+│
 │           self.redis_client = redis.from_url(
 │               self.config.infrastructure_redis_url,
 │               decode_responses=True,
 │               retry_on_timeout=True,
 │               health_check_interval=30
 │           )
-│           
+│
 │           # Test connection
 │           await self.redis_client.ping()
-│           
+│
 │           self.logger.info("Redis setup complete")
-│       
-│      
-│        
+│
+│
+│
 │       def _init_mappers(self) -> None:
 │           """Initialize mappers"""
-│           
+│
 │           self.logger.info("Setting up mappers...")
-│           
+│
 │           self.credit_mapper = CreditMapper()
 │           self.credit_transaction_mapper = CreditTransactionMapper()
-│           
+│
 │           self.logger.info("Mappers setup complete")
-│       
-│       
-│       
+│
+│
+│
 │       def _init_local_services(self) -> None:
 │           """Initialize business services"""
-│           
+│
 │           self.logger.info("Setting up services...")
-│           
+│
 │           if not self.messaging_wrapper:
 │               raise RuntimeError("Messaging wrapper is not initialized")
-│           
-│           event_publisher = cast(CreditEventPublisher, 
+│
+│           event_publisher = cast(CreditEventPublisher,
 │               self.messaging_wrapper.create_publisher(CreditEventPublisher)
 │           )
-│           
-│           
+│
+│
 │           # Balance monitor service
 │           self.balance_monitor_service = BalanceMonitorService(
 │               config=self.config,
 │               publisher=event_publisher,
 │               logger=self.logger
 │           )
-│           
+│
 │           if not self.credit_repo:
 │               raise RuntimeError("Credit repository is not initialized")
-│           
+│
 │           if not self.credit_transaction_repo:
 │               raise RuntimeError("Credit transaction repository is not initialized")
-│           
+│
 │           if not self.redis_client:
 │               raise RuntimeError("Redis client is not initialized")
-│           
+│
 │           if not self.credit_mapper:
 │               raise RuntimeError("CreditMapper is not initialized")
-│           
+│
 │           # Plugin status service
 │           self.plugin_status_service = PluginStatusService(
 │               config=self.config,
@@ -3425,7 +3425,7 @@ src/
 │               redis_client=self.redis_client,
 │               logger=self.logger
 │           )
-│           
+│
 │           # Main credit service
 │           self.credit_service = CreditService(
 │               config=self.config,
@@ -3435,83 +3435,83 @@ src/
 │               credit_mapper=self.credit_mapper,
 │               logger=self.logger
 │           )
-│           
+│
 │           if not self.credit_service:
 │               raise RuntimeError("CreditService initialization failed")
 │           if not self.credit_transaction_repo:
 │               raise RuntimeError("CreditTransactionRepository not initialized")
 │           if not self.credit_transaction_mapper:
 │               raise RuntimeError("CreditTransactionMapper not initialized")
-│   
+│
 │           self.credit_transaction_service = CreditTransactionService(
 │               transaction_repo=self.credit_transaction_repo,
 │               transaction_mapper=self.credit_transaction_mapper,
 │               credit_service=self.credit_service,
 │               logger=self.logger
 │           )
-│           
+│
 │           self.logger.info("Services setup complete")
-│       
-│       
-│       
+│
+│
+│
 │       async def _init_subscribers(self) -> None:
 │           if not self.messaging_wrapper:
 │               raise RuntimeError("Messaging wrapper not initialized")
-│   
+│
 │           # ⚠️ Register deps BEFORE launching subscribers – they may receive a
 │           # message immediately after pull_subscribe().
 │           self.messaging_wrapper.register_dependency("credit_service", self.credit_service)
 │           self.messaging_wrapper.register_dependency("credit_transaction_service", self.credit_transaction_service)
 │           self.messaging_wrapper.register_dependency("logger", self.logger)
-│           
+│
 │           # Start all subscribers with registered dependencies
 │           subscribers = [
 │               OrderUpdatedSubscriber,
-│               TrialCreditsSubscriber, 
+│               TrialCreditsSubscriber,
 │               SubscriptionSubscriber,
 │               MerchantCreatedSubscriber,
 │           ]
-│           
+│
 │           for subscriber_class in subscribers:
 │               await self.messaging_wrapper.start_subscriber(subscriber_class)
-│   
+│
 │       def add_task(self, coro) -> asyncio.Task:
 │           t = asyncio.create_task(coro)
 │           self._tasks.append(t)
 │           return t
-│   
+│
 │       async def wait_for_shutdown(self) -> None:
 │           await self._shutdown_event.wait()
-│   
+│
 │       def signal_shutdown(self) -> None:
 │           self._shutdown_event.set()
 │   ```
-│   
+│
 ├── main.py
-│   
+│
 │   ```py
 │   # services/credit-service/src/main.py
 │   """Credit Service main application."""
-│   
+│
 │   from fastapi import FastAPI
 │   from contextlib import asynccontextmanager
-│   
+│
 │   from shared.utils.logger import create_logger
 │   from shared.api import setup_middleware
 │   from .config import get_service_config
 │   from .lifecycle import ServiceLifecycle
 │   from .api.v1 import health, credits, transactions, plugin_status
-│   
+│
 │   # Global singletons
 │   config = get_service_config()
 │   logger = create_logger(config.service_name)
 │   lifecycle = ServiceLifecycle(config, logger)
-│   
-│   
+│
+│
 │   @asynccontextmanager
 │   async def lifespan(app: FastAPI):
 │       """Application lifespan management"""
-│       
+│
 │       logger.info(
 │           f"Starting {config.service_name}",
 │           extra={
@@ -3521,11 +3521,11 @@ src/
 │               "api_port": config.effective_port,
 │           }
 │       )
-│       
+│
 │       app.state.lifecycle = lifecycle
 │       app.state.config = config
 │       app.state.logger = logger
-│       
+│
 │       try:
 │           await lifecycle.startup()
 │           logger.info("Credit Service started successfully")
@@ -3534,9 +3534,9 @@ src/
 │           logger.info("Shutting down Credit Service")
 │           await lifecycle.shutdown()
 │           logger.info("Credit Service stopped")
-│           
+│
 │   def create_application() -> FastAPI:
-│   
+│
 │       # Create FastAPI app
 │       app = FastAPI(
 │           title=config.service_name,
@@ -3545,36 +3545,36 @@ src/
 │           description="Credit management service for merchant credits and plugin access control",
 │           exception_handlers={}  # Use shared middleware for exception handling
 │       )
-│   
+│
 │       setup_middleware(
 │           app,
 │           service_name=config.service_name,
 │           enable_metrics=True
 │       )
-│   
+│
 │       # Include routers
 │       app.include_router(health.router, prefix="/api/v1/credits")
 │       app.include_router(credits.router, prefix="/api/v1/credits")
 │       app.include_router(transactions.router, prefix="/api/v1/credits")
 │       app.include_router(plugin_status.router, prefix="/api/v1")
-│       
+│
 │       return app
-│   
+│
 │   app = create_application()
-│   
+│
 │   if __name__ == "__main__":
 │       import uvicorn
-│       
+│
 │       # Smart port selection
 │       port = config.effective_port
-│       
+│
 │       logger.info(f"Starting server", extra={
 │           "internal_port": config.api_port,
 │           "external_port": config.api_external_port,
 │           "effective_port": port,
 │           "environment": config.environment
 │       })
-│       
+│
 │       uvicorn.run(
 │           "src.main:app",
 │           host=config.api_host,
@@ -3582,159 +3582,159 @@ src/
 │           reload=config.debug
 │       )
 │   ```
-│   
+│
 └── metrics.py
-    
+
     ```py
     # services/credit-service/src/metrics.py
     """Metrics for credit service."""
-    
+
     from src.schemas.plugin_status import PluginStatus
-    
+
     from prometheus_client import Counter, Histogram, Gauge
-    
+
     # Transaction metrics
     transaction_created_total = Counter(
         "credits_transactions_total",
         "Total credit transactions created",
         ["type", "reference_type"]
     )
-    
+
     balance_updated_total = Counter(
-        "credits_balance_updated_total", 
+        "credits_balance_updated_total",
         "Total balance updates"
     )
-    
+
     # Processing time
     transaction_processing_seconds = Histogram(
         "credits_transaction_processing_seconds",
         "Time spent processing credit transactions"
     )
-    
+
     # Balance metrics
     merchant_balance_total = Gauge(
         "credits_balance_total",
         "Current credit balance per merchant",
         ["merchant_id"]
     )
-    
+
     merchants_zero_balance = Gauge(
         "credits_merchants_zero_balance",
         "Number of merchants with zero balance"
     )
-    
+
     merchants_low_balance = Gauge(
-        "credits_merchants_low_balance", 
+        "credits_merchants_low_balance",
         "Number of merchants with low balance"
     )
-    
+
     # Plugin status metrics
     plugin_status_checks_total = Counter(
         "credits_plugin_status_checks_total",
         "Total plugin status checks",
         ["status"]
     )
-    
+
     plugin_status_distribution = Gauge(
         "credits_plugin_status",
         "Plugin status distribution",
         ["status"]
     )
-    
+
     # Event metrics
     events_published_total = Counter(
         "credits_events_published_total",
         "Total events published",
         ["subject"]
     )
-    
-    
+
+
     # Helper functions
     def increment_transaction_created(transaction_type: str, reference_type: str = "unknown"):
         """Increment transaction created counter"""
         transaction_created_total.labels(type=transaction_type, reference_type=reference_type).inc()
-    
-    
+
+
     def increment_balance_updated():
         """Increment balance updated counter"""
         balance_updated_total.inc()
-    
-    
+
+
     def observe_transaction_processing_time(duration_seconds: float):
         """Record transaction processing time"""
         transaction_processing_seconds.observe(duration_seconds)
-    
-    
+
+
     def set_merchant_balance_gauge(merchant_id: str, balance: float):
         """Set merchant balance gauge"""
         merchant_balance_total.labels(merchant_id=merchant_id).set(balance)
-    
-    
+
+
     def increment_plugin_status_check(status: PluginStatus):
         """Increment plugin status check counter"""
         plugin_status_checks_total.labels(status=status).inc()
-    
-    
+
+
     def set_plugin_status_distribution(status: str, count: int):
         """Set plugin status distribution"""
         plugin_status_distribution.labels(status=status).set(count)
-    
-    
+
+
     def increment_event_published(subject: str):
         """Increment events published counter"""
         events_published_total.labels(subject=subject).inc()
     ```
-    
+
 tests/
 ├── __init__.py
 └── conftest.py
-    
+
     ```py
     # services/credit-service/tests/conftest.py
     """Test configuration and fixtures for credit service."""
-    
+
     import asyncio
     import pytest
     import pytest_asyncio
-    
+
     from uuid import uuid4
     from typing import AsyncGenerator
-    
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
     from testcontainers.postgres import PostgresContainer
     from testcontainers.redis import RedisContainer
-    
+
     from shared.database.base import Base
     from shared.utils.logger import create_logger
-    
+
     from src.config import CreditServiceConfig
     from src.models import Credit, CreditTransaction, TransactionType
     from src.repositories.credit_repository import CreditRepository
     from src.repositories.credit_transaction_repository import CreditTransactionRepository
-    
-    
+
+
     @pytest.fixture(scope="session")
     def event_loop():
         """Create event loop for async tests."""
         loop = asyncio.get_event_loop_policy().new_event_loop()
         yield loop
         loop.close()
-    
-    
+
+
     @pytest.fixture(scope="session")
     async def postgres_container():
         """Start PostgreSQL container for testing."""
         with PostgresContainer("postgres:15-alpine") as postgres:
             yield postgres
-    
-    
+
+
     @pytest.fixture(scope="session")
     async def redis_container():
         """Start Redis container for testing."""
         with RedisContainer("redis:7-alpine") as redis:
             yield redis
-    
-    
+
+
     @pytest.fixture(scope="session")
     async def test_config(postgres_container, redis_container):
         """Create test configuration."""
@@ -3747,36 +3747,36 @@ tests/
             TRIAL_CREDITS=Decimal("100.00"),
             LOG_LEVEL="DEBUG",
         )
-    
-    
+
+
     @pytest_asyncio.fixture
     async def db_session(test_config) -> AsyncGenerator[AsyncSession, None]:
         """Create database session for testing."""
         engine = create_async_engine(test_config.DATABASE_URL)
-    
+
         # Create tables
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    
+
         # Create session
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    
+
         async with session_factory() as session:
             yield session
-    
+
         # Cleanup
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
-    
+
         await engine.dispose()
-    
-    
+
+
     @pytest.fixture
     def test_merchant_id():
         """Create test merchant ID."""
         return uuid4()
-    
-    
+
+
     @pytest.fixture
     async def test_account(db_session: AsyncSession, test_merchant_id) -> Credit:
         """Create test credit account."""
@@ -3785,21 +3785,21 @@ tests/
             balance=Decimal("50.00"),
             lifetime_credits=Decimal("100.00"),
         )
-    
+
         db_session.add(account)
         await db_session.commit()
         await db_session.refresh(account)
-    
+
         return account
-    
-    
+
+
     @pytest.fixture
     async def credit_repo(db_session: AsyncSession) -> CreditRepository:
         """Create credit account repository."""
         session_factory = async_sessionmaker(bind=db_session.bind)
         return CreditRepository(session_factory)
-    
-    
+
+
     @pytest.fixture
     async def credit_transaction_repo(
         db_session: AsyncSession,
@@ -3807,14 +3807,14 @@ tests/
         """Create credit transaction repository."""
         session_factory = async_sessionmaker(bind=db_session.bind)
         return CreditTransactionRepository(session_factory)
-    
-    
+
+
     @pytest.fixture
     def logger():
         """Create test logger."""
         return create_logger("credit-service-test", "DEBUG")
     ```
-    
+
 .env.examples
 .gitignore
 .pre-commit-config.yaml

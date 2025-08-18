@@ -1,44 +1,42 @@
+# services/notification-service/src/providers/base.py
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-from src.models import NotificationProvider
+from typing import Any
+
 
 @dataclass
 class EmailMessage:
     """Email message structure"""
-    to_email: str
-    subject: str
-    html_body: str
-    text_body: Optional[str] = None
 
-@dataclass
-class EmailResult:
-    """Email send result"""
-    success: bool
-    provider: NotificationProvider
-    provider_message_id: Optional[str] = None
-    error_message: Optional[str] = None
-    error_code: Optional[str] = None
+    to: str
+    subject: str
+    html: str
+    text: str
+    from_email: str | None = None
+    from_name: str | None = None
+    metadata: dict[str, Any] | None = None
+
 
 class EmailProvider(ABC):
     """Base email provider interface"""
-    
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
-        self.from_email = config.get('from_email', 'noreply@glamyouup.com')
-        self.from_name = config.get('from_name', 'GlamYouUp')
-    
+
+    @property
     @abstractmethod
-    async def send_email(self, message: EmailMessage) -> EmailResult:
-        """Send a single email"""
+    def name(self) -> str:
+        """Provider name"""
         pass
-    
+
     @abstractmethod
-    async def send_bulk_emails(self, messages: List[EmailMessage]) -> List[EmailResult]:
-        """Send multiple emails"""
+    async def send(self, message: EmailMessage) -> str:
+        """
+        Send email and return provider message ID
+
+        Raises:
+            Exception: On send failure
+        """
         pass
-    
+
     @abstractmethod
-    async def health_check(self) -> bool:
-        """Check if provider is healthy"""
+    async def get_status(self, message_id: str) -> dict[str, Any]:
+        """Get message status from provider"""
         pass

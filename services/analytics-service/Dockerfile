@@ -17,7 +17,7 @@ COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# ---- 2️⃣  Install service dependencies  
+# ---- 2️⃣  Install service dependencies
 WORKDIR /app
 COPY services/analytics-service/pyproject.toml services/analytics-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
@@ -29,7 +29,7 @@ COPY services/analytics-service /app
 COPY config /app/config
 
 # ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime  
+# 📦  Stage 2 ─ Runtime
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
@@ -49,4 +49,3 @@ EXPOSE 8017
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8017"]
 """
-

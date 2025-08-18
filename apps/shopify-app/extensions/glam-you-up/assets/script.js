@@ -84,7 +84,7 @@ function endProgress() {
 
 function getDistinctProducts(variants) {
   const uniqueProductsIds = new Set();
-  return variants.filter(variant => {
+  return variants.filter((variant) => {
     if (!uniqueProductsIds.has(variant.product_id)) {
       uniqueProductsIds.add(variant.product_id);
       return true;
@@ -120,7 +120,7 @@ const errorHandleNotifications = {
 };
 
 const warningNotifications = {
-  "missing selfie": "Please upload your selfie to use this feature."
+  "missing selfie": "Please upload your selfie to use this feature.",
 };
 
 function hexToRgb(hex) {
@@ -138,7 +138,7 @@ function rgbToHex(r, g, b) {
 function interpolateColor(color1, color2, factor) {
   const result = color1.slice();
   for (let i = 0; i < 3; i++) {
-      result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
+    result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
   }
   return result;
 }
@@ -149,9 +149,9 @@ function generateGradientColors(startColor, endColor, numColors) {
   const colors = [];
 
   for (let i = 0; i < numColors; i++) {
-      const factor = i / (numColors - 1);
-      const rgb = interpolateColor(startRgb, endRgb, factor);
-      colors.push(rgbToHex(...rgb));
+    const factor = i / (numColors - 1);
+    const rgb = interpolateColor(startRgb, endRgb, factor);
+    colors.push(rgbToHex(...rgb));
   }
 
   return colors;

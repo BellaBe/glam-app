@@ -1,130 +1,148 @@
-from typing import Optional, List
+# services/credit-service/src/repositories/credit_repository.py
 from uuid import UUID
-from datetime import datetime
+
 from prisma import Prisma
-from prisma.models import MerchantCredit, CreditLedger
-from ..schemas.credit import CreditGrantIn, LedgerEntryOut, BalanceOut
-from ..utils import normalize_shop_domain
+from prisma.errors import UniqueViolationError
+
+from shared.utils.exceptions import NotFoundError
+
 
 class CreditRepository:
     """Repository for credit operations using Prisma"""
-    
+
     def __init__(self, prisma: Prisma):
         self.prisma = prisma
-    
-    async def get_or_create_merchant_credit(self, shop_domain: str) -> MerchantCredit:
-        """Get or create merchant credit account"""
-        shop_domain = normalize_shop_domain(shop_domain)
-        
-        # Try to get existing
-        merchant = await self.prisma.merchantcredit.find_unique(
-            where={"shopDomain": shop_domain}
-        )
-        
-        if not merchant:
-            # Create new with default balance
-            merchant = await self.prisma.merchantcredit.create(
-                data={"shopDomain": shop_domain, "balance": 0}
-            )
-        
-        return merchant
-    
-    async def find_ledger_by_external_ref(self, external_ref: str) -> Optional[CreditLedger]:
-        """Find ledger entry by external reference"""
-        return await self.prisma.creditledger.find_unique(
-            where={"externalRef": external_ref}
-        )
-    
-    async def grant_credits_transactional(
-        self, 
-        shop_domain: str, 
-        amount: int, 
-        reason: str,
-        external_ref: Optional[str] = None,
-        metadata: Optional[dict] = None
-    ) -> tuple[int, bool]:  # (new_balance, was_idempotent)
-        """Grant credits in a transaction with row locking"""
-        shop_domain = normalize_shop_domain(shop_domain)
-        
-        # Check for existing grant (idempotency)
-        if external_ref:
-            existing = await self.find_ledger_by_external_ref(external_ref)
-            if existing:
-                # Get current balance
-                merchant = await self.get_or_create_merchant_credit(shop_domain)
-                return merchant.balance, True
-        
-        # Execute in transaction
-        async with self.prisma.tx() as tx:
-            # Get or create with lock
-            merchant = await tx.merchantcredit.upsert(
-                where={"shopDomain": shop_domain},
-                create={"shopDomain": shop_domain, "balance": 0},
-                update={}
-            )
-            
-            # Create ledger entry
-            await tx.creditledger.create(
+
+    async def create_account(
+        self,
+        merchant_id: UUID,
+        platform_name: str,
+        platform_id: str,
+        platform_domain: str,
+    ) -> dict:
+        """Create credit account with platform context"""
+        try:
+            account = await self.prisma.creditaccount.create(
                 data={
-                    "shopDomain": shop_domain,
-                    "amount": amount,
-                    "reason": reason,
-                    "externalRef": external_ref,
-                    "metadata": metadata
+                    "merchant_id": str(merchant_id),
+                    "platform_name": platform_name,
+                    "platform_id": platform_id,
+                    "platform_domain": platform_domain,
+                    "balance": 0,
+                    "total_granted": 0,
+                    "total_consumed": 0,
                 }
             )
-            
-            # Update balance
-            updated = await tx.merchantcredit.update(
-                where={"shopDomain": shop_domain},
-                data={"balance": {"increment": amount}}
+            return account
+        except UniqueViolationError:
+            # Account already exists
+            existing = await self.find_by_merchant_id(merchant_id)
+            if existing:
+                return existing
+            raise
+
+    async def find_by_merchant_id(self, merchant_id: UUID) -> dict | None:
+        """Find credit account by merchant ID"""
+        account = await self.prisma.creditaccount.find_unique(where={"merchant_id": str(merchant_id)})
+        return account
+
+    async def find_by_platform_domain(self, platform_domain: str) -> dict | None:
+        """Find credit account by platform domain"""
+        account = await self.prisma.creditaccount.find_first(where={"platform_domain": platform_domain})
+        return account
+
+    async def update_balance(
+        self,
+        merchant_id: UUID,
+        amount: int,
+        operation: str,  # 'credit' or 'debit'
+        reference_type: str,
+        reference_id: str,
+        description: str | None = None,
+        metadata: dict | None = None,
+    ) -> tuple[dict, dict]:
+        """
+        Update balance with transaction record.
+        Returns (account, transaction) tuple.
+        Uses transaction to ensure consistency.
+        """
+        async with self.prisma.tx() as tx:
+            # Get current account with lock
+            account = await tx.creditaccount.find_unique(where={"merchant_id": str(merchant_id)})
+
+            if not account:
+                raise NotFoundError(
+                    message=f"Credit account not found for merchant {merchant_id}",
+                    resource="credit_account",
+                    resource_id=str(merchant_id),
+                )
+
+            # Calculate new balance
+            balance_before = account.balance
+            if operation == "credit":
+                balance_after = balance_before + amount
+                total_granted = account.total_granted + amount
+                total_consumed = account.total_consumed
+            else:  # debit
+                balance_after = max(0, balance_before - amount)  # Never negative
+                actual_debit = balance_before - balance_after
+                total_granted = account.total_granted
+                total_consumed = account.total_consumed + actual_debit
+
+            # Check for existing transaction (idempotency)
+            existing_tx = await tx.credittransaction.find_unique(
+                where={
+                    "reference_type_reference_id": {
+                        "reference_type": reference_type,
+                        "reference_id": reference_id,
+                    }
+                }
             )
-            
-            return updated.balance, False
-    
-    async def get_balance(self, shop_domain: str) -> Optional[BalanceOut]:
-        """Get merchant credit balance"""
-        shop_domain = normalize_shop_domain(shop_domain)
-        
-        merchant = await self.prisma.merchantcredit.find_unique(
-            where={"shopDomain": shop_domain}
-        )
-        
-        if not merchant:
-            return None
-        
-        return BalanceOut(
-            balance=merchant.balance,
-            updated_at=merchant.updatedAt
-        )
-    
-    async def get_ledger_entries(self, shop_domain: str, limit: int = 100) -> List[LedgerEntryOut]:
-        """Get ledger entries for a merchant"""
-        shop_domain = normalize_shop_domain(shop_domain)
-        
-        entries = await self.prisma.creditledger.find_many(
-            where={"shopDomain": shop_domain},
-            order_by={"createdAt": "desc"},
-            take=limit
-        )
-        
-        return [
-            LedgerEntryOut(
-                id=entry.id,
-                amount=entry.amount,
-                reason=entry.reason,
-                external_ref=entry.externalRef,
-                metadata=entry.metadata,
-                created_at=entry.createdAt
+
+            if existing_tx:
+                # Return existing without modification
+                return account, existing_tx
+
+            # Create transaction record
+            transaction = await tx.credittransaction.create(
+                data={
+                    "account_id": account.id,
+                    "merchant_id": str(merchant_id),
+                    "amount": amount,
+                    "operation": operation,
+                    "balance_before": balance_before,
+                    "balance_after": balance_after,
+                    "reference_type": reference_type,
+                    "reference_id": reference_id,
+                    "description": description,
+                    "metadata": metadata,
+                }
             )
-            for entry in entries
-        ]
-    
-    async def count_ledger_entries(self, shop_domain: str) -> int:
-        """Count total ledger entries for a merchant"""
-        shop_domain = normalize_shop_domain(shop_domain)
-        
-        return await self.prisma.creditledger.count(
-            where={"shopDomain": shop_domain}
+
+            # Update account balance
+            account = await tx.creditaccount.update(
+                where={"merchant_id": str(merchant_id)},
+                data={
+                    "balance": balance_after,
+                    "total_granted": total_granted,
+                    "total_consumed": total_consumed,
+                },
+            )
+
+            return account, transaction
+
+    async def get_transactions(self, merchant_id: UUID, skip: int = 0, take: int = 50) -> tuple[int, list[dict]]:
+        """Get transaction history with pagination"""
+
+        # Count total
+        total = await self.prisma.credittransaction.count(where={"merchant_id": str(merchant_id)})
+
+        # Get page
+        transactions = await self.prisma.credittransaction.find_many(
+            where={"merchant_id": str(merchant_id)},
+            order_by={"created_at": "desc"},
+            skip=skip,
+            take=take,
         )
 
+        return total, transactions

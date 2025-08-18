@@ -7,10 +7,10 @@ assets/
 └── help-hero.png
 components/
 ├── BillingPlans.jsx
-│   
+│
 │   ```jsx
 │   import { Grid, Card, Text, Button, BlockStack, InlineStack, Badge, List } from "@shopify/polaris";
-│   
+│
 │   export default function BillingPlans({ currentPlan, onSelectPlan, loading }) {
 │     const plans = [
 │       {
@@ -52,7 +52,7 @@ components/
 │         recommended: false
 │       }
 │     ];
-│   
+│
 │     return (
 │       <BlockStack gap="400">
 │         <Text variant="headingMd" as="h2">Choose Your Plan</Text>
@@ -95,24 +95,24 @@ components/
 │     );
 │   }
 │   ```
-│   
+│
 ├── CatalogSync.jsx
-│   
+│
 │   ```jsx
 │   import { Card, Button, Banner, Text, BlockStack, InlineStack, Badge, ProgressBar } from "@shopify/polaris";
-│   
+│
 │   export default function CatalogSync({ lastSync, productCount, syncing, progress, onSync }) {
 │     const formatTimeAgo = (date) => {
 │       if (!date) return 'Never';
-│       
+│
 │       const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-│       
+│
 │       if (seconds < 60) return 'Just now';
 │       if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
 │       if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
 │       return `${Math.floor(seconds / 86400)} days ago`;
 │     };
-│   
+│
 │     return (
 │       <Card>
 │         <BlockStack gap="400">
@@ -122,14 +122,14 @@ components/
 │               <Badge tone="success">{productCount} Products</Badge>
 │             )}
 │           </InlineStack>
-│           
+│
 │           {lastSync && (
 │             <InlineStack gap="200">
 │               <Text tone="subdued">Last synced:</Text>
 │               <Text>{formatTimeAgo(lastSync)}</Text>
 │             </InlineStack>
 │           )}
-│   
+│
 │           {syncing ? (
 │             <BlockStack gap="300">
 │               <ProgressBar progress={progress?.percent || 0} />
@@ -150,7 +150,7 @@ components/
 │               )}
 │             </InlineStack>
 │           )}
-│   
+│
 │           {productCount === 0 && !syncing && (
 │             <Banner tone="warning">
 │               <Text>No products synced yet. Sync your catalog to enable selfie recommendations.</Text>
@@ -161,34 +161,34 @@ components/
 │     );
 │   }
 │   ```
-│   
+│
 ├── CreditUsage.jsx
-│   
+│
 │   ```jsx
 │   import { Card, Text, ProgressBar, Banner, BlockStack, InlineStack, Badge, Icon, Button } from "@shopify/polaris";
 │   import { AlertCircleIcon } from "@shopify/polaris-icons";
-│   
+│
 │   export default function CreditUsage({ used, limit, resetsAt }) {
 │     const percentage = limit > 0 ? (used / limit) * 100 : 0;
 │     const remaining = limit - used;
 │     const isUnlimited = limit === -1 || limit === 0;
-│     
+│
 │     const getDaysUntilReset = () => {
 │       if (!resetsAt) return null;
 │       const days = Math.ceil((new Date(resetsAt) - new Date()) / (1000 * 60 * 60 * 24));
 │       return days;
 │     };
-│   
+│
 │     const getToneForUsage = () => {
 │       if (isUnlimited) return 'success';
 │       if (percentage >= 90) return 'critical';
 │       if (percentage >= 75) return 'warning';
 │       return 'success';
 │     };
-│   
+│
 │     const tone = getToneForUsage();
 │     const daysUntilReset = getDaysUntilReset();
-│   
+│
 │     return (
 │       <Card>
 │         <BlockStack gap="400">
@@ -200,7 +200,7 @@ components/
 │               </Badge>
 │             )}
 │           </InlineStack>
-│   
+│
 │           {isUnlimited ? (
 │             <BlockStack gap="300">
 │               <InlineStack gap="200" blockAlign="center">
@@ -222,13 +222,13 @@ components/
 │                     {remaining.toLocaleString()} remaining
 │                   </Text>
 │                 </InlineStack>
-│                 <ProgressBar 
-│                   progress={percentage} 
+│                 <ProgressBar
+│                   progress={percentage}
 │                   tone={tone}
 │                   size="small"
 │                 />
 │               </BlockStack>
-│   
+│
 │               <InlineStack align="space-between">
 │                 <Text tone="subdued">
 │                   {Math.round(percentage)}% used this period
@@ -239,7 +239,7 @@ components/
 │                   </Text>
 │                 )}
 │               </InlineStack>
-│   
+│
 │               {percentage >= 90 && (
 │                 <InlineStack gap="200" blockAlign="center">
 │                   <Icon source={AlertCircleIcon} tone="critical" />
@@ -248,7 +248,7 @@ components/
 │                   </Text>
 │                 </InlineStack>
 │               )}
-│   
+│
 │               {percentage >= 100 && (
 │                 <BlockStack gap="200">
 │                   <Banner tone="critical">
@@ -264,7 +264,7 @@ components/
 │               )}
 │             </BlockStack>
 │           )}
-│   
+│
 │           <BlockStack gap="200">
 │             <Text variant="headingSm" tone="subdued">Credit Usage Breakdown</Text>
 │             <BlockStack gap="100">
@@ -278,7 +278,7 @@ components/
 │               </InlineStack>
 │             </BlockStack>
 │           </BlockStack>
-│   
+│
 │           {!isUnlimited && (
 │             <InlineStack gap="200">
 │               <Button plain>View detailed usage</Button>
@@ -292,19 +292,19 @@ components/
 │     );
 │   }
 │   ```
-│   
+│
 ├── DashboardStats.jsx
-│   
+│
 │   ```jsx
 │   import { Grid, Card, Text, BlockStack, InlineStack, Badge, Icon } from "@shopify/polaris";
 │   import { CameraIcon, CreditCardIcon, ProductIcon } from "@shopify/polaris-icons";
-│   
-│   export default function DashboardStats({ 
-│     selfiesToday, 
-│     creditsRemaining, 
-│     creditsLimit, 
-│     syncStatus, 
-│     productCount 
+│
+│   export default function DashboardStats({
+│     selfiesToday,
+│     creditsRemaining,
+│     creditsLimit,
+│     syncStatus,
+│     productCount
 │   }) {
 │     const stats = [
 │       {
@@ -326,7 +326,7 @@ components/
 │         tone: syncStatus === 'error' ? 'critical' : productCount > 0 ? 'success' : 'warning'
 │       }
 │     ];
-│   
+│
 │     return (
 │       <Grid>
 │         {stats.map((stat, index) => (
@@ -349,12 +349,12 @@ components/
 │     );
 │   }
 │   ```
-│   
+│
 ├── LoadingState.jsx
-│   
+│
 │   ```jsx
 │   import { Card, SkeletonBodyText, SkeletonDisplayText, BlockStack, Layout, SkeletonThumbnail, InlineStack } from "@shopify/polaris";
-│   
+│
 │   export function LoadingState({ type = 'page' }) {
 │     if (type === 'card') {
 │       return (
@@ -366,7 +366,7 @@ components/
 │         </Card>
 │       );
 │     }
-│   
+│
 │     if (type === 'table') {
 │       return (
 │         <Card>
@@ -386,7 +386,7 @@ components/
 │         </Card>
 │       );
 │     }
-│   
+│
 │     if (type === 'stats') {
 │       return (
 │         <InlineStack gap="400">
@@ -402,7 +402,7 @@ components/
 │         </InlineStack>
 │       );
 │     }
-│   
+│
 │     // Default: full page loading
 │     return (
 │       <Layout>
@@ -433,7 +433,7 @@ components/
 │       </Layout>
 │     );
 │   }
-│   
+│
 │   export function LoadingDashboard() {
 │     return (
 │       <Layout>
@@ -477,19 +477,19 @@ components/
 │       </Layout>
 │     );
 │   }
-│   
+│
 │   export function LoadingInline() {
 │     return <SkeletonBodyText lines={1} />;
 │   }
-│   
+│
 │   export default LoadingState;
 │   ```
-│   
+│
 └── SubscriptionStatus.jsx
-    
+
     ```jsx
     import { CalloutCard, Text, Badge, InlineStack, BlockStack } from "@shopify/polaris";
-    
+
     export default function SubscriptionStatus({ subscription, onStartTrial, onViewPlans }) {
       const getStatusContent = () => {
         if (subscription.status === 'inactive') {
@@ -503,12 +503,12 @@ components/
             tone: "info"
           };
         }
-    
+
         if (subscription.status === 'trial') {
           const daysLeft = Math.ceil(
             (new Date(subscription.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24)
           );
-          
+
           return {
             title: `Free trial: ${daysLeft} days remaining`,
             description: "Choose a plan to continue after your trial ends",
@@ -519,7 +519,7 @@ components/
             tone: daysLeft <= 3 ? "warning" : "info"
           };
         }
-    
+
         if (subscription.status === 'active') {
           return {
             title: `${subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)} Plan Active`,
@@ -531,7 +531,7 @@ components/
             tone: "success"
           };
         }
-    
+
         if (subscription.status === 'expired') {
           return {
             title: "Trial expired",
@@ -544,9 +544,9 @@ components/
           };
         }
       };
-    
+
       const content = getStatusContent();
-    
+
       return (
         <CalloutCard
           title={content.title}
@@ -558,14 +558,14 @@ components/
       );
     }
     ```
-    
+
 lib/
 └── apiClient.js
-    
+
     ```js
     // apps/shopify-bff/app/lib/apiClient.js
     import jwt from "jsonwebtoken";
-    
+
     const svc = {
       merchant:  process.env.MERCHANT_URL,   // e.g. http://merchant-service:8000/
       catalog:   process.env.CATALOG_URL,    // e.g. http://catalog-service:8000/
@@ -573,8 +573,8 @@ lib/
       analytics: process.env.ANALYTICS_URL,
       webhook:   process.env.WEBHOOK_URL,    // e.g. http://localhost:8010/  (base only)
     };
-    
-    
+
+
     function signJwt(shop) {
       const token = jwt.sign(
         { sub: shop, scope: "bff:call", iat: Math.floor(Date.now() / 1000) },
@@ -584,10 +584,10 @@ lib/
       if (!token) throw new Error("Failed to create internal JWT");
       return token;
     }
-    
+
     function addHeaders(shop, { webhookId = null, topic = null } = {}) {
       const token = signJwt(shop);
-    
+
       const headers = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -597,14 +597,14 @@ lib/
       if (topic) headers["X-Shopify-Topic"] = topic;
       return headers;
     }
-    
+
     function buildUrl(base, path) {
       if (!base) throw new Error("API base URL not set");
       const baseNorm = base.endsWith("/") ? base : base + "/";
       const pathNorm = path.startsWith("/") ? path : "/" + path;
       return `${baseNorm}api/v1${pathNorm}`;
     }
-    
+
     async function callAndForget(base, path, { method = "GET", shop, body, webhookId, topic } = {}) {
       const url = buildUrl(base, path);
       const headers = addHeaders(shop, { webhookId, topic });
@@ -617,7 +617,7 @@ lib/
         body: body ? JSON.stringify(body) : undefined,
       }).catch((e) => console.error(`[API call ${method} ${url}] failed:`, e?.message || e));
     }
-    
+
     async function call(base, path, { method = "GET", shop, body } = {}) {
       const url = buildUrl(base, path);
       const res = await fetch(url, {
@@ -629,7 +629,7 @@ lib/
       if (!res.ok) throw new Error(json?.error?.message || `API ${res.status}`);
       return json?.data ?? json;
     }
-    
+
     export default {
       // Merchant
       syncShop: (payload) =>
@@ -638,24 +638,24 @@ lib/
           shop: payload.myshopifyDomain,
           body: payload,
         }),
-    
+
       startTrial: (shop) =>
         call(svc.merchant, "/merchants/trial", {
           method: "POST",
           shop,
           body: { shop },
         }),
-    
+
       createSubscription: (shop, plan, id) =>
         call(svc.merchant, "/billing/subscription", {
           method: "POST",
           shop,
           body: { shop, plan, charge_id: id },
         }),
-    
+
       getMerchantStatus: (shop) =>
         call(svc.merchant, `/merchants/status?shop=${shop}`, { shop }),
-    
+
       // Catalog
       syncCatalog: (shop) =>
         call(svc.catalog, "/catalog/sync", {
@@ -663,53 +663,53 @@ lib/
           shop,
           body: { shop },
         }),
-    
+
       getCatalogStatus: (shop) =>
         call(svc.catalog, `/catalog/status?shop=${shop}`, { shop }),
-    
+
       // Credits
       getCreditsStatus: (shop) =>
         call(svc.credits, `/credits/status?shop=${shop}`, { shop }),
-    
+
       // Analytics
       getAnalytics: (shop, from, to) =>
         call(svc.analytics, `/analysis/overview?shop=${shop}&from=${from}&to=${to}`, { shop }),
-    
+
       // Webhooks (fire-and-forget)
       relayShopifyWebhook: ({ topic, shop, payload, webhookId }) =>
         callAndForget(svc.webhook, "/webhooks/shopify", {
           method: "POST",
-          shop, 
+          shop,
           body: payload,
           webhookId,
-          topic,            
+          topic,
         }),
     };
     ```
-    
+
 routes/
 ├── _index/
 │   ├── route.jsx
-│   │   
+│   │
 │   │   ```jsx
 │   │   import { redirect } from "@remix-run/node";
 │   │   import { Form, useLoaderData } from "@remix-run/react";
 │   │   import { login } from "../../shopify.server";
 │   │   import styles from "./styles.module.css";
-│   │   
+│   │
 │   │   export const loader = async ({ request }) => {
 │   │     const url = new URL(request.url);
-│   │   
+│   │
 │   │     if (url.searchParams.get("shop")) {
 │   │       throw redirect(`/app?${url.searchParams.toString()}`);
 │   │     }
-│   │   
+│   │
 │   │     return { showForm: Boolean(login) };
 │   │   };
-│   │   
+│   │
 │   │   export default function App() {
 │   │     const { showForm } = useLoaderData();
-│   │   
+│   │
 │   │     return (
 │   │       <div className={styles.index}>
 │   │         <div className={styles.content}>
@@ -748,9 +748,9 @@ routes/
 │   │     );
 │   │   }
 │   │   ```
-│   │   
+│   │
 │   └── styles.module.css
-│       
+│
 │       ```css
 │       .index {
 │         align-items: center;
@@ -761,23 +761,23 @@ routes/
 │         text-align: center;
 │         padding: 1rem;
 │       }
-│       
+│
 │       .heading,
 │       .text {
 │         padding: 0;
 │         margin: 0;
 │       }
-│       
+│
 │       .text {
 │         font-size: 1.2rem;
 │         padding-bottom: 2rem;
 │       }
-│       
+│
 │       .content {
 │         display: grid;
 │         gap: 2rem;
 │       }
-│       
+│
 │       .form {
 │         display: flex;
 │         align-items: center;
@@ -785,7 +785,7 @@ routes/
 │         margin: 0 auto;
 │         gap: 1rem;
 │       }
-│       
+│
 │       .label {
 │         display: grid;
 │         gap: 0.2rem;
@@ -793,15 +793,15 @@ routes/
 │         text-align: left;
 │         font-size: 1rem;
 │       }
-│       
+│
 │       .input {
 │         padding: 0.4rem;
 │       }
-│       
+│
 │       .button {
 │         padding: 0.4rem;
 │       }
-│       
+│
 │       .list {
 │         list-style: none;
 │         padding: 0;
@@ -810,42 +810,42 @@ routes/
 │         display: flex;
 │         gap: 2rem;
 │       }
-│       
+│
 │       .list > li {
 │         max-width: 20rem;
 │         text-align: left;
 │       }
-│       
+│
 │       @media only screen and (max-width: 50rem) {
 │         .list {
 │           display: block;
 │         }
-│       
+│
 │         .list > li {
 │           padding-bottom: 1rem;
 │         }
 │       }
 │       ```
-│       
+│
 ├── auth.login/
 │   ├── error.server.jsx
-│   │   
+│   │
 │   │   ```jsx
 │   │   import { LoginErrorType } from "@shopify/shopify-app-remix/server";
-│   │   
+│   │
 │   │   export function loginErrorMessage(loginErrors) {
 │   │     if (loginErrors?.shop === LoginErrorType.MissingShop) {
 │   │       return { shop: "Please enter your shop domain to log in" };
 │   │     } else if (loginErrors?.shop === LoginErrorType.InvalidShop) {
 │   │       return { shop: "Please enter a valid shop domain to log in" };
 │   │     }
-│   │   
+│   │
 │   │     return {};
 │   │   }
 │   │   ```
-│   │   
+│   │
 │   └── route.jsx
-│       
+│
 │       ```jsx
 │       import { useState } from "react";
 │       import { Form, useActionData, useLoaderData } from "@remix-run/react";
@@ -862,29 +862,29 @@ routes/
 │       import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 │       import { login } from "../../shopify.server";
 │       import { loginErrorMessage } from "./error.server";
-│       
+│
 │       export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
-│       
+│
 │       export const loader = async ({ request }) => {
 │         const errors = loginErrorMessage(await login(request));
-│       
+│
 │         return { errors, polarisTranslations };
 │       };
-│       
+│
 │       export const action = async ({ request }) => {
 │         const errors = loginErrorMessage(await login(request));
-│       
+│
 │         return {
 │           errors,
 │         };
 │       };
-│       
+│
 │       export default function Auth() {
 │         const loaderData = useLoaderData();
 │         const actionData = useActionData();
 │         const [shop, setShop] = useState("");
 │         const { errors } = actionData || loaderData;
-│       
+│
 │         return (
 │           <PolarisAppProvider i18n={loaderData.polarisTranslations}>
 │             <Page>
@@ -913,9 +913,9 @@ routes/
 │         );
 │       }
 │       ```
-│       
+│
 ├── app._index.jsx
-│   
+│
 │   ```jsx
 │   import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
 │   import { Page, Layout, Card, Button, Text, Badge, CalloutCard, DataTable, ProgressBar, Grid, BlockStack, InlineStack, Box } from "@shopify/polaris";
@@ -924,22 +924,22 @@ routes/
 │   import { useState, useEffect } from "react";
 │   import DashboardStats from "../components/DashboardStats";
 │   import SubscriptionStatus from "../components/SubscriptionStatus";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const shop = session.shop;
-│   
+│
 │     // Fetch data from external API
 │     const [merchantStatus, creditsStatus, catalogStatus, analytics] = await Promise.all([
 │       apiClient.getMerchantStatus(shop),
 │       apiClient.getCreditsStatus(shop),
 │       apiClient.getCatalogStatus(shop),
-│       apiClient.getAnalytics(shop, 
+│       apiClient.getAnalytics(shop,
 │         new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
 │         new Date().toISOString()
 │       )
 │     ]);
-│   
+│
 │     return Response.json({
 │       shop,
 │       subscription: merchantStatus.data || {
@@ -964,36 +964,36 @@ routes/
 │       }
 │     });
 │   };
-│   
+│
 │   export const action = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const formData = await request.formData();
 │     const action = formData.get("action");
-│   
+│
 │     if (action === "start_trial") {
 │       const result = await apiClient.startTrial(session.shop);
 │       return Response.json(result);
 │     }
-│   
+│
 │     if (action === "sync_catalog") {
 │       const result = await apiClient.syncCatalog(session.shop);
 │       return Response(result);
 │     }
-│   
+│
 │     return Response.json({ error: "Invalid action" });
 │   };
-│   
+│
 │   export default function Index() {
 │     const { shop, subscription, credits, catalog, analytics } = useLoaderData();
 │     const fetcher = useFetcher();
 │     const navigate = useNavigate();
 │     const [syncProgress, setSyncProgress] = useState(null);
-│   
+│
 │     // WebSocket for catalog sync progress
 │     useEffect(() => {
 │       if (fetcher.data?.websocket_url) {
 │         const ws = new WebSocket(fetcher.data.websocket_url);
-│         
+│
 │         ws.onmessage = (event) => {
 │           const data = JSON.parse(event.data);
 │           if (data.type === 'progress') {
@@ -1008,30 +1008,30 @@ routes/
 │             window.location.reload();
 │           }
 │         };
-│   
+│
 │         ws.onerror = () => {
 │           setSyncProgress(null);
 │           ws.close();
 │         };
-│   
+│
 │         return () => ws.close();
 │       }
 │     }, [fetcher.data]);
-│   
+│
 │     const handleStartTrial = () => {
 │       fetcher.submit(
 │         { action: "start_trial" },
 │         { method: "post" }
 │       );
 │     };
-│   
+│
 │     const handleSyncCatalog = () => {
 │       fetcher.submit(
 │         { action: "sync_catalog" },
 │         { method: "post" }
 │       );
 │     };
-│   
+│
 │     const checklistItems = [
 │       {
 │         label: subscription.status === 'inactive' ? 'Start free trial' : 'Subscription active',
@@ -1049,18 +1049,18 @@ routes/
 │         action: () => navigate('/app/analytics')
 │       }
 │     ];
-│   
+│
 │     return (
 │       <Page>
 │         <Layout>
 │           <Layout.Section>
-│             <SubscriptionStatus 
+│             <SubscriptionStatus
 │               subscription={subscription}
 │               onStartTrial={handleStartTrial}
 │               onViewPlans={() => navigate('/app/billing')}
 │             />
 │           </Layout.Section>
-│   
+│
 │           <Layout.Section>
 │             <DashboardStats
 │               selfiesToday={analytics.selfiesToday}
@@ -1070,12 +1070,12 @@ routes/
 │               productCount={catalog.productCount}
 │             />
 │           </Layout.Section>
-│   
+│
 │           <Layout.Section>
 │             <Card>
 │               <BlockStack gap="400">
 │                 <Text variant="headingMd" as="h2">Getting Started</Text>
-│                 <ProgressBar 
+│                 <ProgressBar
 │                   size="small"
 │                   progress={checklistItems.filter(item => item.completed).length * 33.33}
 │                 />
@@ -1103,7 +1103,7 @@ routes/
 │               </BlockStack>
 │             </Card>
 │           </Layout.Section>
-│   
+│
 │           {syncProgress && (
 │             <Layout.Section>
 │               <CalloutCard
@@ -1122,7 +1122,7 @@ routes/
 │       </Page>
 │     );
 │   }
-│   
+│
 │   export function ErrorBoundary({ error }) {
 │     return (
 │       <Page>
@@ -1143,24 +1143,24 @@ routes/
 │     );
 │   }
 │   ```
-│   
+│
 ├── app.analytics.jsx
-│   
+│
 │   ```jsx
 │   import { useLoaderData, useFetcher } from "@remix-run/react";
-│   import { 
-│     Page, 
-│     Layout, 
-│     Card, 
-│     Text, 
-│     DatePicker, 
-│     Select, 
-│     Button, 
-│     DataTable, 
-│     BlockStack, 
-│     InlineStack, 
-│     Badge, 
-│     Grid, 
+│   import {
+│     Page,
+│     Layout,
+│     Card,
+│     Text,
+│     DatePicker,
+│     Select,
+│     Button,
+│     DataTable,
+│     BlockStack,
+│     InlineStack,
+│     Badge,
+│     Grid,
 │     Popover,
 │     Banner,
 │     SkeletonBodyText,
@@ -1169,25 +1169,25 @@ routes/
 │   import { authenticate } from "../shopify.server";
 │   import apiClient from "../lib/apiClient";
 │   import { useState, useCallback } from "react";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const shop = session.shop;
-│   
+│
 │     const url = new URL(request.url);
 │     const from = url.searchParams.get('from') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 │     const to = url.searchParams.get('to') || new Date().toISOString();
-│   
+│
 │     const analytics = await apiClient.getAnalytics(shop, from, to);
-│   
+│
 │     return Response.json({
 │       shop,
 │       analytics: analytics.data || {
 │         selfie_uploads: { total: 0, by_day: [] },
 │         recommendations: { total: 0, click_through_rate: 0, by_product: [] },
-│         conversion_metrics: { 
-│           views: 0, 
-│           clicks: 0, 
+│         conversion_metrics: {
+│           views: 0,
+│           clicks: 0,
 │           purchases: 0,
 │           return_rate_before: 0,
 │           return_rate_after: 0
@@ -1196,28 +1196,28 @@ routes/
 │       dateRange: { from, to }
 │     });
 │   };
-│   
+│
 │   export const action = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const formData = await request.formData();
 │     const action = formData.get("action");
-│   
+│
 │     if (action === "export") {
 │       const from = formData.get("from");
 │       const to = formData.get("to");
 │       const format = formData.get("format");
-│       
+│
 │       // In real implementation, this would trigger a download
 │       // For now, we'll just return success
-│       return Response.json({ 
-│         success: true, 
-│         message: `Export initiated in ${format} format` 
+│       return Response.json({
+│         success: true,
+│         message: `Export initiated in ${format} format`
 │       });
 │     }
-│   
+│
 │     return Response.json({ error: "Invalid action" });
 │   };
-│   
+│
 │   export default function Analytics() {
 │     const { shop, analytics, dateRange } = useLoaderData();
 │     const fetcher = useFetcher();
@@ -1227,18 +1227,18 @@ routes/
 │     });
 │     const [datePickerActive, setDatePickerActive] = useState(false);
 │     const [exportFormat, setExportFormat] = useState('csv');
-│   
+│
 │     const handleDateChange = useCallback((value) => {
 │       setSelectedDateRange(value);
 │     }, []);
-│   
+│
 │     const handleApplyDateRange = () => {
 │       window.location.href = `/app/analytics?from=${selectedDateRange.start.toISOString()}&to=${selectedDateRange.end.toISOString()}`;
 │     };
-│   
+│
 │     const handleExport = () => {
 │       fetcher.submit(
-│         { 
+│         {
 │           action: "export",
 │           from: selectedDateRange.start.toISOString(),
 │           to: selectedDateRange.end.toISOString(),
@@ -1247,23 +1247,23 @@ routes/
 │         { method: "post" }
 │       );
 │     };
-│   
+│
 │     // Calculate key metrics
-│     const conversionRate = analytics.recommendations.total > 0 
+│     const conversionRate = analytics.recommendations.total > 0
 │       ? ((analytics.recommendations.click_through_rate * 100).toFixed(2))
 │       : '0.00';
-│   
+│
 │     const returnRateReduction = analytics.conversion_metrics.return_rate_before > 0
 │       ? (((analytics.conversion_metrics.return_rate_before - analytics.conversion_metrics.return_rate_after) / analytics.conversion_metrics.return_rate_before * 100).toFixed(1))
 │       : '0.0';
-│   
+│
 │     // Prepare chart data
 │     const chartData = analytics.selfie_uploads.by_day.map(day => ({
 │       date: new Date(day.date).toLocaleDateString(),
 │       selfies: day.count,
 │       recommendations: day.recommendations || 0
 │     }));
-│   
+│
 │     // Top performing products table
 │     const topProductsRows = (analytics.recommendations.by_product || [])
 │       .slice(0, 10)
@@ -1276,7 +1276,7 @@ routes/
 │           {(product.conversion_rate * 100).toFixed(1)}%
 │         </Badge>
 │       ]);
-│   
+│
 │     // Loading state
 │     if (fetcher.state === 'loading') {
 │       return (
@@ -1294,7 +1294,7 @@ routes/
 │         </Page>
 │       );
 │     }
-│   
+│
 │     return (
 │       <Page
 │         title="Analytics"
@@ -1316,7 +1316,7 @@ routes/
 │               </Banner>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           <Layout.Section>
 │             <Card>
 │               <BlockStack gap="400">
@@ -1355,7 +1355,7 @@ routes/
 │               </BlockStack>
 │             </Card>
 │           </Layout.Section>
-│   
+│
 │           <Layout.Section>
 │             <Grid>
 │               <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
@@ -1398,7 +1398,7 @@ routes/
 │               </Grid.Cell>
 │             </Grid>
 │           </Layout.Section>
-│   
+│
 │           {chartData.length > 0 && (
 │             <Layout.Section>
 │               <Card>
@@ -1416,7 +1416,7 @@ routes/
 │               </Card>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           {topProductsRows.length > 0 && (
 │             <Layout.Section>
 │               <Card>
@@ -1434,7 +1434,7 @@ routes/
 │               </Card>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           <Layout.Section>
 │             <Card>
 │               <BlockStack gap="400">
@@ -1461,7 +1461,7 @@ routes/
 │       </Page>
 │     );
 │   }
-│   
+│
 │   export function ErrorBoundary({ error }) {
 │     return (
 │       <Page title="Analytics">
@@ -1482,9 +1482,9 @@ routes/
 │     );
 │   }
 │   ```
-│   
+│
 ├── app.billing.jsx
-│   
+│
 │   ```jsx
 │   import { json } from "@remix-run/node";
 │   import { useLoaderData, useFetcher } from "@remix-run/react";
@@ -1493,16 +1493,16 @@ routes/
 │   import apiClient from "../lib/apiClient";
 │   import BillingPlans from "../components/BillingPlans";
 │   import CreditUsage from "../components/CreditUsage";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     const { session, billing } = await authenticate.admin(request);
 │     const shop = session.shop;
-│   
+│
 │     const [merchantStatus, creditsStatus] = await Promise.all([
 │       apiClient.getMerchantStatus(shop),
 │       apiClient.getCreditsStatus(shop)
 │     ]);
-│   
+│
 │     return json({
 │       shop,
 │       subscription: merchantStatus.data,
@@ -1510,24 +1510,24 @@ routes/
 │       billing
 │     });
 │   };
-│   
+│
 │   export const action = async ({ request }) => {
 │     const { session, billing } = await authenticate.admin(request);
 │     const formData = await request.formData();
 │     const plan = formData.get("plan");
-│   
+│
 │     // Create Shopify recurring charge
 │     const planDetails = {
 │       starter: { price: 29, credits: 1000 },
 │       growth: { price: 99, credits: 5000 },
 │       enterprise: { price: 299, credits: -1 } // -1 for unlimited
 │     };
-│   
+│
 │     const selectedPlan = planDetails[plan];
 │     if (!selectedPlan) {
 │       return json({ error: "Invalid plan selected" });
 │     }
-│   
+│
 │     try {
 │       const charge = await billing.require({
 │         plan: plan,
@@ -1535,31 +1535,31 @@ routes/
 │         currencyCode: "USD",
 │         interval: "EVERY_30_DAYS"
 │       });
-│   
+│
 │       // Notify external API about subscription
 │       const result = await apiClient.createSubscription(
 │         session.shop,
 │         plan,
 │         charge.id
 │       );
-│   
+│
 │       return json(result);
 │     } catch (error) {
 │       return json({ error: error.message });
 │     }
 │   };
-│   
+│
 │   export default function Billing() {
 │     const { shop, subscription, credits } = useLoaderData();
 │     const fetcher = useFetcher();
-│   
+│
 │     const handleSelectPlan = (plan) => {
 │       fetcher.submit(
 │         { plan },
 │         { method: "post" }
 │       );
 │     };
-│   
+│
 │     const billingHistory = [
 │       {
 │         date: '2024-01-15',
@@ -1574,14 +1574,14 @@ routes/
 │         invoice: '#INV-002'
 │       }
 │     ];
-│   
+│
 │     const rows = billingHistory.map(item => [
 │       item.date,
 │       item.amount,
 │       <Badge tone={item.status === 'Paid' ? 'success' : 'warning'}>{item.status}</Badge>,
 │       item.invoice
 │     ]);
-│   
+│
 │     return (
 │       <Page
 │         title="Billing & Plans"
@@ -1605,7 +1605,7 @@ routes/
 │               </Banner>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           {subscription?.plan && (
 │             <Layout.Section>
 │               <Card>
@@ -1626,7 +1626,7 @@ routes/
 │               </Card>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           <Layout.Section>
 │             <CreditUsage
 │               used={credits?.used || 0}
@@ -1634,7 +1634,7 @@ routes/
 │               resetsAt={credits?.resetsAt}
 │             />
 │           </Layout.Section>
-│   
+│
 │           <Layout.Section id="plans-section">
 │             <BillingPlans
 │               currentPlan={subscription?.plan}
@@ -1642,7 +1642,7 @@ routes/
 │               loading={fetcher.state === 'submitting'}
 │             />
 │           </Layout.Section>
-│   
+│
 │           {billingHistory.length > 0 && (
 │             <Layout.Section>
 │               <Card>
@@ -1662,9 +1662,9 @@ routes/
 │     );
 │   }
 │   ```
-│   
+│
 ├── app.catalog.jsx
-│   
+│
 │   ```jsx
 │   import { json } from "@remix-run/node";
 │   import { useLoaderData, useFetcher } from "@remix-run/react";
@@ -1673,13 +1673,13 @@ routes/
 │   import apiClient from "../lib/apiClient";
 │   import { useState, useEffect } from "react";
 │   import CatalogSync from "../components/CatalogSync";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const shop = session.shop;
-│   
+│
 │     const catalogStatus = await apiClient.getCatalogStatus(shop);
-│   
+│
 │     return json({
 │       shop,
 │       catalog: catalogStatus.data || {
@@ -1690,31 +1690,31 @@ routes/
 │       }
 │     });
 │   };
-│   
+│
 │   export const action = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const formData = await request.formData();
 │     const action = formData.get("action");
-│   
+│
 │     if (action === "sync") {
 │       const result = await apiClient.syncCatalog(session.shop);
 │       return json(result);
 │     }
-│   
+│
 │     return json({ error: "Invalid action" });
 │   };
-│   
+│
 │   export default function Catalog() {
 │     const { shop, catalog } = useLoaderData();
 │     const fetcher = useFetcher();
 │     const [syncing, setSyncing] = useState(false);
 │     const [syncProgress, setSyncProgress] = useState(null);
-│   
+│
 │     useEffect(() => {
 │       if (fetcher.data?.websocket_url) {
 │         setSyncing(true);
 │         const ws = new WebSocket(fetcher.data.websocket_url);
-│         
+│
 │         ws.onmessage = (event) => {
 │           const data = JSON.parse(event.data);
 │           if (data.type === 'progress') {
@@ -1735,24 +1735,24 @@ routes/
 │             ws.close();
 │           }
 │         };
-│   
+│
 │         ws.onerror = () => {
 │           setSyncing(false);
 │           setSyncProgress(null);
 │           ws.close();
 │         };
-│   
+│
 │         return () => ws.close();
 │       }
 │     }, [fetcher.data]);
-│   
+│
 │     const handleSync = () => {
 │       fetcher.submit(
 │         { action: "sync" },
 │         { method: "post" }
 │       );
 │     };
-│   
+│
 │     const syncHistoryRows = (catalog.syncHistory || []).map(sync => [
 │       new Date(sync.date).toLocaleString(),
 │       sync.productCount.toString(),
@@ -1761,7 +1761,7 @@ routes/
 │         {sync.status}
 │       </Badge>
 │     ]);
-│   
+│
 │     return (
 │       <Page
 │         title="Catalog Management"
@@ -1789,7 +1789,7 @@ routes/
 │               </Banner>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           <Layout.Section>
 │             <CatalogSync
 │               lastSync={catalog.lastSyncAt}
@@ -1799,7 +1799,7 @@ routes/
 │               onSync={handleSync}
 │             />
 │           </Layout.Section>
-│   
+│
 │           {syncProgress && (
 │             <Layout.Section>
 │               <Card>
@@ -1816,7 +1816,7 @@ routes/
 │               </Card>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           {!syncing && catalog.productCount > 0 && (
 │             <Layout.Section>
 │               <Card>
@@ -1841,7 +1841,7 @@ routes/
 │               </Card>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           {syncHistoryRows.length > 0 && (
 │             <Layout.Section>
 │               <Card>
@@ -1861,22 +1861,22 @@ routes/
 │     );
 │   }
 │   ```
-│   
+│
 ├── app.help.jsx
-│   
+│
 │   ```jsx
 │   import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-│   import { 
-│     Page, 
-│     Layout, 
-│     Card, 
-│     Text, 
-│     Button, 
-│     TextField, 
-│     Select, 
-│     BlockStack, 
-│     InlineStack, 
-│     Badge, 
+│   import {
+│     Page,
+│     Layout,
+│     Card,
+│     Text,
+│     Button,
+│     TextField,
+│     Select,
+│     BlockStack,
+│     InlineStack,
+│     Badge,
 │     Banner,
 │     Link,
 │     List,
@@ -1887,7 +1887,7 @@ routes/
 │     Box,
 │     Divider
 │   } from "@shopify/polaris";
-│   import { 
+│   import {
 │     BookOpenIcon,
 │     ChevronDownIcon,
 │     ChevronRightIcon
@@ -1896,14 +1896,14 @@ routes/
 │   import apiClient from "../lib/apiClient";
 │   import { useState, useCallback } from "react";
 │   import { LoadingState } from "../components/LoadingState";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const shop = session.shop;
-│   
+│
 │     // Fetch merchant status for context
 │     const merchantStatus = await apiClient.getMerchantStatus(shop);
-│   
+│
 │     return Response.json({
 │       shop,
 │       subscription: merchantStatus.data || { plan: null, status: 'inactive' },
@@ -1911,12 +1911,12 @@ routes/
 │       supportPhone: '1-800-GLAM-YOU'
 │     });
 │   };
-│   
+│
 │   export const action = async ({ request }) => {
 │     const { session } = await authenticate.admin(request);
 │     const formData = await request.formData();
 │     const action = formData.get("action");
-│   
+│
 │     if (action === "submit_ticket") {
 │       const ticketData = {
 │         shop: session.shop,
@@ -1926,20 +1926,20 @@ routes/
 │         message: formData.get("message"),
 │         email: formData.get("email")
 │       };
-│   
+│
 │       // Submit to external API
 │       const result = await apiClient.submitSupportTicket(ticketData);
 │       return Response.Response.json(result);
 │     }
-│   
+│
 │     return Response.Response.json({ error: "Invalid action" });
 │   };
-│   
+│
 │   export default function Help() {
 │     const { shop, subscription, supportEmail, supportPhone } = useLoaderData();
 │     const fetcher = useFetcher();
 │     const navigate = useNavigate();
-│   
+│
 │     // Form state
 │     const [subject, setSubject] = useState('');
 │     const [category, setCategory] = useState('technical');
@@ -1947,10 +1947,10 @@ routes/
 │     const [message, setMessage] = useState('');
 │     const [email, setEmail] = useState('');
 │     const [errors, setErrors] = useState({});
-│   
+│
 │     // FAQ state
 │     const [expandedFaq, setExpandedFaq] = useState({});
-│   
+│
 │     const validateForm = () => {
 │       const newErrors = {};
 │       if (!subject.trim()) newErrors.subject = 'Subject is required';
@@ -1959,15 +1959,15 @@ routes/
 │       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 │         newErrors.email = 'Please enter a valid email';
 │       }
-│       
+│
 │       setErrors(newErrors);
 │       return Object.keys(newErrors).length === 0;
 │     };
-│   
+│
 │     const handleSubmit = () => {
 │       if (validateForm()) {
 │         fetcher.submit(
-│           { 
+│           {
 │             action: "submit_ticket",
 │             subject,
 │             category,
@@ -1979,14 +1979,14 @@ routes/
 │         );
 │       }
 │     };
-│   
+│
 │     const toggleFaq = (id) => {
 │       setExpandedFaq(prev => ({
 │         ...prev,
 │         [id]: !prev[id]
 │       }));
 │     };
-│   
+│
 │     const faqs = [
 │       {
 │         id: 'trial',
@@ -2029,7 +2029,7 @@ routes/
 │         answer: 'Merchants typically see 25-40% reduction in size-related returns. Results vary based on product category and implementation. Fashion apparel sees the highest improvement.'
 │       }
 │     ];
-│   
+│
 │     const quickLinks = [
 │       {
 │         title: 'Getting Started Guide',
@@ -2057,10 +2057,10 @@ routes/
 │         icon: BookOpenIcon
 │       }
 │     ];
-│   
+│
 │     // Show success message if ticket was submitted
 │     const ticketSubmitted = fetcher.data?.data?.ticket_id;
-│   
+│
 │     return (
 │       <Page
 │         title="Help & Support"
@@ -2075,13 +2075,13 @@ routes/
 │                 onDismiss={() => window.location.reload()}
 │               >
 │                 <Text>
-│                   Your ticket #{fetcher.data.data.ticket_id} has been submitted. 
+│                   Your ticket #{fetcher.data.data.ticket_id} has been submitted.
 │                   We'll respond within 24 hours to {email}.
 │                 </Text>
 │               </Banner>
 │             </Layout.Section>
 │           )}
-│   
+│
 │           <Layout.Section>
 │             <Grid>
 │               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }}>
@@ -2098,14 +2098,14 @@ routes/
 │                   <Text tone="subdued">Response within 24 hours</Text>
 │                 </CalloutCard>
 │               </Grid.Cell>
-│   
+│
 │               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }}>
 │                 <CalloutCard
 │                   title="Priority Support"
 │                   illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/phone.svg?v=1701930959"
 │                   primaryAction={{
-│                     content: subscription?.plan === 'growth' || subscription?.plan === 'enterprise' 
-│                       ? 'Call Now' 
+│                     content: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
+│                       ? 'Call Now'
 │                       : 'Upgrade for Phone Support',
 │                     url: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
 │                       ? `tel:${supportPhone.replace(/-/g, '')}`
@@ -2121,14 +2121,14 @@ routes/
 │                   </Text>
 │                 </CalloutCard>
 │               </Grid.Cell>
-│   
+│
 │               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }}>
 │                 <CalloutCard
 │                   title="Live Chat"
 │                   illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/chat.svg?v=1701930959"
 │                   primaryAction={{
-│                     content: subscription?.plan === 'enterprise' 
-│                       ? 'Start Chat' 
+│                     content: subscription?.plan === 'enterprise'
+│                       ? 'Start Chat'
 │                       : 'Enterprise Only',
 │                     disabled: subscription?.plan !== 'enterprise',
 │                     url: '#'
@@ -2144,13 +2144,13 @@ routes/
 │               </Grid.Cell>
 │             </Grid>
 │           </Layout.Section>
-│   
+│
 │           <Layout>
 │             <Layout.Section oneHalf>
 │               <Card>
 │                 <BlockStack gap="400">
 │                   <Text variant="headingMd" as="h2">Submit Support Ticket</Text>
-│                   
+│
 │                   <TextField
 │                     label="Email"
 │                     value={email}
@@ -2160,7 +2160,7 @@ routes/
 │                     placeholder="your@email.com"
 │                     autoComplete="email"
 │                   />
-│   
+│
 │                   <TextField
 │                     label="Subject"
 │                     value={subject}
@@ -2169,7 +2169,7 @@ routes/
 │                     placeholder="Brief description of your issue"
 │                     autoComplete="off"
 │                   />
-│   
+│
 │                   <Select
 │                     label="Category"
 │                     options={[
@@ -2183,7 +2183,7 @@ routes/
 │                     value={category}
 │                     onChange={setCategory}
 │                   />
-│   
+│
 │                   <Select
 │                     label="Priority"
 │                     options={[
@@ -2195,7 +2195,7 @@ routes/
 │                     value={priority}
 │                     onChange={setPriority}
 │                   />
-│   
+│
 │                   <TextField
 │                     label="Message"
 │                     value={message}
@@ -2205,10 +2205,10 @@ routes/
 │                     placeholder="Please describe your issue in detail. Include any error messages, steps to reproduce, and what you expected to happen."
 │                     autoComplete="off"
 │                   />
-│   
+│
 │                   <InlineStack gap="200">
-│                     <Button 
-│                       primary 
+│                     <Button
+│                       primary
 │                       onClick={handleSubmit}
 │                       loading={fetcher.state === 'submitting'}
 │                     >
@@ -2221,7 +2221,7 @@ routes/
 │                 </BlockStack>
 │               </Card>
 │             </Layout.Section>
-│   
+│
 │             <Layout.Section oneHalf>
 │               <BlockStack gap="400">
 │                 <Card>
@@ -2252,7 +2252,7 @@ routes/
 │                     </BlockStack>
 │                   </BlockStack>
 │                 </Card>
-│   
+│
 │                 <Card>
 │                   <BlockStack gap="400">
 │                     <InlineStack align="space-between">
@@ -2281,7 +2281,7 @@ routes/
 │               </BlockStack>
 │             </Layout.Section>
 │           </Layout>
-│   
+│
 │           <Layout.Section>
 │             <Card>
 │               <BlockStack gap="400">
@@ -2298,8 +2298,8 @@ routes/
 │                           ariaControls={`faq-${faq.id}`}
 │                         >
 │                           <InlineStack gap="200" blockAlign="center">
-│                             <Icon 
-│                               source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon} 
+│                             <Icon
+│                               source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon}
 │                             />
 │                             <Text variant="bodyMd" fontWeight="semibold">
 │                               {faq.question}
@@ -2325,7 +2325,7 @@ routes/
 │               </BlockStack>
 │             </Card>
 │           </Layout.Section>
-│   
+│
 │           <Layout.Section>
 │             <Card>
 │               <BlockStack gap="400">
@@ -2354,7 +2354,7 @@ routes/
 │       </Page>
 │     );
 │   }
-│   
+│
 │   export function ErrorBoundary({ error }) {
 │     return (
 │       <Page title="Help & Support">
@@ -2375,9 +2375,9 @@ routes/
 │     );
 │   }
 │   ```
-│   
+│
 ├── app.jsx
-│   
+│
 │   ```jsx
 │   import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 │   import { boundary } from "@shopify/shopify-app-remix/server";
@@ -2385,18 +2385,18 @@ routes/
 │   import { NavMenu } from "@shopify/app-bridge-react";
 │   import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 │   import { authenticate } from "../shopify.server";
-│   
+│
 │   export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
-│   
+│
 │   export const loader = async ({ request }) => {
 │     await authenticate.admin(request);
-│   
+│
 │     return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 │   };
-│   
+│
 │   export default function App() {
 │     const { apiKey } = useLoaderData();
-│   
+│
 │     return (
 │       <AppProvider isEmbeddedApp apiKey={apiKey}>
 │         <NavMenu>
@@ -2412,31 +2412,31 @@ routes/
 │       </AppProvider>
 │     );
 │   }
-│   
+│
 │   // Shopify needs Remix to catch some thrown responses, so that their headers are included in the response.
 │   export function ErrorBoundary() {
 │     return boundary.error(useRouteError());
 │   }
-│   
+│
 │   export const headers = (headersArgs) => {
 │     return boundary.headers(headersArgs);
 │   };
 │   ```
-│   
+│
 ├── auth.$.jsx
-│   
+│
 │   ```jsx
 │   import { authenticate } from "../shopify.server";
-│   
+│
 │   export const loader = async ({ request }) => {
 │     await authenticate.admin(request);
-│   
+│
 │     return null;
 │   };
 │   ```
-│   
+│
 ├── match.analysis.jsx
-│   
+│
 │   ```jsx
 │   // import { json } from "@remix-run/node";
 │   // import { getProductFromImageId } from "../models/gyuProducts.store";
@@ -2446,7 +2446,7 @@ routes/
 │   // /**
 │   //  * This route handles requests from the storefront to the Remix server,
 │   //  * performing an AI-based product matching and analysis based on provided data.
-│   //  * 
+│   //  *
 │   //  * Expected Request Payload:
 │   //  * @request matchData - An object containing:
 │   //  *   - shop_id (string): ID of the Shopify store
@@ -2471,7 +2471,7 @@ routes/
 │   //         matchData[key] = matchData[key].toString();
 │   //       }
 │   //     }
-│   
+│
 │   //     // Retrieve the product associated with the given image ID and shop
 │   //     const matchedProduct = await getProductFromImageId(matchData);
 │   //     if (matchedProduct == null) {
@@ -2481,12 +2481,12 @@ routes/
 │   //         },
 │   //       });
 │   //     }
-│   
+│
 │   //     console.log("product sort request body -------", JSON.stringify({
 │   //       ...matchData,
 │   //       variant_id: matchedProduct.variant_id
 │   //     }));
-│   
+│
 │   //     const options = {
 │   //       method: "POST",
 │   //       headers: {
@@ -2498,9 +2498,9 @@ routes/
 │   //         variant_id: matchedProduct.variant_id
 │   //       }),
 │   //     };
-│   
+│
 │   //     let responseData, response;
-│   
+│
 │   //     try {
 │   //       response = await fetchWithTimeout(ai_server_match_analysis, options, 15000); // 5000 ms timeout
 │   //       if (!response.ok) {
@@ -2520,9 +2520,9 @@ routes/
 │   //             "Access-Control-Allow-Origin": "*",
 │   //           },
 │   //         });
-│   //       }      
+│   //       }
 │   //     }
-│   
+│
 │   //     // If AI response is received, format and return the data to the storefront
 │   //     if (responseData) {
 │   //       console.log("product match response -------", JSON.stringify({
@@ -2550,9 +2550,9 @@ routes/
 │   //   }
 │   // }
 │   ```
-│   
+│
 ├── selfie.register.jsx
-│   
+│
 │   ```jsx
 │   // import { json, unstable_createMemoryUploadHandler, unstable_parseMultipartFormData } from "@remix-run/node";
 │   // import { getDownloadURL, getStorage, ref, uploadBytes, uploadString } from "firebase/storage";
@@ -2560,15 +2560,15 @@ routes/
 │   // import { isValidBilling } from "../utils/billingConfig";
 │   // import firebase from "../utils/firebase";
 │   // import { fetchWithTimeout } from "../utils/functions";
-│   
+│
 │   // /**
 │   //  * Uploads a file or a captured image URL to Firebase Storage and returns the download URL.
-│   //  * 
+│   //  *
 │   //  * @param {File | null} file - The file to be uploaded (if available).
 │   //  * @param {string} selfie_id - A unique identifier for the storage reference (e.g., user ID or selfie ID).
 │   //  * @param {string} capturedURL - A data URL string representing the captured image, used if file is not provided.
 │   //  * @returns {Promise<string>} - A promise that resolves to the download URL of the uploaded file.
-│   //  * 
+│   //  *
 │   //  */
 │   // async function uploadFile(file, selfie_id, capturedURL) {
 │   //   const storage = getStorage(firebase);
@@ -2581,13 +2581,13 @@ routes/
 │   //   const downloadURL = await getDownloadURL(fileRef.ref);
 │   //   return downloadURL;
 │   // }
-│   
+│
 │   // /**
 │   //  * Processes a request from the storefront to the Remix server to upload a selfie, validate billing, and register the selfie via an AI server.
-│   //  * 
+│   //  *
 │   //  * @param {Object} request - Incoming request containing multipart form data (selfie_id, shop_id, jpegFile, capturedURL).
 │   //  * @param {Object} params - Additional parameters from the route.
-│   //  * 
+│   //  *
 │   //  * @returns {Response} - JSON response with either the registered selfie details or an error status.
 │   //  */
 │   // export const action = async ({ request, params }) => {
@@ -2605,7 +2605,7 @@ routes/
 │   //     const shop_id = formData.get("shop_id");
 │   //     const avatar = formData.get("jpegFile");
 │   //     const isValid = await isValidBilling(shop_id);
-│   
+│
 │   //     // Validate billing for the shop
 │   //     if (!isValid) {
 │   //       return json({ error: "billing failed" }, {
@@ -2614,7 +2614,7 @@ routes/
 │   //         },
 │   //       });
 │   //     }
-│   
+│
 │   //     // Upload selfie image (either jpegFile or capturedURL)
 │   //     if (avatar)
 │   //       selfie_url = await uploadFile(avatar, selfie_id, '');
@@ -2622,7 +2622,7 @@ routes/
 │   //       const capturedURL = formData.get("capturedURL");
 │   //       selfie_url = await uploadFile(null, selfie_id, capturedURL);
 │   //     }
-│   
+│
 │   //     const options = {
 │   //       method: "POST",
 │   //       headers: {
@@ -2635,10 +2635,10 @@ routes/
 │   //         shop_id
 │   //       }),
 │   //     };
-│   
+│
 │   //     console.log({selfie: options});
-│   
-│   //     let responseData, response;  
+│
+│   //     let responseData, response;
 │   //     try {
 │   //       response = await fetchWithTimeout(ai_server_selfie_register, options, 20000); // 5000 ms timeout
 │   //       if (!response.ok) {
@@ -2658,7 +2658,7 @@ routes/
 │   //             "Access-Control-Allow-Origin": "*",
 │   //           },
 │   //         });
-│   //       }      
+│   //       }
 │   //     }
 │   //     console.log("responseData error: ", {responseData});
 │   //     if (responseData) {
@@ -2676,7 +2676,7 @@ routes/
 │   //           description: responseData.description,
 │   //           recommendation: responseData.recommendation
 │   //         };
-│   //       }      
+│   //       }
 │   //     } else {
 │   //       return json({ error: "ai response failed" }, {
 │   //         headers: {
@@ -2684,7 +2684,7 @@ routes/
 │   //         },
 │   //       });
 │   //     }
-│   
+│
 │   //     return json({ selfie }, {
 │   //       headers: {
 │   //         "Access-Control-Allow-Origin": "*",
@@ -2700,24 +2700,24 @@ routes/
 │   //   }
 │   // }
 │   ```
-│   
+│
 ├── selfie.remove.jsx
-│   
+│
 │   ```jsx
 │   // import { json } from "@remix-run/node";
 │   // import { deleteObject, getStorage, ref } from "firebase/storage";
 │   // import firebase from "../utils/firebase";
-│   
+│
 │   // /**
 │   //  * Deletes a file from Firebase Storage given its URL.
-│   //  * 
+│   //  *
 │   //  * @param {string} fileUrl - The URL of the file to be deleted.
 │   //  * @returns {void}
 │   //  */
 │   // async function deleteFileByUrl(fileUrl) {
 │   //   const storage = getStorage(firebase);
 │   //   const fileRef = ref(storage, fileUrl);
-│   
+│
 │   //   try {
 │   //     await deleteObject(fileRef);
 │   //     console.log('File deleted successfully');
@@ -2725,12 +2725,12 @@ routes/
 │   //     console.error('Error deleting file:', error);
 │   //   }
 │   // }
-│   
+│
 │   // /**
 │   //  * Handles the request from the storefront to the Remix server for deleting a selfie file.
 │   //  * @request Multipart form data containing:
 │   //  * - `selfieUrl` (string): Firestore URL of the selfie image to delete.
-│   //  * 
+│   //  *
 │   //  * @returns JSON response:
 │   //  * - `{ ok: "ok" }` with status 200 and CORS headers on success.
 │   //  * - `{ status: 411 }` on failure, with CORS headers.
@@ -2738,13 +2738,13 @@ routes/
 │   // export const action = async ({ request, params }) => {
 │   //   try {
 │   //     const form = await request.formData();
-│   //     const selfieUrl = form.get("selfieUrl");   
+│   //     const selfieUrl = form.get("selfieUrl");
 │   //     await deleteFileByUrl(selfieUrl);
 │   //     return json({ ok: "ok" }, {
 │   //       headers: {
 │   //         "Access-Control-Allow-Origin": "*",
 │   //       },
-│   //     });    
+│   //     });
 │   //   } catch (error) {
 │   //     return json({ error: "request failed" }, {
 │   //       headers: {
@@ -2754,24 +2754,24 @@ routes/
 │   //   }
 │   // }
 │   ```
-│   
+│
 ├── sort.analysis.jsx
-│   
+│
 │   ```jsx
 │   // import { json } from "@remix-run/node";
 │   // import { ai_server_shop_sort } from "../constant";
 │   // import { isValidBilling } from "../utils/billingConfig";
 │   // import { getDistinctProducts } from "../utils/functions";
 │   // import { getRegistered } from "../models/gyuProducts.store";
-│   
+│
 │   // /**
 │   //  * Processes product sorting requests from the storefront to the Remix server.
-│   //  * 
+│   //  *
 │   //  * @request Multipart form data with:
 │   //  * - `selfie_id` (string): The ID for the selfie image.
 │   //  * - `shop_id` (string): The shop's unique ID.
 │   //  * - `gyu_products` (stringified JSON): Array of products to check against the database.
-│   //  * 
+│   //  *
 │   //  * @returns JSON response:
 │   //  * - `{ sorted_products }` with sorted products and CORS headers if sorting succeeds.
 │   //  * - `{ success: "no update" }` if no update is needed.
@@ -2784,7 +2784,7 @@ routes/
 │   //     const form = await request.formData();
 │   //     const isValid = await isValidBilling(String(form.get("shop_id")));
 │   //     const selfie_id = form.get("selfie_id");
-│   //     const shop_id = form.get("shop_id");   
+│   //     const shop_id = form.get("shop_id");
 │   //     if (!isValid) {
 │   //       return json({ error: "billing failed" }, {
 │   //         headers: {
@@ -2793,7 +2793,7 @@ routes/
 │   //       });
 │   //     }
 │   //     // Compares the firebase products registered in the 'Analyzed' status with the cache products obtained from the ai server.
-│   //     const gyuProducts = JSON.parse(form.get("gyu_products"));    
+│   //     const gyuProducts = JSON.parse(form.get("gyu_products"));
 │   //     const variants = await getRegistered(shop_id);
 │   //     let fDifferent = false;
 │   //     const cntGyuProducts = getDistinctProducts(gyuProducts).length;
@@ -2870,17 +2870,17 @@ routes/
 │   //   }
 │   // }
 │   ```
-│   
+│
 └── webhooks.relay.jsx
-    
+
     ```jsx
     // apps/shopify-bff/app/routes/webhooks.relay.jsx
     import { authenticate } from "../shopify.server";
     import apiClient from "../lib/apiClient";
-    
+
     export const action = async ({ request }) => {
       const { topic, shop, payload, webhookId } = await authenticate.webhook(request);
-    
+
       // Fire-and-forget (don’t await)
       void apiClient.relayShopifyWebhook({
         topic,
@@ -2888,14 +2888,14 @@ routes/
         payload,
         webhookId,
       });
-    
+
       return new Response(JSON.stringify({ relayed: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     };
     ```
-    
+
 db.server.js
 
 ```js
@@ -3279,7 +3279,7 @@ const shopify = shopifyApp({
           name: shopData.data.shop.name,
           url: shopData.data.shop.url,
           email: shopData.data.shop.email,
-          currencyCode: shopData.data.shop.currencyCode,   
+          currencyCode: shopData.data.shop.currencyCode,
           primaryDomainDomain: shopData.data.shop.primaryDomain?.domain,
           primaryDomainHost: shopData.data.shop.primaryDomain?.host,
           plan: shopData.data.shop.plan?.displayName,
@@ -3290,7 +3290,7 @@ const shopify = shopifyApp({
           scope: session.scope,
         };
 
-        
+
         const syncResponse = await apiClient.syncShop(syncData);
         console.log("[SHOPIFY] Sync Shop Response:", syncResponse);
         if (syncResponse.error) {

@@ -79,7 +79,7 @@
   }
 
   #goodsDescription {
-    height: 500px; 
+    height: 500px;
     overflow: hidden;
   }
 
@@ -125,7 +125,7 @@
   @keyframes glow{
     0%{
     box-shadow: 5px 5px 20px rgb(93, 52, 168),-5px -5px 20px rgb(93, 52, 168);}
-    
+
     50%{
     box-shadow: 5px 5px 20px rgb(81, 224, 210),-5px -5px 20px rgb(81, 224, 210)
     }
@@ -272,7 +272,7 @@
   .ai-light {
     border-color: {{ block.settings.button_color }};
     box-shadow: 0 0 40px 40px {{ block.settings.button_color }} inset, 0 0 0 0 {{ block.settings.button_color }};
-    transition: all 150ms ease-in-out;   
+    transition: all 150ms ease-in-out;
     padding: 10px 20px;
   }
   .ai-light:hover {
@@ -288,7 +288,7 @@
     padding: 1em 2em;
   }
 
-  .ai-pulse:hover, 
+  .ai-pulse:hover,
   .ai-pulse:focus {
     animation: pulse 1s;
     box-shadow: 0 0 0 2em transparent;
@@ -314,13 +314,13 @@
   ">
   {% if block.settings.button_icon != blank %}
     {% if block.settings.button_icon_type == 'background' %}
-      <img 
-        src="{{ block.settings.button_icon | img_url }}" 
-        alt="Icon" 
-        style="position: absolute; 
-          width: 100%; 
-          height: 100%; 
-          z-index: -1; 
+      <img
+        src="{{ block.settings.button_icon | img_url }}"
+        alt="Icon"
+        style="position: absolute;
+          width: 100%;
+          height: 100%;
+          z-index: -1;
           object-fit: cover;
           object-position: center;
           left: 0;
@@ -351,7 +351,6 @@
   const gyuRecommendshopId = {{ shop.id | json }};
   const gyuRecommendproductId = {{ product.id | json }};
   const currentProduct = {{ product | json }};
-  console.log({currentProduct});
 
   function stars(starCount, elementId) {
     var starsHTML = "";
@@ -420,7 +419,7 @@
               }
               gyuProducts = strSortedProducts;
               postGyuProducts();
-            }            
+            }
           },
           error: function (jqXHR, textStatus, errorThrown) {
             endProgress();
@@ -429,7 +428,7 @@
         });
       } else {
         postGyuProducts();
-      }      
+      }
     } else {
       warningToast(warningNotifications["missing selfie"]);
       document.getElementById("gyuRegisterModal").style.display = 'block';
@@ -479,7 +478,6 @@
     if (firstRun) {
       let imageView = document.getElementById("tile-view-variants");
       let relatedVariants = JSON.parse(gyuProducts).filter(variant => variant.product_id == currentProduct.id);
-      console.log({relatedVariants});
       let relatedAvailableVariants = [];
       let imageList = [];
       for (const variant of relatedVariants) {
@@ -492,28 +490,27 @@
           }
         }
       }
-      console.log({relatedAvailableVariants})
       let colors = [];
       if (relatedAvailableVariants && relatedAvailableVariants.length)
         colors = generateGradientColors('#00ff00', '#ff0000', relatedAvailableVariants.length);
       imageView.innerHTML = ``;
       let index = 1;
       for (const variant of relatedAvailableVariants) {
-        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length); 
+        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length);
         {% comment %} imageView.innerHTML += `
-              <img 
-                src="${variantObject.featured_image.src}" 
-                onClick="clickedVariant('${variantObject.featured_image.src}', ${variant.variant_id}, ${variantObject.featured_image.id})" 
-                id="img-variant-${variantObject.id}" 
+              <img
+                src="${variantObject.featured_image.src}"
+                onClick="clickedVariant('${variantObject.featured_image.src}', ${variant.variant_id}, ${variantObject.featured_image.id})"
+                id="img-variant-${variantObject.id}"
                 class="${(variantObject.id == exceptVariant_id || featuredImage.includes(variantObject.featured_image.src)) ? 'img-variant-highlight' : ''}"
                 style="width: 150px; height: 150px; cursor: pointer; border-bottom: 10px solid; border-image:linear-gradient(90deg, ${colors[index]} ${lengthPercent}%, transparent 0%, transparent 100%) 1 ;">
             `; {% endcomment %}
         imageView.innerHTML += `
           <div style="position: relative">
-            <img 
-              src="${variant.featured_image.src}" 
-              onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})" 
-              id="img-variant-${variant.id}" 
+            <img
+              src="${variant.featured_image.src}"
+              onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})"
+              id="img-variant-${variant.id}"
               class="${(variant.id == exceptVariant_id || featuredImage.includes(variant.featured_image.src)) ? 'img-variant-highlight' : ''}"
               style="width: 150px; height: 150px; cursor: pointer;object-fit: contain;">
             <svg class="animated_badge_svg" width="75" height="100" viewBox="0 0 75 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="
@@ -553,16 +550,15 @@
       imageList = [];
       listView.innerHTML = ``;
       index = 1;
-      console.log({relatedAvailableVariants});
       for (const variant of relatedAvailableVariants) {
-        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length); 
+        let lengthPercent = Math.ceil(100 * (relatedAvailableVariants.length - index) / relatedAvailableVariants.length);
         listView.innerHTML += `
           <div style="display: flex; width: 100%; align-items: center; gap: 20px">
             <div style="position: relative">
-              <img 
-                src="${variant.featured_image.src}" 
-                onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})" 
-                id="img-list-variant-${variant.id}" 
+              <img
+                src="${variant.featured_image.src}"
+                onClick="clickedVariant('${variant.featured_image.src}', ${variant.id}, ${variant.featured_image.id})"
+                id="img-list-variant-${variant.id}"
                 class="${(variant.id == exceptVariant_id || featuredImage.includes(variant.featured_image.src)) ? 'img-variant-highlight' : ''}"
                 style="width: 120px; height: 120px; cursor: pointer;">
               <svg class="animated_badge_svg" width="75" height="100" viewBox="0 0 75 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="
@@ -591,7 +587,7 @@
                   right: -3px;
                   color: white;
                   width: 30px;
-                  text-align: center;                  
+                  text-align: center;
               ">${index}</span>
             </div>
             <div style="flex-grow: 1; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-weight: bold; font-size: 20px">
@@ -608,7 +604,7 @@
       $('[id^="img-list-variant-"]').removeClass('img-variant-highlight');
       $(`#img-variant-${exceptVariant_id}`).addClass('img-variant-highlight');
       $(`#img-list-variant-${exceptVariant_id}`).addClass('img-variant-highlight');
-    }   
+    }
   }
 
   function clickedVariant(featuredImage, variant_id, image_id, firstRun = 0) {
@@ -616,19 +612,19 @@
     $('#goodsDescription').css('display', 'none');
     $('#showMoreDescription').css('display', 'none');
     $('#showLessDescription').css('display', 'none');
-    
+
     var imgFeatured = document.getElementById("imgFeatured");
     imgFeatured.innerHTML = `<img src="${featuredImage}" style="width: 300px; height: 300px; object-fit: contain;"/>`;
 
     imageViewDraw(featuredImage, variant_id, firstRun);
-    
+
     $('#analyzeVariant').off('click').on('click', function () {
       showRecommendData(featuredImage, variant_id, image_id);
     });
   }
 
   function changedViewCategory() {
-    const selectElement = document.getElementById('viewCategory');  
+    const selectElement = document.getElementById('viewCategory');
     const listView = document.getElementById("list-view-variants");
     const tileView = document.getElementById("tile-view-variants");
     const selectedValue = selectElement.value;
@@ -652,7 +648,7 @@
 
     const formData = new FormData();
     formData.append('matchData', JSON.stringify(matchData));
-    
+
     if (firstRun) startProgress(10);
     else startProgress(10, ".gyu-recommend-modal-content");
 
@@ -665,7 +661,7 @@
       data: formData,
       success: function(data) {
         endProgress();
-        if (data.error == "billing failed") {          
+        if (data.error == "billing failed") {
           errorToast(errorHandleNotifications["billing failed"]);
         } else if(data.error == "timeout error") {
           errorToast(errorHandleNotifications["timeout error"]);
@@ -692,7 +688,7 @@
                     <div id="goodsDescription" style="height: 500px; overflow: hidden;">
                       <div id="goodMatch" style="display: none; margin-top: 20px;" class="match-logo-container">
                         <span class="match-logo-text">Good Match</span>
-                      </div>                      
+                      </div>
                       <p id="mathDescription"></p>
                       <p id="matchRecommendation"></p>
                     </div>
@@ -707,19 +703,19 @@
                       </div>
                       <div id="tile-view-variants" style="display: flex; flex-wrap: wrap; gap: 30px"></div>
                       <div id="list-view-variants" style="display: none; flex-direction: column; gap: 20px"></div>
-                    </div>                    
+                    </div>
                   </div>
                 </div>
               </div>`;
-      
+
             clickedVariant(featuredImage, variant_id, image_id, 1);
             analysisModal = document.getElementById("gyuRecommendModal");
-            const contentDom = document.getElementsByClassName("gyu-recommend-modal-content");   
+            const contentDom = document.getElementsByClassName("gyu-recommend-modal-content");
             document.addEventListener("click", function(event) {
               if (event.target !== contentDom && (contentDom && contentDom[0] && !contentDom[0].contains(event.target)) && event.target.id !== 'gyuAnalyzeBtn') {
                 analysisModal.remove();
               }
-            }); 
+            });
           }
           $('#analyzeVariant').css('display', 'none');
           $('#goodsDescription').css('display', 'block');
@@ -729,7 +725,7 @@
           var match_description = document.getElementById("mathDescription");
           var match_recommendation = document.getElementById("matchRecommendation");
           var goodMatch = document.getElementById("goodMatch");
-          
+
           var matchScoreColor = data.score_color;
           var matchScoreMorph = data.score_morph;
           var matchScoreOverall = data.score_overall;

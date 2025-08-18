@@ -1,0 +1,17 @@
+#!/bin/bash
+# Prevent committing to protected files
+
+PROTECTED_FILES=(
+    "services/*/migrations/*"
+    "*.pem"
+    "*.key"
+    ".env"
+)
+
+for pattern in "${PROTECTED_FILES[@]}"; do
+    if git diff --cached --name-only | grep -E "$pattern"; then
+        echo "❌ Attempting to commit protected files matching: $pattern"
+        echo "Please review your changes"
+        exit 1
+    fi
+done

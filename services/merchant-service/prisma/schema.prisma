@@ -19,31 +19,31 @@ enum MerchantStatus {
 
 model Merchant {
   id                String   @id @default(uuid()) @db.Uuid
-  
+
   // Platform Identity (immutable after creation)
   platform_name          String              // 'shopify', 'woocommerce', etc.
   platform_id       String              // gid://shopify/Shop/123
   platform_domain   String              // bb-staging-test.myshopify.com (PERMANENT)
-  
+
   // Basic Info
   name              String              // Shop/Store name
   email             String              // Contact email
   primary_domain    String?             // Current primary domain (could be custom)
   currency          String @default("USD")
   country           String?
-  
+
   // Platform Details
   platform_version  String              // API version (2024-01, etc.)
   scopes           String?              // What permissions were granted
-  
+
   // Lifecycle
   status            MerchantStatus @default(PENDING)
   status_changed_at DateTime?           // When status last changed
-  
+
   installed_at      DateTime @default(now())
   uninstalled_at    DateTime?
   last_sync_at      DateTime?           // When we last synced with platform
-  
+
   // Timestamps
   created_at        DateTime @default(now()) @db.Timestamptz(3)
   updated_at        DateTime @updatedAt @db.Timestamptz(3)
@@ -55,4 +55,3 @@ model Merchant {
   @@index([status])
   @@map("merchants")
 }
-

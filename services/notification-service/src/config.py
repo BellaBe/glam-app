@@ -1,115 +1,107 @@
-from functools import lru_cache
+# services/notification-service/src/config.py
 import os
-from typing import List, Optional
-from pydantic import BaseModel, Field
-from shared.utils.config_loader import merged_config, flatten_config
-from shared.database import DatabaseConfig, create_database_config
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from shared.utils import ConfigurationError, load_root_env
 
 
 class ServiceConfig(BaseModel):
-    # Service Identity (from shared + service YAML)
-    service_name: str = Field(..., alias="service.name")
-    service_version: str = Field(..., alias="service.version")
-    environment: str
-    debug: bool
-    
-    # API Configuration (from shared + service YAML)
-    api_host: str = Field(..., alias="api.host")
-    api_port: int = Field(..., alias="api.port")
-    api_external_port: int = Field(..., alias="api.external_port")  # Local development port
-    api_cors_origins: List[str] = Field(..., alias="api.cors_origins")
-    
-    # Infrastructure (from shared YAML)
-    infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
-    infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
-    
-    # Database Configuration
-    db_enabled: bool = Field(..., alias="database.enabled")
-    
-    # Logging (from shared YAML)
-    logging_level: str = Field(..., alias="logging.level")
-    logging_format: str = Field(..., alias="logging.format")
-    
-    # Email Configuration (from shared + service YAML)
-    email_primary_provider: str = Field(..., alias="email.primary_provider")
-    email_fallback_provider: str = Field(..., alias="email.fallback_provider")
-    email_from_domain: str = Field(..., alias="email.from_domain")
-    email_smtp_port: int = Field(..., alias="email.smtp_port")
-    
-    # AWS (from shared YAML)
-    aws_region: str = Field(..., alias="aws.region")
-    
-    # Rate Limiting (from shared + service YAML)
-    rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
-    rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-    rate_limiting_per_hour: int = Field(..., alias="rate_limiting.per_hour")
-    rate_limiting_per_day: int = Field(..., alias="rate_limiting.per_day")
-    
-    # Monitoring (from shared YAML)
-    monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
-    monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
-    
-    # Template Configuration (service-specific)
-    template_max_size: int = Field(..., alias="template.max_size")
-    template_render_timeout: int = Field(..., alias="template.render_timeout")
-    
-    # Retry Configuration (service-specific)
-    retry_max_attempts: int = Field(..., alias="retry.max_attempts")
-    retry_initial_delay_ms: int = Field(..., alias="retry.initial_delay_ms")
-    retry_max_delay_ms: int = Field(..., alias="retry.max_delay_ms")
-    
-    # Bulk Email Configuration (service-specific)
-    bulk_email_default_batch_size: int = Field(..., alias="bulk_email.default_batch_size")
-    bulk_email_max_batch_size: int = Field(..., alias="bulk_email.max_batch_size")
-    bulk_email_min_batch_size: int = Field(..., alias="bulk_email.min_batch_size")
-    bulk_email_batch_delay_seconds: float = Field(..., alias="bulk_email.batch_delay_seconds")
-    bulk_email_max_delay_seconds: float = Field(..., alias="bulk_email.max_delay_seconds")
-    bulk_email_concurrent_batches: int = Field(..., alias="bulk_email.concurrent_batches")
-    
-    # External Services (env-only, optional)
-    sendgrid_api_key: Optional[str] = None
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
-    smtp_host: Optional[str] = None
-    smtp_username: Optional[str] = None
-    smtp_password: Optional[str] = None
-    email_from_address: Optional[str] = None
-    email_from_name: Optional[str] = None
-    
-    @property
-    def database_config(self) -> DatabaseConfig:
-        """Get database configuration"""
-        return create_database_config(prefix="NOTIFICATION_")
-    
-    @property
-    def effective_port(self) -> int:
-        """
-        Get the effective port to use based on environment.
-        
-        Logic:
-        - Local development (not in Docker): use external_port
-        - Docker/container environment: use internal port
-        - Environment override: NOTIFICATION_USE_EXTERNAL_PORT=true forces external_port
-        """
-        # Check if explicitly requested to use external port
-        use_external = os.getenv("NOTIFICATION_USE_EXTERNAL_PORT", "false").lower() == "true"
+    """Notification service configuration"""
 
-        # Check if running in container (common Docker environment variables)
-        in_container = any([
-            os.getenv("DOCKER_CONTAINER"),
-            os.getenv("HOSTNAME", "").startswith("notification-service"),
-            os.path.exists("/.dockerenv")
-        ])
-        
-        if use_external or (not in_container and self.environment == "development"):
-            return self.api_external_port
-        else:
-            return self.api_port
+    model_config = ConfigDict(
+        extra="ignore",
+        case_sensitive=False,
+        allow_population_by_field_name=True,
+    )
+
+    # Service identification
+    service_name: str = "notification-service"
+    service_version: str = "1.0.0"
+    service_description: str = "Event-driven email notification service"
+    debug: bool = Field(default=False, alias="DEBUG")
+
+    # Required environment variables
+    environment: str = Field(..., alias="APP_ENV")
+    api_external_port: int = Field(8008, alias="NOTIFICATION_API_EXTERNAL_PORT")
+    database_enabled: bool = Field(True, alias="NOTIFICATION_DB_ENABLED")
+
+    # Required secrets
+    database_url: str = Field(..., alias="DATABASE_URL")
+    client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
+
+    # API configuration
+    api_host: str = "0.0.0.0"
+
+    # Email provider configuration
+    email_provider: Literal["sendgrid", "mailhog"] = Field("mailhog", alias="NOTIFICATION_EMAIL_PROVIDER")
+
+    # SendGrid settings
+    sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
+    sendgrid_from_email: str = Field(default="noreply@glamyouup.com", alias="SENDGRID_FROM_EMAIL")
+    sendgrid_from_name: str = Field(default="Glam You Up", alias="SENDGRID_FROM_NAME")
+    sendgrid_sandbox_mode: bool = Field(False, alias="SENDGRID_SANDBOX_MODE")
+
+    # Mailhog settings
+    mailhog_smtp_host: str = Field(default="localhost", alias="MAILHOG_SMTP_HOST")
+    mailhog_smtp_port: int = Field(default=1025, alias="MAILHOG_SMTP_PORT")
+
+    # Template settings
+    template_path: str = Field(default="/app/templates", alias="NOTIFICATION_TEMPLATE_PATH")
+    template_cache_ttl: int = Field(default=300, alias="NOTIFICATION_CACHE_TTL")
+
+    # Retry settings
+    max_retries: int = Field(default=3, alias="NOTIFICATION_MAX_RETRIES")
+    retry_delay: int = Field(default=60, alias="NOTIFICATION_RETRY_DELAY")
+
+    # Logging
+    logging_level: str = "INFO"
+    logging_format: str = "json"
+
+    @property
+    def nats_url(self) -> str:
+        """NATS URL for event system"""
+        in_container = os.path.exists("/.dockerenv")
+        if in_container or self.environment in ["development", "production"]:
+            return "nats://nats:4222"
+        return "nats://localhost:4222"
+
+    @property
+    def api_port(self) -> int:
+        """Port based on environment"""
+        in_container = os.path.exists("/.dockerenv")
+        return 8000 if in_container else self.api_external_port
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production"""
+        return self.environment == "production"
+
+    @model_validator(mode="after")
+    def validate_config(self):
+        if self.database_enabled and not self.database_url:
+            raise ValueError("DATABASE_URL required when database is enabled")
+
+        if self.email_provider == "sendgrid" and not self.sendgrid_api_key:
+            raise ValueError("SENDGRID_API_KEY required when using SendGrid provider")
+
+        # Use local template path in development
+        if not os.path.exists("/.dockerenv") and self.environment == "local":
+            import pathlib
+
+            self.template_path = str(pathlib.Path(__file__).parent.parent / "templates")
+
+        return self
 
 
 @lru_cache
 def get_service_config() -> ServiceConfig:
-    """Load and cache service configuration"""
-    cfg_dict = merged_config("notification", env_prefix="NOTIFICATION")
-    flattened = flatten_config(cfg_dict)
-    return ServiceConfig(**flattened) #type: ingnore
+    """Load configuration once"""
+    try:
+        load_root_env()  # From shared package
+        return ServiceConfig(**os.environ)
+    except Exception as e:
+        raise ConfigurationError(f"Failed to load config: {e}", config_key="notification-service") from e

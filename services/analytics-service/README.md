@@ -97,7 +97,7 @@ make docker-stop
 The service uses a three-tier configuration system:
 
 1. **Shared Configuration** (`config/shared.yml`)
-2. **Service Configuration** (`config/services/analytics-service.yml`)  
+2. **Service Configuration** (`config/services/analytics-service.yml`)
 3. **Environment Variables** (`.env`)
 
 ### Key Configuration Options

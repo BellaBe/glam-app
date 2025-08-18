@@ -1,21 +1,19 @@
 # services/billing-service/src/dependencies.py
 from typing import Annotated
-from fastapi import Depends, Request, HTTPException
-from prisma import Prisma
-from shared.api.dependencies import (
-    RequestIdDep, PaginationDep, CorrelationIdDep, 
-    RequestContextDep, PaginationParams
-)
+
+from fastapi import Depends, HTTPException, Request
+
+from shared.api.dependencies import CorrelationIdDep, PaginationDep, RequestContextDep, RequestIdDep
+
+from .config import ServiceConfig
+from .events.publishers import BillingEventPublisher
 from .lifecycle import ServiceLifecycle
 from .services.billing_service import BillingService
 from .services.purchase_service import PurchaseService
-from .events.publishers import BillingEventPublisher
-from .config import ServiceConfig
-
 
 # Re-export shared dependencies
 __all__ = [
-    "CorrelationIdDep", 
+    "CorrelationIdDep",
     "PaginationDep",
     "RequestIdDep",
     "RequestContextDep",
@@ -23,7 +21,7 @@ __all__ = [
     "ConfigDep",
     "BillingServiceDep",
     "PurchaseServiceDep",
-    "PublisherDep"
+    "PublisherDep",
 ]
 
 

@@ -11,7 +11,7 @@ export default async function handleRequest(
   request,
   responseStatusCode,
   responseHeaders,
-  remixContext,
+  remixContext
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
   const userAgent = request.headers.get("user-agent");
@@ -30,7 +30,7 @@ export default async function handleRequest(
             new Response(stream, {
               headers: responseHeaders,
               status: responseStatusCode,
-            }),
+            })
           );
           pipe(body);
         },
@@ -41,7 +41,7 @@ export default async function handleRequest(
           responseStatusCode = 500;
           console.error(error);
         },
-      },
+      }
     );
 
     // Automatically timeout the React renderer after 6 seconds, which ensures

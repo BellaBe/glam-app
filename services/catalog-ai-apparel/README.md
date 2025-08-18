@@ -1,6 +1,5 @@
-================
+
 # services/catalog-analysis/README.md
-================
 
 # Catalog Analysis Service
 
@@ -9,7 +8,7 @@ AI-powered catalog item analysis and color extraction service for apparel using 
 ## Overview
 
 This service processes catalog item images to:
-- Segment apparel items from background/person  
+- Segment apparel items from background/person
 - Extract dominant color palettes from apparel regions
 - Save analysis artifacts for review
 - Publish results via event-driven architecture
@@ -52,13 +51,13 @@ The service maintains the **exact same output format** as the original API imple
 **Success**: `evt.catalog.item.analysis.completed`
 ```json
 {
-  "subject": "evt.catalog.item.analysis.completed", 
+  "subject": "evt.catalog.item.analysis.completed",
   "payload": {
     "status": "success",
     "colours": [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
     "latency_ms": 1250,
     "shop_id": "70931710194",
-    "product_id": "8526062977266", 
+    "product_id": "8526062977266",
     "variant_id": "46547096469746"
   },
   "correlation_id": "unique-request-id"
@@ -103,7 +102,7 @@ make docker-logs
 # Unit tests
 pytest tests/unit/
 
-# Integration tests  
+# Integration tests
 pytest tests/integration/
 
 # Manual testing
@@ -134,7 +133,7 @@ python scripts/test_catalog_analysis.py listen
 - **scikit-learn**: K-means clustering for color analysis
 - **numpy**: Numerical operations
 
-### Infrastructure  
+### Infrastructure
 - **shared**: Internal shared package for events, config, logging
 - **nats-py**: Event streaming via NATS JetStream
 - **redis**: Caching (optional)
@@ -150,7 +149,7 @@ service:
   name: "catalog-analysis"
 catalog_analysis:
   model_path: "services/cv_cloth/models/selfie_multiclass_256x256.tflite"
-  products_base_path: "selfie/products" 
+  products_base_path: "selfie/products"
   default_colors: 5
   sample_size: 20000
   min_chroma: 8.0
@@ -170,7 +169,7 @@ CATALOG_ANALYSIS_API_KEY=your_api_key_here
 
 Typical processing times:
 - **Small images** (< 500px): 200-500ms
-- **Medium images** (500-1000px): 500-1000ms  
+- **Medium images** (500-1000px): 500-1000ms
 - **Large images** (> 1000px): 1000-2000ms
 
 Memory usage scales with image size and color complexity.

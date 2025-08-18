@@ -16,7 +16,7 @@ COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# Install service dependencies  
+# Install service dependencies
 WORKDIR /app
 COPY services/billing-service/pyproject.toml services/billing-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
@@ -31,7 +31,7 @@ COPY services/billing-service /app
 # Copy config
 COPY config /app/config
 
-# Stage 2 - Runtime  
+# Stage 2 - Runtime
 FROM python:3.11-slim
 
 # Copy everything from builder
@@ -52,4 +52,3 @@ EXPOSE 8000
 
 # Run migrations and start server
 CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
-

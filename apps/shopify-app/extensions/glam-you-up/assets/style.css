@@ -1,15 +1,29 @@
 .ai-btn {
-  background-color: #A16892;
-  border: 0 solid #E5E7EB;
+  background-color: #a16892;
+  border: 0 solid #e5e7eb;
   box-sizing: border-box;
   color: #000000;
   display: flex;
-  font-family: ui-sans-serif,system-ui,-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    system-ui,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
   font-size: 1rem;
   font-weight: 700;
   justify-content: center;
   line-height: 1.75rem;
-  padding: .75rem 1.65rem;
+  padding: 0.75rem 1.65rem;
   position: relative;
   text-align: center;
   text-decoration: none #000000 solid;
@@ -31,7 +45,7 @@
 }
 
 .ai-btn:after {
-  content: '';
+  content: "";
   position: absolute;
   border: 1px solid #000000;
   bottom: 4px;
@@ -52,26 +66,24 @@
   }
 }
 
-
 @media screen and (max-width: 749px) {
-
   .ai-btn {
     margin-right: 0px;
   }
 }
 
-.ai-round:hover, 
+.ai-round:hover,
 .ai-round:focus {
   color: #313133;
   transform: translateY(-6px);
 }
 
-.ai-round:hover::before, 
+.ai-round:hover::before,
 .ai-round:focus::before {
   opacity: 1;
 }
 
-.ai-round:hover::after, 
+.ai-round:hover::after,
 .ai-round:focus::after {
   animation: none;
   display: none;
@@ -94,7 +106,7 @@
   width: 140px;
   appearance: none;
   backface-visibility: hidden;
-  background-color: #A16892;
+  background-color: #a16892;
   border-radius: 10px;
   border-style: none;
   box-shadow: none;
@@ -102,7 +114,14 @@
   color: #fff;
   cursor: pointer;
   /* display: inline-block; */
-  font-family: Inter,-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    system-ui,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    sans-serif;
   font-size: 15px;
   font-weight: 500;
   height: 50px;
@@ -115,7 +134,7 @@
   text-align: center;
   text-decoration: none;
   transform: translate3d(0, 0, 0);
-  transition: all .3s;
+  transition: all 0.3s;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -129,27 +148,30 @@
 
 .gyu-btn:hover {
   background-color: #835276;
-  box-shadow: rgba(0, 0, 0, .05) 0 5px 30px, rgba(0, 0, 0, .05) 0 1px 4px;
+  box-shadow:
+    rgba(0, 0, 0, 0.05) 0 5px 30px,
+    rgba(0, 0, 0, 0.05) 0 1px 4px;
   opacity: 1;
   transform: translateY(0);
-  transition-duration: .35s;
+  transition-duration: 0.35s;
 }
 
 .gyu-btn:hover:after {
-  opacity: .5;
+  opacity: 0.5;
 }
 
 .gyu-btn:active {
-  box-shadow: rgba(0, 0, 0, .1) 0 3px 6px 0, rgba(0, 0, 0, .1) 0 0 10px 0, rgba(0, 0, 0, .1) 0 1px 4px -1px;
+  box-shadow:
+    rgba(0, 0, 0, 0.1) 0 3px 6px 0,
+    rgba(0, 0, 0, 0.1) 0 0 10px 0,
+    rgba(0, 0, 0, 0.1) 0 1px 4px -1px;
   transform: translateY(2px);
-  transition-duration: .35s;
+  transition-duration: 0.35s;
 }
 
 .gyu-btn:active:after {
   opacity: 1;
 }
-
-
 
 .loader-progress-bar-back {
   position: fixed;
@@ -178,13 +200,15 @@
   height: 16px;
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
-  box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 2px 0px, rgba(60, 64, 67, 0.15) 0px 2px 6px 2px;
-  background-color: #A16892;
+  box-shadow:
+    rgba(60, 64, 67, 0.3) 0px 1px 2px 0px,
+    rgba(60, 64, 67, 0.15) 0px 2px 6px 2px;
+  background-color: #a16892;
 }
 
 .gyu-image-circle {
   display: block;
-	/* width: 40;
+  /* width: 40;
 	height: 40px;
 	border-radius: 50%;
 	border-top: 2px dotted #C394B8;
@@ -195,29 +219,43 @@
 	animation: spin 7s infinite linear; */
 }
 .gyu-image-circle img {
-	/* animation: spin 7s infinite reverse linear; */
-	width: 100%;
-	border-radius: 50%;
+  /* animation: spin 7s infinite reverse linear; */
+  width: 100%;
+  border-radius: 50%;
 }
 
 @keyframes spin {
-	100% {
-		transform: rotate(1turn);
-	}
+  100% {
+    transform: rotate(1turn);
+  }
 }
 
 .ai-rect {
-  background-color: #A16892;
-  border: 0 solid #E5E7EB;
+  background-color: #a16892;
+  border: 0 solid #e5e7eb;
   box-sizing: border-box;
   color: #000000;
   display: flex;
-  font-family: ui-sans-serif,system-ui,-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    system-ui,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
   font-size: 1rem;
   font-weight: 700;
   justify-content: center;
   line-height: 1.75rem;
-  padding: .75rem 1.65rem;
+  padding: 0.75rem 1.65rem;
   position: relative;
   text-align: center;
   text-decoration: none #000000 solid;
@@ -234,18 +272,32 @@
 }
 
 .ai-circle {
-  background-color: #A16892;
-  border: 0 solid #E5E7EB;
-  border-radius: 50%!important;
+  background-color: #a16892;
+  border: 0 solid #e5e7eb;
+  border-radius: 50% !important;
   box-sizing: border-box;
   color: #000000;
   display: flex;
-  font-family: ui-sans-serif,system-ui,-apple-system,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    system-ui,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
   font-size: 1rem;
   font-weight: 700;
   justify-content: center;
   line-height: 1.75rem;
-  padding: .75rem 1.65rem;
+  padding: 0.75rem 1.65rem;
   position: relative;
   text-align: center;
   text-decoration: none #000000 solid;
@@ -285,7 +337,7 @@
 select {
   /* styling */
   background-color: white;
-  border: thin solid #A16892;
+  border: thin solid #a16892;
   border-radius: 4px;
   display: inline-block;
   font: inherit;
@@ -294,7 +346,7 @@ select {
 
   /* reset */
 
-  margin: 0;      
+  margin: 0;
   -webkit-box-sizing: border-box;
   -moz-box-sizing: border-box;
   box-sizing: border-box;
@@ -303,9 +355,8 @@ select {
 }
 
 select.classic {
-  background-image:
-    linear-gradient(45deg, transparent 50%, #A16892 50%),
-    linear-gradient(135deg, #A16892 50%, transparent 50%),
+  background-image: linear-gradient(45deg, transparent 50%, #a16892 50%),
+    linear-gradient(135deg, #a16892 50%, transparent 50%),
     linear-gradient(to right, #d9c8d5, #d9c8d5);
   background-position:
     calc(100% - 20px) calc(1em + 2px),
@@ -319,10 +370,8 @@ select.classic {
 }
 
 select.classic:focus {
-  background-image:
-    linear-gradient(45deg, white 50%, transparent 50%),
-    linear-gradient(135deg, transparent 50%, white 50%),
-    linear-gradient(to right, gray, #d9c8d5);
+  background-image: linear-gradient(45deg, white 50%, transparent 50%),
+    linear-gradient(135deg, transparent 50%, white 50%), linear-gradient(to right, gray, #d9c8d5);
   background-position:
     calc(100% - 15px) 1em,
     calc(100% - 20px) 1em,

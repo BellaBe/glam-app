@@ -1,10 +1,13 @@
 # services/webhook-service/src/services/webhook_service.py
-from typing import Dict, Any
+from typing import Any
+
 from shared.utils.logger import ServiceLogger
-from ..models import WebhookPlatform, ShopifyWebhookTopic
-from ..repositories.webhook_repository import WebhookRepository
-from ..events.publishers import WebhookEventPublisher
+
 from ..config import ServiceConfig
+from ..events.publishers import WebhookEventPublisher
+from ..models import ShopifyWebhookTopic, WebhookPlatform
+from ..repositories.webhook_repository import WebhookRepository
+
 
 class WebhookService:
     def __init__(
@@ -12,7 +15,7 @@ class WebhookService:
         config: ServiceConfig,
         repository: WebhookRepository,
         publisher: WebhookEventPublisher,
-        logger: ServiceLogger
+        logger: ServiceLogger,
     ):
         self.config = config
         self.repository = repository
@@ -35,7 +38,6 @@ class WebhookService:
         """
 
         if topic is ShopifyWebhookTopic.UNKNOWN:
-
             self.logger.warning(
                 "Received webhook with unknown topic",
                 extra={
@@ -44,7 +46,7 @@ class WebhookService:
                     "shop_domain": shop_domain,
                     "webhook_id": webhook_id,
                     "correlation_id": correlation_id,
-                }
+                },
             )
 
         # Store the webhook
@@ -65,13 +67,12 @@ class WebhookService:
                     "topic": topic.value,
                     "shop_domain": shop_domain,
                     "webhook_id": webhook_id,
-                    "correlation_id":  correlation_id,
+                    "correlation_id": correlation_id,
                     "entry_id": entry.id,
                 },
             )
             return entry.id
-        
-        
+
         await self._publish_domain_event(
             topic=topic,
             shop_domain=shop_domain,
@@ -93,17 +94,17 @@ class WebhookService:
         )
 
         return entry.id
-    
+
     async def _publish_domain_event(
         self,
         topic: ShopifyWebhookTopic,
         shop_domain: str,
         webhook_id: str,
-        payload: Dict[Any, Any],
+        payload: dict[Any, Any],
         correlation_id: str,
     ) -> None:
         """Publish appropriate domain event based on webhook topic"""
-        
+
         # Map webhook topics to domain events
         if topic is ShopifyWebhookTopic.APP_UNINSTALLED:
             await self.publisher.app_uninstalled(
@@ -144,12 +145,16 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
-        elif topic in (ShopifyWebhookTopic.PRODUCTS_CREATE, ShopifyWebhookTopic.PRODUCTS_UPDATE, ShopifyWebhookTopic.PRODUCTS_DELETE):
+
+        elif topic in (
+            ShopifyWebhookTopic.PRODUCTS_CREATE,
+            ShopifyWebhookTopic.PRODUCTS_UPDATE,
+            ShopifyWebhookTopic.PRODUCTS_DELETE,
+        ):
             action_map = {
                 ShopifyWebhookTopic.PRODUCTS_CREATE: "created",
                 ShopifyWebhookTopic.PRODUCTS_UPDATE: "updated",
-                ShopifyWebhookTopic.PRODUCTS_DELETE: "deleted"
+                ShopifyWebhookTopic.PRODUCTS_DELETE: "deleted",
             }
             event_type = action_map[topic]
             await self.publisher.catalog_product_event(
@@ -160,12 +165,16 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
-        elif topic in (ShopifyWebhookTopic.COLLECTIONS_CREATE, ShopifyWebhookTopic.COLLECTIONS_UPDATE, ShopifyWebhookTopic.COLLECTIONS_DELETE):
+
+        elif topic in (
+            ShopifyWebhookTopic.COLLECTIONS_CREATE,
+            ShopifyWebhookTopic.COLLECTIONS_UPDATE,
+            ShopifyWebhookTopic.COLLECTIONS_DELETE,
+        ):
             action_map = {
                 ShopifyWebhookTopic.COLLECTIONS_CREATE: "created",
                 ShopifyWebhookTopic.COLLECTIONS_UPDATE: "updated",
-                ShopifyWebhookTopic.COLLECTIONS_DELETE: "deleted"
+                ShopifyWebhookTopic.COLLECTIONS_DELETE: "deleted",
             }
             event_type = action_map[topic]
             await self.publisher.catalog_collection_event(
@@ -176,7 +185,7 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
+
         elif topic is ShopifyWebhookTopic.INVENTORY_LEVELS_UPDATE:
             await self.publisher.inventory_updated(
                 shop_domain=shop_domain,
@@ -186,7 +195,7 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
+
         elif topic is ShopifyWebhookTopic.CUSTOMERS_DATA_REQUEST:
             customer = payload.get("customer", {})
             await self.publisher.gdpr_data_request(
@@ -196,7 +205,7 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
+
         elif topic is ShopifyWebhookTopic.CUSTOMERS_REDACT:
             customer = payload.get("customer", {})
             await self.publisher.gdpr_customer_redact(
@@ -206,14 +215,14 @@ class WebhookService:
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
+
         elif topic is ShopifyWebhookTopic.SHOP_REDACT:
             await self.publisher.gdpr_shop_redact(
                 shop_domain=shop_domain,
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
-            
+
         else:
             self.logger.warning(
                 f"No domain event mapping for topic: {topic}",
@@ -221,5 +230,5 @@ class WebhookService:
                     "topic": topic.value,
                     "shop_domain": shop_domain,
                     "correlation_id": correlation_id,
-                }
+                },
             )

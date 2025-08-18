@@ -1,5 +1,6 @@
 # services/merchant-service/src/api/v1/__init__.py
 from fastapi import APIRouter
+
 from .merchants import merchants_router
 
 v1_router = APIRouter(prefix="/v1")

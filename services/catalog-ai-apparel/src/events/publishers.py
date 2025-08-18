@@ -1,7 +1,8 @@
-================
 # services/catalog-analysis/src/events/publishers.py
-================
-from shared.events import DomainEventPublisher, Streams
+from shared.events import DomainEventPublisher, DomainEventSubscriber, Streams
+
+from ..schemas.catalog_item import CatalogItemAnalysisRequest
+from .types import CatalogAnalysisEvents
 
 
 class CatalogAnalysisEventPublisher(DomainEventPublisher):
@@ -9,15 +10,6 @@ class CatalogAnalysisEventPublisher(DomainEventPublisher):
 
     domain_stream = Streams.CATALOG
     service_name_override = "catalog-analysis"
-
-
-================
-# services/catalog-analysis/src/events/subscribers.py
-================
-from shared.events import DomainEventSubscriber
-from ..services.catalog_analysis_service import CatalogAnalysisService
-from ..schemas.catalog_item import CatalogItemAnalysisRequest
-from .types import CatalogAnalysisEvents
 
 
 class CatalogItemAnalysisSubscriber(DomainEventSubscriber):
@@ -71,9 +63,7 @@ class CatalogItemAnalysisSubscriber(DomainEventSubscriber):
                 )
 
         except Exception as e:
-            logger.error(
-                f"Failed to process catalog item analysis request: {str(e)}", exc_info=True
-            )
+            logger.error(f"Failed to process catalog item analysis request: {e!s}", exc_info=True)
 
             # Publish failure event
             await publisher.publish_event(

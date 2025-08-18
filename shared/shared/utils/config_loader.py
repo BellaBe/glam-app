@@ -2,7 +2,9 @@
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 
 def load_root_env():
     """Load .env from repository root"""

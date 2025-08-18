@@ -1,18 +1,21 @@
 # shared/messaging/js_listener.py
 """A thin, “safe” JetStream listener with JSON decode guard and error handling."""
 
+import asyncio
 import contextlib
-import asyncio, json
+import json
 from abc import ABC, abstractmethod
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
+from nats.errors import TimeoutError as NATSTimeoutError
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from nats.js.errors import NotFoundError
-from nats.errors import TimeoutError as NATSTimeoutError
 
 from shared.utils.logger import ServiceLogger
+
 from .jetstream_client import JetStreamClient
+
 # from .event_context import set_correlation_id, set_source_service
 
 
@@ -23,12 +26,12 @@ class Listener(ABC):
     • JSON decode guard
     • soft-fail vs. hard-fail error handling
     """
-    
+
     stream_name: str = "GLAM_EVENTS"
     batch_size: int = 10
     ack_wait_sec: int = 30
     max_deliver: int = 3
-    _task: Optional[asyncio.Task] = None
+    _task: asyncio.Task | None = None
     _running: bool = False
     idle_sleep_sec: float = 0.05  # avoid spin when idle
     poll_window_sec: float = 2.0  # server-side fetch window
@@ -58,9 +61,6 @@ class Listener(ABC):
         self.logger = logger
         self._sub = None
 
-    # ======================================================================
-    # public API
-    # ======================================================================
     async def start(self) -> None:
         await self._ensure_stream()
         await self._ensure_consumer()
@@ -79,15 +79,10 @@ class Listener(ABC):
         if self._sub:
             await self._sub.unsubscribe()
 
-    # ======================================================================
-    # override in subclasses
-    # ======================================================================
     @abstractmethod
-    async def on_message(self, data: Dict[str, Any]) -> None: ...
+    async def on_message(self, data: dict[str, Any]) -> None:
+        ...
 
-    # ======================================================================
-    # internals
-    # ======================================================================
     # stream
     async def _ensure_stream(self) -> None:
         """Stream must exist and cover ``evt.*`` **and** ``cmd.*``."""
@@ -106,7 +101,6 @@ class Listener(ABC):
             )
             await self._js.add_stream(cfg)
             self.logger.info("Created stream %s", self.stream_name)
-        
 
     # consumer
     async def _ensure_consumer(self) -> None:
@@ -119,7 +113,7 @@ class Listener(ABC):
                 deliver_policy=DeliverPolicy.ALL,
                 ack_policy=AckPolicy.EXPLICIT,
                 max_deliver=self.max_deliver,
-                max_ack_pending= self.batch_size * 5,   # tame inflight
+                max_ack_pending=self.batch_size * 5,  # tame inflight
                 filter_subject=self.subject,
             )
             await self._js.add_consumer(self.stream_name, cfg)
@@ -178,17 +172,15 @@ class Listener(ABC):
                 return
 
         if envelope.get("event_type") and envelope["event_type"] != self.subject:
-            self.logger.warning("Event-type mismatch; acking (subject=%s, event_type=%s)", self.subject, envelope["event_type"])
+            self.logger.warning(
+                "Event-type mismatch; acking (subject=%s, event_type=%s)", self.subject, envelope["event_type"]
+            )
             await msg.ack()
             return
-        
+
         md = getattr(msg, "metadata", None)
-        if md and getattr(md, "num_delivered", None) is not None:
-            if md.num_delivered >= self.max_deliver:
-                self.logger.error(
-                    "Final delivery hit; dropping msg on subject %s",
-                    self.subject
-            )
+        if md and getattr(md, "num_delivered", None) is not None and md.num_delivered >= self.max_deliver:
+            self.logger.error("Final delivery hit; dropping msg on subject %s", self.subject)
 
         try:
             await self.on_message(envelope["data"])
@@ -202,7 +194,6 @@ class Listener(ABC):
                     await msg.nak()
             except Exception:
                 self.logger.critical("Failed to ack/nak message")
-
 
     # default hook
     async def on_error(self, error: Exception, data: dict) -> bool:

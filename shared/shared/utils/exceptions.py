@@ -1,6 +1,4 @@
-# -------------------------------
-# shared/errors/base.py
-# -------------------------------
+# shared/utils/exceptions.py
 
 """
 Base error classes for the glam-app error hierarchy.
@@ -12,7 +10,7 @@ errors inherit from, following a three-tier model:
 3. DomainError - Business logic violations
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class GlamBaseError(Exception):
@@ -34,10 +32,10 @@ class GlamBaseError(Exception):
         self,
         message: str,
         *,
-        code: Optional[str] = None,
-        status: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None
+        code: str | None = None,
+        status: int | None = None,
+        details: dict[str, Any] | None = None,
+        cause: Exception | None = None,
     ):
         super().__init__(message)
 
@@ -53,9 +51,9 @@ class GlamBaseError(Exception):
         if cause is not None:
             self.__cause__ = cause
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert error to dictionary for JSON serialization."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "code": self.code,
             "message": self.message,
         }
@@ -64,6 +62,7 @@ class GlamBaseError(Exception):
             result["details"] = self.details
 
         return result
+
 
 class InfrastructureError(GlamBaseError):
     """
@@ -76,14 +75,7 @@ class InfrastructureError(GlamBaseError):
     code = "INFRASTRUCTURE_ERROR"
     status = 503  # Service Unavailable
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        service: Optional[str] = None,
-        retryable: bool = True,
-        **kwargs
-    ):
+    def __init__(self, message: str, *, service: str | None = None, retryable: bool = True, **kwargs):
         super().__init__(message, **kwargs)
 
         if service:
@@ -91,6 +83,7 @@ class InfrastructureError(GlamBaseError):
 
         self.details["retryable"] = retryable
         self.retryable = retryable
+
 
 class DomainError(GlamBaseError):
     """
@@ -113,14 +106,7 @@ class ValidationError(DomainError):
     code = "VALIDATION_ERROR"
     status = 422  # Unprocessable Entity
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        field: Optional[str] = None,
-        value: Optional[Any] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, *, field: str | None = None, value: Any | None = None, **kwargs):
         super().__init__(message, **kwargs)
 
         if field:
@@ -135,14 +121,7 @@ class NotFoundError(DomainError):
     code = "NOT_FOUND"
     status = 404
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        resource: Optional[str] = None,
-        resource_id: Optional[Any] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, *, resource: str | None = None, resource_id: Any | None = None, **kwargs):
         super().__init__(message, **kwargs)
 
         if resource:
@@ -158,12 +137,7 @@ class ConflictError(DomainError):
     status = 409
 
     def __init__(
-        self,
-        message: str,
-        *,
-        conflicting_resource: Optional[str] = None,
-        current_state: Optional[str] = None,
-        **kwargs
+        self, message: str, *, conflicting_resource: str | None = None, current_state: str | None = None, **kwargs
     ):
         super().__init__(message, **kwargs)
 
@@ -179,13 +153,7 @@ class UnauthorizedError(DomainError):
     code = "UNAUTHORIZED"
     status = 401
 
-    def __init__(
-        self,
-        message: str = "Authentication required",
-        *,
-        auth_type: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str = "Authentication required", *, auth_type: str | None = None, **kwargs):
         super().__init__(message, **kwargs)
 
         if auth_type:
@@ -202,9 +170,9 @@ class ForbiddenError(DomainError):
         self,
         message: str = "Insufficient permissions",
         *,
-        required_permission: Optional[str] = None,
-        resource: Optional[str] = None,
-        **kwargs
+        required_permission: str | None = None,
+        resource: str | None = None,
+        **kwargs,
     ):
         super().__init__(message, **kwargs)
 
@@ -224,10 +192,10 @@ class RateLimitExceededError(DomainError):
         self,
         message: str = "Rate limit exceeded",
         *,
-        limit: Optional[int] = None,
-        window: Optional[str] = None,
-        retry_after: Optional[int] = None,
-        **kwargs
+        limit: int | None = None,
+        window: str | None = None,
+        retry_after: int | None = None,
+        **kwargs,
     ):
         super().__init__(message, **kwargs)
 
@@ -252,14 +220,7 @@ class RequestTimeoutError(InfrastructureError):
     code = "TIMEOUT"
     status = 504
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        timeout_seconds: Optional[float] = None,
-        operation: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, *, timeout_seconds: float | None = None, operation: str | None = None, **kwargs):
         super().__init__(message, **kwargs)
 
         if timeout_seconds:
@@ -274,34 +235,21 @@ class InternalError(GlamBaseError):
     code = "INTERNAL_ERROR"
     status = 500
 
-    def __init__(
-        self,
-        message: str = "An unexpected error occurred",
-        *,
-        error_id: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str = "An unexpected error occurred", *, error_id: str | None = None, **kwargs):
         # Never expose internal details in production
         super().__init__(message, **kwargs)
 
         if error_id:
             self.details["error_id"] = error_id
-            
-            
+
+
 class ConfigurationError(GlamBaseError):
     """Configuration errors in the application."""
 
     code = "CONFIGURATION_ERROR"
     status = 500
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        config_key: Optional[str] = None,
-        expected_value: Optional[Any] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, *, config_key: str | None = None, expected_value: Any | None = None, **kwargs):
         super().__init__(message, **kwargs)
 
         if config_key:

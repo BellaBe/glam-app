@@ -1,76 +1,55 @@
-"""
-FastAPI dependency providers with type aliases for cleaner code.
-"""
-from typing import Annotated, Any
+# services/notification-service/src/dependencies.py
+from typing import Annotated
 
-from fastapi import Depends, Request, HTTPException
+from fastapi import Depends, HTTPException, Request
+
 from shared.api.dependencies import (
-    RequestIdDep, RequestContextDep, PaginationDep, CorrelationIdDep,
+    ClientAuthDep,
+    LoggerDep,
+    PaginationDep,
+    PlatformContextDep,
+    RequestContextDep,
 )
 
-from shared.messaging.jetstream_client import JetStreamClient
+from .config import ServiceConfig
 from .lifecycle import ServiceLifecycle
 from .services.notification_service import NotificationService
-from .services.template_service import TemplateService
-from .services.email_service import EmailService
-from .events.publishers import EmailSendPublisher
 
-# ---------------------------------------------------------------- exports ---
+# Re-export shared dependencies
 __all__ = [
-    # shared deps
-    "RequestIdDep", "RequestContextDep", "PaginationDep", "CorrelationIdDep",
-    # core
-    "LifecycleDep", "ConfigDep",
-    # messaging
-    "MessagingClientDep", "SendEmailPublisherDep",
-    # services
-    "NotificationServiceDep", "TemplateServiceDep", "EmailServiceDep",
+    "RequestContextDep",
+    "ClientAuthDep",
+    "PlatformContextDep",
+    "PaginationDep",
+    "LoggerDep",
+    "LifecycleDep",
+    "ConfigDep",
+    "NotificationServiceDep",
 ]
 
-# ---------------------------------------------------------------- core -------
-def _lifecycle(req: Request) -> ServiceLifecycle:
-    return req.app.state.lifecycle
 
-def _config(req: Request):
-    return req.app.state.config
-
-LifecycleDep = Annotated[ServiceLifecycle, Depends(_lifecycle)]
-ConfigDep    = Annotated[Any,             Depends(_config)]
-
-# ---------------------------------------------------------------- messaging --
-def _messaging_client(lc: LifecycleDep) -> JetStreamClient:
-    if not lc.messaging_client:
-        raise HTTPException(500, "Messaging client not initialised")
-    return lc.messaging_client
-
-def _publisher(lc: LifecycleDep) -> EmailSendPublisher:
-    if not lc.email_send_publisher:
-        raise HTTPException(500, "EmailSendPublisher not initialised")
-    return lc.email_send_publisher
-
-MessagingClientDep   = Annotated[JetStreamClient,    Depends(_messaging_client)]
-SendEmailPublisherDep = Annotated[EmailSendPublisher, Depends(_publisher)]
-
-# ---------------------------------------------------------------- utilities --
-def _email_service(lc: LifecycleDep) -> EmailService:
-    if not lc.email_service:
-        raise HTTPException(500, "EmailService not initialised")
-    return lc.email_service
-
-EmailServiceDep = Annotated[EmailService, Depends(_email_service)]
-
-# ----------------------------------------------------------- domain services -
-def _template_service(lc: LifecycleDep) -> TemplateService:
-    if not lc.template_service:
-        raise HTTPException(500, "TemplateService not initialised")
-    return lc.template_service
-
-def _notification_service(lc: LifecycleDep) -> NotificationService:
-    if not lc.notification_service:
-        raise HTTPException(500, "NotificationService not initialised")
-    return lc.notification_service
-
-TemplateServiceDep     = Annotated[TemplateService,     Depends(_template_service)]
-NotificationServiceDep = Annotated[NotificationService, Depends(_notification_service)]
+# Core dependencies
+def get_lifecycle(request: Request) -> ServiceLifecycle:
+    """Get service lifecycle from app state"""
+    return request.app.state.lifecycle
 
 
+def get_config(request: Request) -> ServiceConfig:
+    """Get service config from app state"""
+    return request.app.state.config
+
+
+# Type aliases
+LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+
+
+# Service dependencies
+def get_notification_service(lifecycle: LifecycleDep) -> NotificationService:
+    """Get notification service"""
+    if not lifecycle.notification_service:
+        raise HTTPException(500, "Notification service not initialized")
+    return lifecycle.notification_service
+
+
+NotificationServiceDep = Annotated[NotificationService, Depends(get_notification_service)]

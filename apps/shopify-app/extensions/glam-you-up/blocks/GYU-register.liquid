@@ -293,9 +293,9 @@
                 type="file"
               >
               <p class="label-image">Shot taken</p>
-              <img src="{{ 'sample.png' | asset_url }}" width="300px" height="300px" class="selfie" id="sampleAvatar">  
-            </div>  
-            <div>        
+              <img src="{{ 'sample.png' | asset_url }}" width="300px" height="300px" class="selfie" id="sampleAvatar">
+            </div>
+            <div>
               <p class="label-image">Camera frame</p>
               <video id="captureVideo" class="selfie" autoplay></video>
               <canvas id="capturedSelfie" class="selfie"></canvas>
@@ -399,7 +399,7 @@
         $('#textBtnGroup').css('display', 'flex');
         $('#sampleAvatar').css('border', 'solid 10px green');
         $('.label-image').css('display', 'block');
-        $('.image-body').css('gap', '20px');  
+        $('.image-body').css('gap', '20px');
         $('#registerGyuResult').css('display', 'none');
         $('#analyzeBtn').css('display', 'none');
         $('#gyuComplete').css('display', 'none');
@@ -466,9 +466,9 @@
         $('#showMore').css('display', 'block');
         $('#showLess').css('display', 'none');
         $('#registerRecommendation').css('display', 'none');
-      });      
+      });
 
-      $("#gyuComplete").click(function() {        
+      $("#gyuComplete").click(function() {
         $('.gyu-register-modal').css('display', 'none');
         const originalSelfieUrl = window.localStorage.getItem("selfieUrl");
         if (originalSelfieUrl) {
@@ -482,7 +482,6 @@
             method: 'POST',
             data: removeData,
             success: function (response) {
-              console.log("ok");
             }
           })
         }
@@ -499,7 +498,7 @@
       });
 
       $("#take-capture").click(function() {
-        startWebcamRecorder();        
+        startWebcamRecorder();
       });
 
       $("#cancel-capture").click(function() {
@@ -636,7 +635,7 @@
             } else if (response.error == "request failed") {
               errorToast(errorHandleNotifications["request failed"]);
               return;
-            } 
+            }
             else if (response.error == "unknown error") {
               errorToast(errorHandleNotifications["unknown error"]);
               return;
@@ -673,7 +672,6 @@
                 method: 'POST',
                 data: removeData,
                 success: function (response) {
-                  console.log("ok");
                 }
               })
             }

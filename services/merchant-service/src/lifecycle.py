@@ -1,13 +1,16 @@
 # services/merchant-service/src/lifecycle.py
-from typing import Optional, List, Dict, Any
 import asyncio
+
 from prisma import Prisma
+
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
+
 from .config import ServiceConfig
+from .events.publishers import MerchantEventPublisher
 from .repositories import MerchantRepository
 from .services.merchant_service import MerchantService
-from .events.publishers import MerchantEventPublisher
+
 
 class ServiceLifecycle:
     """Manages service lifecycle and dependencies"""
@@ -17,20 +20,20 @@ class ServiceLifecycle:
         self.logger = logger
 
         # External connections
-        self.messaging_client: Optional[JetStreamClient] = None
-        self.prisma: Optional[Prisma] = None
+        self.messaging_client: JetStreamClient | None = None
+        self.prisma: Prisma | None = None
         self._db_connected: bool = False
 
         # Publisher / listeners
-        self.event_publisher: Optional[MerchantEventPublisher] = None
+        self.event_publisher: MerchantEventPublisher | None = None
         self._listeners: list = []
 
         # Repositories / mappers / services
-        self.merchant_repo: Optional[MerchantRepository] = None
-        self.merchant_service: Optional[MerchantService] = None
+        self.merchant_repo: MerchantRepository | None = None
+        self.merchant_service: MerchantService | None = None
 
         # Tasks
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
 
     async def startup(self) -> None:
@@ -82,10 +85,7 @@ class ServiceLifecycle:
         await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher now (you require it in _init_listeners)
-        self.event_publisher = MerchantEventPublisher(
-            jetstream_client=self.messaging_client,
-            logger=self.logger
-        )
+        self.event_publisher = MerchantEventPublisher(jetstream_client=self.messaging_client, logger=self.logger)
         self.logger.info("Messaging client and publisher initialized")
 
     async def _init_database(self) -> None:
@@ -96,7 +96,7 @@ class ServiceLifecycle:
 
         # Prisma reads DATABASE_URL from the environment; no args needed
         self.prisma = Prisma()
-        
+
         if not self.prisma:
             raise RuntimeError("Prisma client not initialized")
 
@@ -109,7 +109,6 @@ class ServiceLifecycle:
             self.logger.error("Prisma connect failed: %s", e, exc_info=True)
             raise
 
-    # ---------------------------------------------------------------- repos
     def _init_repositories(self) -> None:
         if self.config.database_enabled:
             if not (self.prisma and self._db_connected):
@@ -119,20 +118,14 @@ class ServiceLifecycle:
         else:
             self.merchant_repo = None  # service must handle db-disabled mode
 
-    # ---------------------------------------------------------- local services
     def _init_local_services(self) -> None:
-        
         if not self.merchant_repo or not self.event_publisher:
             raise RuntimeError("Merchant repository not initialized")
-        
+
         self.merchant_service = MerchantService(
-            repository=self.merchant_repo,
-            publisher=self.event_publisher,
-            logger=self.logger
-            
+            repository=self.merchant_repo, publisher=self.event_publisher, logger=self.logger
         )
 
-    # -------------------------------------------------------------- listeners
     async def _init_listeners(self) -> None:
         if not self.messaging_client or not self.merchant_service or not self.event_publisher:
             raise RuntimeError("Messaging or service layer not ready")
@@ -141,7 +134,7 @@ class ServiceLifecycle:
         # await some_listener.start()
         # self._listeners.append(some_listener)
 
-    # ================================================= convenience helpers
+    # convenience helpers
     def add_task(self, coro) -> asyncio.Task:
         t = asyncio.create_task(coro)
         self._tasks.append(t)

@@ -18,7 +18,7 @@ COPY shared /shared
 WORKDIR /shared
 RUN poetry install --no-dev
 
-# ---- 2️⃣  Install service dependencies  
+# ---- 2️⃣  Install service dependencies
 WORKDIR /app
 COPY services/webhook-service/pyproject.toml services/webhook-service/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
@@ -31,7 +31,7 @@ RUN prisma generate
 COPY services/webhook-service /app
 
 # ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime  
+# 📦  Stage 2 ─ Runtime
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 

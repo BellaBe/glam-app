@@ -1,247 +1,205 @@
-from typing import Optional, List
+# services/catalog-service/src/lifecycle.py
 import asyncio
-from redis import asyncio as aioredis
+
+import redis.asyncio as redis
 from prisma import Prisma
-from shared.messaging.jetstream_client import JetStreamClient
+
+from shared.messaging import JetStreamClient
 from shared.utils.logger import ServiceLogger
+
 from .config import ServiceConfig
-from .repositories.catalog_state_repository import CatalogStateRepository
-from .repositories.sync_job_repository import SyncJobRepository
-from .repositories.sync_item_repository import SyncItemRepository
-from .services.catalog_sync_service import CatalogSyncService
-from .services.cache_service import CacheService
+from .events.listeners import AnalysisCompletedListener, ProductsFetchedListener
 from .events.publishers import CatalogEventPublisher
-from .events.listeners import (
-    MerchantSettingsListener,
-    BillingEntitlementsListener,
-    CatalogCountedListener,
-    CatalogItemListener,
-    AnalysisCompletedListener
-)
+from .repositories.analysis_repository import AnalysisRepository
+from .repositories.catalog_repository import CatalogRepository
+from .repositories.sync_repository import SyncRepository
+from .services.catalog_service import CatalogService
+
 
 class ServiceLifecycle:
-    """Manages service lifecycle and dependencies"""
-    
+    """Manages all service components lifecycle"""
+
     def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         self.config = config
         self.logger = logger
-        
-        # External connections
-        self.messaging_client: Optional[JetStreamClient] = None
-        self.prisma: Optional[Prisma] = None
-        self._db_connected: bool = False
-        self.redis: Optional[aioredis.Redis] = None
-        
-        # Publisher / listeners
-        self.event_publisher: Optional[CatalogEventPublisher] = None
+
+        # Connections
+        self.messaging_client: JetStreamClient | None = None
+        self.prisma: Prisma | None = None
+        self.redis: redis.Redis | None = None
+        self._db_connected = False
+
+        # Components
+        self.event_publisher: CatalogEventPublisher | None = None
+        self.catalog_repo: CatalogRepository | None = None
+        self.sync_repo: SyncRepository | None = None
+        self.analysis_repo: AnalysisRepository | None = None
+        self.catalog_service: CatalogService | None = None
+
+        # Listeners
         self._listeners: list = []
-        
-        # Repositories
-        self.catalog_state_repo: Optional[CatalogStateRepository] = None
-        self.sync_job_repo: Optional[SyncJobRepository] = None
-        self.sync_item_repo: Optional[SyncItemRepository] = None
-        
-        # Services
-        self.cache_service: Optional[CacheService] = None
-        self.catalog_sync_service: Optional[CatalogSyncService] = None
-        
-        # Tasks
-        self._tasks: List[asyncio.Task] = []
-        self._shutdown_event = asyncio.Event()
-    
+        self._tasks: list[asyncio.Task] = []
+
     async def startup(self) -> None:
+        """Initialize all components in correct order"""
         try:
-            self.logger.info("Starting service components...")
+            self.logger.info("Starting catalog service components...")
+
+            # 1. Messaging (for events)
             await self._init_messaging()
+
+            # 2. Database
             await self._init_database()
+
+            # 3. Redis (for progress caching)
             await self._init_redis()
+
+            # 4. Repositories (depends on Prisma)
             self._init_repositories()
-            self._init_local_services()
+
+            # 5. Services (depends on repositories)
+            self._init_services()
+
+            # 6. Event listeners (depends on services)
             await self._init_listeners()
-            self.logger.info("%s started successfully", self.config.service_name)
+
+            self.logger.info("Catalog service started successfully")
+
         except Exception:
-            self.logger.critical("Service failed to start", exc_info=True)
+            self.logger.critical("Service startup failed", exc_info=True)
             await self.shutdown()
             raise
-    
+
     async def shutdown(self) -> None:
-        """Graceful shutdown of all components"""
-        self.logger.info("Shutting down %s", self.config.service_name)
-        
-        for t in self._tasks:
-            t.cancel()
+        """Graceful shutdown in reverse order"""
+        self.logger.info("Shutting down catalog service")
+
+        # Cancel tasks
+        for task in self._tasks:
+            task.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
-        
-        for lst in self._listeners:
+
+        # Stop listeners
+        for listener in self._listeners:
             try:
-                await lst.stop()
+                await listener.stop()
             except Exception:
-                self.logger.critical("Listener stop failed")
-        
+                self.logger.error("Listener stop failed", exc_info=True)
+
+        # Close Redis
         if self.redis:
             try:
                 await self.redis.close()
             except Exception:
-                self.logger.critical("Redis close failed")
-        
+                self.logger.error("Redis close failed", exc_info=True)
+
+        # Close messaging
         if self.messaging_client:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.critical("Messaging client close failed")
-        
+                self.logger.error("Messaging close failed", exc_info=True)
+
+        # Disconnect database
         if self.prisma and self._db_connected:
             try:
                 await self.prisma.disconnect()
             except Exception:
-                self.logger.critical("Prisma disconnect failed")
-        
-        self.logger.info("%s shutdown complete", self.config.service_name)
-    
+                self.logger.error("Prisma disconnect failed", exc_info=True)
+
+        self.logger.info("Catalog service shutdown complete")
+
     async def _init_messaging(self) -> None:
+        """Initialize NATS/JetStream for events"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
         await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
-        
-        # Initialize publisher now
-        self.event_publisher = CatalogEventPublisher(
-            messaging=self.messaging_client,
-            logger=self.logger,
-            config=self.config,
-        )
+
+        # Initialize publisher
+        self.event_publisher = CatalogEventPublisher(jetstream_client=self.messaging_client, logger=self.logger)
+
         self.logger.info("Messaging client and publisher initialized")
-    
+
     async def _init_database(self) -> None:
-        """Initialize Prisma client if database is enabled."""
-        if not self.config.db_enabled:
+        """Initialize Prisma client"""
+        if not self.config.database_enabled:
             self.logger.info("Database disabled; skipping Prisma initialization")
             return
-        
+
         self.prisma = Prisma()
-        if not self.prisma:
-            raise RuntimeError("Prisma client not initialized")
-        
         try:
             await self.prisma.connect()
             self._db_connected = True
             self.logger.info("Prisma connected")
         except Exception as e:
-            self.logger.error("Prisma connect failed: %s", e, exc_info=True)
+            self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
             raise
-    
+
     async def _init_redis(self) -> None:
-        """Initialize Redis connection for caching."""
-        self.redis = await aioredis.from_url(
-            self.config.redis_url,
-            encoding="utf-8",
-            decode_responses=True
-        )
-        await self.redis.ping()
-        self.logger.info("Redis connected")
-    
+        """Initialize Redis for progress caching"""
+        if not self.config.redis_enabled:
+            self.logger.info("Redis disabled; skipping initialization")
+            return
+
+        try:
+            self.redis = await redis.from_url(self.config.redis_url, encoding="utf-8", decode_responses=True)
+            await self.redis.ping()
+            self.logger.info("Redis connected")
+        except Exception as e:
+            self.logger.warning(f"Redis connect failed: {e}. Continuing without cache.")
+            self.redis = None
+
     def _init_repositories(self) -> None:
-        if self.config.db_enabled:
-            if not (self.prisma and self._db_connected):
-                raise RuntimeError("Prisma client not initialized/connected")
-            
-            self.catalog_state_repo = CatalogStateRepository(self.prisma)
-            self.sync_job_repo = SyncJobRepository(self.prisma)
-            self.sync_item_repo = SyncItemRepository(self.prisma)
-            self.logger.info("Repositories initialized")
-        else:
-            self.catalog_state_repo = None
-            self.sync_job_repo = None
-            self.sync_item_repo = None
-    
-    def _init_local_services(self) -> None:
-        if not self.redis:
-            raise RuntimeError("Redis not initialized")
-        
-        self.cache_service = CacheService(
-            redis=self.redis,
-            logger=self.logger,
-            config=self.config
-        )
-        
-        if not self.catalog_state_repo or not self.sync_job_repo or not self.sync_item_repo:
+        """Initialize repositories with Prisma client"""
+        if not self._db_connected:
+            self.logger.warning("Database not connected, skipping repositories")
+            return
+
+        self.catalog_repo = CatalogRepository(self.prisma)
+        self.sync_repo = SyncRepository(self.prisma)
+        self.analysis_repo = AnalysisRepository(self.prisma)
+
+        self.logger.info("Repositories initialized")
+
+    def _init_services(self) -> None:
+        """Initialize business services"""
+        if not self.catalog_repo or not self.sync_repo:
             raise RuntimeError("Repositories not initialized")
-        
-        if not self.event_publisher:
-            raise RuntimeError("Event publisher not initialized")
-        
-        self.catalog_sync_service = CatalogSyncService(
-            catalog_state_repo=self.catalog_state_repo,
-            sync_job_repo=self.sync_job_repo,
-            sync_item_repo=self.sync_item_repo,
-            event_publisher=self.event_publisher,
-            cache_service=self.cache_service,
+
+        self.catalog_service = CatalogService(
+            catalog_repo=self.catalog_repo,
+            sync_repo=self.sync_repo,
+            redis_client=self.redis,
             logger=self.logger,
-            config=self.config
+            config=vars(self.config),
         )
-    
+
+        self.logger.info("Catalog service initialized")
+
     async def _init_listeners(self) -> None:
-        if not self.messaging_client:
-            raise RuntimeError("Messaging not ready")
-        
-        # Merchant settings listener
-        merchant_listener = MerchantSettingsListener(
+        """Initialize event listeners"""
+        if not self.messaging_client or not self.catalog_service:
+            raise RuntimeError("Messaging or service not ready")
+
+        # Products fetched listener
+        products_listener = ProductsFetchedListener(
             js_client=self.messaging_client,
-            cache_service=self.cache_service,
-            catalog_state_repo=self.catalog_state_repo,
-            logger=self.logger
+            publisher=self.event_publisher,
+            service=self.catalog_service,
+            logger=self.logger,
         )
-        await merchant_listener.start()
-        self._listeners.append(merchant_listener)
-        
-        # Billing entitlements listener
-        billing_listener = BillingEntitlementsListener(
-            js_client=self.messaging_client,
-            cache_service=self.cache_service,
-            catalog_state_repo=self.catalog_state_repo,
-            logger=self.logger
-        )
-        await billing_listener.start()
-        self._listeners.append(billing_listener)
-        
-        # Catalog counted listener
-        counted_listener = CatalogCountedListener(
-            js_client=self.messaging_client,
-            sync_job_repo=self.sync_job_repo,
-            logger=self.logger
-        )
-        await counted_listener.start()
-        self._listeners.append(counted_listener)
-        
-        # Catalog item listener
-        item_listener = CatalogItemListener(
-            js_client=self.messaging_client,
-            sync_service=self.catalog_sync_service,
-            logger=self.logger
-        )
-        await item_listener.start()
-        self._listeners.append(item_listener)
-        
+        await products_listener.start()
+        self._listeners.append(products_listener)
+
         # Analysis completed listener
         analysis_listener = AnalysisCompletedListener(
             js_client=self.messaging_client,
-            sync_service=self.catalog_sync_service,
-            logger=self.logger
+            analysis_repo=self.analysis_repo,
+            catalog_repo=self.catalog_repo,
+            logger=self.logger,
         )
         await analysis_listener.start()
         self._listeners.append(analysis_listener)
-        
-        self.logger.info("All listeners started")
-    
-    def add_task(self, coro) -> asyncio.Task:
-        t = asyncio.create_task(coro)
-        self._tasks.append(t)
-        return t
-    
-    async def wait_for_shutdown(self) -> None:
-        await self._shutdown_event.wait()
-    
-    def signal_shutdown(self) -> None:
-        self._shutdown_event.set()
 
-# ================================================================
+        self.logger.info("Event listeners started")

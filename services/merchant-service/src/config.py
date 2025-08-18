@@ -1,12 +1,15 @@
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+import os
 from functools import lru_cache
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from shared.utils import load_root_env
 from shared.utils.exceptions import ConfigurationError
-import os
 
 
 class ServiceConfig(BaseModel):
     """Merchant service configuration"""
+
     model_config = ConfigDict(
         extra="ignore",
         case_sensitive=False,
@@ -34,12 +37,20 @@ class ServiceConfig(BaseModel):
     @property
     def nats_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
-        return "nats://nats:4222" if in_container or self.environment in ["development", "production"] else "nats://localhost:4222"
+        return (
+            "nats://nats:4222"
+            if in_container or self.environment in ["development", "production"]
+            else "nats://localhost:4222"
+        )
 
     @property
     def redis_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
-        return "redis://redis:6379" if in_container or self.environment in ["development", "production"] else "redis://localhost:6379"
+        return (
+            "redis://redis:6379"
+            if in_container or self.environment in ["development", "production"]
+            else "redis://localhost:6379"
+        )
 
     @property
     def api_port(self) -> int:
@@ -63,4 +74,4 @@ def get_service_config() -> ServiceConfig:
             f"Failed to load service configuration: {e}",
             config_key="merchant-service",
             expected_value="valid config",
-        )
+        ) from e

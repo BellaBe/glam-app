@@ -1,0 +1,134 @@
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--unsafe']  # Allow custom tags like !ENV
+      - id: check-json
+        name: Check JSON syntax
+        exclude: tsconfig.json  # TSConfig allows comments
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-added-large-files
+        name: Prevent large files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+        name: Detect private keys
+      - id: check-merge-conflict
+        name: Check merge conflicts
+      - id: mixed-line-ending
+        name: Check line endings
+        args: ['--fix=lf']
+      - id: check-case-conflict
+        name: Check filename case conflicts
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        name: Lint Python with Ruff
+        files: ^(services|shared)/.*\.py$
+        args: [--fix]
+      - id: ruff-format
+        name: Format Python with Ruff
+        files: ^(services|shared)/.*\.py$
+        args: [--line-length=120]
+
+  # Python: Type checking
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.8.0
+  #   hooks:
+  #     - id: mypy
+  #       name: Type check Python
+  #       files: ^services/.*\.py$
+  #       pass_filenames: false
+  #       args: [--config-file=pyproject.toml, services, shared]
+  #       additional_dependencies: [types-requests, types-redis]
+
+  # JavaScript/TypeScript: Prettier
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        name: Format JS/TS with Prettier
+        files: ^apps/shopify-app/.*\.(js|jsx|ts|tsx|json|css|md)$
+        exclude: ^apps/shopify-app/(node_modules|dist|build)/
+
+  # JavaScript/TypeScript: ESLint
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        name: Lint JavaScript/TypeScript
+        files: ^apps/shopify-app/app/.*\.(js|jsx|ts|tsx)$
+        args: ['--fix', '--max-warnings=0']
+        additional_dependencies:
+          - eslint@8.56.0
+          - eslint-config-prettier@9.1.0
+          - eslint-plugin-react@7.33.2
+          - eslint-plugin-react-hooks@4.6.0
+          - '@typescript-eslint/parser@6.18.1'
+          - '@typescript-eslint/eslint-plugin@6.18.1'
+
+  # # Docker
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.12.0
+  #   hooks:
+  #     - id: hadolint-docker
+  #       name: Lint Dockerfiles
+  #       files: Dockerfile.*
+
+  # Shell scripts
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        name: Check shell scripts
+
+  # Local custom checks
+  - repo: local
+    hooks:
+      # Validate Poetry lock files
+      - id: poetry-check
+        name: Validate Poetry configuration
+        entry: bash -c 'for dir in services/*; do if [ -f "$dir/pyproject.toml" ]; then (cd "$dir" && poetry check); fi; done'
+        language: system
+        pass_filenames: false
+        files: ^services/.*/pyproject.toml$
+
+      # Check Prisma schemas are valid
+      - id: prisma-validate
+        name: Validate Prisma schemas
+        entry: bash -c 'if [ -f apps/shopify-app/prisma/schema.prisma ]; then cd apps/shopify-app && npx prisma validate; fi'
+        language: system
+        pass_filenames: false
+        files: \.prisma$
+
+      # Check for debug code in production
+      - id: no-debug-code
+        name: Check for debug code
+        entry: bash -c 'scripts/check-debug-code.sh'
+        language: system
+        pass_filenames: false
+
+      # Validate environment variables
+      - id: check-env-vars
+        name: Check environment variables
+        entry: python scripts/check_env_vars.py
+        language: system
+        pass_filenames: false
+        files: \.env\.example$
+
+      # Check Python imports
+      - id: check-imports
+        name: Check Python imports
+        entry: bash -c 'scripts/check-imports.sh'
+        language: system
+        pass_filenames: false
+        files: ^(services|shared)/.*\.py$

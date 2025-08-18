@@ -147,9 +147,9 @@ import { Card, Button, Banner, Text, BlockStack, InlineStack, Badge, ProgressBar
 export default function CatalogSync({ lastSync, productCount, syncing, progress, onSync }) {
   const formatTimeAgo = (date) => {
     if (!date) return 'Never';
-    
+
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    
+
     if (seconds < 60) return 'Just now';
     if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
@@ -165,7 +165,7 @@ export default function CatalogSync({ lastSync, productCount, syncing, progress,
             <Badge tone="success">{productCount} Products</Badge>
           )}
         </InlineStack>
-        
+
         {lastSync && (
           <InlineStack gap="200">
             <Text tone="subdued">Last synced:</Text>
@@ -218,7 +218,7 @@ export default function CreditUsage({ used, limit, resetsAt }) {
   const percentage = limit > 0 ? (used / limit) * 100 : 0;
   const remaining = limit - used;
   const isUnlimited = limit === -1 || limit === 0;
-  
+
   const getDaysUntilReset = () => {
     if (!resetsAt) return null;
     const days = Math.ceil((new Date(resetsAt) - new Date()) / (1000 * 60 * 60 * 24));
@@ -268,8 +268,8 @@ export default function CreditUsage({ used, limit, resetsAt }) {
                   {remaining.toLocaleString()} remaining
                 </Text>
               </InlineStack>
-              <ProgressBar 
-                progress={percentage} 
+              <ProgressBar
+                progress={percentage}
                 tone={tone}
                 size="small"
               />
@@ -348,12 +348,12 @@ export default function CreditUsage({ used, limit, resetsAt }) {
 import { Grid, Card, Text, BlockStack, InlineStack, Badge, Icon } from "@shopify/polaris";
 import { CameraIcon, CreditCardIcon, ProductIcon } from "@shopify/polaris-icons";
 
-export default function DashboardStats({ 
-  selfiesToday, 
-  creditsRemaining, 
-  creditsLimit, 
-  syncStatus, 
-  productCount 
+export default function DashboardStats({
+  selfiesToday,
+  creditsRemaining,
+  creditsLimit,
+  syncStatus,
+  productCount
 }) {
   const stats = [
     {
@@ -563,7 +563,7 @@ export default function SubscriptionStatus({ subscription, onStartTrial, onViewP
       const daysLeft = Math.ceil(
         (new Date(subscription.trialEndsAt) - new Date()) / (1000 * 60 * 60 * 24)
       );
-      
+
       return {
         title: `Free trial: ${daysLeft} days remaining`,
         description: "Choose a plan to continue after your trial ends",
@@ -634,9 +634,9 @@ const svc = {
 
 function signJwt(shop) {
   const token = jwt.sign(
-    { 
-      sub: shop, 
-      scope: "bff:api:access", 
+    {
+      sub: shop,
+      scope: "bff:api:access",
       iat: Math.floor(Date.now() / 1000),
       platform: "shopify"
     },
@@ -649,7 +649,7 @@ function signJwt(shop) {
 
 function addApiHeaders(shop) {
   const token = signJwt(shop);
-  
+
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -660,25 +660,25 @@ function addApiHeaders(shop) {
 
 function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
   const token = signJwt(shop);
-  
+
   const headers = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    "X-Shop-Platform": "shopify", 
+    "X-Shop-Platform": "shopify",
     "X-Shop-Domain": shop,
     "X-Webhook-Platform": "shopify",
   };
-  
+
   if (topic) {
     headers["X-Webhook-Topic"] = topic;
   }
-  
+
   if (webhookId) {
     headers["X-Webhook-Id"] = webhookId;
     // Keep Shopify-specific for backward compatibility if needed
     headers["X-Shopify-Webhook-Id"] = webhookId;
   }
-  
+
   return headers;
 }
 
@@ -694,7 +694,7 @@ async function callAndForget(base, path, { method = "GET", shop, body, webhookId
   const headers = addWebhookHeaders(shop, { webhookId, topic });
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 1500); // don't hang; we're not awaiting
-  
+
   fetch(url, {
     method,
     signal: controller.signal,
@@ -710,13 +710,13 @@ async function call(base, path, { method = "GET", shop, body } = {}) {
     headers: addApiHeaders(shop),
     body: body ? JSON.stringify(body) : undefined,
   });
-  
+
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const errorMsg = json?.error?.message || json?.detail?.message || `API ${res.status}`;
     throw new Error(errorMsg);
   }
-  
+
   return json?.data ?? json;
 }
 
@@ -766,10 +766,10 @@ export default {
   relayShopifyWebhook: ({ topic, shop, payload, webhookId }) =>
     callAndForget(svc.webhook, "/webhooks/shopify", {
       method: "POST",
-      shop, 
+      shop,
       body: payload,
       webhookId,
-      topic,            
+      topic,
     }),
 };
 ```
@@ -1031,7 +1031,7 @@ import SubscriptionStatus from "../components/SubscriptionStatus";
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
-  
+
   console.log("Loader called for shop:", shop);
 
   // Fetch data from external API
@@ -1039,7 +1039,7 @@ export const loader = async ({ request }) => {
     apiClient.getMerchant(shop),
     apiClient.getCreditsStatus(shop),
     apiClient.getCatalogStatus(shop),
-    apiClient.getAnalytics(shop, 
+    apiClient.getAnalytics(shop,
       new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       new Date().toISOString()
     )
@@ -1098,7 +1098,7 @@ export default function Index() {
   useEffect(() => {
     if (fetcher.data?.websocket_url) {
       const ws = new WebSocket(fetcher.data.websocket_url);
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'progress') {
@@ -1159,7 +1159,7 @@ export default function Index() {
     <Page>
       <Layout>
         <Layout.Section>
-          <SubscriptionStatus 
+          <SubscriptionStatus
             subscription={subscription}
             onStartTrial={handleStartTrial}
             onViewPlans={() => navigate('/app/billing')}
@@ -1180,7 +1180,7 @@ export default function Index() {
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">Getting Started</Text>
-              <ProgressBar 
+              <ProgressBar
                 size="small"
                 progress={checklistItems.filter(item => item.completed).length * 33.33}
               />
@@ -1256,19 +1256,19 @@ export function ErrorBoundary({ error }) {
 
 ```jsx
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { 
-  Page, 
-  Layout, 
-  Card, 
-  Text, 
-  DatePicker, 
-  Select, 
-  Button, 
-  DataTable, 
-  BlockStack, 
-  InlineStack, 
-  Badge, 
-  Grid, 
+import {
+  Page,
+  Layout,
+  Card,
+  Text,
+  DatePicker,
+  Select,
+  Button,
+  DataTable,
+  BlockStack,
+  InlineStack,
+  Badge,
+  Grid,
   Popover,
   Banner,
   SkeletonBodyText,
@@ -1293,9 +1293,9 @@ export const loader = async ({ request }) => {
     analytics: analytics.data || {
       selfie_uploads: { total: 0, by_day: [] },
       recommendations: { total: 0, click_through_rate: 0, by_product: [] },
-      conversion_metrics: { 
-        views: 0, 
-        clicks: 0, 
+      conversion_metrics: {
+        views: 0,
+        clicks: 0,
         purchases: 0,
         return_rate_before: 0,
         return_rate_after: 0
@@ -1314,12 +1314,12 @@ export const action = async ({ request }) => {
     const from = formData.get("from");
     const to = formData.get("to");
     const format = formData.get("format");
-    
+
     // In real implementation, this would trigger a download
     // For now, we'll just return success
-    return Response.json({ 
-      success: true, 
-      message: `Export initiated in ${format} format` 
+    return Response.json({
+      success: true,
+      message: `Export initiated in ${format} format`
     });
   }
 
@@ -1346,7 +1346,7 @@ export default function Analytics() {
 
   const handleExport = () => {
     fetcher.submit(
-      { 
+      {
         action: "export",
         from: selectedDateRange.start.toISOString(),
         to: selectedDateRange.end.toISOString(),
@@ -1357,7 +1357,7 @@ export default function Analytics() {
   };
 
   // Calculate key metrics
-  const conversionRate = analytics.recommendations.total > 0 
+  const conversionRate = analytics.recommendations.total > 0
     ? ((analytics.recommendations.click_through_rate * 100).toFixed(2))
     : '0.00';
 
@@ -1828,7 +1828,7 @@ export default function Catalog() {
     if (fetcher.data?.websocket_url) {
       setSyncing(true);
       const ws = new WebSocket(fetcher.data.websocket_url);
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'progress') {
@@ -1983,17 +1983,17 @@ export default function Catalog() {
 
 ```jsx
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import { 
-  Page, 
-  Layout, 
-  Card, 
-  Text, 
-  Button, 
-  TextField, 
-  Select, 
-  BlockStack, 
-  InlineStack, 
-  Badge, 
+import {
+  Page,
+  Layout,
+  Card,
+  Text,
+  Button,
+  TextField,
+  Select,
+  BlockStack,
+  InlineStack,
+  Badge,
   Banner,
   Link,
   List,
@@ -2004,7 +2004,7 @@ import {
   Box,
   Divider
 } from "@shopify/polaris";
-import { 
+import {
   BookOpenIcon,
   ChevronDownIcon,
   ChevronRightIcon
@@ -2076,7 +2076,7 @@ export default function Help() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = 'Please enter a valid email';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -2084,7 +2084,7 @@ export default function Help() {
   const handleSubmit = () => {
     if (validateForm()) {
       fetcher.submit(
-        { 
+        {
           action: "submit_ticket",
           subject,
           category,
@@ -2192,7 +2192,7 @@ export default function Help() {
               onDismiss={() => window.location.reload()}
             >
               <Text>
-                Your ticket #{fetcher.data.data.ticket_id} has been submitted. 
+                Your ticket #{fetcher.data.data.ticket_id} has been submitted.
                 We'll respond within 24 hours to {email}.
               </Text>
             </Banner>
@@ -2221,8 +2221,8 @@ export default function Help() {
                 title="Priority Support"
                 illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/phone.svg?v=1701930959"
                 primaryAction={{
-                  content: subscription?.plan === 'growth' || subscription?.plan === 'enterprise' 
-                    ? 'Call Now' 
+                  content: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
+                    ? 'Call Now'
                     : 'Upgrade for Phone Support',
                   url: subscription?.plan === 'growth' || subscription?.plan === 'enterprise'
                     ? `tel:${supportPhone.replace(/-/g, '')}`
@@ -2244,8 +2244,8 @@ export default function Help() {
                 title="Live Chat"
                 illustration="https://cdn.shopify.com/s/files/1/0583/6465/7734/files/chat.svg?v=1701930959"
                 primaryAction={{
-                  content: subscription?.plan === 'enterprise' 
-                    ? 'Start Chat' 
+                  content: subscription?.plan === 'enterprise'
+                    ? 'Start Chat'
                     : 'Enterprise Only',
                   disabled: subscription?.plan !== 'enterprise',
                   url: '#'
@@ -2267,7 +2267,7 @@ export default function Help() {
             <Card>
               <BlockStack gap="400">
                 <Text variant="headingMd" as="h2">Submit Support Ticket</Text>
-                
+
                 <TextField
                   label="Email"
                   value={email}
@@ -2324,8 +2324,8 @@ export default function Help() {
                 />
 
                 <InlineStack gap="200">
-                  <Button 
-                    primary 
+                  <Button
+                    primary
                     onClick={handleSubmit}
                     loading={fetcher.state === 'submitting'}
                   >
@@ -2415,8 +2415,8 @@ export default function Help() {
                         ariaControls={`faq-${faq.id}`}
                       >
                         <InlineStack gap="200" blockAlign="center">
-                          <Icon 
-                            source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon} 
+                          <Icon
+                            source={expandedFaq[faq.id] ? ChevronDownIcon : ChevronRightIcon}
                           />
                           <Text variant="bodyMd" fontWeight="semibold">
                             {faq.question}
@@ -2574,7 +2574,7 @@ export const loader = async ({ request }) => {
 // /**
 //  * This route handles requests from the storefront to the Remix server,
 //  * performing an AI-based product matching and analysis based on provided data.
-//  * 
+//  *
 //  * Expected Request Payload:
 //  * @request matchData - An object containing:
 //  *   - shop_id (string): ID of the Shopify store
@@ -2648,7 +2648,7 @@ export const loader = async ({ request }) => {
 //             "Access-Control-Allow-Origin": "*",
 //           },
 //         });
-//       }      
+//       }
 //     }
 
 //     // If AI response is received, format and return the data to the storefront
@@ -2695,12 +2695,12 @@ export const loader = async ({ request }) => {
 
 // /**
 //  * Uploads a file or a captured image URL to Firebase Storage and returns the download URL.
-//  * 
+//  *
 //  * @param {File | null} file - The file to be uploaded (if available).
 //  * @param {string} selfie_id - A unique identifier for the storage reference (e.g., user ID or selfie ID).
 //  * @param {string} capturedURL - A data URL string representing the captured image, used if file is not provided.
 //  * @returns {Promise<string>} - A promise that resolves to the download URL of the uploaded file.
-//  * 
+//  *
 //  */
 // async function uploadFile(file, selfie_id, capturedURL) {
 //   const storage = getStorage(firebase);
@@ -2716,10 +2716,10 @@ export const loader = async ({ request }) => {
 
 // /**
 //  * Processes a request from the storefront to the Remix server to upload a selfie, validate billing, and register the selfie via an AI server.
-//  * 
+//  *
 //  * @param {Object} request - Incoming request containing multipart form data (selfie_id, shop_id, jpegFile, capturedURL).
 //  * @param {Object} params - Additional parameters from the route.
-//  * 
+//  *
 //  * @returns {Response} - JSON response with either the registered selfie details or an error status.
 //  */
 // export const action = async ({ request, params }) => {
@@ -2770,7 +2770,7 @@ export const loader = async ({ request }) => {
 
 //     console.log({selfie: options});
 
-//     let responseData, response;  
+//     let responseData, response;
 //     try {
 //       response = await fetchWithTimeout(ai_server_selfie_register, options, 20000); // 5000 ms timeout
 //       if (!response.ok) {
@@ -2790,7 +2790,7 @@ export const loader = async ({ request }) => {
 //             "Access-Control-Allow-Origin": "*",
 //           },
 //         });
-//       }      
+//       }
 //     }
 //     console.log("responseData error: ", {responseData});
 //     if (responseData) {
@@ -2808,7 +2808,7 @@ export const loader = async ({ request }) => {
 //           description: responseData.description,
 //           recommendation: responseData.recommendation
 //         };
-//       }      
+//       }
 //     } else {
 //       return json({ error: "ai response failed" }, {
 //         headers: {
@@ -2846,7 +2846,7 @@ export const loader = async ({ request }) => {
 
 // /**
 //  * Deletes a file from Firebase Storage given its URL.
-//  * 
+//  *
 //  * @param {string} fileUrl - The URL of the file to be deleted.
 //  * @returns {void}
 //  */
@@ -2866,7 +2866,7 @@ export const loader = async ({ request }) => {
 //  * Handles the request from the storefront to the Remix server for deleting a selfie file.
 //  * @request Multipart form data containing:
 //  * - `selfieUrl` (string): Firestore URL of the selfie image to delete.
-//  * 
+//  *
 //  * @returns JSON response:
 //  * - `{ ok: "ok" }` with status 200 and CORS headers on success.
 //  * - `{ status: 411 }` on failure, with CORS headers.
@@ -2874,13 +2874,13 @@ export const loader = async ({ request }) => {
 // export const action = async ({ request, params }) => {
 //   try {
 //     const form = await request.formData();
-//     const selfieUrl = form.get("selfieUrl");   
+//     const selfieUrl = form.get("selfieUrl");
 //     await deleteFileByUrl(selfieUrl);
 //     return json({ ok: "ok" }, {
 //       headers: {
 //         "Access-Control-Allow-Origin": "*",
 //       },
-//     });    
+//     });
 //   } catch (error) {
 //     return json({ error: "request failed" }, {
 //       headers: {
@@ -2906,12 +2906,12 @@ export const loader = async ({ request }) => {
 
 // /**
 //  * Processes product sorting requests from the storefront to the Remix server.
-//  * 
+//  *
 //  * @request Multipart form data with:
 //  * - `selfie_id` (string): The ID for the selfie image.
 //  * - `shop_id` (string): The shop's unique ID.
 //  * - `gyu_products` (stringified JSON): Array of products to check against the database.
-//  * 
+//  *
 //  * @returns JSON response:
 //  * - `{ sorted_products }` with sorted products and CORS headers if sorting succeeds.
 //  * - `{ success: "no update" }` if no update is needed.
@@ -2924,7 +2924,7 @@ export const loader = async ({ request }) => {
 //     const form = await request.formData();
 //     const isValid = await isValidBilling(String(form.get("shop_id")));
 //     const selfie_id = form.get("selfie_id");
-//     const shop_id = form.get("shop_id");   
+//     const shop_id = form.get("shop_id");
 //     if (!isValid) {
 //       return json({ error: "billing failed" }, {
 //         headers: {
@@ -2933,7 +2933,7 @@ export const loader = async ({ request }) => {
 //       });
 //     }
 //     // Compares the firebase products registered in the 'Analyzed' status with the cache products obtained from the ai server.
-//     const gyuProducts = JSON.parse(form.get("gyu_products"));    
+//     const gyuProducts = JSON.parse(form.get("gyu_products"));
 //     const variants = await getRegistered(shop_id);
 //     let fDifferent = false;
 //     const cntGyuProducts = getDistinctProducts(gyuProducts).length;
@@ -3043,7 +3043,7 @@ export const action = async ({ request }) => {
     // Still return 200 to Shopify to avoid retries
   }
 
-  return new Response(JSON.stringify({ 
+  return new Response(JSON.stringify({
     relayed: true,
     topic,
     shop: shop.replace(/\.myshopify\.com$/, '***') // Mask shop name in logs
