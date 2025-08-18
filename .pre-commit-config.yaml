@@ -41,15 +41,13 @@ repos:
         args: [--line-length=120]
 
   # Python: Type checking
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: v1.8.0
-  #   hooks:
-  #     - id: mypy
-  #       name: Type check Python
-  #       files: ^services/.*\.py$
-  #       pass_filenames: false
-  #       args: [--config-file=pyproject.toml, services, shared]
-  #       additional_dependencies: [types-requests, types-redis]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: Type check Python
+        files: ^services/.*\.py$
+        args: []
 
   # JavaScript/TypeScript: Prettier
   - repo: https://github.com/pre-commit/mirrors-prettier
