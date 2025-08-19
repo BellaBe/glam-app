@@ -23,7 +23,7 @@ class ServiceConfig(BaseModel):
 
     # Required environment variables
     environment: str = Field(..., alias="APP_ENV")
-    api_external_port: int = Field(default=8005, alias="CATALOG_API_EXTERNAL_PORT")
+    api_external_port: int = Field(..., alias="CATALOG_API_EXTERNAL_PORT")
     database_enabled: bool = Field(default=True, alias="CATALOG_DB_ENABLED")
 
     # Required secrets (from .env)

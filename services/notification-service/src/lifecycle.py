@@ -178,34 +178,19 @@ class ServiceLifecycle:
         # Create listeners for ALL event types
         listeners = [
             MerchantCreatedListener(
-                self.messaging_client,
-                self.notification_service,
-                self.event_publisher,
-                self.logger,
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             CatalogSyncCompletedListener(
-                self.messaging_client,
-                self.notification_service,
-                self.event_publisher,
-                self.logger,
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             BillingSubscriptionExpiredListener(
-                self.messaging_client,
-                self.notification_service,
-                self.event_publisher,
-                self.logger,
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             CreditBalanceLowListener(
-                self.messaging_client,
-                self.notification_service,
-                self.event_publisher,
-                self.logger,
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             CreditBalanceDepletedListener(
-                self.messaging_client,
-                self.notification_service,
-                self.event_publisher,
-                self.logger,
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
         ]
 

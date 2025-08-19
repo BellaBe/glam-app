@@ -6,7 +6,6 @@ from shared.messaging.subjects import Subjects
 from shared.utils.exceptions import ValidationError
 
 from ..schemas.events import (
-    BillingSubscriptionExpiredPayload,
     CatalogSyncCompletedPayload,
     CreditBalanceDepletedPayload,
     CreditBalanceLowPayload,
@@ -111,55 +110,6 @@ class CatalogSyncCompletedListener(Listener):
             return
         except Exception as e:
             self.logger.error(f"Failed to process catalog sync: {e}")
-            raise
-
-
-# Similar listeners for billing and credit events...
-class BillingSubscriptionExpiredListener(Listener):
-    """Listen for billing subscription expired events"""
-
-    @property
-    def subject(self) -> str:
-        return "evt.billing.subscription.expired.v1"
-
-    @property
-    def queue_group(self) -> str:
-        return "notification-billing-expired"
-
-    @property
-    def service_name(self) -> str:
-        return "notification-service"
-
-    def __init__(self, js_client, notification_service, event_publisher, logger):
-        super().__init__(js_client, logger)
-        self.notification_service = notification_service
-        self.event_publisher = event_publisher
-
-    async def on_message(self, data: dict[str, Any]) -> None:
-        """Process billing expired event"""
-        try:
-            payload = BillingSubscriptionExpiredPayload(**data)
-
-            notification = await self.notification_service.process_event(
-                event_type=self.subject,
-                event_data=payload.model_dump(),
-                correlation_id=payload.correlation_id or "unknown",
-            )
-
-            if notification:
-                if notification.status == "sent":
-                    await self.event_publisher.email_sent(notification)
-                else:
-                    await self.event_publisher.email_failed(
-                        notification,
-                        error=notification.error_message or "Unknown error",
-                    )
-
-        except ValidationError as e:
-            self.logger.error(f"Invalid billing expired event: {e}")
-            return
-        except Exception as e:
-            self.logger.error(f"Failed to process billing expired: {e}")
             raise
 
 

@@ -3,13 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from shared.api.dependencies import (
-    ClientAuthDep,
-    LoggerDep,
-    PaginationDep,
-    PlatformContextDep,
-    RequestContextDep,
-)
+from shared.api.dependencies import ClientAuthDep, LoggerDep, PaginationDep, PlatformContextDep, RequestContextDep
 
 from .config import ServiceConfig
 from .lifecycle import ServiceLifecycle

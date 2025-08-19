@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from prisma import Prisma  # type: ignore[attr-defined]
+from prisma import Prisma
 
 from ..schemas.notification import NotificationOut, NotificationStats
 
@@ -30,11 +30,7 @@ class NotificationRepository:
         return NotificationOut.model_validate(notification) if notification else None
 
     async def find_many(
-        self,
-        filters: dict[str, Any] | None,
-        order_by: list[tuple] | None,
-        skip: int = 0,
-        limit: int = 50,
+        self, filters: dict[str, Any] = None, skip: int = 0, limit: int = 50, order_by: list[tuple] = None
     ) -> list[NotificationOut]:
         """Find multiple notifications with filters"""
         where = filters or {}
@@ -68,24 +64,15 @@ class NotificationRepository:
 
         # Count by status today
         sent_today = await self.prisma.notification.count(
-            where={
-                "status": "sent",
-                "created_at": {"gte": today_start, "lt": today_end},
-            }
+            where={"status": "sent", "created_at": {"gte": today_start, "lt": today_end}}
         )
 
         failed_today = await self.prisma.notification.count(
-            where={
-                "status": "failed",
-                "created_at": {"gte": today_start, "lt": today_end},
-            }
+            where={"status": "failed", "created_at": {"gte": today_start, "lt": today_end}}
         )
 
         pending_today = await self.prisma.notification.count(
-            where={
-                "status": "pending",
-                "created_at": {"gte": today_start, "lt": today_end},
-            }
+            where={"status": "pending", "created_at": {"gte": today_start, "lt": today_end}}
         )
 
         # Get counts by template type

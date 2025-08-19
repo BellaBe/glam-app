@@ -23,7 +23,7 @@ class ServiceConfig(BaseModel):
 
     # Environment
     environment: str = Field(..., alias="APP_ENV")
-    api_external_port: int = Field(default=8002, alias="CREDIT_API_EXTERNAL_PORT")
+    api_external_port: int = Field(..., alias="CREDIT_API_EXTERNAL_PORT")
     database_enabled: bool = Field(default=True, alias="CREDIT_DB_ENABLED")
 
     # Required secrets

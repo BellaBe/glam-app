@@ -24,7 +24,7 @@ class ServiceConfig(BaseModel):
 
     # Required environment variables
     environment: str = Field(..., alias="APP_ENV")
-    api_external_port: int = Field(8008, alias="NOTIFICATION_API_EXTERNAL_PORT")
+    api_external_port: int = Field(..., alias="NOTIFICATION_API_EXTERNAL_PORT")
     database_enabled: bool = Field(True, alias="NOTIFICATION_DB_ENABLED")
 
     # Required secrets

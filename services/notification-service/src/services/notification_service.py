@@ -18,9 +18,9 @@ class NotificationService:
 
     # Event to template mapping
     EVENT_TEMPLATE_MAP: ClassVar[dict[str, str]] = {
-        "evt.merchant.created": "welcome",
-        "evt.credit.balance.low": "credit_warning",
-        "evt.credit.balance.depleted": "zero_balance",
+        "evt.merchant.created.v1": "welcome",
+        "evt.credit.balance.low.v1": "credit_warning",
+        "evt.credit.balance.depleted.v1": "zero_balance",
     }
 
     def __init__(
