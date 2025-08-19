@@ -1,7 +1,6 @@
 # services/catalog-service/src/lifecycle.py
 import asyncio
 
-import redis.asyncio as redis
 from prisma import Prisma  # type: ignore[attr-defined]
 
 from shared.messaging import JetStreamClient
@@ -26,7 +25,6 @@ class ServiceLifecycle:
         # Connections
         self.messaging_client: JetStreamClient | None = None
         self.prisma: Prisma | None = None
-        self.redis: redis.Redis | None = None
         self._db_connected = False
 
         # Components
@@ -51,16 +49,13 @@ class ServiceLifecycle:
             # 2. Database
             await self._init_database()
 
-            # 3. Redis (for progress caching)
-            await self._init_redis()
-
-            # 4. Repositories (depends on Prisma)
+            # 3. Repositories (depends on Prisma)
             self._init_repositories()
 
-            # 5. Services (depends on repositories)
+            # 5``. Services (depends on repositories)
             self._init_services()
 
-            # 6. Event listeners (depends on services)
+            # 5. Event listeners (depends on services)
             await self._init_listeners()
 
             self.logger.info("Catalog service started successfully")
@@ -87,13 +82,6 @@ class ServiceLifecycle:
             except Exception:
                 self.logger.error("Listener stop failed", exc_info=True)
 
-        # Close Redis
-        if self.redis:
-            try:
-                await self.redis.close()
-            except Exception:
-                self.logger.error("Redis close failed", exc_info=True)
-
         # Close messaging
         if self.messaging_client:
             try:
@@ -114,7 +102,7 @@ class ServiceLifecycle:
         """Initialize NATS/JetStream for events"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher
         self.event_publisher = CatalogEventPublisher(jetstream_client=self.messaging_client, logger=self.logger)
@@ -136,20 +124,6 @@ class ServiceLifecycle:
             self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
             raise
 
-    async def _init_redis(self) -> None:
-        """Initialize Redis for progress caching"""
-        if not self.config.redis_enabled:
-            self.logger.info("Redis disabled; skipping initialization")
-            return
-
-        try:
-            self.redis = await redis.from_url(self.config.redis_url, encoding="utf-8", decode_responses=True)
-            await self.redis.ping()
-            self.logger.info("Redis connected")
-        except Exception as e:
-            self.logger.warning(f"Redis connect failed: {e}. Continuing without cache.")
-            self.redis = None
-
     def _init_repositories(self) -> None:
         """Initialize repositories with Prisma client"""
         if not self._db_connected:
@@ -170,7 +144,6 @@ class ServiceLifecycle:
         self.catalog_service = CatalogService(
             catalog_repo=self.catalog_repo,
             sync_repo=self.sync_repo,
-            redis_client=self.redis,
             logger=self.logger,
             config=vars(self.config),
         )

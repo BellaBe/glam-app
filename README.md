@@ -1,4 +1,4 @@
-# Run once per service repository (writes to services/<name>/.venv)
+ # Run once per service repository (writes to services/<name>/.venv)
 poetry config virtualenvs.in-project true --local
 Poetry will now drop a .venv/ folder right next to the pyproject.toml inside every services/<name> directory.
 

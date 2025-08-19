@@ -1,6 +1,5 @@
 import asyncio
 
-import redis.asyncio as redis
 from prisma import Prisma  # type: ignore[attr-defined]
 
 from shared.messaging.jetstream_client import JetStreamClient
@@ -27,7 +26,7 @@ class ServiceLifecycle:
         # External connections
         self.messaging_client: JetStreamClient | None = None
         self.prisma: Prisma | None = None
-        self.redis: redis.Redis | None = None
+        # self.redis: redis.Redis | None = None
         self._db_connected: bool = False
 
         # Publishers / listeners
@@ -57,7 +56,7 @@ class ServiceLifecycle:
 
             await self._init_messaging()
             await self._init_database()
-            await self._init_redis()
+            # await self._init_redis()
             self._init_utils()
             self._init_repositories()
             self._init_local_services()
@@ -87,14 +86,14 @@ class ServiceLifecycle:
             except Exception:
                 self.logger.critical("Listener stop failed", exc_info=True)
 
-        # Close connections
-        if self.redis:
-            try:
-                await self.redis.close()
-                if hasattr(self.redis, "wait_closed"):
-                    await self.redis.wait_closed()
-            except Exception:
-                self.logger.critical("Redis close failed", exc_info=True)
+        # # Close connections
+        # if self.redis:
+        #     try:
+        #         await self.redis.close()
+        #         if hasattr(self.redis, "wait_closed"):
+        #             await self.redis.wait_closed()
+        #     except Exception:
+        #         self.logger.critical("Redis close failed", exc_info=True)
 
         if self.messaging_client:
             try:
@@ -114,7 +113,7 @@ class ServiceLifecycle:
         """Initialize messaging client"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher
         self.event_publisher = BillingEventPublisher(
@@ -142,11 +141,11 @@ class ServiceLifecycle:
             self.logger.error("Prisma connect failed: %s", e, exc_info=True)
             raise
 
-    async def _init_redis(self) -> None:
-        """Initialize Redis client"""
-        self.redis = redis.from_url(self.config.redis_url)
-        await self.redis.ping()
-        self.logger.info("Redis connected")
+    # async def _init_redis(self) -> None:
+    #     """Initialize Redis client"""
+    #     self.redis = redis.from_url(self.config.redis_url)
+    #     await self.redis.ping()
+    #     self.logger.info("Redis connected")
 
     def _init_utils(self) -> None:
         """Initialize utility classes"""
@@ -175,9 +174,9 @@ class ServiceLifecycle:
         if not self.event_publisher:
             raise RuntimeError("Event publisher not initialized")
 
-        # Add checks for required dependencies
-        if not self.redis:
-            raise RuntimeError("Redis client not initialized")
+        # # Add checks for required dependencies
+        # if not self.redis:
+        #     raise RuntimeError("Redis client not initialized")
 
         if not self.pack_manager:
             raise RuntimeError("Credit pack manager not initialized")
@@ -190,7 +189,6 @@ class ServiceLifecycle:
             billing_repo=self.billing_repo,
             purchase_repo=self.purchase_repo,
             publisher=self.event_publisher,
-            redis_client=self.redis,
             logger=self.logger,
         )
 
@@ -201,7 +199,6 @@ class ServiceLifecycle:
             pack_manager=self.pack_manager,
             shopify_client=self.shopify_client,
             publisher=self.event_publisher,
-            redis_client=self.redis,
             logger=self.logger,
         )
 

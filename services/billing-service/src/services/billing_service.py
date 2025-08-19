@@ -1,8 +1,6 @@
 from datetime import datetime
 from uuid import UUID
 
-import redis.asyncio as redis
-
 from shared.utils.logger import ServiceLogger
 
 from ..config import ServiceConfig
@@ -28,14 +26,13 @@ class BillingService:
         billing_repo: BillingRepository,
         purchase_repo: PurchaseRepository,
         publisher: BillingEventPublisher,
-        redis_client: redis.Redis,
         logger: ServiceLogger,
     ):
         self.config = config
         self.billing_repo = billing_repo
         self.purchase_repo = purchase_repo
         self.publisher = publisher
-        self.redis = redis_client
+        # self.redis = redis_client
         self.logger = logger
 
     async def create_billing_record(self, merchant_id: UUID) -> None:
@@ -77,13 +74,13 @@ class BillingService:
     async def activate_trial(self, merchant_id: UUID, idempotency_key: str | None = None) -> TrialActivatedOut:
         """Activate trial for merchant"""
         # Check idempotency
-        if idempotency_key:
-            cache_key = f"trial:{idempotency_key}"
-            cached = await self.redis.get(cache_key)
-            if cached:
-                import json
+        # if idempotency_key:
+        #     cache_key = f"trial:{idempotency_key}"
+        #     cached = await self.redis.get(cache_key)
+        #     if cached:
+        #         import json
 
-                return TrialActivatedOut(**json.loads(cached))
+        #         return TrialActivatedOut(**json.loads(cached))
 
         # Get billing record
         record = await self.billing_repo.find_by_merchant_id(merchant_id)
@@ -110,13 +107,13 @@ class BillingService:
         )
 
         # Cache for idempotency
-        if idempotency_key:
-            cache_key = f"trial:{idempotency_key}"
-            await self.redis.setex(
-                cache_key,
-                86400,  # 24 hours
-                response.model_dump_json(),
-            )
+        # if idempotency_key:
+        #     cache_key = f"trial:{idempotency_key}"
+        #     await self.redis.setex(
+        #         cache_key,
+        #         86400,  # 24 hours
+        #         response.model_dump_json(),
+        #     )
 
         return response
 

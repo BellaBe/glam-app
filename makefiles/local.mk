@@ -85,3 +85,31 @@ local-wait: ## Wait for infrastructure to be ready
 	@$(call print_info,"Waiting for infrastructure to be ready...")
 	@scripts/wait-for-db.sh
 	@$(call print_success,"Infrastructure is ready")
+
+clean-venv:
+	@echo "Cleaning all virtual environments..."
+	@for dir in services/*; do \
+		if [ -d "$$dir/.venv" ]; then \
+			echo "Removing $$dir/.venv"; \
+			rm -rf "$$dir/.venv"; \
+		fi \
+	done
+
+update-locks:
+	@echo "Updating all lock files..."
+	@for dir in services/*; do \
+		if [ -f "$$dir/pyproject.toml" ]; then \
+			echo "Updating lock for $$dir..."; \
+			(cd "$$dir" && poetry lock --no-update); \
+		fi \
+	done
+
+reinstall-all: clean-venv update-locks
+	@echo "Installing all services..."
+	@for dir in services/*; do \
+		if [ -f "$$dir/pyproject.toml" ]; then \
+			echo "Installing $$dir..."; \
+			(cd "$$dir" && poetry install); \
+		fi \
+	done
+	@echo "✅ All services reinstalled"

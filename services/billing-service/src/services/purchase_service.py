@@ -1,6 +1,5 @@
 from uuid import UUID
 
-import redis.asyncio as redis
 
 from shared.utils.logger import ServiceLogger
 
@@ -25,7 +24,6 @@ class PurchaseService:
         pack_manager: CreditPackManager,
         shopify_client: ShopifyClient,
         publisher: BillingEventPublisher,
-        redis_client: redis.Redis,
         logger: ServiceLogger,
     ):
         self.config = config
@@ -34,7 +32,6 @@ class PurchaseService:
         self.pack_manager = pack_manager
         self.shopify_client = shopify_client
         self.publisher = publisher
-        self.redis = redis_client
         self.logger = logger
 
     async def create_purchase(self, merchant_id: UUID, shop_domain: str, data: PurchaseCreateIn) -> PurchaseCreatedOut:

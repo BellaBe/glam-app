@@ -1,6 +1,7 @@
 # services/merchant-service/src/schemas/merchant.py
+from httpx import stream
 from prisma.enums import MerchantStatus
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 # ---------- INPUT DTOs ----------
@@ -11,7 +12,7 @@ class MerchantSyncIn(BaseModel):
     platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
     platform_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
     shop_name: str = Field(..., description="Shop display name")
-    email: EmailStr = Field(..., description="Shop contact email")
+    email: str = Field(..., description="Shop contact email")
     primary_domain_host: str = Field(..., description="Primary domain of the shop")
     currency: str = Field(..., description="Shop currency (e.g., USD)")
     country: str = Field(..., description="Shop country code (e.g., US)")
@@ -44,7 +45,7 @@ class MerchantSyncedPayload(BaseModel):
     platform_name: str
     platform_id: str
     platform_domain: str
-    contact_email: EmailStr
+    contact_email: str
     name: str
     status: MerchantStatus
 

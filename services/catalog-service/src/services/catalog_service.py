@@ -2,8 +2,6 @@
 import json
 from datetime import datetime
 
-import redis.asyncio as redis
-
 from shared.utils.exceptions import ConflictError, NotFoundError
 from shared.utils.logger import ServiceLogger
 
@@ -20,13 +18,11 @@ class CatalogService:
         self,
         catalog_repo: CatalogRepository,
         sync_repo: SyncRepository,
-        redis_client: redis.Redis | None,
         logger: ServiceLogger,
         config: dict,
     ):
         self.catalog_repo = catalog_repo
         self.sync_repo = sync_repo
-        self.redis = redis_client
         self.logger = logger
         self.config = config
 
@@ -62,17 +58,6 @@ class CatalogService:
 
         sync = await self.sync_repo.create(sync_dto)
 
-        # Cache initial progress for polling
-        if self.redis:
-            await self._cache_progress(
-                sync.id,
-                status="pending",
-                progress_percent=0,
-                message="Initializing sync...",
-                total_products=0,
-                processed_products=0,
-            )
-
         self.logger.info(
             "Started catalog sync",
             extra={
@@ -87,12 +72,6 @@ class CatalogService:
 
     async def get_sync_progress(self, sync_id: str, correlation_id: str) -> SyncProgressOut:
         """Get sync progress for polling"""
-
-        # Try cache first
-        if self.redis:
-            cached = await self._get_cached_progress(sync_id)
-            if cached:
-                return cached
 
         # Fallback to database
         sync = await self.sync_repo.find_by_id(sync_id)
@@ -173,17 +152,6 @@ class CatalogService:
                 message=f"Processed batch {batch_num}, {processed} products synced",
             )
 
-            # Update cache
-            if self.redis:
-                await self._cache_progress(
-                    sync_id=sync_id,
-                    status="running",
-                    progress_percent=progress_percent,
-                    message=f"Processing batch {batch_num}...",
-                    total_products=sync.total_products,
-                    processed_products=processed,
-                )
-
         self.logger.info(
             f"Processed product batch {batch_num}",
             extra={
@@ -210,53 +178,3 @@ class CatalogService:
             "last_sync_at": last_sync.completed_at if last_sync else None,
             "sync_status": last_sync.status if last_sync else "never_synced",
         }
-
-    async def _cache_progress(
-        self,
-        sync_id: str,
-        status: str,
-        progress_percent: int,
-        message: str,
-        total_products: int,
-        processed_products: int,
-    ) -> None:
-        """Cache progress in Redis for fast polling"""
-        if not self.redis:
-            return
-
-        data = {
-            "status": status,
-            "progress_percent": progress_percent,
-            "message": message,
-            "total_products": total_products,
-            "processed_products": processed_products,
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-
-        await self.redis.setex(
-            f"sync:{sync_id}",
-            self.config.get("sync_progress_ttl", 3600),
-            json.dumps(data),
-        )
-
-    async def _get_cached_progress(self, sync_id: str) -> SyncProgressOut | None:
-        """Get cached progress from Redis"""
-        if not self.redis:
-            return None
-
-        data = await self.redis.get(f"sync:{sync_id}")
-        if not data:
-            return None
-
-        progress = json.loads(data)
-        return SyncProgressOut(
-            sync_id=sync_id,
-            status=progress["status"],
-            progress_percent=progress["progress_percent"],
-            message=progress["message"],
-            total_products=progress["total_products"],
-            processed_products=progress["processed_products"],
-            failed_products=0,
-            started_at=None,
-            completed_at=None,
-        )

@@ -1,6 +1,5 @@
 import asyncio
 
-import redis.asyncio as redis
 from prisma import Prisma  # type: ignore[attr-defined]
 
 from shared.messaging.jetstream_client import JetStreamClient
@@ -22,7 +21,6 @@ class ServiceLifecycle:
         # External connections
         self.messaging_client: JetStreamClient | None = None
         self.prisma: Prisma | None = None
-        self.redis_client: redis.Redis | None = None
         self._db_connected: bool = False
 
         # Publisher / listeners
@@ -42,7 +40,6 @@ class ServiceLifecycle:
             self.logger.info("Starting service components...")
 
             await self._init_messaging()
-            await self._init_redis()
             await self._init_database()
             self._init_repositories()
             self._init_local_services()
@@ -76,13 +73,6 @@ class ServiceLifecycle:
             except Exception:
                 self.logger.critical("Messaging client close failed", exc_info=True)
 
-        # Close Redis
-        if self.redis_client:
-            try:
-                await self.redis_client.close()
-            except Exception:
-                self.logger.critical("Redis close failed", exc_info=True)
-
         # Disconnect database
         if self.prisma and self._db_connected:
             try:
@@ -104,17 +94,6 @@ class ServiceLifecycle:
         )
 
         self.logger.info("Messaging client and publisher initialized")
-
-    async def _init_redis(self) -> None:
-        """Initialize Redis client"""
-        self.redis_client = redis.from_url(
-            self.config.redis_url,
-            decode_responses=False,  # We want bytes for idempotency keys
-        )
-
-        # Test connection
-        await self.redis_client.ping()
-        self.logger.info("Redis connected")
 
     async def _init_database(self) -> None:
         """Initialize Prisma client if database is enabled."""

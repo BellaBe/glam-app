@@ -28,7 +28,7 @@ model CatalogItem {
   product_title     String
   variant_title     String
   sku               String?
-  price             Decimal  @db.Decimal(10, 2)
+  price             String
   currency          String   @default("USD")
   inventory_quantity Int     @default(0)
 
@@ -70,8 +70,8 @@ model AnalysisResult {
   attributes        Json?    @db.Json
 
   // Quality metrics
-  quality_score     Decimal? @db.Decimal(5, 4)
-  confidence_score  Decimal? @db.Decimal(5, 4)
+  quality_score     String?
+  confidence_score  String?
   processing_time_ms Int?
   analyzed_at       DateTime @default(now())
 

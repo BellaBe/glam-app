@@ -78,10 +78,10 @@ class JetStreamClient:
         cfg = StreamConfig(
             name=name,
             subjects=subjects,
-            retention=kw.get("retention", RetentionPolicy.LIMITS),
-            max_age=kw.get("max_age", timedelta(hours=24)),
-            max_msgs=kw.get("max_msgs", 1_000_000),
-            storage=kw.get("storage", StorageType.FILE),
+            retention=RetentionPolicy.LIMITS,
+            max_age=24 * 60 * 60,
+            max_msgs=1_000_000,
+            storage=StorageType.FILE,
         )
 
         try:

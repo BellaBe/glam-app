@@ -92,9 +92,9 @@ class Listener(ABC):
         except NotFoundError:
             cfg = StreamConfig(
                 name=self.stream_name,
-                subjects=["evt.*", "cmd.*"],
+                subjects=["evt.>", "cmd.>"],
                 retention=RetentionPolicy.LIMITS,
-                max_age=timedelta(hours=24),
+                max_age=24 * 60 * 60,
                 max_msgs=1_000_000,
                 storage=StorageType.FILE,
             )

@@ -3,7 +3,7 @@
 client_id = "9ab171053318ab7feabfaf0e810fbd76"
 name = "Staging-GYU-App"
 handle = "StagingGYUApp"
-application_url = "https://26b86cb37a67.ngrok-free.app"
+application_url = "https://008ae92733a9.ngrok-free.app"
 embedded = true
 
 [webhooks]
@@ -71,7 +71,7 @@ uri = "/webhooks/relay"
 scopes = "read_metaobject_definitions,read_metaobjects,read_orders,write_metaobject_definitions,write_metaobjects,write_orders,write_products"
 
 [auth]
-redirect_urls = ["https://26b86cb37a67.ngrok-free.app/auth/callback", "https://26b86cb37a67.ngrok-free.app/auth/shopify/callback", "https://26b86cb37a67.ngrok-free.app/api/auth/callback"]
+redirect_urls = ["https://008ae92733a9.ngrok-free.app/auth/callback", "https://008ae92733a9.ngrok-free.app/auth/shopify/callback", "https://008ae92733a9.ngrok-free.app/api/auth/callback"]
 
 [pos]
 embedded = false

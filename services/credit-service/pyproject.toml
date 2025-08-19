@@ -3,6 +3,7 @@ name = "credit-service"
 version = "1.0.0"
 description = "Credit balance accounting service"
 authors = ["GlamYouUp Team"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
