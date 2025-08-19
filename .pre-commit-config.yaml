@@ -81,8 +81,8 @@ repos:
         name: mypy for services
         entry: python .pre-commit-scripts/run_mypy.py
         language: system
-        pass_filenames: false
         always_run: true
+
       # Validate Poetry lock files
       - id: poetry-check
         name: Validate Poetry configuration
@@ -94,9 +94,8 @@ repos:
       # Check Prisma schemas are valid
       - id: prisma-validate
         name: Validate Prisma schemas
-        entry: bash -c 'if [ -f apps/shopify-app/prisma/schema.prisma ]; then cd apps/shopify-app && npx prisma validate; fi'
+        entry: bash scripts/validate-prisma.sh
         language: system
-        pass_filenames: false
         files: \.prisma$
 
       # Check for debug code in production

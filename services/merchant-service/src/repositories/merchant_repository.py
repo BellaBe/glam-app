@@ -1,7 +1,7 @@
 # services/merchant-service/src/repositories/merchant_repository.py
 from datetime import UTC, datetime
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 from prisma.enums import MerchantStatus
 from prisma.models import Merchant
 

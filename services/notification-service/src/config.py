@@ -101,6 +101,6 @@ def get_service_config() -> ServiceConfig:
     """Load configuration once"""
     try:
         load_root_env()  # From shared package
-        return ServiceConfig(**os.environ) # type: ignore[arg-type]
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(f"Failed to load config: {e}", config_key="notification-service") from e

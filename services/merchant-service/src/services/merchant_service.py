@@ -151,3 +151,26 @@ class MerchantService:
             old_status=old_status,
             payload=status_payload,
         )
+
+    async def handle_app_uninstalled(self, shop_domain: str, uninstall_reason: str | None = None) -> None:
+        """Handle app uninstalled event"""
+        self.logger.info(f"Handling app uninstall for {shop_domain}", extra={"shop_domain": shop_domain})
+
+        merchant = await self.repository.find_by_platform_domain(shop_domain)
+        if not merchant:
+            self.logger.warning(f"Merchant not found for uninstall: {shop_domain}")
+            return
+
+        # Update status to UNINSTALLED
+        await self.repository.update_status(merchant.id, MerchantStatus.UNINSTALLED)
+
+        # Publish uninstalled event
+        await self.publisher.publish_merchant_uninstalled(
+            correlation_id=merchant.correlation_id,  # TODO: set a propper ctx Assuming this is available in the context
+            merchant_id=merchant.id,
+            platform_id=merchant.platform_id,
+            platform_domain=merchant.platform_domain,
+            name=merchant.name,
+            email=merchant.email,
+            uninstall_reason=uninstall_reason,
+        )

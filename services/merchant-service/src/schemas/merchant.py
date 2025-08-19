@@ -11,7 +11,7 @@ class MerchantSyncIn(BaseModel):
     platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
     platform_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
     shop_name: str = Field(..., description="Shop display name")
-    email: EmailStr = Field(None, description="Shop contact email")
+    email: EmailStr = Field(..., description="Shop contact email")
     primary_domain_host: str = Field(..., description="Primary domain of the shop")
     currency: str = Field(..., description="Shop currency (e.g., USD)")
     country: str = Field(..., description="Shop country code (e.g., US)")

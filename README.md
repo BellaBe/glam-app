@@ -67,3 +67,24 @@ poetry env use python3.11
 poetry install
 poetry shell
 python --version
+
+
+# Setup a service (first time only)
+make local-setup SERVICE=notification-service
+make db-push SERVICE=notification-service
+
+# Run a single service
+make local-run SERVICE=notification-service
+
+# Run all services in parallel
+make local-run-all
+
+# Check status
+make local-status
+
+# View logs (infrastructure)
+make local-logs
+
+# Database operations
+make db-studio SERVICE=notification-service  # Visual DB editor
+make db-url SERVICE=notification-service     # Get connection string

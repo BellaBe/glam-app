@@ -21,23 +21,6 @@ services:
       retries: 5
       start_period: 10s
 
-  # ----------------- Cache -----------------
-  redis:
-    image: redis:7-alpine
-    container_name: glam-redis-local
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-local-data:/data
-    networks:
-      - glam-local-net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-
   # ----------------- Email Testing (MailHog) -----------------
   mailhog:
     image: mailhog/mailhog:latest
@@ -54,45 +37,6 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-
-  # ----------------- S3-compatible Storage (MinIO) -----------------
-  minio:
-    image: minio/minio:latest
-    container_name: glam-minio-local
-    ports:
-      - "9000:9000"   # API
-      - "9001:9001"   # Console
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-local-data:/data
-    networks:
-      - glam-local-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # ----------------- MinIO Client (Setup buckets) -----------------
-  minio-setup:
-    image: minio/mc:latest
-    container_name: glam-minio-setup-local
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/glamyouup-selfies || true;
-      /usr/bin/mc mb myminio/glamyouup-images || true;
-      /usr/bin/mc anonymous set public myminio/glamyouup-images;
-      exit 0;
-      "
-    networks:
-      - glam-local-net
 
   # ----------------- Webhook Database -----------------
   webhook-db:
@@ -229,8 +173,6 @@ networks:
 
 volumes:
   nats-local-data:
-  redis-local-data:
-  minio-local-data:
   catalog-db-local-data:
   notification-db-local-data:
   credit-db-local-data:

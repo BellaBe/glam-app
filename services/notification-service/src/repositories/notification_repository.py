@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 
 from ..schemas.notification import NotificationOut, NotificationStats
 

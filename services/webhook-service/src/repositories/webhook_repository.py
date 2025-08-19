@@ -56,7 +56,7 @@ class WebhookRepository:
         """Update webhook processing status"""
         from datetime import datetime
 
-        update_data = {"status": status.value}
+        update_data: dict[str, Any] = {"status": status.value}
 
         if status == WebhookStatus.PROCESSED:
             update_data["processed_at"] = datetime.utcnow()

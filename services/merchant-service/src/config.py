@@ -67,7 +67,7 @@ class ServiceConfig(BaseModel):
 def get_service_config() -> ServiceConfig:
     try:
         load_root_env()
-        return ServiceConfig(**os.environ)  # type: ignore[typeddict-unknown-key]
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(
             f"Failed to load service configuration: {e}",

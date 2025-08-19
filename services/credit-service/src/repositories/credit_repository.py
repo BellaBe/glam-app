@@ -1,7 +1,7 @@
 # services/credit-service/src/repositories/credit_repository.py
 from uuid import UUID
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 from prisma.errors import UniqueViolationError
 
 from shared.utils.exceptions import NotFoundError
