@@ -13,15 +13,15 @@ from .services.purchase_service import PurchaseService
 
 # Re-export shared dependencies
 __all__ = [
-    "CorrelationIdDep",
-    "PaginationDep",
-    "RequestIdDep",
-    "RequestContextDep",
-    "LifecycleDep",
-    "ConfigDep",
     "BillingServiceDep",
-    "PurchaseServiceDep",
+    "ConfigDep",
+    "CorrelationIdDep",
+    "LifecycleDep",
+    "PaginationDep",
     "PublisherDep",
+    "PurchaseServiceDep",
+    "RequestContextDep",
+    "RequestIdDep",
 ]
 
 

@@ -1,6 +1,6 @@
 # services/catalog-service/src/repositories/catalog_repository.py
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 
 from ..schemas.catalog import CatalogItemCreate, CatalogItemOut
 

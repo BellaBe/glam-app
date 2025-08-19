@@ -10,7 +10,13 @@ from ..events.publishers import BillingEventPublisher
 from ..exceptions import MerchantNotFoundError, TrialAlreadyUsedError
 from ..repositories.billing_repository import BillingRepository
 from ..repositories.purchase_repository import PurchaseRepository
-from ..schemas.billing import BillingStatusOut, TrialActivatedOut, TrialStartedPayload, TrialStatusOut
+from ..schemas.billing import (
+    BillingStatusOut,
+    TrialActivatedOut,
+    TrialExpiredPayload,
+    TrialStartedPayload,
+    TrialStatusOut,
+)
 
 
 class BillingService:
@@ -139,9 +145,8 @@ class BillingService:
 
         for record in expired_records:
             try:
-                await self.publisher.trial_expired(
-                    {"merchant_id": UUID(record.merchant_id), "expired_at": record.trial_ends_at}
-                )
+                payload = TrialExpiredPayload(merchant_id=UUID(record.merchant_id), expired_at=record.trial_ends_at)
+                await self.publisher.trial_expired(payload)
 
                 self.logger.info(f"Published trial expired event for merchant {record.merchant_id}")
 

@@ -1,6 +1,7 @@
 # ruff: noqa: RUF012
 # services/notification-service/src/templates/email_templates.py
 """Email templates for different notification types"""
+
 from typing import Any
 
 

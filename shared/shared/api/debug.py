@@ -132,7 +132,7 @@ def setup_debug_handlers(app: FastAPI):
         # Log validation errors in detail
         print(f"❌ Validation Errors ({len(exc.errors())} total):")
         for i, error in enumerate(exc.errors()):
-            print(f"   {i+1}. Field: {error.get('loc', 'unknown')}")
+            print(f"   {i + 1}. Field: {error.get('loc', 'unknown')}")
             print(f"      Type: {error.get('type', 'unknown')}")
             print(f"      Message: {error.get('msg', 'unknown')}")
             print(f"      Input: {error.get('input', 'not provided')}")

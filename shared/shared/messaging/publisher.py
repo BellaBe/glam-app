@@ -1,5 +1,6 @@
 # shared/messaging/publisher.py
 """Publisher base class for domain events and commands."""
+
 import json
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
@@ -15,8 +16,7 @@ class Publisher(ABC):
 
     @property
     @abstractmethod
-    def service_name(self) -> str:
-        ...
+    def service_name(self) -> str: ...
 
     def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
         self.js_client = jetstream_client

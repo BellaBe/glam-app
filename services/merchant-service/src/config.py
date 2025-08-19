@@ -12,8 +12,7 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(
         extra="ignore",
-        case_sensitive=False,
-        validate_by_name=True,
+        populate_by_name=True,
     )
 
     service_name: str = "merchant-service"
@@ -68,7 +67,7 @@ class ServiceConfig(BaseModel):
 def get_service_config() -> ServiceConfig:
     try:
         load_root_env()
-        return ServiceConfig(**os.environ)
+        return ServiceConfig(**os.environ)  # type: ignore[typeddict-unknown-key]
     except Exception as e:
         raise ConfigurationError(
             f"Failed to load service configuration: {e}",

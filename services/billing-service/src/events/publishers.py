@@ -1,4 +1,6 @@
 # billing-service/src/events/publishers.py
+from datetime import UTC, datetime
+
 from shared.messaging.publisher import Publisher
 from shared.messaging.subjects import Subjects
 
@@ -16,7 +18,10 @@ class BillingEventPublisher(Publisher):
         """Publish trial started event"""
         self.logger.info(
             "Publishing trial started event",
-            extra={"merchant_id": payload.merchant_id, "trial_start_date": payload.trial_start_date.isoformat()},
+            extra={
+                "merchant_id": payload.merchant_id,
+                "trial_start_date": datetime.now(UTC).isoformat(),
+            },
         )
         return await self.publish_event(subject=Subjects.BILLING_TRIAL_STARTED, data=payload.model_dump(mode="json"))
 
@@ -24,7 +29,7 @@ class BillingEventPublisher(Publisher):
         """Publish trial expired event"""
         self.logger.info(
             "Publishing trial expired event",
-            extra={"merchant_id": payload.merchant_id, "trial_end_date": payload.trial_end_date.isoformat()},
+            extra={"merchant_id": payload.merchant_id, "trial_end_date": payload.expired_at.isoformat()},
         )
         return await self.publish_event(subject=Subjects.BILLING_TRIAL_EXPIRED, data=payload.model_dump(mode="json"))
 

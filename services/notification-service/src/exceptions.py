@@ -23,17 +23,17 @@ from shared.utils.exceptions import (
 )
 
 __all__ = [
+    "ConfigurationError",
+    "ConflictError",
+    "DomainError",
+    "ForbiddenError",
     "GlamBaseError",
     "InfrastructureError",
-    "DomainError",
-    "ValidationError",
-    "NotFoundError",
-    "ConflictError",
-    "ConfigurationError",
-    "UnauthorizedError",
-    "ForbiddenError",
-    "RateLimitExceededError",
-    "ServiceUnavailableError",
-    "RequestTimeoutError",
     "InternalError",
+    "NotFoundError",
+    "RateLimitExceededError",
+    "RequestTimeoutError",
+    "ServiceUnavailableError",
+    "UnauthorizedError",
+    "ValidationError",
 ]

@@ -7,8 +7,8 @@ from .publisher import Publisher
 from .subjects import Subjects
 
 __all__ = [
-    "Publisher",
-    "Listener",
     "JetStreamClient",
+    "Listener",
+    "Publisher",
     "Subjects",
 ]

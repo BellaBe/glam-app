@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 from prisma.models import BillingRecord
 
 from shared.utils.logger import ServiceLogger

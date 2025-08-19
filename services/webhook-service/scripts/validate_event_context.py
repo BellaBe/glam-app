@@ -1,5 +1,6 @@
 # ruff: noqa: T201
 """Validate proper EventContext usage across services."""
+
 import ast
 import sys
 from pathlib import Path
@@ -29,7 +30,7 @@ def check_event_context_usage():
                         keywords = {kw.arg for kw in node.keywords if kw.arg}
                         if "correlation_id" not in keywords:
                             errors.append(
-                                f"{py_file}:{node.lineno} - " f"EventContext.create() missing correlation_id parameter"
+                                f"{py_file}:{node.lineno} - EventContext.create() missing correlation_id parameter"
                             )
             except SyntaxError:
                 continue

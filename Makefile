@@ -1,5 +1,7 @@
 # Makefile for Glam App Monorepo
 
+-include makefiles/precommit.mk
+
 # Service directories (auto-detect)
 SERVICE_DIRS := $(shell find services -maxdepth 1 -type d -name "*-service" -o -name "*-ai-*" -o -name "*-connector" -o -name "*-cache" | sort)
 SERVICE_NAMES := $(shell find services -maxdepth 1 -type d \( -name "*-service" -o -name "*-ai-*" -o -name "*-connector" -o -name "*-cache" \) -exec basename {} \; | sort)

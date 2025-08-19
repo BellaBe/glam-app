@@ -7,9 +7,9 @@ from .merchant import (
 )
 
 __all__ = [
+    "MerchantSelfOut",
+    "MerchantStatusUpdatedPayload",
     "MerchantSyncIn",
     "MerchantSyncOut",
-    "MerchantSelfOut",
     "MerchantSyncedPayload",
-    "MerchantStatusUpdatedPayload",
 ]

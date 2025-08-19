@@ -9,13 +9,13 @@ from .lifecycle import ServiceLifecycle
 from .services import MerchantService
 
 __all__ = [
-    "CorrelationIdDep",
-    "PaginationDep",
-    "RequestIdDep",
-    "RequestContextDep",
-    "LifecycleDep",
     "ConfigDep",
+    "CorrelationIdDep",
+    "LifecycleDep",
     "MerchantServiceDep",
+    "PaginationDep",
+    "RequestContextDep",
+    "RequestIdDep",
 ]
 
 

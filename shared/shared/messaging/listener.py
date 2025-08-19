@@ -80,8 +80,7 @@ class Listener(ABC):
             await self._sub.unsubscribe()
 
     @abstractmethod
-    async def on_message(self, data: dict[str, Any]) -> None:
-        ...
+    async def on_message(self, data: dict[str, Any]) -> None: ...
 
     # stream
     async def _ensure_stream(self) -> None:
@@ -138,7 +137,7 @@ class Listener(ABC):
                         batch=self.batch_size,
                         timeout=self.poll_window_sec,
                     )
-                except (NATSTimeoutError, asyncio.TimeoutError):
+                except (TimeoutError, NATSTimeoutError):
                     # Normal: no messages in window
                     await asyncio.sleep(self.idle_sleep_sec)
                     continue

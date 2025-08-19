@@ -7,8 +7,8 @@ from .lifecycle import ServiceLifecycle
 from .services import WebhookService
 
 __all__ = [
-    "LifecycleDep",
     "ConfigDep",
+    "LifecycleDep",
     "WebhookServiceDep",
 ]
 

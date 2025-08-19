@@ -17,14 +17,14 @@ from .services.credit_service import CreditService
 
 # Re-export shared dependencies
 __all__ = [
-    "RequestContextDep",
     "ClientAuthDep",
-    "PlatformContextDep",
-    "PaginationDep",
-    "LoggerDep",
-    "LifecycleDep",
     "ConfigDep",
     "CreditServiceDep",
+    "LifecycleDep",
+    "LoggerDep",
+    "PaginationDep",
+    "PlatformContextDep",
+    "RequestContextDep",
 ]
 
 

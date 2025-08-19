@@ -1,7 +1,7 @@
 # services/catalog-service/src/repositories/sync_repository.py
 from datetime import datetime
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 
 from ..schemas.sync import SyncOperationCreate, SyncOperationOut
 

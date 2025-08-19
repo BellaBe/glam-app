@@ -12,8 +12,7 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(
         extra="ignore",
-        case_sensitive=False,
-        allow_population_by_field_name=True,
+        populate_by_name=True,
     )
 
     # Service identification
@@ -69,6 +68,6 @@ def get_service_config() -> ServiceConfig:
     """Load configuration once"""
     try:
         load_root_env()
-        return ServiceConfig(**os.environ)
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(f"Failed to load config: {e}", config_key="credit-service") from e

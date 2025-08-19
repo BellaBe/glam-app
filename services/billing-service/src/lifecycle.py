@@ -1,7 +1,7 @@
 import asyncio
 
 import redis.asyncio as redis
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
@@ -174,6 +174,16 @@ class ServiceLifecycle:
 
         if not self.event_publisher:
             raise RuntimeError("Event publisher not initialized")
+
+        # Add checks for required dependencies
+        if not self.redis:
+            raise RuntimeError("Redis client not initialized")
+
+        if not self.pack_manager:
+            raise RuntimeError("Credit pack manager not initialized")
+
+        if not self.shopify_client:
+            raise RuntimeError("Shopify client not initialized")
 
         self.billing_service = BillingService(
             config=self.config,

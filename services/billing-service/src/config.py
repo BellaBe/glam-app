@@ -12,8 +12,7 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(
         extra="ignore",
-        case_sensitive=False,
-        validate_by_name=True,
+        populate_by_name=True,
     )
 
     # Service basics with defaults
@@ -95,7 +94,7 @@ def get_service_config() -> ServiceConfig:
         load_root_env()
 
         # Create config from environment variables
-        return ServiceConfig(**os.environ)
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(
             f"Failed to load service configuration: {e}", config_key="billing-service", expected_value="valid config"

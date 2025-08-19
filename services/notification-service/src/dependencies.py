@@ -17,14 +17,14 @@ from .services.notification_service import NotificationService
 
 # Re-export shared dependencies
 __all__ = [
-    "RequestContextDep",
     "ClientAuthDep",
-    "PlatformContextDep",
-    "PaginationDep",
-    "LoggerDep",
-    "LifecycleDep",
     "ConfigDep",
+    "LifecycleDep",
+    "LoggerDep",
     "NotificationServiceDep",
+    "PaginationDep",
+    "PlatformContextDep",
+    "RequestContextDep",
 ]
 
 

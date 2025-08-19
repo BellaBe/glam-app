@@ -17,14 +17,14 @@ from .lifecycle import ServiceLifecycle
 from .services.catalog_service import CatalogService
 
 __all__ = [
-    "RequestContextDep",
-    "ClientAuthDep",
-    "PlatformContextDep",
-    "PaginationDep",
-    "LoggerDep",
-    "LifecycleDep",
     "CatalogServiceDep",
+    "ClientAuthDep",
     "EventPublisherDep",
+    "LifecycleDep",
+    "LoggerDep",
+    "PaginationDep",
+    "PlatformContextDep",
+    "RequestContextDep",
 ]
 
 

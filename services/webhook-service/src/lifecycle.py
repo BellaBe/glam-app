@@ -1,7 +1,7 @@
 import asyncio
 
 import redis.asyncio as redis
-from prisma import Prisma
+from prisma import Prisma # type: ignore[attr-defined]
 
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger

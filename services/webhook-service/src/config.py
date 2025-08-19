@@ -12,8 +12,7 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(
         extra="ignore",
-        case_sensitive=False,
-        validate_by_name=True,
+        populate_by_name=True,
     )
 
     service_name: str = "webhook-service"
@@ -71,7 +70,7 @@ def get_service_config() -> ServiceConfig:
     """Load config - fail if anything is missing"""
     try:
         load_root_env()
-        return ServiceConfig(**os.environ)
+        return ServiceConfig(**os.environ) # type: ignore[arg-type]
 
     except Exception as e:
         raise ConfigurationError(

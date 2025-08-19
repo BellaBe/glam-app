@@ -1,5 +1,6 @@
 # ruff: noqa: T201
 """Manual test script for webhook service"""
+
 import asyncio
 import base64
 import hashlib

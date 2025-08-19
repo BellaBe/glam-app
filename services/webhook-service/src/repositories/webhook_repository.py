@@ -1,7 +1,7 @@
 # services/webhook-service/src/repositories/webhook_repository.py
 from typing import Any
 
-from prisma import Prisma
+from prisma import Prisma  # type: ignore[attr-defined]
 from prisma.errors import UniqueViolationError
 
 from ..models.enums import WebhookStatus

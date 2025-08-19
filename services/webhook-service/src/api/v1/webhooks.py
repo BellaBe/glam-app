@@ -1,5 +1,4 @@
 # services/webhook-service/src/api/v1/webhooks.py
-# ruff: noqa: T201
 import json
 
 from fastapi import APIRouter

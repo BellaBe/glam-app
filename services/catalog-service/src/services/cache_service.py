@@ -9,7 +9,7 @@ from shared.utils.logger import ServiceLogger
 
 from ..repositories.catalog_repository import CatalogRepository
 from ..repositories.sync_repository import SyncRepository
-from ..schemas.catalog import CatalogItemCreate, CatalogItemOut
+from ..schemas.catalog import CatalogItemCreate
 from ..schemas.sync import SyncOperationCreate, SyncOperationOut, SyncProgressOut
 
 
@@ -123,7 +123,7 @@ class CatalogService:
         batch_num: int,
         has_more: bool,
         correlation_id: str,
-    ) -> list[CatalogItemOut]:
+    ):
         """Process batch of products from platform"""
 
         items_created = []

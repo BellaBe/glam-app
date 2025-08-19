@@ -1,6 +1,5 @@
 # shared/shared/messaging/jetstream_client.py
-"""Pure JetStream client - only connection + stream management.
-"""
+"""Pure JetStream client - only connection + stream management."""
 
 import os
 from datetime import timedelta

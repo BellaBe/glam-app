@@ -10,10 +10,9 @@ from shared.utils import ConfigurationError, load_root_env
 class ServiceConfig(BaseModel):
     """Catalog service configuration with required shared package integration"""
 
-    model_config = ConfigDict(
+    model_config = ConfigDict(  # type: ignore[arg-type]
         extra="ignore",
-        case_sensitive=False,
-        allow_population_by_field_name=True,
+        populate_by_name=True,
     )
 
     # Service identification (required by shared package)
@@ -75,6 +74,6 @@ def get_service_config() -> ServiceConfig:
     """Load configuration once"""
     try:
         load_root_env()  # From shared package, loads root .env
-        return ServiceConfig(**os.environ)
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(f"Failed to load config: {e}", config_key="catalog-service") from e
