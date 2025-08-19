@@ -1,5 +1,4 @@
 # services/catalog-service/src/services/catalog_service.py
-import json
 from datetime import datetime
 
 from shared.utils.exceptions import ConflictError, NotFoundError

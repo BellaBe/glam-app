@@ -2,7 +2,6 @@
 """Pure JetStream client - only connection + stream management."""
 
 import os
-from datetime import timedelta
 
 import nats
 from nats.aio.client import Client

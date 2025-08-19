@@ -1,5 +1,4 @@
 # services/merchant-service/src/schemas/merchant.py
-from httpx import stream
 from prisma.enums import MerchantStatus
 from pydantic import BaseModel, Field
 

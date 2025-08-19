@@ -5,7 +5,6 @@ import asyncio
 import contextlib
 import json
 from abc import ABC, abstractmethod
-from datetime import timedelta
 from typing import Any
 
 from nats.errors import TimeoutError as NATSTimeoutError

@@ -1,6 +1,5 @@
 from uuid import UUID
 
-
 from shared.utils.logger import ServiceLogger
 
 from ..config import ServiceConfig
