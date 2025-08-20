@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from shared.api.dependencies import ClientAuthContext, PlatformContext
+from shared.api.dependencies import ClientAuthContext, PlatformContext, InternalAuthContext
 from shared.utils.logger import ServiceLogger
 
 
@@ -157,3 +157,55 @@ def validate_shop_context(
 #     expected_scope="bff:call",
 #     webhook_payload=payload
 # )
+
+# shared/api/validation.py - ADD this function to existing file
+
+def validate_service_context(
+    internal_auth: InternalAuthContext,
+    logger: ServiceLogger,
+    allowed_services: list[str] | None = None,
+    operation: str | None = None
+) -> None:
+    """
+    Validate internal service-to-service calls.
+    
+    Args:
+        internal_auth: Internal service authentication context
+        logger: Service logger
+        allowed_services: List of services allowed to make this call
+        operation: Operation being performed (for logging)
+    
+    Raises:
+        HTTPException: On validation failure
+    """
+    
+    # Check if service is in allowed list
+    if allowed_services and internal_auth.service not in allowed_services:
+        logger.warning(
+            f"Unauthorized service access attempt",
+            extra={
+                "requesting_service": internal_auth.service,
+                "allowed_services": allowed_services,
+                "operation": operation
+            }
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "SERVICE_NOT_ALLOWED",
+                "message": f"Service '{internal_auth.service}' not authorized for this operation",
+                "details": {
+                    "service": internal_auth.service,
+                    "operation": operation,
+                    "allowed_services": allowed_services
+                }
+            }
+        )
+    
+    logger.info(
+        f"Service access validated",
+        extra={
+            "requesting_service": internal_auth.service,
+            "operation": operation
+        }
+    )

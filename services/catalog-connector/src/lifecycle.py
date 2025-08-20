@@ -1,99 +1,116 @@
-# src/lifecycle.py
+# services/platform-connector/src/lifecycle.py
+from typing import Optional, List
 import asyncio
 
-from shared.database import DatabaseSessionManager, set_database_manager
-from shared.messaging import JetStreamWrapper
-from shared.utils.logger import create_logger
+from shared.messaging import JetStreamClient
+from shared.utils.logger import ServiceLogger
 
-from .config import ConnectorServiceConfig
-from .events.publishers import ConnectorEventPublisher
-from .events.subscribers import SyncFetchRequestedSubscriber
-from .repositories.bulk_operation_repository import BulkOperationRepository
-from .repositories.fetch_operation_repository import FetchOperationRepository
-from .services.bulk_operation_service import BulkOperationService
-from .services.product_transformer import ProductTransformer
+from .config import ServiceConfig
+from .services.connector_service import ConnectorService
+from .events.publishers import PlatformEventPublisher
+from .events.listeners import CatalogSyncRequestedListener
 
-
-class ConnectorServiceLifecycle:
-    """Manages connector service lifecycle and dependencies"""
-
-    def __init__(self, config: ConnectorServiceConfig):
+class ServiceLifecycle:
+    """Manages all service components lifecycle"""
+    
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         self.config = config
-        self.logger = create_logger(config.service_name)
-
-        # External connections
-        self.messaging_wrapper: JetStreamWrapper | None = None
-        self.db_manager: DatabaseSessionManager | None = None
-
-        # Repositories
-        self.bulk_repo: BulkOperationRepository | None = None
-        self.fetch_repo: FetchOperationRepository | None = None
-
-        # Services
-        self.transformer: ProductTransformer | None = None
-        self.bulk_service: BulkOperationService | None = None
-
-        # Event handling
-        self.event_publisher: ConnectorEventPublisher | None = None
-
-        # Background tasks
-        self._tasks: list[asyncio.Task] = []
-
+        self.logger = logger
+        
+        # Connections
+        self.messaging_client: Optional[JetStreamClient] = None
+        
+        # Components
+        self.event_publisher: Optional[PlatformEventPublisher] = None
+        self.connector_service: Optional[ConnectorService] = None
+        
+        # Listeners
+        self._listeners: List = []
+        self._tasks: List[asyncio.Task] = []
+    
     async def startup(self) -> None:
-        """Initialize all components in order"""
-        self.logger.info(f"Starting {self.config.service_name}")
-
-        # 1. Database
-        if self.config.db_enabled:
-            self.db_manager = DatabaseSessionManager(
-                database_url=self.config.database_config.database_url, echo=self.config.debug
-            )
-            await self.db_manager.init()
-            set_database_manager(self.db_manager)
-
-        # 2. Messaging
-        self.messaging_wrapper = JetStreamWrapper(self.logger)
-        await self.messaging_wrapper.connect(self.config.nats_servers)
-
-        # 3. Create publisher
-        self.event_publisher = self.messaging_wrapper.create_publisher(ConnectorEventPublisher)
-
-        # 4. Initialize repositories
-        if self.db_manager:
-            self.bulk_repo = BulkOperationRepository(self.db_manager.session_factory)
-            self.fetch_repo = FetchOperationRepository(self.db_manager.session_factory)
-
-        # 5. Initialize services
-        self.transformer = ProductTransformer(self.logger)
-
-        self.bulk_service = BulkOperationService(
-            bulk_repo=self.bulk_repo,
-            fetch_repo=self.fetch_repo,
-            transformer=self.transformer,
-            publisher=self.event_publisher,
-            logger=self.logger,
-            config=self.config,
-        )
-
-        # 6. Register dependencies for subscribers
-        self.messaging_wrapper.register_dependency("bulk_service", self.bulk_service)
-        self.messaging_wrapper.register_dependency("logger", self.logger)
-
-        # 7. Start event subscribers
-        await self.messaging_wrapper.start_subscriber(SyncFetchRequestedSubscriber)
-
-        self.logger.info("Connector service startup completed")
-
+        """Initialize all components"""
+        try:
+            self.logger.info("Starting platform connector components...")
+            
+            # 1. Messaging (for events)
+            await self._init_messaging()
+            
+            # 2. Services
+            self._init_services()
+            
+            # 3. Event listeners
+            await self._init_listeners()
+            
+            self.logger.info("Platform connector started successfully")
+            
+        except Exception as e:
+            self.logger.critical("Service startup failed", exc_info=True)
+            await self.shutdown()
+            raise
+    
     async def shutdown(self) -> None:
-        """Graceful shutdown of all components"""
-        self.logger.info(f"Shutting down {self.config.service_name}")
-
-        # Cancel background tasks
+        """Graceful shutdown"""
+        self.logger.info("Shutting down platform connector")
+        
+        # Cancel tasks
         for task in self._tasks:
             task.cancel()
-
-        # Close connections
-        if self.messaging_wrapper:
-            await self.messaging_wrapper.close()
-        if self.db_manager:
-            await self.db_manager.close()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+        
+        # Stop listeners
+        for listener in self._listeners:
+            try:
+                await listener.stop()
+            except Exception:
+                self.logger.error("Listener stop failed", exc_info=True)
+        
+        # Close messaging
+        if self.messaging_client:
+            try:
+                await self.messaging_client.close()
+            except Exception:
+                self.logger.error("Messaging close failed", exc_info=True)
+        
+        self.logger.info("Platform connector shutdown complete")
+    
+    async def _init_messaging(self) -> None:
+        """Initialize NATS/JetStream"""
+        self.messaging_client = JetStreamClient(self.logger)
+        await self.messaging_client.connect([self.config.nats_url])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+        
+        # Initialize publisher
+        self.event_publisher = PlatformEventPublisher(
+            jetstream_client=self.messaging_client,
+            logger=self.logger
+        )
+        
+        self.logger.info("Messaging initialized")
+    
+    def _init_services(self) -> None:
+        """Initialize business services"""
+        self.connector_service = ConnectorService(
+            event_publisher=self.event_publisher,
+            logger=self.logger,
+            config=vars(self.config)
+        )
+        
+        self.logger.info("Connector service initialized")
+    
+    async def _init_listeners(self) -> None:
+        """Initialize event listeners"""
+        if not self.messaging_client or not self.connector_service:
+            raise RuntimeError("Messaging or service not ready")
+        
+        # Catalog sync requested listener
+        sync_listener = CatalogSyncRequestedListener(
+            js_client=self.messaging_client,
+            connector_service=self.connector_service,
+            logger=self.logger
+        )
+        await sync_listener.start()
+        self._listeners.append(sync_listener)
+        
+        self.logger.info("Event listeners started")

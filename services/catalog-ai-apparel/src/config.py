@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from shared.utils.config_loader import flatten_config, merged_config
 
 
-class CatalogAnalysisConfig(BaseModel):
+class ServiceConfig(BaseModel):
     """Service configuration from YAML + environment"""
 
     # Service Identity
@@ -41,11 +41,11 @@ class CatalogAnalysisConfig(BaseModel):
 
 
 @lru_cache
-def get_service_config() -> CatalogAnalysisConfig:
+def get_service_config() -> ServiceConfig:
     """Load and cache service configuration"""
     cfg_dict = merged_config("catalog-analysis", env_prefix="CATALOG_ANALYSIS")
     flattened = flatten_config(cfg_dict)
-    return CatalogAnalysisConfig(**flattened)
+    return ServiceConfig(**flattened)
 
 
 config = get_service_config()

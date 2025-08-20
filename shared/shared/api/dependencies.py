@@ -272,9 +272,9 @@ def require_internal_auth(request: Request) -> InternalAuthContext:
     Uses static API keys for simplicity and performance.
     """
     token = _get_bearer_token(request)
-    raw = os.getenv("INTERNAL_API_KEYS", "")
+    raw = os.getenv("INTERNAL_JWT_SECRET", "")
     if not raw:
-        raise RuntimeError("INTERNAL_API_KEYS not configured")
+        raise RuntimeError("INTERNAL_JWT_SECRET not configured")
 
     # Format: "service1:key1,service2:key2" or just "key1,key2"
     allowed = {}

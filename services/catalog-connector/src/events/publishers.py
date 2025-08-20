@@ -1,37 +1,58 @@
-# src/events/publishers.py
-from uuid import UUID
+# services/platform-connector/src/events/publishers.py
+from shared.messaging import Publisher
+from typing import Dict, Any
 
-from shared.events import DomainEventPublisher, Streams
-
-from ..schemas.product import ProductsBatchOut
-
-
-class ConnectorEventPublisher(DomainEventPublisher):
-    """Connector domain event publisher"""
-
-    domain_stream = Streams.CATALOG  # Publish to catalog stream
-    service_name_override = "platform-connector"
-
-    async def publish_products_fetched(self, batch: ProductsBatchOut, correlation_id: str) -> str:
-        """Publish products fetched batch"""
-        payload = batch.model_dump(mode="json")
-
+class PlatformEventPublisher(Publisher):
+    """Publish platform connector events"""
+    
+    @property
+    def service_name(self) -> str:
+        return "platform-connector"
+    
+    async def platform_products_fetched(
+        self,
+        batch_data: Dict[str, Any],
+        correlation_id: str
+    ) -> str:
+        """Publish products batch fetched from platform"""
         return await self.publish_event(
-            subject="sync.products.fetched.v1",
-            payload=payload,
-            correlation_id=correlation_id,
+            subject="evt.platform.products.fetched",
+            data=batch_data,
+            correlation_id=correlation_id
         )
-
-    async def publish_fetch_failed(self, sync_id: UUID, shop_id: str, error_message: str, correlation_id: str) -> str:
-        """Publish fetch failure"""
-        payload = {
-            "sync_id": str(sync_id),
-            "shop_id": shop_id,
-            "error_message": error_message,
-        }
-
+    
+    async def platform_fetch_completed(
+        self,
+        merchant_id: str,
+        sync_id: str,
+        total_products: int,
+        correlation_id: str
+    ) -> str:
+        """Publish platform fetch completed"""
         return await self.publish_event(
-            subject="sync.fetch.failed.v1",
-            payload=payload,
-            correlation_id=correlation_id,
+            subject="evt.platform.fetch.completed",
+            data={
+                "merchant_id": merchant_id,
+                "sync_id": sync_id,
+                "total_products": total_products
+            },
+            correlation_id=correlation_id
+        )
+    
+    async def platform_fetch_failed(
+        self,
+        merchant_id: str,
+        sync_id: str,
+        error: str,
+        correlation_id: str
+    ) -> str:
+        """Publish platform fetch failure"""
+        return await self.publish_event(
+            subject="evt.platform.fetch.failed",
+            data={
+                "merchant_id": merchant_id,
+                "sync_id": sync_id,
+                "error": error
+            },
+            correlation_id=correlation_id
         )

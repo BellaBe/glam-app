@@ -1,0 +1,911 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/catalog-ai-apparel
+================================================================================
+
+catalog-ai-apparel/
+src/
+├── events/
+│   ├── __init__.py
+│   ├── publishers.py
+│   │   
+│   │   ```py
+│   │   # services/catalog-analysis/src/events/publishers.py
+│   │   from shared.events import DomainEventPublisher, DomainEventSubscriber, Streams
+│   │   
+│   │   from ..schemas.catalog_item import CatalogItemAnalysisRequest
+│   │   from .types import CatalogAnalysisEvents
+│   │   
+│   │   
+│   │   class CatalogAnalysisEventPublisher(DomainEventPublisher):
+│   │       """Catalog analysis specific event publisher"""
+│   │   
+│   │       domain_stream = Streams.CATALOG
+│   │       service_name_override = "catalog-analysis"
+│   │   
+│   │   
+│   │   class CatalogItemAnalysisSubscriber(DomainEventSubscriber):
+│   │       """Subscribe to catalog item analysis requests"""
+│   │   
+│   │       stream_name = "CATALOG"
+│   │       subject = CatalogAnalysisEvents.ITEM_ANALYSIS_REQUESTED
+│   │       subject = CatalogAnalysisEvents.ITEM_ANALYSIS_REQUESTED
+│   │       durable_name = "catalog-analysis-requests"
+│   │   
+│   │       async def on_event(self, event: dict, headers: dict):
+│   │           """Process catalog item analysis request"""
+│   │           # Get injected dependencies
+│   │           service = self.get_dependency("catalog_analysis_service")
+│   │           publisher = self.get_dependency("publisher")
+│   │           logger = self.get_dependency("logger")
+│   │   
+│   │           payload = event["payload"]
+│   │           correlation_id = event.get("correlation_id")
+│   │   
+│   │           logger.info(
+│   │               "Processing catalog item analysis request",
+│   │               extra={
+│   │                   "subject": self.subject,
+│   │                   "correlation_id": correlation_id,
+│   │                   "shop_id": payload.get("shop_id"),
+│   │                   "product_id": payload.get("product_id"),
+│   │                   "variant_id": payload.get("variant_id"),
+│   │               },
+│   │           )
+│   │   
+│   │           try:
+│   │               # Parse request
+│   │               request = CatalogItemAnalysisRequest(**payload)
+│   │   
+│   │               # Process catalog item analysis
+│   │               result = await service.analyze_catalog_item(request)
+│   │   
+│   │               # Publish result event based on status
+│   │               if result.status == "success":
+│   │                   await publisher.publish_event(
+│   │                       subject=CatalogAnalysisEvents.ITEM_ANALYSIS_COMPLETED,
+│   │                       payload=result.model_dump(),
+│   │                       correlation_id=correlation_id,
+│   │                   )
+│   │               else:
+│   │                   await publisher.publish_event(
+│   │                       subject=CatalogAnalysisEvents.ITEM_ANALYSIS_FAILED,
+│   │                       payload=result.model_dump(),
+│   │                       correlation_id=correlation_id,
+│   │                   )
+│   │   
+│   │           except Exception as e:
+│   │               logger.error(f"Failed to process catalog item analysis request: {e!s}", exc_info=True)
+│   │   
+│   │               # Publish failure event
+│   │               await publisher.publish_event(
+│   │                   subject=CatalogAnalysisEvents.ITEM_ANALYSIS_FAILED,
+│   │                   payload={
+│   │                       "status": "error",
+│   │                       "error": str(e),
+│   │                       "shop_id": payload.get("shop_id"),
+│   │                       "product_id": payload.get("product_id"),
+│   │                       "variant_id": payload.get("variant_id"),
+│   │                       "latency_ms": 0,
+│   │                       "colours": None,
+│   │                   },
+│   │                   correlation_id=correlation_id,
+│   │               )
+│   │   ```
+│   │   
+│   └── types.py
+│       
+│       ```py
+│       # services/catalog-analysis/src/events/types.py
+│       class CatalogAnalysisEvents:
+│           """Event type constants for catalog item analysis"""
+│       
+│           ITEM_ANALYSIS_REQUESTED = "evt.catalog.item.analysis.requested"
+│           ITEM_ANALYSIS_COMPLETED = "evt.catalog.item.analysis.completed"
+│           ITEM_ANALYSIS_FAILED = "evt.catalog.item.analysis.failed"
+│       ```
+│       
+├── schemas/
+│   ├── __init__.py
+│   └── catalog_item.py
+│       
+│       ```py
+│       # services/catalog-analysis/src/schemas/catalog_item.py
+│       
+│       from pydantic import BaseModel, Field
+│       
+│       
+│       class CatalogItemAnalysisRequest(BaseModel):
+│           """Input DTO for catalog item analysis request"""
+│       
+│           shop_id: str = Field(..., example="70931710194")
+│           product_id: str = Field(..., example="8526062977266")
+│           variant_id: str = Field(..., example="46547096469746")
+│       
+│       
+│       class CatalogItemAnalysisResult(BaseModel):
+│           """Output DTO for catalog item analysis result - maintains original API format"""
+│       
+│           status: str
+│           colours: list[list[int]] | None = None
+│           latency_ms: int
+│           error: str | None = None
+│           shop_id: str
+│           product_id: str
+│           variant_id: str
+│       ```
+│       
+├── services/
+│   ├── __init__.py
+│   └── analysis.py
+│       
+│       ```py
+│       # services/catalog-analysis/src/services/catalog_analysis_service.py
+│       import time
+│       from pathlib import Path
+│       
+│       import cv2
+│       import mediapipe as mp
+│       import numpy as np
+│       from sklearn.cluster import KMeans
+│       
+│       from shared.utils.logger import ServiceLogger
+│       
+│       from ..config import ServiceConfig
+│       from ..schemas.catalog_item import CatalogItemAnalysisRequest, CatalogItemAnalysisResult
+│       
+│       
+│       class CatalogAnalysisService:
+│           """Core business logic for catalog item apparel analysis and color extraction"""
+│       
+│           def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│               self.config = config
+│               self.logger = logger
+│               self._segmenter = None
+│       
+│               # Validate model file exists
+│               model_path = Path(config.model_path)
+│               if not model_path.is_file():
+│                   raise SystemExit(f"❌ Model file missing at {model_path}")
+│       
+│           async def analyze_catalog_item(self, request: CatalogItemAnalysisRequest) -> CatalogItemAnalysisResult:
+│               """Main catalog item analysis pipeline for apparel color extraction"""
+│               t0 = time.perf_counter()
+│       
+│               try:
+│                   self.logger.info(f"Analyzing catalog item {request.shop_id}/{request.product_id}/{request.variant_id}")
+│       
+│                   # Build file paths
+│                   variant_dir = (
+│                       Path(self.config.products_base_path) / request.shop_id / request.product_id / request.variant_id
+│                   )
+│                   product_path = variant_dir / "product.png"
+│                   analysis_dir = variant_dir / self.config.analysis_dir_name
+│                   analysis_dir.mkdir(parents=True, exist_ok=True)
+│       
+│                   # Validate input file exists
+│                   if not product_path.exists():
+│                       raise FileNotFoundError(f"{product_path} not found - upstream step missing?")
+│       
+│                   # Load and validate image
+│                   image = cv2.imread(str(product_path))
+│                   if image is None:
+│                       raise ValueError("Unable to read image (corrupt or unsupported format)")
+│       
+│                   # Perform apparel segmentation
+│                   coloured_mask, apparel_mask, apparel_crop, bound_crop, bound_mask = self._segment_apparel(image)
+│       
+│                   if bound_crop is None or bound_mask is None:
+│                       self.logger.warning("No apparel detected in catalog item")
+│                       return CatalogItemAnalysisResult(
+│                           status="success",  # Keep original behavior: return success with empty colours
+│                           colours=[],
+│                           latency_ms=int((time.perf_counter() - t0) * 1000),
+│                           shop_id=request.shop_id,
+│                           product_id=request.product_id,
+│                           variant_id=request.variant_id,
+│                       )
+│       
+│                   # Extract apparel color palette
+│                   dominant_colours = self._extract_apparel_palette_lab(
+│                       mask=bound_mask,
+│                       image=bound_crop,
+│                       n_colors=self.config.default_colors,
+│                       sample_size=self.config.sample_size,
+│                       min_chroma=self.config.min_chroma,
+│                   )
+│       
+│                   # Save analysis artifacts
+│                   cv2.imwrite(str(analysis_dir / "colored_mask.png"), coloured_mask)
+│                   cv2.imwrite(str(analysis_dir / "clothes_crop.png"), apparel_crop)
+│                   cv2.imwrite(str(analysis_dir / "clothes_crop_bound.png"), bound_crop)
+│       
+│                   latency = int((time.perf_counter() - t0) * 1000)
+│       
+│                   self.logger.info(
+│                       f"Catalog item analysis completed successfully in {latency}ms, found {len(dominant_colours)} colors"
+│                   )
+│       
+│                   return CatalogItemAnalysisResult(
+│                       status="success",
+│                       colours=dominant_colours,
+│                       latency_ms=latency,
+│                       shop_id=request.shop_id,
+│                       product_id=request.product_id,
+│                       variant_id=request.variant_id,
+│                   )
+│       
+│               except Exception as e:
+│                   latency = int((time.perf_counter() - t0) * 1000)
+│                   self.logger.error(f"Catalog item analysis failed: {e!s}", exc_info=True)
+│       
+│                   return CatalogItemAnalysisResult(
+│                       status="error",
+│                       colours=None,
+│                       latency_ms=latency,
+│                       error=str(e),
+│                       shop_id=request.shop_id,
+│                       product_id=request.product_id,
+│                       variant_id=request.variant_id,
+│                   )
+│       
+│           def _get_segmenter(self):
+│               """Create the ImageSegmenter once - tailored for mediapipe 0.10.21."""
+│               if self._segmenter is not None:
+│                   return self._segmenter
+│       
+│               from mediapipe.tasks.python.core.base_options import BaseOptions
+│               from mediapipe.tasks.python.vision.image_segmenter import (
+│                   ImageSegmenter,
+│                   ImageSegmenterOptions,
+│                   _RunningMode,
+│               )
+│       
+│               self.logger.info(f"Creating ImageSegmenter with model path: {self.config.model_path}")
+│       
+│               opts = ImageSegmenterOptions(
+│                   base_options=BaseOptions(model_asset_path=str(self.config.model_path)),
+│                   running_mode=_RunningMode.IMAGE,
+│                   output_category_mask=True,
+│               )
+│               self._segmenter = ImageSegmenter.create_from_options(opts)
+│               return self._segmenter
+│       
+│           def _make_colour_mask(self, segment_mask: np.ndarray):
+│               """Create colored visualization mask for catalog item analysis"""
+│               lut = np.zeros((256, 1, 3), dtype=np.uint8)
+│               lut[0] = (0, 0, 0)  # bg
+│               lut[1] = (255, 255, 0)  # hair
+│               lut[2] = (255, 0, 0)  # body-skin
+│               lut[3] = (0, 0, 255)  # face-skin
+│               lut[4] = (0, 255, 0)  # apparel/clothes
+│               lut[5] = (255, 0, 255)  # other
+│               return cv2.applyColorMap(segment_mask, lut)
+│       
+│           def _segment_apparel(
+│               self, image: np.ndarray
+│           ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+│               """
+│               Run Mediapipe segmentation and extract apparel regions from catalog item.
+│       
+│               Returns:
+│                   coloured_mask: HxWx3 BGR viz of all classes
+│                   apparel_mask: HxW uint8 binary mask (255=apparel, 0=other)
+│                   apparel_crop: HxWx3 BGR image where only apparel pixels survive
+│                   bound_crop: H'xW'x3 BGR tight crop of apparel region
+│                   bound_mask: H'xW' uint8 tight crop of binary mask
+│               """
+│               # Get segmenter
+│               segmenter = self._get_segmenter()
+│       
+│               # Wrap NumPy BGR in an mp.Image
+│               mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+│       
+│               # Run segmentation
+│               result = segmenter.segment(mp_img)
+│               class_mask = result.category_mask.numpy_view()  # HxW, values 0-5
+│       
+│               # Build binary apparel mask (class 4 = clothes/apparel)
+│               apparel_mask = np.where(class_mask == 4, 255, 0).astype(np.uint8)
+│       
+│               # Coloured viz mask (for debugging)
+│               coloured_mask = self._make_colour_mask(class_mask)
+│       
+│               # Raw crop: zero out non-apparel pixels
+│               apparel_crop = cv2.bitwise_and(image, image, mask=apparel_mask)
+│       
+│               # Find tight bounding box on the apparel region
+│               ys, xs = np.where(apparel_mask == 255)
+│               if xs.size == 0 or ys.size == 0:
+│                   # No apparel detected in catalog item
+│                   return coloured_mask, apparel_mask, None, None, None
+│       
+│               x0, x1 = xs.min(), xs.max() + 1
+│               y0, y1 = ys.min(), ys.max() + 1
+│       
+│               # Tight crops
+│               bound_crop = apparel_crop[y0:y1, x0:x1]
+│               bound_mask = apparel_mask[y0:y1, x0:x1]
+│       
+│               return coloured_mask, apparel_mask, apparel_crop, bound_crop, bound_mask
+│       
+│           def _extract_apparel_palette_lab(
+│               self,
+│               mask: np.ndarray,
+│               image: np.ndarray,
+│               n_colors: int = 5,
+│               sample_size: int = 20000,
+│               min_chroma: float = 5.0,
+│           ) -> list[list[int]]:
+│               """
+│               Extract color palette from apparel region in catalog item using LAB color space.
+│       
+│               Args:
+│                   mask: HxW uint8 mask (255 = apparel, 0 = other)
+│                   image: HxWx3 BGR image
+│                   n_colors: Number of colors to extract
+│                   sample_size: Maximum number of pixels to sample
+│                   min_chroma: Minimum chroma threshold to filter grays
+│       
+│               Returns:
+│                   List of [R,G,B] color values (0-255) representing dominant apparel colors
+│               """
+│               # Grab only the apparel-masked pixels
+│               coords = np.where(mask == 255)
+│               pixels = image[coords]  # NNx3 BGR
+│       
+│               if len(pixels) == 0:
+│                   return []
+│       
+│               # Sample down if too many pixels
+│               if len(pixels) > sample_size:
+│                   idx = np.random.choice(len(pixels), sample_size, replace=False)
+│                   pixels = pixels[idx]
+│       
+│               # Convert BGR→RGB→Lab
+│               pixels_rgb = pixels[:, ::-1]
+│               pixels_lab = cv2.cvtColor(pixels_rgb.reshape(-1, 1, 3), cv2.COLOR_RGB2LAB).reshape(-1, 3)
+│       
+│               # K-Means clustering in Lab space
+│               km = KMeans(n_clusters=n_colors * 2, n_init=8, random_state=0)
+│               labels = km.fit_predict(pixels_lab)
+│               centers_lab = km.cluster_centers_
+│       
+│               # Compute counts & chroma, filter out low-chroma (near-gray)
+│               counts = np.bincount(labels)
+│               chroma = np.linalg.norm(centers_lab[:, 1:], axis=1)  # sqrt(a^2 + b^2)
+│               keep = [i for i in np.argsort(-counts) if chroma[i] >= min_chroma]
+│       
+│               # Take top n_colors valid clusters
+│               chosen = keep[:n_colors]
+│               palette_rgb = []
+│               for i in chosen:
+│                   # Convert Lab center back to RGB
+│                   lab = np.uint8(centers_lab[i].reshape(1, 1, 3))
+│                   rgb = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB).reshape(
+│                       3,
+│                   )
+│                   palette_rgb.append([int(c) for c in rgb])
+│       
+│               return palette_rgb
+│       ```
+│       
+├── __init__.py
+├── config.py
+│   
+│   ```py
+│   # services/catalog-analysis/src/config.py
+│   from functools import lru_cache
+│   
+│   from pydantic import BaseModel, Field
+│   
+│   from shared.utils.config_loader import flatten_config, merged_config
+│   
+│   
+│   class ServiceConfig(BaseModel):
+│       """Service configuration from YAML + environment"""
+│   
+│       # Service Identity
+│       service_name: str = Field(..., alias="service.name")
+│       service_version: str = Field(..., alias="service.version")
+│       environment: str
+│       debug: bool
+│   
+│       # Infrastructure
+│       infrastructure_nats_url: str = Field(..., alias="infrastructure.nats_url")
+│       infrastructure_redis_url: str = Field(..., alias="infrastructure.redis_url")
+│   
+│       # Logging
+│       logging_level: str = Field(..., alias="logging.level")
+│       logging_format: str = Field(..., alias="logging.format")
+│   
+│       # Service-specific configuration
+│       model_path: str = Field(..., alias="catalog_analysis.model_path")
+│       products_base_path: str = Field(..., alias="catalog_analysis.products_base_path")
+│       analysis_dir_name: str = Field(..., alias="catalog_analysis.analysis_dir_name", default="analysis")
+│       default_colors: int = Field(..., alias="catalog_analysis.default_colors", default=5)
+│       sample_size: int = Field(..., alias="catalog_analysis.sample_size", default=20000)
+│       min_chroma: float = Field(..., alias="catalog_analysis.min_chroma", default=8.0)
+│   
+│       @property
+│       def nats_servers(self) -> list[str]:
+│           return [self.infrastructure_nats_url]
+│   
+│       @property
+│       def is_production(self) -> bool:
+│           return self.environment == "production"
+│   
+│   
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load and cache service configuration"""
+│       cfg_dict = merged_config("catalog-analysis", env_prefix="CATALOG_ANALYSIS")
+│       flattened = flatten_config(cfg_dict)
+│       return ServiceConfig(**flattened)
+│   
+│   
+│   config = get_service_config()
+│   ```
+│   
+├── dependencies.py
+│   
+│   ```py
+│   # services/catalog-analysis/src/dependencies.py
+│   from typing import Annotated
+│   
+│   from fastapi import Depends
+│   
+│   from .events.publishers import CatalogAnalysisEventPublisher
+│   from .lifecycle import ServiceLifecycle
+│   from .services.catalog_analysis_service import CatalogAnalysisService
+│   
+│   # This file is kept for potential future API needs, but not used in event-driven mode
+│   
+│   
+│   def get_catalog_analysis_service(lifecycle: ServiceLifecycle) -> CatalogAnalysisService:
+│       """Get catalog analysis service"""
+│       if not lifecycle.catalog_analysis_service:
+│           raise RuntimeError("CatalogAnalysisService not initialized")
+│       return lifecycle.catalog_analysis_service
+│   
+│   
+│   def get_publisher(lifecycle: ServiceLifecycle) -> CatalogAnalysisEventPublisher:
+│       """Get event publisher"""
+│       if not lifecycle.event_publisher:
+│           raise RuntimeError("EventPublisher not initialized")
+│       return lifecycle.event_publisher
+│   
+│   
+│   # Type aliases
+│   CatalogAnalysisServiceDep = Annotated[CatalogAnalysisService, Depends(get_catalog_analysis_service)]
+│   PublisherDep = Annotated[CatalogAnalysisEventPublisher, Depends(get_publisher)]
+│   ```
+│   
+├── lifecycle.py
+│   
+│   ```py
+│   # services/catalog-analysis/src/lifecycle.py
+│   import asyncio
+│   
+│   import redis.asyncio as redis
+│   
+│   from shared.messaging import JetStreamWrapper
+│   from shared.utils.logger import create_logger
+│   
+│   from .config import CatalogAnalysisConfig
+│   from .events.publishers import CatalogAnalysisEventPublisher
+│   from .events.subscribers import CatalogItemAnalysisSubscriber
+│   from .services.catalog_analysis_service import CatalogAnalysisService
+│   
+│   
+│   class ServiceLifecycle:
+│       """Manages service lifecycle and dependencies"""
+│   
+│       def __init__(self, config: CatalogAnalysisConfig):
+│           self.config = config
+│           self.logger = create_logger(config.service_name)
+│   
+│           # External connections
+│           self.messaging_wrapper: JetStreamWrapper | None = None
+│           self.redis_client: redis.Redis | None = None
+│   
+│           # Services
+│           self.catalog_analysis_service: CatalogAnalysisService | None = None
+│   
+│           # Event handling
+│           self.event_publisher: CatalogAnalysisEventPublisher | None = None
+│   
+│           # Background tasks
+│           self._tasks: list[asyncio.Task] = []
+│   
+│       async def startup(self) -> None:
+│           """Initialize all components in order"""
+│           self.logger.info(f"Starting {self.config.service_name}")
+│   
+│           # 1. Redis
+│           self.redis_client = await redis.from_url(self.config.infrastructure_redis_url, encoding="utf-8")
+│   
+│           # 2. Messaging
+│           self.messaging_wrapper = JetStreamWrapper(self.logger)
+│           await self.messaging_wrapper.connect(self.config.nats_servers)
+│   
+│           # 3. Create publisher
+│           self.event_publisher = self.messaging_wrapper.create_publisher(CatalogAnalysisEventPublisher)
+│   
+│           # 4. Initialize services
+│           self.catalog_analysis_service = CatalogAnalysisService(config=self.config, logger=self.logger)
+│   
+│           # 5. Register dependencies for subscribers
+│           self.messaging_wrapper.register_dependency("catalog_analysis_service", self.catalog_analysis_service)
+│           self.messaging_wrapper.register_dependency("publisher", self.event_publisher)
+│           self.messaging_wrapper.register_dependency("logger", self.logger)
+│   
+│           # 6. Start event subscribers
+│           await self.messaging_wrapper.start_subscriber(CatalogItemAnalysisSubscriber)
+│   
+│           self.logger.info(f"✅ {self.config.service_name} started successfully")
+│   
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown of all components"""
+│           self.logger.info(f"Shutting down {self.config.service_name}")
+│   
+│           # Cancel background tasks
+│           for task in self._tasks:
+│               task.cancel()
+│   
+│           # Close connections
+│           if self.messaging_wrapper:
+│               await self.messaging_wrapper.close()
+│   
+│           if self.redis_client:
+│               await self.redis_client.close()
+│   
+│           self.logger.info(f"✅ {self.config.service_name} shutdown complete")
+│   ```
+│   
+└── main.py
+    
+    ```py
+    # services/catalog-analysis/src/main.py
+    import asyncio
+    import signal
+    
+    from .config import config
+    from .lifecycle import ServiceLifecycle
+    
+    lifecycle = ServiceLifecycle(config)
+    
+    
+    async def main():
+        """Main application entry point"""
+        shutdown_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+    
+        # Signal handlers just trigger the event (no background task -> no RUF006)
+        def _on_signal() -> None:
+            loop.call_soon_threadsafe(shutdown_event.set)
+    
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, _on_signal)
+    
+        try:
+            await lifecycle.startup()
+            # Keep running until a signal arrives
+            await shutdown_event.wait()
+        except Exception as e:
+            lifecycle.logger.error(f"Fatal error: {e}", exc_info=True)
+            raise
+        finally:
+            # Always shutdown gracefully
+            await lifecycle.shutdown()
+    
+    
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+    
+tests/
+└── __init__.py
+.python-version
+Dockerfile
+
+```
+# services/catalog-analysis/Dockerfile
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 1 ─ Builder
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install system dependencies for OpenCV and ML libraries
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+
+# ---- 1️⃣  Install shared package dependencies
+COPY shared /shared
+WORKDIR /shared
+RUN poetry install --no-dev
+
+# ---- 2️⃣  Install service dependencies
+WORKDIR /app
+COPY services/catalog-analysis/pyproject.toml services/catalog-analysis/poetry.lock* ./
+RUN poetry install --no-dev --no-interaction --no-ansi
+
+# ---- 3️⃣  Copy service code
+COPY services/catalog-analysis /app
+
+# ---- 4️⃣  Copy config
+COPY config /app/config
+
+# ---- 5️⃣  Copy model file
+COPY services/cv_cloth/models /app/models
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Install runtime dependencies for OpenCV
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy everything from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+COPY --from=builder /shared /shared
+
+ENV PYTHONPATH="/shared:/app"
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import asyncio; print('Service running')" || exit 1
+
+CMD ["python", "-m", "src.main"]
+```
+
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+[tool.poetry]
+name = "catalog-analysis"
+version = "1.0.0"
+description = "AI-powered catalog item analysis and color extraction service for apparel"
+authors = ["GlamYouUp Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+nats-py = "^2.6.0"
+redis = "^5.0.1"
+opencv-python = "^4.8.1"
+mediapipe = "^0.10.16"
+scikit-learn = "^1.3.0"
+numpy = "^1.24.0"
+python-dotenv = "^1.0.0"
+shared = { path = "../../shared", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+README.md
+
+```md
+
+# services/catalog-analysis/README.md
+
+# Catalog Analysis Service
+
+AI-powered catalog item analysis and color extraction service for apparel using MediaPipe and computer vision.
+
+## Overview
+
+This service processes catalog item images to:
+- Segment apparel items from background/person
+- Extract dominant color palettes from apparel regions
+- Save analysis artifacts for review
+- Publish results via event-driven architecture
+
+The service maintains the **exact same output format** as the original API implementation:
+```json
+{
+  "status": "success",
+  "colours": [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+  "latency_ms": 1250
+}
+```
+
+## Features
+
+- **MediaPipe Integration**: Uses Google's MediaPipe for accurate human/apparel segmentation
+- **Color Analysis**: LAB color space analysis with chroma filtering to avoid grays
+- **Event-Driven**: Consumes analysis requests and publishes results via NATS
+- **Artifact Storage**: Saves visualization masks and cropped regions
+- **Production Ready**: Comprehensive error handling, logging, and monitoring
+
+## Event Contracts
+
+### Input Events
+**Subject**: `evt.catalog.item.analysis.requested`
+```json
+{
+  "subject": "evt.catalog.item.analysis.requested",
+  "payload": {
+    "shop_id": "70931710194",
+    "product_id": "8526062977266",
+    "variant_id": "46547096469746"
+  },
+  "correlation_id": "unique-request-id"
+}
+```
+
+### Output Events
+
+**Success**: `evt.catalog.item.analysis.completed`
+```json
+{
+  "subject": "evt.catalog.item.analysis.completed",
+  "payload": {
+    "status": "success",
+    "colours": [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+    "latency_ms": 1250,
+    "shop_id": "70931710194",
+    "product_id": "8526062977266",
+    "variant_id": "46547096469746"
+  },
+  "correlation_id": "unique-request-id"
+}
+```
+
+**Failure**: `evt.catalog.item.analysis.failed`
+```json
+{
+  "subject": "evt.catalog.item.analysis.failed",
+  "payload": {
+    "status": "error",
+    "error": "Product image not found",
+    "latency_ms": 50,
+    "shop_id": "70931710194",
+    "product_id": "8526062977266",
+    "variant_id": "46547096469746"
+  },
+  "correlation_id": "unique-request-id"
+}
+```
+
+## Development
+
+### Setup
+```bash
+# Install dependencies
+make setup-dev
+
+# Run tests
+make test
+
+# Start with Docker
+make docker-run
+
+# View logs
+make docker-logs
+```
+
+### Testing
+```bash
+# Unit tests
+pytest tests/unit/
+
+# Integration tests
+pytest tests/integration/
+
+# Manual testing
+python scripts/test_catalog_analysis.py publish
+python scripts/test_catalog_analysis.py listen
+```
+
+## Algorithm Details
+
+### Apparel Segmentation Pipeline
+1. **MediaPipe Processing**: Segments image into 6 classes (background, hair, body-skin, face-skin, clothes, other)
+2. **Apparel Extraction**: Isolates clothing pixels (class 4) from other regions
+3. **Bounding Box**: Finds tight bounds around apparel region
+4. **Color Sampling**: Randomly samples up to 20,000 pixels from apparel area
+
+### Color Analysis
+1. **Color Space**: Converts BGR → RGB → LAB for perceptually uniform clustering
+2. **K-Means Clustering**: Groups colors into 2×requested clusters
+3. **Chroma Filtering**: Removes low-chroma colors (grays) using threshold
+4. **Ranking**: Orders by cluster size, returns top N colors
+5. **Format**: Converts back to RGB integers (0-255)
+
+## Dependencies
+
+### Core
+- **mediapipe** (≥0.10.16): Human segmentation model
+- **opencv-python**: Image processing and color space conversion
+- **scikit-learn**: K-means clustering for color analysis
+- **numpy**: Numerical operations
+
+### Infrastructure
+- **shared**: Internal shared package for events, config, logging
+- **nats-py**: Event streaming via NATS JetStream
+- **redis**: Caching (optional)
+- **pydantic**: Data validation and configuration
+
+## Configuration
+
+Service configuration follows the three-tier hierarchy:
+
+### Service Configuration (config/services/catalog-analysis.yml)
+```yaml
+service:
+  name: "catalog-analysis"
+catalog_analysis:
+  model_path: "services/cv_cloth/models/selfie_multiclass_256x256.tflite"
+  products_base_path: "selfie/products"
+  default_colors: 5
+  sample_size: 20000
+  min_chroma: 8.0
+```
+
+### Environment Variables (.env)
+```bash
+# No database required for this service
+REDIS_URL=redis://localhost:6379
+NATS_URL=nats://localhost:4222
+
+# Optional service secrets
+CATALOG_ANALYSIS_API_KEY=your_api_key_here
+```
+
+## Performance
+
+Typical processing times:
+- **Small images** (< 500px): 200-500ms
+- **Medium images** (500-1000px): 500-1000ms
+- **Large images** (> 1000px): 1000-2000ms
+
+Memory usage scales with image size and color complexity.
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

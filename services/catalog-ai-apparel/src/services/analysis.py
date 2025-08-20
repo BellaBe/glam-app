@@ -9,14 +9,14 @@ from sklearn.cluster import KMeans
 
 from shared.utils.logger import ServiceLogger
 
-from ..config import CatalogAnalysisConfig
+from ..config import ServiceConfig
 from ..schemas.catalog_item import CatalogItemAnalysisRequest, CatalogItemAnalysisResult
 
 
 class CatalogAnalysisService:
     """Core business logic for catalog item apparel analysis and color extraction"""
 
-    def __init__(self, config: CatalogAnalysisConfig, logger: ServiceLogger):
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
         self.config = config
         self.logger = logger
         self._segmenter = None

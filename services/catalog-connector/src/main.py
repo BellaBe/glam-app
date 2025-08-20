@@ -1,42 +1,60 @@
-# src/main.py
-import asyncio
+# services/platform-connector/src/main.py
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from shared.api import setup_middleware, create_health_router
+from shared.utils import create_logger
 
-from shared.utils.logger import create_logger
+from .config import get_service_config
+from .lifecycle import ServiceLifecycle
 
-from .config import config
-from .lifecycle import ConnectorServiceLifecycle
+# CRITICAL: Create these at module level (singletons)
+config = get_service_config()
+logger = create_logger(config.service_name)
+lifecycle = ServiceLifecycle(config, logger)
 
-# Create lifecycle manager
-lifecycle = ConnectorServiceLifecycle(config)
-
-
-async def main():
-    """Main application entry point"""
-    logger = create_logger("platform-connector-main")
-
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan management for startup/shutdown"""
+    # Store in app state for dependencies
+    app.state.lifecycle = lifecycle
+    app.state.config = config
+    app.state.logger = logger  # REQUIRED for middleware
+    
     try:
-        logger.info("Starting Platform Connector Service")
-
-        # Start the service
         await lifecycle.startup()
-
-        # Keep the service running
-        logger.info("Platform Connector Service is running. Press Ctrl+C to stop.")
-
-        # Wait forever (until interrupted)
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Shutdown signal received")
-
-    except Exception as e:
-        logger.error(f"Service failed: {e}")
+        yield
     finally:
-        # Clean shutdown
         await lifecycle.shutdown()
-        logger.info("Platform Connector Service stopped")
 
+def create_application() -> FastAPI:
+    """Create FastAPI app with shared package integration"""
+    app = FastAPI(
+        title=config.service_name,
+        version=config.service_version,
+        description=config.service_description,
+        lifespan=lifespan,
+    )
+    
+    # CRITICAL: Setup shared middleware (handles ALL errors)
+    setup_middleware(
+        app,
+        service_name=config.service_name
+    )
+    
+    # Add health check from shared package
+    app.include_router(create_health_router(config.service_name))
+    
+    # No API endpoints for this service - event-driven only
+    
+    return app
+
+app = create_application()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import uvicorn
+    uvicorn.run(
+        "src.main:app",
+        host=config.api_host,
+        port=config.api_port,
+        reload=config.debug
+    )

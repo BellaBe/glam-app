@@ -8,7 +8,6 @@ from shared.utils.logger import ServiceLogger
 
 from .config import ServiceConfig
 from .events.listeners import (
-    BillingSubscriptionExpiredListener,
     CatalogSyncCompletedListener,
     CreditBalanceDepletedListener,
     CreditBalanceLowListener,
@@ -181,9 +180,6 @@ class ServiceLifecycle:
                 self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             CatalogSyncCompletedListener(
-                self.messaging_client, self.notification_service, self.event_publisher, self.logger
-            ),
-            BillingSubscriptionExpiredListener(
                 self.messaging_client, self.notification_service, self.event_publisher, self.logger
             ),
             CreditBalanceLowListener(
