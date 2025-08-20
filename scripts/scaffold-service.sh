@@ -5,7 +5,7 @@ set -euo pipefail
 #  GLAM Service Scaffold Script - Creates skeleton only
 #  Edit these variables and run:  ./scripts/scaffold-service.sh
 ###############################################################################
-SERVICE_NAME="catalog-ai-analyzer"          # kebab-case slug
+SERVICE_NAME="season-compatibility-service"          # kebab-case slug
 PY_VERSION="^3.11"
 ###############################################################################
 
@@ -131,10 +131,10 @@ EOF
 echo "🛠   Initializing Poetry project …"
 (
   cd "${BASE}"
-  
+
   # Configure Poetry to create .venv inside the project
   poetry config virtualenvs.in-project true --local
-  
+
   # Initialize project
   poetry init \
     --name "${SERVICE_NAME}" \
@@ -142,27 +142,22 @@ echo "🛠   Initializing Poetry project …"
     --author "GLAM Team" \
     --python "${PY_VERSION}" \
     --no-interaction
-  
+
   echo "📦  Installing dependencies (this may take a moment)..."
-  
+
   # Core dependencies
   poetry add \
     fastapi@^0.109 \
     "uvicorn[standard]" \
     pydantic \
     prisma \
-    httpx \
-    opencv-python \
-    mediapipe \
-    scikit-learn \
     numpy \
-    openai \
-    groq \
+    scipy \
     --no-interaction
-  
+
   # Add shared package from monorepo
   poetry add --editable ../../shared --no-interaction
-  
+
   # Dev dependencies
   poetry add --group dev \
     pytest \

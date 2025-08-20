@@ -1,0 +1,54 @@
+// services/season-compatibility/prisma/schema.prisma
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SeasonCompatibility {
+  id                String   @id @default(uuid())
+
+  // Identifiers
+  item_id           String
+  merchant_id       String
+  product_id        String
+  variant_id        String
+
+  // 16 Season Scores (0.0 to 1.0)
+  light_spring      Float    @default(0.0)
+  true_spring       Float    @default(0.0)
+  bright_spring     Float    @default(0.0)
+  warm_spring       Float    @default(0.0)
+  light_summer      Float    @default(0.0)
+  true_summer       Float    @default(0.0)
+  soft_summer       Float    @default(0.0)
+  cool_summer       Float    @default(0.0)
+  soft_autumn       Float    @default(0.0)
+  true_autumn       Float    @default(0.0)
+  warm_autumn       Float    @default(0.0)
+  deep_autumn       Float    @default(0.0)
+  bright_winter     Float    @default(0.0)
+  true_winter       Float    @default(0.0)
+  cool_winter       Float    @default(0.0)
+  deep_winter       Float    @default(0.0)
+
+  // Quick lookup fields
+  primary_season    String
+  secondary_season  String
+  tertiary_season   String
+  max_score         Float
+
+  // Timestamps
+  computed_at       DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([merchant_id, item_id])
+  @@index([merchant_id, primary_season])
+  @@index([merchant_id, max_score])
+  @@map("season_compatibility")
+}
