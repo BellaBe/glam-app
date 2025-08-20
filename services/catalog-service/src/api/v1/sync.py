@@ -42,8 +42,8 @@ async def start_sync(
     sync = await svc.start_sync(
         merchant_id=auth.shop,  # Using shop as merchant_id
         platform_name=platform.platform,
-        platform_id=platform.domain,  # Using domain as platform_id for now
-        platform_domain=platform.domain,
+        platform_shop_id=platform.domain,  # Using domain as platform_shop_id for now
+        shop_domain=platform.domain,
         sync_type=body.sync_type,
         correlation_id=ctx.correlation_id
     )
@@ -52,8 +52,8 @@ async def start_sync(
     await publisher.catalog_sync_requested(
         merchant_id=auth.shop,
         platform_name=platform.platform,
-        platform_id=platform.domain,
-        platform_domain=platform.domain,
+        platform_shop_id=platform.domain,
+        shop_domain=platform.domain,
         sync_id=sync.id,
         sync_type=body.sync_type,
         correlation_id=ctx.correlation_id

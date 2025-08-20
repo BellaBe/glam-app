@@ -161,8 +161,8 @@ class NotificationService:
                 {
                     "merchant_id": str(event_data.get("merchant_id")),
                     "platform_name": event_data.get("platform_name"),
-                    "platform_id": event_data.get("platform_id"),
-                    "platform_domain": event_data.get("platform_domain"),
+                    "platform_shop_id": event_data.get("platform_shop_id"),
+                    "shop_domain": event_data.get("shop_domain"),
                     "recipient_email": recipient_email,
                     "template_type": template_type,
                     "subject": subject,
@@ -205,10 +205,10 @@ class NotificationService:
         context = {
             "merchant_id": event_data.get("merchant_id"),
             "platform_name": event_data.get("platform_name"),
-            "platform_id": event_data.get("platform_id"),
-            "platform_domain": event_data.get("platform_domain"),
-            "shop_domain": event_data.get("platform_domain"),  # Alias
-            "shop_name": event_data.get("shop_name", event_data.get("platform_domain")),
+            "platform_shop_id": event_data.get("platform_shop_id"),
+            "shop_domain": event_data.get("shop_domain"),
+            "shop_domain": event_data.get("shop_domain"),  # Alias
+            "shop_name": event_data.get("shop_name", event_data.get("shop_domain")),
             "current_year": datetime.now().year,
             "support_email": "support@glamyouup.com",
             "app_url": "https://app.glamyouup.com",
@@ -234,8 +234,8 @@ class NotificationService:
             {
                 "merchant_id": str(event_data.get("merchant_id")),
                 "platform_name": event_data.get("platform_name"),
-                "platform_id": event_data.get("platform_id"),
-                "platform_domain": event_data.get("platform_domain"),
+                "platform_shop_id": event_data.get("platform_shop_id"),
+                "shop_domain": event_data.get("shop_domain"),
                 "recipient_email": recipient_email,
                 "template_type": template_type,
                 "subject": "",  # No subject for failed

@@ -20,8 +20,8 @@ class MerchantEventPublisher(Publisher):
         correlation_id: str,
         merchant_id: str,
         platform_name: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         name: str,
         email: str,
         installed_at: datetime,
@@ -30,7 +30,7 @@ class MerchantEventPublisher(Publisher):
 
         self.logger.info(
             "Publishing merchant installed event",
-            extra={"correlation_id": correlation_id, "merchant_id": merchant_id, "platform_domain": platform_domain},
+            extra={"correlation_id": correlation_id, "merchant_id": merchant_id, "shop_domain": shop_domain},
         )
 
         return await self.publish_event(
@@ -38,8 +38,8 @@ class MerchantEventPublisher(Publisher):
             data={
                 "merchant_id": merchant_id,
                 "platform_name": platform_name,
-                "platform_id": platform_id,
-                "platform_domain": platform_domain,
+                "platform_shop_id": platform_shop_id,
+                "shop_domain": shop_domain,
                 "name": name,
                 "email": email,
                 "installed_at": installed_at.isoformat(),
@@ -48,15 +48,15 @@ class MerchantEventPublisher(Publisher):
         )
 
     async def publish_merchant_reinstalled(
-        self, correlation_id: str, merchant_id: str, platform_id: str, platform_domain: str, name: str, email: str
+        self, correlation_id: str, merchant_id: str, platform_shop_id: str, shop_domain: str, name: str, email: str
     ) -> str:
         """Publish evt.merchant.reinstalled event"""
         return await self.publish_event(
             subject="evt.merchant.reinstalled.v1",
             data={
                 "merchant_id": merchant_id,
-                "platform_id": platform_id,
-                "platform_domain": platform_domain,
+                "platform_shop_id": platform_shop_id,
+                "shop_domain": shop_domain,
                 "name": name,
                 "email": email,
                 "reinstalled_at": datetime.utcnow().isoformat(),

@@ -39,8 +39,8 @@ class ConnectorService:
         self,
         merchant_id: str,
         platform_name: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_id: str,
         correlation_id: str
     ) -> None:
@@ -53,7 +53,7 @@ class ConnectorService:
                 "sync_id": sync_id,
                 "merchant_id": merchant_id,
                 "platform": platform_name,
-                "domain": platform_domain
+                "domain": shop_domain
             }
         )
         
@@ -79,8 +79,8 @@ class ConnectorService:
             
             async for batch in adapter.fetch_products(
                 merchant_id=merchant_id,
-                platform_id=platform_id,
-                platform_domain=platform_domain,
+                platform_shop_id=platform_shop_id,
+                shop_domain=shop_domain,
                 sync_id=sync_id,
                 correlation_id=correlation_id
             ):
@@ -128,7 +128,7 @@ class ConnectorService:
                 extra={
                     "correlation_id": correlation_id,
                     "sync_id": sync_id,
-                    "domain": platform_domain
+                    "domain": shop_domain
                 }
             )
             

@@ -12,8 +12,8 @@ class NotificationOut(BaseModel):
     id: UUID
     merchant_id: UUID
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     recipient_email: str
     template_type: str
     subject: str

@@ -13,8 +13,8 @@ class CatalogEventPublisher(Publisher):
         self,
         merchant_id: str,
         platform_name: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_id: str,
         sync_type: str,
         correlation_id: str
@@ -25,8 +25,8 @@ class CatalogEventPublisher(Publisher):
             data={
                 "merchant_id": merchant_id,
                 "platform_name": platform_name,
-                "platform_id": platform_id,
-                "platform_domain": platform_domain,
+                "platform_shop_id": platform_shop_id,
+                "shop_domain": shop_domain,
                 "sync_id": sync_id,
                 "sync_type": sync_type
             },

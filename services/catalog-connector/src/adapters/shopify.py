@@ -91,8 +91,8 @@ class ShopifyAdapter(PlatformAdapter):
     async def fetch_products(
         self,
         merchant_id: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_id: str,
         correlation_id: str
     ) -> AsyncIterator[Dict[str, Any]]:
@@ -100,18 +100,18 @@ class ShopifyAdapter(PlatformAdapter):
         
         # Get access token from Token Service
         token = await self.authenticate({
-            "shop_domain": platform_domain,
+            "shop_domain": shop_domain,
             "correlation_id": correlation_id
         })
         
         if not token:
             raise UnauthorizedError(
-                f"Failed to get Shopify token for {platform_domain}",
+                f"Failed to get Shopify token for {shop_domain}",
                 auth_type="shopify_oauth"
             )
         
         self.logger.info(
-            f"Starting Shopify product fetch for {platform_domain}",
+            f"Starting Shopify product fetch for {shop_domain}",
             extra={
                 "correlation_id": correlation_id,
                 "sync_id": sync_id,
@@ -131,7 +131,7 @@ class ShopifyAdapter(PlatformAdapter):
                     # Execute GraphQL query
                     response_data = await self._execute_graphql(
                         session,
-                        platform_domain,
+                        shop_domain,
                         token,
                         self.PRODUCTS_QUERY,
                         {"cursor": cursor}
@@ -149,8 +149,8 @@ class ShopifyAdapter(PlatformAdapter):
                             transformed = self.transform_product({
                                 "product": product,
                                 "variant": variant,
-                                "platform_domain": platform_domain,
-                                "platform_id": platform_id
+                                "shop_domain": shop_domain,
+                                "platform_shop_id": platform_shop_id
                             })
                             
                             products_batch.append(transformed)
@@ -165,8 +165,8 @@ class ShopifyAdapter(PlatformAdapter):
                         "merchant_id": merchant_id,
                         "sync_id": sync_id,
                         "platform_name": "shopify",
-                        "platform_id": platform_id,
-                        "platform_domain": platform_domain,
+                        "platform_shop_id": platform_shop_id,
+                        "shop_domain": shop_domain,
                         "products": products_batch,
                         "batch_num": batch_num,
                         "has_more": has_more
@@ -186,7 +186,7 @@ class ShopifyAdapter(PlatformAdapter):
                 except UnauthorizedError:
                     # Token might be expired or revoked
                     self.logger.error(
-                        f"Shopify authentication failed for {platform_domain}",
+                        f"Shopify authentication failed for {shop_domain}",
                         extra={
                             "correlation_id": correlation_id,
                             "sync_id": sync_id
@@ -278,8 +278,8 @@ class ShopifyAdapter(PlatformAdapter):
         
         return {
             "platform_name": "shopify",
-            "platform_id": raw_data["platform_id"],
-            "platform_domain": raw_data["platform_domain"],
+            "platform_shop_id": raw_data["platform_shop_id"],
+            "shop_domain": raw_data["shop_domain"],
             "product_id": self.extract_id(product["id"]),
             "variant_id": self.extract_id(variant["id"]),
             "product_title": product["title"],

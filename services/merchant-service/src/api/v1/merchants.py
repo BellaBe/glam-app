@@ -38,13 +38,13 @@ async def sync_merchant(
         platform_ctx=platform_ctx,
         logger=logger,
         body_platform=body.platform_name,
-        body_domain=body.platform_domain,
+        body_domain=body.shop_domain,
     )
 
     logger.set_request_context(
         platform=platform_ctx.platform,
         domain=platform_ctx.domain,
-        platform_id=body.platform_id,
+        platform_shop_id=body.platform_shop_id,
     )
 
     logger.info("Starting merchant sync")
@@ -110,7 +110,7 @@ async def get_current_merchant(
 
     try:
         merchant = await service.get_merchant_by_domain(
-            platform_domain=platform_ctx.domain,
+            shop_domain=platform_ctx.domain,
         )
 
         logger.info(

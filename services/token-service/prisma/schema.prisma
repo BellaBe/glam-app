@@ -20,7 +20,7 @@ model PlatformToken {
   // Platform identification (complete platform context)
   platform_name     String    // "shopify", "woocommerce", "bigcommerce"
   platform_shop_id  String    // Shop's ID in the platform (e.g., "12345678")
-  platform_domain   String    // Full domain (e.g., "example.myshopify.com")
+  shop_domain   String    // Full domain (e.g., "example.myshopify.com")
   
   // Encrypted token data
   encrypted_token   String    @db.Text // Encrypted JSON containing credentials
@@ -43,7 +43,7 @@ model PlatformToken {
   @@unique([merchant_id, platform_name])
   @@index([merchant_id])
   @@index([platform_name])
-  @@index([platform_domain])
+  @@index([shop_domain])
   @@map("platform_tokens")
 }
 

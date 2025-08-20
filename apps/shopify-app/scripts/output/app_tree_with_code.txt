@@ -747,7 +747,7 @@ export default {
   syncShop: (payload) =>
     call(svc.merchant, "/merchants/sync", {
       method: "POST",
-      shop: payload.platform_domain,
+      shop: payload.shop_domain,
       body: payload,
     }),
   getMerchant: (shop) => call(svc.merchant, "/merchants/self", { shop }),
@@ -3515,8 +3515,8 @@ const shopify = shopifyApp({
         // Build sync payload with correct field names
         const syncData = {
           platform_name: "shopify",
-          platform_id: shopData.data.shop.id,
-          platform_domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
+          platform_shop_id: shopData.data.shop.id,
+          shop_domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
           shop_name: shopData.data.shop.name,
           email: shopData.data.shop.contactEmail,
           primary_domain_host: shopData.data.shop.primaryDomain.host,
@@ -3538,7 +3538,7 @@ const shopify = shopifyApp({
           attempts++;
           try {
             // Use simple domain-based lookup
-            merchant = await apiClient.getMerchant(syncData.platform_domain);
+            merchant = await apiClient.getMerchant(syncData.shop_domain);
             break;
           } catch (error) {
             if (error.status === 404 && attempts < maxAttempts) {

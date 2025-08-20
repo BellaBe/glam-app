@@ -19,8 +19,8 @@ class PlatformAdapter(ABC):
     async def fetch_products(
         self,
         merchant_id: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_id: str,
         correlation_id: str
     ) -> AsyncIterator[Dict[str, Any]]:

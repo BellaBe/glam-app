@@ -22,8 +22,8 @@ model Merchant {
 
   // Platform Identity (immutable after creation)
   platform_name          String              // 'shopify', 'woocommerce', etc.
-  platform_id       String              // gid://shopify/Shop/123
-  platform_domain   String              // bb-staging-test.myshopify.com (PERMANENT)
+  platform_shop_id       String              // gid://shopify/Shop/123
+  shop_domain   String              // bb-staging-test.myshopify.com (PERMANENT)
 
   // Basic Info
   name              String              // Shop/Store name
@@ -48,10 +48,10 @@ model Merchant {
   created_at        DateTime @default(now()) @db.Timestamptz(3)
   updated_at        DateTime @updatedAt @db.Timestamptz(3)
 
-  @@unique([platform_name, platform_id])
-  @@unique([platform_name, platform_domain])
-  @@index([platform_id, platform_domain])
-  @@index([platform_domain])
+  @@unique([platform_name, platform_shop_id])
+  @@unique([platform_name, shop_domain])
+  @@index([platform_shop_id, shop_domain])
+  @@index([shop_domain])
   @@index([status])
   @@map("merchants")
 }

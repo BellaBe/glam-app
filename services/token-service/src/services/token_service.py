@@ -53,7 +53,7 @@ class TokenService:
             "merchant_id": request.merchant_id,
             "platform_name": request.platform_name,
             "platform_shop_id": request.platform_shop_id,
-            "platform_domain": request.platform_domain,
+            "shop_domain": request.shop_domain,
             "encrypted_token": encrypted,
             "encryption_key_id": self.encryption.key_id,
             "token_type": request.token_type,
@@ -64,7 +64,7 @@ class TokenService:
         # Log access
         await self.repository.log_access(
             token_id=token.id,
-            accessed_by=request.platform_domain,  # Store requester
+            accessed_by=request.shop_domain,  # Store requester
             access_type="write",
             success=True,
             correlation_id=correlation_id
@@ -145,7 +145,7 @@ class TokenService:
             result.append(TokenData(
                 platform_name=token.platform_name,
                 platform_shop_id=token.platform_shop_id,
-                platform_domain=token.platform_domain,
+                shop_domain=token.shop_domain,
                 token_data=token_data,
                 token_type=token.token_type,
                 expires_at=token.expires_at,
@@ -188,7 +188,7 @@ class TokenService:
             # Log deletion
             await self.repository.log_access(
                 token_id=deleted.id,
-                accessed_by=deleted.platform_domain,
+                accessed_by=deleted.shop_domain,
                 access_type="delete",
                 success=True,
                 correlation_id=correlation_id

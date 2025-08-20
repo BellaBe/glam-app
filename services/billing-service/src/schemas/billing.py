@@ -129,8 +129,8 @@ class MerchantCreatedPayload(BaseModel):
 
     merchant_id: UUID
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     name: str
     email: str
     installed_at: datetime

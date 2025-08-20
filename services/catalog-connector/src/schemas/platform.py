@@ -6,8 +6,8 @@ from pydantic import BaseModel
 class PlatformProduct(BaseModel):
     """Internal platform product format"""
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     product_id: str
     variant_id: str
     product_title: str
@@ -25,8 +25,8 @@ class ProductBatch(BaseModel):
     merchant_id: str
     sync_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     products: List[Dict[str, Any]]
     batch_num: int
     has_more: bool

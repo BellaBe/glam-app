@@ -9,8 +9,8 @@ class CatalogItemCreate(BaseModel):
     """DTO for creating/updating catalog item"""
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     product_id: str
     variant_id: str
     image_id: Optional[str] = None
@@ -42,8 +42,8 @@ class CatalogItemOut(BaseModel):
     id: str
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     product_id: str
     variant_id: str
     image_id: Optional[str]

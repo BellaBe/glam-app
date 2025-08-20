@@ -16,8 +16,8 @@ class SyncRepository:
             data={
                 "merchant_id": dto.merchant_id,
                 "platform_name": dto.platform_name,
-                "platform_id": dto.platform_id,
-                "platform_domain": dto.platform_domain,
+                "platform_shop_id": dto.platform_shop_id,
+                "shop_domain": dto.shop_domain,
                 "sync_type": dto.sync_type,
                 "status": "pending"
             }

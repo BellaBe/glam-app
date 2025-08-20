@@ -6,7 +6,7 @@ class CatalogSyncRequestedPayload(BaseModel):
     """Payload for catalog.sync.requested event"""
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     sync_id: str
     sync_type: str = "full"

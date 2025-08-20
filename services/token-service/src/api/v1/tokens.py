@@ -41,12 +41,12 @@ async def store_token(
     """
     
     # Validate domain matches JWT
-    if body.platform_domain != auth.shop:
+    if body.shop_domain != auth.shop:
         raise UnauthorizedError(
             "Domain mismatch",
             details={
                 "jwt_domain": auth.shop,
-                "request_domain": body.platform_domain
+                "request_domain": body.shop_domain
             }
         )
     

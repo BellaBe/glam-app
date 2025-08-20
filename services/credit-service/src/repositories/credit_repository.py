@@ -17,8 +17,8 @@ class CreditRepository:
         self,
         merchant_id: UUID,
         platform_name: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
     ) -> dict:
         """Create credit account with platform context"""
         try:
@@ -26,8 +26,8 @@ class CreditRepository:
                 data={
                     "merchant_id": str(merchant_id),
                     "platform_name": platform_name,
-                    "platform_id": platform_id,
-                    "platform_domain": platform_domain,
+                    "platform_shop_id": platform_shop_id,
+                    "shop_domain": shop_domain,
                     "balance": 0,
                     "total_granted": 0,
                     "total_consumed": 0,
@@ -46,9 +46,9 @@ class CreditRepository:
         account = await self.prisma.creditaccount.find_unique(where={"merchant_id": str(merchant_id)})
         return account
 
-    async def find_by_platform_domain(self, platform_domain: str) -> dict | None:
+    async def find_by_shop_domain(self, shop_domain: str) -> dict | None:
         """Find credit account by platform domain"""
-        account = await self.prisma.creditaccount.find_first(where={"platform_domain": platform_domain})
+        account = await self.prisma.creditaccount.find_first(where={"shop_domain": shop_domain})
         return account
 
     async def update_balance(

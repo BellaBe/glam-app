@@ -35,8 +35,8 @@ class CatalogRepository:
             create={
                 "merchant_id": dto.merchant_id,
                 "platform_name": dto.platform_name,
-                "platform_id": dto.platform_id,
-                "platform_domain": dto.platform_domain,
+                "platform_shop_id": dto.platform_shop_id,
+                "shop_domain": dto.shop_domain,
                 "product_id": dto.product_id,
                 "variant_id": dto.variant_id,
                 "image_id": dto.image_id,

@@ -103,7 +103,7 @@ export default {
   syncShop: (payload) =>
     call(svc.merchant, "/merchants/sync", {
       method: "POST",
-      shop: payload.platform_domain,
+      shop: payload.shop_domain,
       body: payload,
     }),
   getMerchant: (shop) => call(svc.merchant, "/merchants/self", { shop }),

@@ -16,8 +16,8 @@ model CreditAccount {
 
   // Platform context (immutable after creation)
   platform_name     String   // 'shopify', 'woocommerce', etc
-  platform_id       String   // Platform-specific ID (e.g., shop_gid for Shopify)
-  platform_domain   String   // e.g., 'example.myshopify.com'
+  platform_shop_id       String   // Platform-specific ID (e.g., shop_gid for Shopify)
+  shop_domain   String   // e.g., 'example.myshopify.com'
 
   // Balance tracking
   balance           Int      @default(0)  // Current credits (never negative)
@@ -28,8 +28,8 @@ model CreditAccount {
   updated_at        DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([merchant_id])
-  @@index([platform_domain])
-  @@index([platform_name, platform_id])
+  @@index([shop_domain])
+  @@index([platform_name, platform_shop_id])
   @@map("credit_accounts")
 }
 

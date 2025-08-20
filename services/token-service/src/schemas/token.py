@@ -11,7 +11,7 @@ class StoreTokenRequest(BaseModel):
     merchant_id: str = Field(..., description="Internal merchant ID")
     platform_name: str = Field(..., description="Platform name (shopify, woocommerce, etc)")
     platform_shop_id: str = Field(..., description="Shop ID in the platform")
-    platform_domain: str = Field(..., description="Full domain")
+    shop_domain: str = Field(..., description="Full domain")
     token_data: Dict[str, Any] = Field(..., description="Token data to encrypt")
     token_type: str = Field(..., description="Token type (oauth, api_key, etc)")
     expires_at: Optional[datetime] = Field(None, description="Token expiration")
@@ -23,7 +23,7 @@ class StoreTokenRequest(BaseModel):
                 "merchant_id": "uuid-merchant-id",
                 "platform_name": "shopify",
                 "platform_shop_id": "12345678",
-                "platform_domain": "example.myshopify.com",
+                "shop_domain": "example.myshopify.com",
                 "token_data": {
                     "access_token": "shpat_xxx",
                     "scope": "read_products,write_orders"
@@ -40,7 +40,7 @@ class TokenData(BaseModel):
     """Decrypted token data"""
     platform_name: str
     platform_shop_id: str
-    platform_domain: str
+    shop_domain: str
     token_data: Dict[str, Any]
     token_type: str
     expires_at: Optional[datetime]

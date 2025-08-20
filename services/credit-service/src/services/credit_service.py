@@ -25,7 +25,7 @@ class CreditService:
 
     # Read operations (for API)
 
-    async def get_balance(self, merchant_id: UUID, platform_domain: str, correlation_id: str) -> CreditBalanceOut:
+    async def get_balance(self, merchant_id: UUID, shop_domain: str, correlation_id: str) -> CreditBalanceOut:
         """Get credit balance with platform context"""
 
         # Find by merchant_id
@@ -33,7 +33,7 @@ class CreditService:
 
         if not account:
             # Also try by domain for backwards compatibility
-            account = await self.repository.find_by_platform_domain(platform_domain)
+            account = await self.repository.find_by_shop_domain(shop_domain)
 
         if not account:
             raise NotFoundError(
@@ -43,14 +43,14 @@ class CreditService:
             )
 
         # Verify domain matches
-        if account.platform_domain != platform_domain:
+        if account.shop_domain != shop_domain:
             self.logger.warning(
                 "Platform domain mismatch in credit lookup",
                 extra={
                     "correlation_id": correlation_id,
                     "merchant_id": str(merchant_id),
-                    "expected_domain": platform_domain,
-                    "account_domain": account.platform_domain,
+                    "expected_domain": shop_domain,
+                    "account_domain": account.shop_domain,
                 },
             )
 
@@ -59,7 +59,7 @@ class CreditService:
             total_granted=account.total_granted,
             total_consumed=account.total_consumed,
             platform_name=account.platform_name,
-            platform_domain=account.platform_domain,
+            shop_domain=account.shop_domain,
         )
 
     async def get_transactions(
@@ -92,15 +92,15 @@ class CreditService:
                 "correlation_id": correlation_id,
                 "merchant_id": str(event.merchant_id),
                 "platform": event.platform,
-                "platform_domain": event.shop_domain,
+                "shop_domain": event.shop_domain,
             },
         )
 
         account = await self.repository.create_account(
             merchant_id=event.merchant_id,
             platform_name=event.platform,
-            platform_id=event.shop_gid,
-            platform_domain=event.shop_domain,
+            platform_shop_id=event.shop_gid,
+            shop_domain=event.shop_domain,
         )
 
         return {

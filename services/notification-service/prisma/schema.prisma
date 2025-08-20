@@ -16,8 +16,8 @@ model Notification {
   // Full merchant identification
   merchant_id         String    @db.Uuid
   platform_name       String    @db.VarChar(255)
-  platform_id         String    @db.VarChar(255)
-  platform_domain     String    @db.VarChar(255)
+  platform_shop_id         String    @db.VarChar(255)
+  shop_domain     String    @db.VarChar(255)
 
   // Email details
   recipient_email     String    @db.VarChar(255)
@@ -48,8 +48,8 @@ model Notification {
   failed_at         DateTime? @db.Timestamptz(3)
 
   @@index([merchant_id, created_at])
-  @@index([platform_name, platform_id])
-  @@index([platform_domain])
+  @@index([platform_name, platform_shop_id])
+  @@index([shop_domain])
   @@index([status])
   @@index([template_type])
   @@index([idempotency_key])

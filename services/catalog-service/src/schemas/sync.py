@@ -15,8 +15,8 @@ class SyncOperationCreate(BaseModel):
     """DTO for creating sync operation"""
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     sync_type: str = "full"
 
 class SyncOperationOut(BaseModel):
@@ -24,8 +24,8 @@ class SyncOperationOut(BaseModel):
     id: str
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     sync_type: str
     status: str
     total_products: int

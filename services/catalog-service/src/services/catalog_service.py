@@ -33,8 +33,8 @@ class CatalogService:
         self,
         merchant_id: str,
         platform_name: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_type: str,
         correlation_id: str
     ) -> SyncOperationOut:
@@ -54,8 +54,8 @@ class CatalogService:
         sync_dto = SyncOperationCreate(
             merchant_id=merchant_id,
             platform_name=platform_name,
-            platform_id=platform_id,
-            platform_domain=platform_domain,
+            platform_shop_id=platform_shop_id,
+            shop_domain=shop_domain,
             sync_type=sync_type
         )
         
@@ -137,8 +137,8 @@ class CatalogService:
             item_dto = CatalogItemCreate(
                 merchant_id=merchant_id,
                 platform_name=product.get("platform_name", "shopify"),
-                platform_id=product["platform_id"],
-                platform_domain=product["platform_domain"],
+                platform_shop_id=product["platform_shop_id"],
+                shop_domain=product["shop_domain"],
                 product_id=product["product_id"],
                 variant_id=product["variant_id"],
                 image_id=product.get("image_id"),

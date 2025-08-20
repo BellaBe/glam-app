@@ -8,8 +8,8 @@ class MerchantSyncIn(BaseModel):
     """Input DTO for syncing merchant"""
 
     platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
-    platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-    platform_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
+    platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
+    shop_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
     shop_name: str = Field(..., description="Shop display name")
     email: str = Field(..., description="Shop contact email")
     primary_domain_host: str = Field(..., description="Primary domain of the shop")
@@ -30,8 +30,8 @@ class MerchantSelfOut(BaseModel):
     """Output DTO for self merchant"""
 
     id: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     shop_name: str
     status: MerchantStatus
 
@@ -42,8 +42,8 @@ class MerchantSyncedPayload(BaseModel):
 
     merchant_id: str
     platform_name: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     contact_email: str
     name: str
     status: MerchantStatus
@@ -53,6 +53,6 @@ class MerchantStatusUpdatedPayload(BaseModel):
     """Payload for evt.merchant.status_updated"""
 
     merchant_id: str
-    platform_id: str
-    platform_domain: str
+    platform_shop_id: str
+    shop_domain: str
     status: MerchantStatus

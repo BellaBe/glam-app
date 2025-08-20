@@ -55,8 +55,8 @@ class WooCommerceAdapter(PlatformAdapter):
     async def fetch_products(
         self,
         merchant_id: str,
-        platform_id: str,
-        platform_domain: str,
+        platform_shop_id: str,
+        shop_domain: str,
         sync_id: str,
         correlation_id: str
     ) -> AsyncIterator[Dict[str, Any]]:
@@ -64,12 +64,12 @@ class WooCommerceAdapter(PlatformAdapter):
         
         # Get auth headers from Token Service
         headers = await self.authenticate({
-            "domain": platform_domain,
+            "domain": shop_domain,
             "correlation_id": correlation_id
         })
         
         self.logger.info(
-            f"Starting WooCommerce product fetch for {platform_domain}",
+            f"Starting WooCommerce product fetch for {shop_domain}",
             extra={
                 "correlation_id": correlation_id,
                 "sync_id": sync_id,
@@ -87,7 +87,7 @@ class WooCommerceAdapter(PlatformAdapter):
                 batch_num += 1
                 
                 # Fetch products page
-                url = f"https://{platform_domain}/wp-json/wc/v3/products"
+                url = f"https://{shop_domain}/wp-json/wc/v3/products"
                 params = {
                     "page": page,
                     "per_page": per_page,
@@ -103,7 +103,7 @@ class WooCommerceAdapter(PlatformAdapter):
                     ) as response:
                         if response.status == 401:
                             raise UnauthorizedError(
-                                f"Invalid WooCommerce credentials for {platform_domain}",
+                                f"Invalid WooCommerce credentials for {shop_domain}",
                                 auth_type="woocommerce_api"
                             )
                         
@@ -117,13 +117,13 @@ class WooCommerceAdapter(PlatformAdapter):
                             if product.get("variations"):
                                 for var_id in product["variations"]:
                                     variation = await self._fetch_variation(
-                                        session, platform_domain, product["id"], var_id, headers
+                                        session, shop_domain, product["id"], var_id, headers
                                     )
                                     transformed = self.transform_product({
                                         "product": product,
                                         "variation": variation,
-                                        "platform_domain": platform_domain,
-                                        "platform_id": platform_id
+                                        "shop_domain": shop_domain,
+                                        "platform_shop_id": platform_shop_id
                                     })
                                     products_batch.append(transformed)
                             else:
@@ -131,8 +131,8 @@ class WooCommerceAdapter(PlatformAdapter):
                                 transformed = self.transform_product({
                                     "product": product,
                                     "variation": None,
-                                    "platform_domain": platform_domain,
-                                    "platform_id": platform_id
+                                    "shop_domain": shop_domain,
+                                    "platform_shop_id": platform_shop_id
                                 })
                                 products_batch.append(transformed)
                         
@@ -147,8 +147,8 @@ class WooCommerceAdapter(PlatformAdapter):
                             "merchant_id": merchant_id,
                             "sync_id": sync_id,
                             "platform_name": "woocommerce",
-                            "platform_id": platform_id,
-                            "platform_domain": platform_domain,
+                            "platform_shop_id": platform_shop_id,
+                            "shop_domain": shop_domain,
                             "products": products_batch,
                             "batch_num": batch_num,
                             "has_more": has_more
@@ -218,8 +218,8 @@ class WooCommerceAdapter(PlatformAdapter):
         
         return {
             "platform_name": "woocommerce",
-            "platform_id": raw_data["platform_id"],
-            "platform_domain": raw_data["platform_domain"],
+            "platform_shop_id": raw_data["platform_shop_id"],
+            "shop_domain": raw_data["shop_domain"],
             "product_id": str(product["id"]),
             "variant_id": variant_id,
             "product_title": product["name"],

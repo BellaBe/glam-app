@@ -17,8 +17,8 @@ prisma/
 │   │       CREATE TABLE "merchants" (
 │   │           "id" UUID NOT NULL,
 │   │           "platform_name" TEXT NOT NULL,
-│   │           "platform_id" TEXT NOT NULL,
-│   │           "platform_domain" TEXT NOT NULL,
+│   │           "platform_shop_id" TEXT NOT NULL,
+│   │           "shop_domain" TEXT NOT NULL,
 │   │           "name" TEXT NOT NULL,
 │   │           "email" TEXT NOT NULL,
 │   │           "primary_domain" TEXT,
@@ -38,19 +38,19 @@ prisma/
 │   │       );
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_platform_id_platform_domain_idx" ON "merchants"("platform_id", "platform_domain");
+│   │       CREATE INDEX "merchants_platform_shop_id_shop_domain_idx" ON "merchants"("platform_shop_id", "shop_domain");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_platform_domain_idx" ON "merchants"("platform_domain");
+│   │       CREATE INDEX "merchants_shop_domain_idx" ON "merchants"("shop_domain");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "merchants_status_idx" ON "merchants"("status");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_id_key" ON "merchants"("platform_name", "platform_id");
+│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_shop_id_key" ON "merchants"("platform_name", "platform_shop_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_domain_key" ON "merchants"("platform_name", "platform_domain");
+│   │       CREATE UNIQUE INDEX "merchants_platform_name_shop_domain_key" ON "merchants"("platform_name", "shop_domain");
 │   │       ```
 │   │
 │   └── migration_lock.toml
@@ -117,13 +117,13 @@ src/
 │   │                   platform_ctx=platform_ctx,
 │   │                   logger=logger,
 │   │                   body_platform=body.platform_name,
-│   │                   body_domain=body.platform_domain
+│   │                   body_domain=body.shop_domain
 │   │               )
 │   │
 │   │           logger.set_request_context(
 │   │               platform=platform_ctx.platform,
 │   │               domain=platform_ctx.domain,
-│   │               platform_id=body.platform_id
+│   │               platform_shop_id=body.platform_shop_id
 │   │           )
 │   │
 │   │           logger.info("Starting merchant sync")
@@ -201,7 +201,7 @@ src/
 │   │
 │   │           try:
 │   │               merchant = await service.get_merchant_by_domain(
-│   │                   platform_domain=platform_ctx.domain,
+│   │                   shop_domain=platform_ctx.domain,
 │   │               )
 │   │
 │   │               logger.info(
@@ -331,8 +331,8 @@ src/
 │               correlation_id: str,
 │               merchant_id: str,
 │               platform_name: str,
-│               platform_id: str,
-│               platform_domain: str,
+│               platform_shop_id: str,
+│               shop_domain: str,
 │               name: str,
 │               email: str,
 │               installed_at: datetime
@@ -344,7 +344,7 @@ src/
 │                   extra={
 │                       "correlation_id": correlation_id,
 │                       "merchant_id": merchant_id,
-│                       "platform_domain": platform_domain
+│                       "shop_domain": shop_domain
 │                   }
 │               )
 │
@@ -353,8 +353,8 @@ src/
 │                   data={
 │                       "merchant_id": merchant_id,
 │                       "platform_name": platform_name,
-│                       "platform_id": platform_id,
-│                       "platform_domain": platform_domain,
+│                       "platform_shop_id": platform_shop_id,
+│                       "shop_domain": shop_domain,
 │                       "name": name,
 │                       "email": email,
 │                       "installed_at": installed_at.isoformat()
@@ -366,8 +366,8 @@ src/
 │               self,
 │               correlation_id: str,
 │               merchant_id: str,
-│               platform_id: str,
-│               platform_domain: str,
+│               platform_shop_id: str,
+│               shop_domain: str,
 │               name: str,
 │               email: str
 │           ) -> str:
@@ -376,8 +376,8 @@ src/
 │                   subject="evt.merchant.reinstalled.v1",
 │                   data={
 │                       "merchant_id": merchant_id,
-│                       "platform_id": platform_id,
-│                       "platform_domain": platform_domain,
+│                       "platform_shop_id": platform_shop_id,
+│                       "shop_domain": shop_domain,
 │                       "name": name,
 │                       "email": email,
 │                       "reinstalled_at": datetime.utcnow().isoformat()
@@ -447,27 +447,27 @@ src/
 │           def __init__(self, prisma: Prisma):
 │               self.prisma = prisma
 │
-│           async def find_by_platform_identity(
+│           async def find_by_platform_shop_identity(
 │               self,
 │               platform_name: str,
-│               platform_domain: str,
-│               platform_id: Optional[str] = None
+│               shop_domain: str,
+│               platform_shop_id: Optional[str] = None
 │           ) -> Optional[Merchant]:
 │               """Find merchant by platform identity"""
 │               conditions = [
-│                   {"platform_name": platform_name, "platform_domain": platform_domain.lower()}
+│                   {"platform_name": platform_name, "shop_domain": shop_domain.lower()}
 │               ]
-│               if platform_id:
-│                   conditions.append({"platform_name": platform_name, "platform_id": platform_id})
+│               if platform_shop_id:
+│                   conditions.append({"platform_name": platform_name, "platform_shop_id": platform_shop_id})
 │
 │               return await self.prisma.merchant.find_first(
 │                   where={"OR": conditions}
 │               )
 │
-│           async def find_by_platform_domain(self, platform_domain: str) -> Optional[Merchant]:
+│           async def find_by_shop_domain(self, shop_domain: str) -> Optional[Merchant]:
 │               """Find merchant by platform domain"""
 │               return await self.prisma.merchant.find_first(
-│                   where={"platform_domain": platform_domain.lower()}
+│                   where={"shop_domain": shop_domain.lower()}
 │               )
 │
 │           async def create(self, data: MerchantSyncIn) -> Merchant:
@@ -475,8 +475,8 @@ src/
 │               return await self.prisma.merchant.create(
 │                   data={
 │                       "platform_name": data.platform_name.lower(),
-│                       "platform_id": data.platform_id,
-│                       "platform_domain": data.platform_domain.lower(),  # myshopify domain
+│                       "platform_shop_id": data.platform_shop_id,
+│                       "shop_domain": data.shop_domain.lower(),  # myshopify domain
 │                       "name": data.shop_name,
 │                       "email": data.email,
 │                       "primary_domain": data.primary_domain_host,  # could be custom domain
@@ -560,8 +560,8 @@ src/
 │       class MerchantSyncIn(BaseModel):
 │           """Input DTO for syncing merchant"""
 │           platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
-│           platform_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-│           platform_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
+│           platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
+│           shop_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
 │           shop_name: str = Field(..., description="Shop display name")
 │           email: EmailStr = Field(None, description="Shop contact email")
 │           primary_domain_host: str = Field(..., description="Primary domain of the shop")
@@ -578,8 +578,8 @@ src/
 │       class MerchantSelfOut(BaseModel):
 │           """Output DTO for self merchant"""
 │           id: str
-│           platform_id: str
-│           platform_domain: str
+│           platform_shop_id: str
+│           shop_domain: str
 │           shop_name: str
 │           status: MerchantStatus
 │
@@ -588,8 +588,8 @@ src/
 │           """Payload for evt.merchant.synced"""
 │           merchant_id: str
 │           platform_name: str
-│           platform_id: str
-│           platform_domain: str
+│           platform_shop_id: str
+│           shop_domain: str
 │           contact_email: EmailStr
 │           name: str
 │           status: MerchantStatus
@@ -597,8 +597,8 @@ src/
 │       class MerchantStatusUpdatedPayload(BaseModel):
 │           """Payload for evt.merchant.status_updated"""
 │           merchant_id: str
-│           platform_id: str
-│           platform_domain: str
+│           platform_shop_id: str
+│           shop_domain: str
 │           status: MerchantStatus
 │
 │       ```
@@ -675,19 +675,19 @@ src/
 │               """Sync merchant from OAuth flow"""
 │
 │               self.logger.info(
-│                   f"Syncing merchant: {data.platform_domain}",
+│                   f"Syncing merchant: {data.shop_domain}",
 │                   extra={
 │                       "correlation_id": ctx.correlation_id,
-│                       "platform_domain": data.platform_domain,
-│                       "platform_id": data.platform_id
+│                       "shop_domain": data.shop_domain,
+│                       "platform_shop_id": data.platform_shop_id
 │                   }
 │               )
 │
 │               # Find existing merchant
-│               existing = await self.repository.find_by_platform_identity(
+│               existing = await self.repository.find_by_platform_shop_identity(
 │                   platform_name=data.platform_name,
-│                   platform_domain=data.platform_domain,
-│                   platform_id=data.platform_id
+│                   shop_domain=data.shop_domain,
+│                   platform_shop_id=data.platform_shop_id
 │               )
 │
 │               if existing:
@@ -706,8 +706,8 @@ src/
 │                       await self.publisher.publish_merchant_reinstalled(
 │                           correlation_id=ctx.correlation_id,
 │                           merchant_id=merchant.id,
-│                           platform_id=merchant.platform_id,
-│                           platform_domain=merchant.platform_domain,
+│                           platform_shop_id=merchant.platform_shop_id,
+│                           shop_domain=merchant.shop_domain,
 │                           name=merchant.name,
 │                           email=merchant.email
 │                       )
@@ -717,10 +717,10 @@ src/
 │                   created = True
 │
 │                   self.logger.info(
-│                       f"Created new merchant: {merchant.platform_domain}",
+│                       f"Created new merchant: {merchant.shop_domain}",
 │                       extra={
 │                           "merchant_id": merchant.id,
-│                           "platform_domain": merchant.platform_domain
+│                           "shop_domain": merchant.shop_domain
 │                       }
 │                   )
 │
@@ -729,8 +729,8 @@ src/
 │                       correlation_id=ctx.correlation_id,
 │                       merchant_id=merchant.id,
 │                       platform_name=merchant.platform_name,
-│                       platform_id=merchant.platform_id,
-│                       platform_domain=merchant.platform_domain,
+│                       platform_shop_id=merchant.platform_shop_id,
+│                       shop_domain=merchant.shop_domain,
 │                       name=merchant.name,
 │                       email=merchant.email,
 │                       installed_at=merchant.installed_at
@@ -740,8 +740,8 @@ src/
 │               synced_payload = MerchantSyncedPayload(
 │                   merchant_id=merchant.id,
 │                   platform_name=merchant.platform_name,
-│                   platform_id=merchant.platform_id,
-│                   platform_domain=merchant.platform_domain,
+│                   platform_shop_id=merchant.platform_shop_id,
+│                   shop_domain=merchant.shop_domain,
 │                   contact_email=merchant.email,
 │                   name=merchant.name,
 │                   status=merchant.status
@@ -757,30 +757,30 @@ src/
 │                   merchant_id=merchant.id
 │               )
 │
-│           async def get_merchant_by_domain(self, platform_domain: str) -> MerchantSelfOut:
+│           async def get_merchant_by_domain(self, shop_domain: str) -> MerchantSelfOut:
 │               """Get merchant by platform domain"""
-│               merchant = await self.repository.find_by_platform_domain(platform_domain)
+│               merchant = await self.repository.find_by_shop_domain(shop_domain)
 │               if not merchant:
-│                   raise MerchantNotFoundError(f"Merchant not found: {platform_domain}")
+│                   raise MerchantNotFoundError(f"Merchant not found: {shop_domain}")
 │
 │               return MerchantSelfOut(
 │                   id=merchant.id,
-│                   platform_id=merchant.platform_id,
-│                   platform_domain=merchant.platform_domain,
+│                   platform_shop_id=merchant.platform_shop_id,
+│                   shop_domain=merchant.shop_domain,
 │                   shop_name=merchant.name,
 │                   status=merchant.status
 │               )
 │
 │           async def update_merchant_status(
 │               self,
-│               platform_domain: str,
+│               shop_domain: str,
 │               new_status: MerchantStatus
 │           ) -> None:
 │               """Update merchant status (called by event listeners)"""
 │
-│               merchant = await self.repository.find_by_platform_domain(platform_domain)
+│               merchant = await self.repository.find_by_shop_domain(shop_domain)
 │               if not merchant:
-│                   raise MerchantNotFoundError(f"Merchant not found: {platform_domain}")
+│                   raise MerchantNotFoundError(f"Merchant not found: {shop_domain}")
 │
 │               old_status = merchant.status
 │
@@ -790,7 +790,7 @@ src/
 │                       f"Invalid status transition from {old_status} to {new_status}",
 │                       extra={
 │                           "merchant_id": merchant.id,
-│                           "platform_domain": platform_domain
+│                           "shop_domain": shop_domain
 │                       }
 │                   )
 │                   raise InvalidStatusTransitionError(
@@ -803,8 +803,8 @@ src/
 │               # Publish status changed event
 │               status_payload = MerchantStatusUpdatedPayload(
 │                   merchant_id=merchant.id,
-│                   platform_id=merchant.platform_id,
-│                   platform_domain=merchant.platform_domain,
+│                   platform_shop_id=merchant.platform_shop_id,
+│                   shop_domain=merchant.shop_domain,
 │                   status=new_status
 │               )
 │

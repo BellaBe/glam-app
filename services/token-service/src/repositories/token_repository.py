@@ -25,7 +25,7 @@ class TokenRepository:
             },
             update={
                 "platform_shop_id": data["platform_shop_id"],
-                "platform_domain": data["platform_domain"],
+                "shop_domain": data["shop_domain"],
                 "encrypted_token": data["encrypted_token"],
                 "encryption_key_id": data["encryption_key_id"],
                 "token_type": data["token_type"],

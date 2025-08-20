@@ -48,8 +48,8 @@ class CatalogSyncRequestedListener(Listener):
             await self.connector_service.process_sync_request(
                 merchant_id=payload.merchant_id,
                 platform_name=payload.platform_name,
-                platform_id=payload.platform_id,
-                platform_domain=payload.platform_domain,
+                platform_shop_id=payload.platform_shop_id,
+                shop_domain=payload.shop_domain,
                 sync_id=payload.sync_id,
                 correlation_id=correlation_id or "unknown"
             )
