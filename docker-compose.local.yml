@@ -38,47 +38,25 @@ services:
       retries: 5
       start_period: 5s
 
-  # ----------------- Webhook Database -----------------
-  webhook-db:
+  # ----------------- Billing Database -----------------
+  billing-db:
     image: postgres:15-alpine
-    container_name: webhook-db-local
+    container_name: billing-db-local
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${WEBHOOK_DB_USER}
-      POSTGRES_PASSWORD: ${WEBHOOK_DB_PASSWORD}
-      POSTGRES_DB: ${WEBHOOK_DB_NAME}
+      POSTGRES_USER: ${BILLING_DB_USER}
+      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
+      POSTGRES_DB: ${BILLING_DB_NAME}
     ports:
-      - "${WEBHOOK_DB_PORT_EXTERNAL}:5432"
+      - "${BILLING_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - webhook-db-local-data:/var/lib/postgresql/data
+      - billing-db-local-data:/var/lib/postgresql/data
     networks:
       - glam-local-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${WEBHOOK_DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER}"]
       interval: 10s
       retries: 5
-      start_period: 10s
-
-  # ----------------- Merchant Database -----------------
-  merchant-db:
-    image: postgres:15-alpine
-    container_name: merchant-db-local
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${MERCHANT_DB_USER}
-      POSTGRES_PASSWORD: ${MERCHANT_DB_PASSWORD}
-      POSTGRES_DB: ${MERCHANT_DB_NAME}
-    ports:
-      - "${MERCHANT_DB_PORT_EXTERNAL}:5432"  # Fixed: added $
-    volumes:
-      - merchant-db-local-data:/var/lib/postgresql/data
-    networks:
-      - glam-local-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${MERCHANT_DB_USER}"]  # Fixed: use correct var
-      interval: 10s
-      retries: 5
-      timeout: 5s
       start_period: 10s
 
   # ----------------- Catalog Database -----------------
@@ -98,6 +76,50 @@ services:
       - glam-local-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 10s
+
+  # ----------------- Credit Database -----------------
+  credit-db:
+    image: postgres:15-alpine
+    container_name: credit-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${CREDIT_DB_USER}
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD}
+      POSTGRES_DB: ${CREDIT_DB_NAME}
+    ports:
+      - "${CREDIT_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - credit-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+
+  # ----------------- Merchant Database -----------------
+  merchant-db:
+    image: postgres:15-alpine
+    container_name: merchant-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${MERCHANT_DB_USER}
+      POSTGRES_PASSWORD: ${MERCHANT_DB_PASSWORD}
+      POSTGRES_DB: ${MERCHANT_DB_NAME}
+    ports:
+      - "${MERCHANT_DB_PORT_EXTERNAL}:5432"  # Fixed: added $
+    volumes:
+      - merchant-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MERCHANT_DB_USER}"]  # Fixed: use correct var
       interval: 10s
       retries: 5
       timeout: 5s
@@ -124,45 +146,64 @@ services:
       retries: 5
       start_period: 10s
 
-  # ----------------- Credit Database -----------------
-  credit-db:
+  # ----------------- Season Compatibility Database -----------------
+  season-compatibility-db:
     image: postgres:15-alpine
-    container_name: credit-db-local
+    container_name: season-compatibility-db-local
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${CREDIT_DB_USER}
-      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD}
-      POSTGRES_DB: ${CREDIT_DB_NAME}
+      POSTGRES_USER: ${SEASON_COMPATIBILITY_DB_USER}
+      POSTGRES_PASSWORD: ${SEASON_COMPATIBILITY_DB_PASSWORD}
+      POSTGRES_DB: ${SEASON_COMPATIBILITY_DB_NAME}
     ports:
-      - "${CREDIT_DB_PORT_EXTERNAL}:5432"
+      - "${SEASON_COMPATIBILITY_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - credit-db-local-data:/var/lib/postgresql/data
+      - season-compatibility-db-local-data:/var/lib/postgresql/data
     networks:
       - glam-local-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${SEASON_COMPATIBILITY_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
 
-
-  # ----------------- Billing Database -----------------
-  billing-db:
+  # ----------------- Token Database -----------------
+  token-db:
     image: postgres:15-alpine
-    container_name: billing-db-local
+    container_name: token-db-local
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${BILLING_DB_USER}
-      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
-      POSTGRES_DB: ${BILLING_DB_NAME}
+      POSTGRES_USER: ${TOKEN_DB_USER}
+      POSTGRES_PASSWORD: ${TOKEN_DB_PASSWORD}
+      POSTGRES_DB: ${TOKEN_DB_NAME}
     ports:
-      - "${BILLING_DB_PORT_EXTERNAL}:5432"
+      - "${TOKEN_DB_PORT_EXTERNAL}:5432"
     volumes:
-      - billing-db-local-data:/var/lib/postgresql/data
+      - token-db-local-data:/var/lib/postgresql/data
     networks:
       - glam-local-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${TOKEN_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+  # ----------------- Webhook Database -----------------
+  webhook-db:
+    image: postgres:15-alpine
+    container_name: webhook-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${WEBHOOK_DB_USER}
+      POSTGRES_PASSWORD: ${WEBHOOK_DB_PASSWORD}
+      POSTGRES_DB: ${WEBHOOK_DB_NAME}
+    ports:
+      - "${WEBHOOK_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - webhook-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WEBHOOK_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -173,9 +214,11 @@ networks:
 
 volumes:
   nats-local-data:
-  catalog-db-local-data:
-  notification-db-local-data:
-  credit-db-local-data:
-  webhook-db-local-data:
-  merchant-db-local-data:
   billing-db-local-data:
+  catalog-db-local-data:
+  credit-db-local-data:
+  merchant-db-local-data:
+  notification-db-local-data:
+  season-compatibility-db-local-data:
+  token-db-local-data:
+  webhook-db-local-data:

@@ -5,7 +5,7 @@ set -euo pipefail
 #  GLAM Service Scaffold Script - Creates skeleton only
 #  Edit these variables and run:  ./scripts/scaffold-service.sh
 ###############################################################################
-SERVICE_NAME="season-compatibility-service"          # kebab-case slug
+SERVICE_NAME="selfie-ai-analyzer"          # kebab-case slug
 PY_VERSION="^3.11"
 ###############################################################################
 

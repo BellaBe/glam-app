@@ -47,7 +47,7 @@ class CodeFlattener:
         '.html', '.css', '.scss', '.sass', '.less',
         '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
         '.md', '.rst', '.txt', '.dockerfile', '.dockerignore',
-        '.gitignore', '.env.example', 'Makefile', 'requirements.txt'
+        '.gitignore', '.env.example', 'Makefile', 'requirements.txt', ".mk"
     }
 
     def __init__(

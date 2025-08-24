@@ -1,0 +1,858 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/makefiles
+================================================================================
+
+makefiles/
+common.mk
+
+```mk
+# ================================================================
+# COMMON CONFIGURATION
+# ================================================================
+
+# Shell settings
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
+
+# Paths
+ROOT_DIR := $(shell pwd)
+SERVICES_DIR := services
+
+# Auto-discovery
+SERVICE_DIRS := $(shell find $(SERVICES_DIR) -maxdepth 1 -type d \
+	\( -name "*-service" -o -name "*-ai-*" -o -name "*-connector" -o -name "*-cache" \) | sort)
+SERVICE_NAMES := $(notdir $(SERVICE_DIRS))
+
+# Docker compose files
+COMPOSE_INFRA := docker-compose.local.yml
+COMPOSE_DEV := docker-compose.dev.yml
+COMPOSE_PROD := docker-compose.prod.yml
+
+# Project settings
+COMPOSE_PROJECT_NAME ?= glam-app
+
+# Colors
+RESET := \033[0m
+BOLD := \033[1m
+DIM := \033[2m
+RED := \033[31m
+GREEN := \033[32m
+YELLOW := \033[33m
+BLUE := \033[34m
+CYAN := \033[36m
+
+# ================================================================
+# FIXED HELPER FUNCTIONS - No @ symbols inside definitions!
+# ================================================================
+
+# Print header
+define print_header
+echo "" && \
+echo "$(BLUE)$(BOLD)════════════════════════════════════════════════$(RESET)" && \
+echo "$(BLUE)$(BOLD)  $(1)$(RESET)" && \
+echo "$(BLUE)$(BOLD)════════════════════════════════════════════════$(RESET)" && \
+echo ""
+endef
+
+# Print success message
+define print_success
+echo "$(GREEN)✅ $(1)$(RESET)"
+endef
+
+# Print error and exit - simplified to avoid issues
+define print_error
+echo "$(RED)❌ $(1)$(RESET)" >&2; exit 1
+endef
+
+# Print warning
+define print_warning
+echo "$(YELLOW)⚠️  $(1)$(RESET)"
+endef
+
+# Print info
+define print_info
+echo "$(CYAN)ℹ️  $(1)$(RESET)"
+endef
+
+# Confirm action
+define confirm
+echo "$(YELLOW)⚠️  $(1)$(RESET)" && \
+read -p "Continue? [y/N]: " confirm && [ "$$confirm" = "y" ] || (echo "Cancelled" && exit 1)
+endef
+
+# Check service - simplified to avoid nested function calls
+define check_service
+test -n "$(SERVICE)" || { echo "$(RED)❌ SERVICE not specified. Usage: make $(1) SERVICE=webhook-service$(RESET)" >&2; exit 1; } && \
+test -d "$(SERVICES_DIR)/$(SERVICE)" || { echo "$(RED)❌ Service '$(SERVICE)' not found$(RESET)" >&2; exit 1; }
+endef
+
+# ================================================================
+# DEPENDENCY CHECKS
+# ================================================================
+
+.PHONY: check-deps
+check-deps: ## Check required dependencies
+	@$(call print_info,Checking dependencies...)
+	@command -v docker >/dev/null 2>&1 || { $(call print_error,Docker not installed); }
+	@command -v docker-compose >/dev/null 2>&1 || command -v docker compose >/dev/null 2>&1 || \
+		{ $(call print_error,Docker Compose not installed); }
+	@command -v poetry >/dev/null 2>&1 || $(call print_warning,Poetry not installed (required for Python services))
+	@$(call print_success,All required dependencies found)
+
+# Environment setup
+.PHONY: setup-env
+setup-env: ## Setup environment files
+	@test -f .env || { cp .env.example .env && $(call print_info,Created .env from .env.example); }
+	@test -f .env.local || { cp .env.example .env.local && $(call print_info,Created .env.local); }
+	@test -f .env.dev || { cp .env.example .env.dev && $(call print_info,Created .env.dev); }
+	@test -f .env.prod || { cp .env.example .env.prod && $(call print_info,Created .env.prod); }
+```
+
+database.mk
+
+```mk
+# ================================================================
+# DATABASE MANAGEMENT
+# ================================================================
+
+.PHONY: db-url
+db-url: ## Get database URL for a service
+	@$(call check_service,"db-url")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)); \
+	echo "$(CYAN)DATABASE_URL for $(SERVICE):$(RESET)"; \
+	echo "$$DATABASE_URL"
+
+
+.PHONY: db-push
+db-push: ## Push Prisma schema to database
+	@$(call check_service,"db-push")
+	@$(call print_info,"Pushing schema for $(SERVICE)...")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)) && \
+	cd $(SERVICES_DIR)/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma db push --accept-data-loss
+
+.PHONY: db-migrate
+db-migrate: ## Create and apply migration
+	@$(call check_service,"db-migrate")
+	@test -n "$(NAME)" || ($(call print_error,"NAME not specified. Usage: make db-migrate SERVICE=x NAME='add_field'") && exit 1)
+	@$(call print_info,"Creating migration '$(NAME)' for $(SERVICE)...")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)) && \
+	cd $(SERVICES_DIR)/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma migrate dev --name $(NAME)
+
+.PHONY: db-reset
+db-reset: ## Reset database (removes all data)
+	@$(call check_service,"db-reset")
+	@$(call confirm,"This will delete all data in $(SERVICE) database")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)) && \
+	cd $(SERVICES_DIR)/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma migrate reset --force --skip-seed
+
+.PHONY: db-studio
+db-studio: ## Open Prisma Studio
+	@$(call check_service,"db-studio")
+	@$(call print_info,"Opening Prisma Studio for $(SERVICE)...")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)) && \
+	cd $(SERVICES_DIR)/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run prisma studio
+
+.PHONY: db-seed
+db-seed: ## Seed database with sample data
+	@$(call check_service,"db-seed")
+	@$(call print_info,"Seeding $(SERVICE) database...")
+	@DATABASE_URL=$$(scripts/get-db-url.sh $(SERVICE) $(ENV)) && \
+	cd $(SERVICES_DIR)/$(SERVICE) && \
+		DATABASE_URL="$$DATABASE_URL" \
+		poetry run python scripts/seed.py
+
+.PHONY: db-status
+db-status: ## Check database status
+	@$(call print_header,"Database Status")
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "$(CYAN)$$service:$(RESET)"; \
+			DATABASE_URL=$$(scripts/get-db-url.sh $$service $(ENV) 2>/dev/null) && \
+			echo "  URL: $$DATABASE_URL" || echo "  $(RED)Not configured$(RESET)"; \
+		fi; \
+	done
+```
+
+dev.mk
+
+```mk
+# ================================================================
+# DEV ENVIRONMENT - Everything in Docker
+# ================================================================
+
+.PHONY: dev
+dev: ## Start dev environment (all services in Docker)
+	@$(call print_info,"Starting dev environment...")
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev up -d
+	@$(MAKE) dev-wait
+	@$(MAKE) dev-status
+	@$(call print_success,"Dev environment is running!")
+
+.PHONY: dev-build
+dev-build: ## Build dev Docker images
+	@$(call print_info,"Building dev images...")
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev build
+
+.PHONY: dev-rebuild
+dev-rebuild: ## Rebuild and restart dev environment
+	@$(MAKE) dev-build
+	@$(MAKE) dev
+
+.PHONY: dev-stop
+dev-stop: ## Stop dev environment
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev stop
+
+.PHONY: dev-down
+dev-down: ## Stop and remove dev environment
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev down
+
+.PHONY: dev-clean
+dev-clean: ## Clean dev environment (removes data)
+	@$(call confirm,"This will delete all dev data")
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev down -v
+
+.PHONY: dev-logs
+dev-logs: ## Show dev logs (SERVICE=name for specific service)
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev logs -f $(SERVICE)
+
+.PHONY: dev-restart
+dev-restart: ## Restart a service in dev
+	@$(call check_service,"dev-restart")
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev restart $(SERVICE)
+
+.PHONY: dev-exec
+dev-exec: ## Execute command in dev service
+	@$(call check_service,"dev-exec")
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev exec $(SERVICE) $(CMD)
+
+.PHONY: dev-status
+dev-status: ## Show dev environment status
+	@echo "$(CYAN)$(BOLD)DEV Environment:$(RESET)"
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  $(DIM)Not running$(RESET)"
+
+.PHONY: dev-wait
+dev-wait: ## Wait for dev services to be ready
+	@$(call print_info,"Waiting for services to be ready...")
+	@sleep 5
+	@scripts/health-check.sh dev
+	@$(call print_success,"All services are ready")
+
+.PHONY: dev-scale
+dev-scale: ## Scale a service in dev (SERVICE=name COUNT=3)
+	@$(call check_service,"dev-scale")
+	@test -n "$(COUNT)" || ($(call print_error,"COUNT not specified") && exit 1)
+	@docker-compose -f $(COMPOSE_DEV) --project-name $(COMPOSE_PROJECT_NAME)-dev up -d --scale $(SERVICE)=$(COUNT)
+```
+
+local.mk
+
+```mk
+# ================================================================
+# LOCAL DEVELOPMENT - Infrastructure in Docker, Services on Host
+# ================================================================
+
+.PHONY: local
+local: local-infra ## Start local development environment
+	@$(call print_success,"Local infrastructure is running!")
+	@echo ""
+	@echo "$(CYAN)Next steps:$(RESET)"
+	@echo "  1. Setup a service:  $(BOLD)make local-setup SERVICE=webhook-service$(RESET)"
+	@echo "  2. Run a service:    $(BOLD)make local-run SERVICE=webhook-service$(RESET)"
+	@echo "  3. Run all services: $(BOLD)make local-run-all$(RESET)"
+
+.PHONY: local-infra
+local-infra: ## Start local infrastructure (postgres, nats, minio)
+	@$(call print_info,"Starting local infrastructure...")
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local up -d
+	@$(MAKE) local-wait
+	@$(MAKE) local-infra-status
+
+.PHONY: local-stop
+local-stop: ## Stop local infrastructure
+	@$(call print_info,"Stopping local infrastructure...")
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local stop
+
+.PHONY: local-down
+local-down: ## Stop and remove local infrastructure
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local down
+
+.PHONY: local-clean
+local-clean: ## Clean local environment (removes data)
+	@$(call confirm,"This will delete all local data")
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local down -v
+
+.PHONY: local-logs
+local-logs: ## Show local infrastructure logs
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local logs -f
+
+.PHONY: local-infra-status
+local-infra-status: ## Show infrastructure status
+	@echo "$(CYAN)Infrastructure Status:$(RESET)"
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
+
+.PHONY: local-wait
+local-wait: ## Wait for infrastructure to be ready
+	@$(call print_info,"Waiting for infrastructure to be ready...")
+	@scripts/wait-for-db.sh
+	@$(call print_success,"Infrastructure is ready")
+
+# ================================================================
+# SINGLE SERVICE OPERATIONS
+# ================================================================
+
+.PHONY: local-setup
+local-setup: ## Setup a service for local development
+	@$(call check_service,"local-setup")
+	@$(call print_info,"Setting up $(SERVICE)...")
+	@cd $(SERVICES_DIR)/$(SERVICE) && \
+		poetry install --sync && \
+		if [ -f prisma/schema.prisma ]; then \
+			$(call print_info,"Generating Prisma client...") && \
+			poetry run prisma generate; \
+		fi
+	@$(call print_success,"$(SERVICE) setup complete")
+
+.PHONY: local-run
+local-run: ## Run a service locally
+	@test -n "$(SERVICE)" || { echo "Usage: make local-run SERVICE=notification-service"; exit 1; }; SERVICE_NAME=$$(echo $(SERVICE) | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); DB_USER=$$(grep "$${SERVICE_NAME}_DB_USER" .env | cut -d '=' -f2); DB_PASSWORD=$$(grep "$${SERVICE_NAME}_DB_PASSWORD" .env | cut -d '=' -f2); DB_NAME=$$(grep "$${SERVICE_NAME}_DB_NAME" .env | cut -d '=' -f2); DB_PORT=$$(grep "$${SERVICE_NAME}_DB_PORT_EXTERNAL" .env | cut -d '=' -f2); cd services/$(SERVICE) && DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" APP_ENV=local poetry run python -m src.main
+
+.PHONY: local-run-all
+local-run-all: ## Run all services locally
+	@$(call print_header,"Starting All Services Locally")
+	@trap 'kill 0' SIGINT EXIT; \
+	for service in $(SERVICE_NAMES); do \
+		($(MAKE) local-run SERVICE=$$service 2>&1 | sed "s/^/[$$service] /") & \
+	done; \
+	wait
+
+.PHONY: local-status
+local-status: ## Show local environment status
+	@echo "$(CYAN)$(BOLD)LOCAL Environment:$(RESET)"
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null || echo "  $(DIM)Not running$(RESET)"
+	@echo ""
+	@echo "$(CYAN)Host Services:$(RESET)"
+	@for service in $(SERVICE_NAMES); do \
+		if pgrep -f "$(SERVICES_DIR)/$$service" > /dev/null 2>&1; then \
+			echo "  $(GREEN)●$(RESET) $$service $(DIM)(running)$(RESET)"; \
+		else \
+			echo "  $(DIM)○ $$service (stopped)$(RESET)"; \
+		fi; \
+	done
+
+# ================================================================
+# BATCH SERVICE OPERATIONS
+# ================================================================
+
+.PHONY: setup-all
+setup-all: ## Setup all services (install deps + generate Prisma)
+	@$(call print_header,"Setting Up All Services")
+	@for service in $(SERVICE_NAMES); do \
+		echo "$(CYAN)Setting up $$service...$(RESET)"; \
+		(cd $(SERVICES_DIR)/$$service && \
+		poetry install --sync && \
+		if [ -f prisma/schema.prisma ]; then \
+			echo "  Generating Prisma client..."; \
+			poetry run prisma generate; \
+		fi) && \
+		echo "$(GREEN)✅ $$service ready$(RESET)" || \
+		echo "$(RED)❌ Failed to setup $$service$(RESET)"; \
+		echo ""; \
+	done
+	@$(call print_success,"All services setup complete!")
+
+.PHONY: clean-venv
+clean-venv: ## Clean all virtual environments
+	@echo "🧹 Cleaning all virtual environments..."
+	@for dir in services/*; do \
+		if [ -d "$$dir/.venv" ]; then \
+			echo "Removing $$dir/.venv"; \
+			rm -rf "$$dir/.venv"; \
+		fi \
+	done
+
+.PHONY: update-locks
+update-locks: ## Update all poetry lock files
+	@echo "🔄 Updating all lock files..."
+	@for dir in services/*; do \
+		if [ -f "$$dir/pyproject.toml" ]; then \
+			echo "Updating lock for $$dir..."; \
+			(cd "$$dir" && poetry lock --no-update); \
+		fi \
+	done
+
+.PHONY: reinstall-all
+reinstall-all: clean-venv update-locks setup-all ## Clean reinstall all services
+	@$(call print_success,"All services reinstalled with fresh dependencies!")
+
+# ================================================================
+# DATABASE OPERATIONS
+# ================================================================
+
+.PHONY: db-push-all
+db-push-all: ## Push all Prisma schemas to databases
+	@$(call print_header,"Pushing All Database Schemas")
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "$(CYAN)Pushing schema for $$service...$(RESET)"; \
+			SERVICE_NAME=$$(echo $$service | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); \
+			DB_USER=$$(grep "$${SERVICE_NAME}_DB_USER" .env | cut -d '=' -f2); \
+			DB_PASSWORD=$$(grep "$${SERVICE_NAME}_DB_PASSWORD" .env | cut -d '=' -f2); \
+			DB_NAME=$$(grep "$${SERVICE_NAME}_DB_NAME" .env | cut -d '=' -f2); \
+			DB_PORT=$$(grep "$${SERVICE_NAME}_DB_PORT_EXTERNAL" .env | cut -d '=' -f2); \
+			(cd $(SERVICES_DIR)/$$service && \
+			DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" \
+			poetry run prisma db push --accept-data-loss) || echo "$(RED)Failed: $$service$(RESET)"; \
+		else \
+			echo "$(DIM)Skipping $$service (no database)$(RESET)"; \
+		fi; \
+	done
+	@$(call print_success,"All schemas pushed!")
+
+.PHONY: db-reset-all
+db-reset-all: ## Reset all databases (DESTRUCTIVE)
+	@echo "$(RED)⚠️  WARNING: This will DELETE ALL DATA in all databases!$(RESET)"
+	@read -p "Are you sure? [y/N]: " confirm && ([ "$$confirm" = "y" ] || [ "$$confirm" = "yes" ]) || exit 1
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "$(YELLOW)Resetting database for $$service...$(RESET)"; \
+			SERVICE_NAME=$$(echo $$service | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); \
+			DB_USER=$$(grep "$${SERVICE_NAME}_DB_USER" .env | cut -d '=' -f2); \
+			DB_PASSWORD=$$(grep "$${SERVICE_NAME}_DB_PASSWORD" .env | cut -d '=' -f2); \
+			DB_NAME=$$(grep "$${SERVICE_NAME}_DB_NAME" .env | cut -d '=' -f2); \
+			DB_PORT=$$(grep "$${SERVICE_NAME}_DB_PORT_EXTERNAL" .env | cut -d '=' -f2); \
+			(cd $(SERVICES_DIR)/$$service && \
+			DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" \
+			poetry run prisma migrate reset --force --skip-seed 2>/dev/null || \
+			DATABASE_URL="postgresql://$${DB_USER}:$${DB_PASSWORD}@localhost:$${DB_PORT}/$${DB_NAME}" \
+			poetry run prisma db push --force-reset --accept-data-loss); \
+		fi; \
+	done
+	@echo "$(GREEN)✅ All databases reset!$(RESET)"
+
+.PHONY: services-status
+services-status: ## Show status of all services with database info
+	@$(call print_header,"Services Status")
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "$(GREEN)✓$(RESET) $$service $(DIM)(has database)$(RESET)"; \
+			if [ -d "$(SERVICES_DIR)/$$service/.venv" ]; then \
+				echo "  $(GREEN)●$(RESET) Poetry environment installed"; \
+			else \
+				echo "  $(RED)○$(RESET) Poetry environment missing"; \
+			fi; \
+		else \
+			echo "$(YELLOW)○$(RESET) $$service $(DIM)(no database)$(RESET)"; \
+			if [ -d "$(SERVICES_DIR)/$$service/.venv" ]; then \
+				echo "  $(GREEN)●$(RESET) Poetry environment installed"; \
+			else \
+				echo "  $(RED)○$(RESET) Poetry environment missing"; \
+			fi; \
+		fi; \
+	done
+
+# ================================================================
+# COMPLETE RESET OPERATIONS
+# ================================================================
+
+.PHONY: reset-all
+reset-all: ## Complete reset: infrastructure + all services + databases
+	@$(call print_header,"COMPLETE SYSTEM RESET")
+	@echo "$(RED)This will:$(RESET)"
+	@echo "  1. Stop and remove all infrastructure"
+	@echo "  2. Delete all database data"
+	@echo "  3. Remove all virtual environments"
+	@echo "  4. Reinstall everything from scratch"
+	@echo ""
+	@read -p "Type 'RESET' to continue: " confirm && [ "$$confirm" = "RESET" ] || exit 1
+	@echo ""
+	@echo "$(YELLOW)Step 1/5: Stopping infrastructure...$(RESET)"
+	@docker-compose -f $(COMPOSE_INFRA) --project-name $(COMPOSE_PROJECT_NAME)-local down -v
+	@echo "$(YELLOW)Step 2/5: Cleaning virtual environments...$(RESET)"
+	@$(MAKE) clean-venv
+	@echo "$(YELLOW)Step 3/5: Starting fresh infrastructure...$(RESET)"
+	@$(MAKE) local-infra
+	@echo "$(YELLOW)Step 4/5: Installing all services...$(RESET)"
+	@$(MAKE) setup-all
+	@echo "$(YELLOW)Step 5/5: Pushing database schemas...$(RESET)"
+	@$(MAKE) db-push-all
+	@$(call print_success,"COMPLETE RESET FINISHED! System ready for development.")
+
+.PHONY: quick-reset
+quick-reset: ## Quick reset: just databases and Prisma clients
+	@echo "$(CYAN)Starting quick reset of databases and Prisma clients...$(RESET)"
+	@$(MAKE) db-reset-all
+	@$(MAKE) db-push-all
+	@echo "$(CYAN)Regenerating Prisma clients...$(RESET)"
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "  Generating Prisma client for $$service..."; \
+			(cd $(SERVICES_DIR)/$$service && poetry run prisma generate); \
+		fi; \
+	done
+	@echo "$(GREEN)✅ Quick reset complete!$(RESET)"
+
+# ================================================================
+# HELPER COMMANDS
+# ================================================================
+
+.PHONY: fix-imports
+fix-imports: ## Fix Python imports in all services
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/pyproject.toml" ]; then \
+			echo "Fixing imports in $$service..."; \
+			cd $(SERVICES_DIR)/$$service && \
+			poetry run isort . && \
+			poetry run black .; \
+		fi; \
+	done
+
+.PHONY: test-connections
+test-connections: ## Test database connections for all services
+	@$(call print_header,"Testing Database Connections")
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			SERVICE_NAME=$$(echo $$service | sed 's/-service//' | sed 's/-/_/g' | tr a-z A-Z); \
+			DB_PORT=$$(grep "$${SERVICE_NAME}_DB_PORT_EXTERNAL" .env | cut -d '=' -f2); \
+			if docker exec -t $$(echo $$service | sed 's/-service/-db-local/') pg_isready 2>/dev/null; then \
+				echo "$(GREEN)✓$(RESET) $$service database is ready (port $$DB_PORT)"; \
+			else \
+				echo "$(RED)✗$(RESET) $$service database is not responding"; \
+			fi; \
+		fi; \
+	done
+```
+
+precommit.mk
+
+```mk
+# makefiles/precommit.mk
+# ========================================
+# Pre-commit and Cache Management
+# ========================================
+
+.PHONY: clean-cache
+clean-cache:  ## Clear all Python and pre-commit caches
+	@echo "🧹 Clearing all caches..."
+	@find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".coverage" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	@find . -type f -name ".coverage" -delete 2>/dev/null || true
+	@rm -rf .coverage.* 2>/dev/null || true
+	@echo "✅ All caches cleared"
+
+.PHONY: clean-precommit
+clean-precommit:  ## Clean and reinstall pre-commit
+	@echo "🧹 Cleaning pre-commit..."
+	@pre-commit clean
+	@pre-commit uninstall
+	@rm -rf ~/.cache/pre-commit/ 2>/dev/null || true
+	@echo "✅ Pre-commit cleaned"
+
+.PHONY: install-precommit
+install-precommit:  ## Install pre-commit hooks
+	@echo "📦 Installing pre-commit..."
+	@pre-commit install
+	@pre-commit install-hooks
+	@echo "✅ Pre-commit installed"
+
+.PHONY: update-precommit
+update-precommit:  ## Update pre-commit hooks to latest versions
+	@echo "🔄 Updating pre-commit hooks..."
+	@pre-commit autoupdate
+	@echo "✅ Pre-commit hooks updated"
+
+.PHONY: fresh-precommit
+fresh-precommit: clean-cache clean-precommit install-precommit  ## Complete fresh pre-commit setup
+	@echo "🎉 Fresh pre-commit setup complete!"
+
+.PHONY: run-precommit
+run-precommit:  ## Run pre-commit on all files
+	@echo "🏃 Running pre-commit on all files..."
+	@pre-commit run --all-files
+
+.PHONY: run-precommit-staged
+run-precommit-staged:  ## Run pre-commit on staged files only
+	@echo "🏃 Running pre-commit on staged files..."
+	@pre-commit run
+
+.PHONY: fix-precommit
+fix-precommit:  ## Run pre-commit with auto-fixing
+	@echo "🔧 Running pre-commit with auto-fix..."
+	@pre-commit run --all-files || pre-commit run --all-files
+
+.PHONY: mypy-services
+mypy-services:  ## Run mypy on all services
+	@echo "🔍 Running mypy on all services..."
+	@python .pre-commit-scripts/run_mypy.py
+
+.PHONY: mypy-clean
+mypy-clean: clean-cache mypy-services  ## Clear mypy cache and run checks
+	@echo "✅ Mypy check complete with fresh cache"
+
+.PHONY: fresh-check
+fresh-check: fresh-precommit run-precommit  ## Fresh setup and run all checks
+	@echo "✅ Fresh check complete!"
+
+.PHONY: quick-check
+quick-check:  ## Quick pre-commit check without cleaning
+	@pre-commit run --all-files
+```
+
+prod.mk
+
+```mk
+# ================================================================
+# PRODUCTION ENVIRONMENT
+# ================================================================
+
+.PHONY: prod
+prod: prod-check ## Start production environment
+	@$(call print_info,"Starting production environment...")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod up -d
+	@$(MAKE) prod-wait
+	@$(MAKE) prod-status
+	@$(call print_success,"Production environment is running!")
+
+.PHONY: prod-check
+prod-check: ## Verify production configuration
+	@test -f .env.prod || $(call print_error,".env.prod not found")
+	@$(call print_info,"Checking production configuration...")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod config > /dev/null
+	@$(call print_success,"Production configuration valid")
+
+.PHONY: prod-build
+prod-build: ## Build production Docker images
+	@$(call print_info,"Building production images...")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod build --no-cache
+
+.PHONY: prod-deploy
+prod-deploy: prod-build ## Build and deploy to production
+	@$(call print_header,"Production Deployment")
+	@$(MAKE) prod-check
+	@$(MAKE) prod-build
+	@$(call print_info,"Deploying to production...")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod up -d --remove-orphans
+	@$(MAKE) prod-wait
+	@$(call print_success,"Production deployment complete!")
+
+.PHONY: prod-stop
+prod-stop: ## Stop production environment
+	@$(call confirm,"This will stop production services")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod stop
+
+.PHONY: prod-down
+prod-down: ## Stop and remove production environment
+	@$(call confirm,"This will remove production containers")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod down
+
+.PHONY: prod-clean
+prod-clean: ## Clean production environment (DANGEROUS)
+	@$(call confirm,"WARNING: This will DELETE ALL PRODUCTION DATA")
+	@$(call confirm,"Are you ABSOLUTELY SURE?")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod down -v
+
+.PHONY: prod-logs
+prod-logs: ## Show production logs
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod logs -f $(SERVICE)
+
+.PHONY: prod-status
+prod-status: ## Show production status
+	@echo "$(CYAN)$(BOLD)PRODUCTION Environment:$(RESET)"
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null || echo "  $(DIM)Not running$(RESET)"
+
+.PHONY: prod-wait
+prod-wait: ## Wait for production services
+	@$(call print_info,"Waiting for production services...")
+	@sleep 10
+	@scripts/health-check.sh prod
+	@$(call print_success,"Production services are ready")
+
+.PHONY: prod-backup
+prod-backup: ## Backup production databases
+	@$(call print_info,"Backing up production databases...")
+	@mkdir -p backups/$(shell date +%Y%m%d)
+	@for service in $(SERVICE_NAMES); do \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod exec -T postgres \
+				pg_dump -U postgres -d $${service}_db > backups/$(shell date +%Y%m%d)/$$service.sql; \
+		fi; \
+	done
+	@$(call print_success,"Backup complete: backups/$(shell date +%Y%m%d)/")
+
+.PHONY: prod-rollback
+prod-rollback: ## Rollback to previous version
+	@$(call print_warning,"Rolling back to previous version...")
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod down
+	@docker-compose -f $(COMPOSE_PROD) --project-name $(COMPOSE_PROJECT_NAME)-prod up -d
+```
+
+services.mk
+
+```mk
+# ================================================================
+# SERVICE MANAGEMENT
+# ================================================================
+
+.PHONY: service-list
+service-list: ## List all services
+	@$(call print_header,"Available Services")
+	@for service in $(SERVICE_NAMES); do \
+		echo "$(GREEN)$$service$(RESET)"; \
+		if [ -f "$(SERVICES_DIR)/$$service/prisma/schema.prisma" ]; then \
+			echo "  Type: Python/FastAPI with Prisma"; \
+		else \
+			echo "  Type: Python/FastAPI"; \
+		fi; \
+		if [ -f "$(SERVICES_DIR)/$$service/.env" ]; then \
+			PORT=$$(grep "PORT=" "$(SERVICES_DIR)/$$service/.env" | cut -d'=' -f2); \
+			echo "  Port: $$PORT"; \
+		fi; \
+	done
+
+.PHONY: service-create
+service-create: ## Create a new service from template
+	@test -n "$(NAME)" || ($(call print_error,"NAME not specified. Usage: make service-create NAME=new-service") && exit 1)
+	@$(call print_info,"Creating service $(NAME)...")
+	@cp -r $(SERVICES_DIR)/template $(SERVICES_DIR)/$(NAME)
+	@sed -i 's/template/$(NAME)/g' $(SERVICES_DIR)/$(NAME)/pyproject.toml
+	@$(call print_success,"Service $(NAME) created")
+
+.PHONY: service-test
+service-test: ## Run tests for a service
+	@$(call check_service,"service-test")
+	@$(call print_info,"Running tests for $(SERVICE)...")
+	@cd $(SERVICES_DIR)/$(SERVICE) && poetry run pytest
+
+.PHONY: service-lint
+service-lint: ## Lint a service
+	@$(call check_service,"service-lint")
+	@$(call print_info,"Linting $(SERVICE)...")
+	@cd $(SERVICES_DIR)/$(SERVICE) && \
+		poetry run black . && \
+		poetry run isort . && \
+		poetry run mypy .
+
+.PHONY: service-deps-update
+service-deps-update: ## Update service dependencies
+	@$(call check_service,"service-deps-update")
+	@$(call print_info,"Updating dependencies for $(SERVICE)...")
+	@cd $(SERVICES_DIR)/$(SERVICE) && poetry update
+
+.PHONY: services-install-all
+services-install-all: ## Install all service dependencies
+	@$(call print_header,"Installing All Services")
+	@for service in $(SERVICE_NAMES); do \
+		$(call print_info,"Installing $$service..."); \
+		cd $(SERVICES_DIR)/$$service && poetry install --sync; \
+	done
+	@$(call print_success,"All services installed")
+
+.PHONY: services-clean
+services-clean: ## Clean all service caches and virtual envs
+	@$(call print_info,"Cleaning service environments...")
+	@for service in $(SERVICE_NAMES); do \
+		rm -rf $(SERVICES_DIR)/$$service/.venv; \
+		rm -rf $(SERVICES_DIR)/$$service/__pycache__; \
+		rm -rf $(SERVICES_DIR)/$$service/.pytest_cache; \
+		rm -rf $(SERVICES_DIR)/$$service/.mypy_cache; \
+	done
+	@$(call print_success,"Services cleaned")
+
+```
+
+Makefile
+
+```mk
+# ================================================================
+# GLAM APP MONOREPO - MAIN ORCHESTRATOR
+# ================================================================
+
+# Default environment
+ENV ?= local
+
+# Load environment files
+-include .env
+-include .env.$(ENV)
+
+# Load modular makefiles
+include makefiles/common.mk
+include makefiles/local.mk
+include makefiles/dev.mk
+include makefiles/prod.mk
+include makefiles/database.mk
+include makefiles/services.mk
+-include makefiles/precommit.mk
+
+# Default target
+.DEFAULT_GOAL := help
+
+# ================================================================
+# MAIN TARGETS
+# ================================================================
+
+.PHONY: help
+help: ## Show this help message
+	@$(call print_header,"Glam App Monorepo")
+	@echo "$(YELLOW)Usage:$(RESET) make [target] [ENV=local|dev|prod] [SERVICE=service-name]"
+	@echo ""
+	@echo "$(CYAN)$(BOLD)Quick Start:$(RESET)"
+	@echo "  make local              $(DIM)# Start local development (infra in Docker, services on host)$(RESET)"
+	@echo "  make dev                $(DIM)# Start dev environment (everything in Docker)$(RESET)"
+	@echo "  make prod               $(DIM)# Start production environment$(RESET)"
+	@echo ""
+	@echo "$(CYAN)$(BOLD)Available Targets:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(BLUE)%-20s$(RESET) %s\n", $$1, $$2}' | \
+		sort
+	@echo ""
+	@echo "$(CYAN)$(BOLD)Available Services:$(RESET)"
+	@for service in $(SERVICE_NAMES); do \
+		printf "  $(GREEN)•$(RESET) %-30s" "$$service"; \
+		if [ -f "services/$$service/prisma/schema.prisma" ]; then \
+			echo "$(DIM)[Prisma]$(RESET)"; \
+		else \
+			echo ""; \
+		fi; \
+	done
+
+.PHONY: init
+init: ## Initialize the monorepo for first use
+	@$(call print_header,"Initializing Monorepo")
+	@$(MAKE) check-deps
+	@$(MAKE) setup-env
+	@$(call print_success,"Initialization complete! Run 'make local' to start developing")
+
+.PHONY: status
+status: ## Show status of all environments
+	@$(call print_header,"System Status")
+	@$(MAKE) -s local-status 2>/dev/null || true
+	@$(MAKE) -s dev-status 2>/dev/null || true
+	@$(MAKE) -s prod-status 2>/dev/null || true
+
+.PHONY: clean-all
+clean-all: ## Clean everything (containers, volumes, caches)
+	@$(call confirm,"This will remove ALL Docker resources and caches")
+	@$(MAKE) local-clean
+	@$(MAKE) dev-clean
+	@$(MAKE) prod-clean
+	@$(MAKE) clean-cache
+	@$(call print_success,"Complete cleanup done")
+
+```
+
+================================================================================
+Output includes file contents
+================================================================================

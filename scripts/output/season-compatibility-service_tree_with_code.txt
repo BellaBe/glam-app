@@ -1,0 +1,1350 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/season-compatibility-service
+================================================================================
+
+season-compatibility-service/
+prisma/
+└── schema.prisma
+src/
+├── api/
+│   ├── v1/
+│   │   ├── __init__.py
+│   │   └── compatibility.py
+│   │
+│   │       ```py
+│   │       # services/season-compatibility/src/api/v1/compatibility.py
+│   │       from fastapi import APIRouter, Query, Request
+│   │
+│   │       from shared.api import ApiResponse, success_response
+│   │       from shared.api.dependencies import RequestContextDep
+│   │       from shared.utils.exceptions import ForbiddenError, UnauthorizedError
+│   │
+│   │       from ...dependencies import CompatibilityServiceDep, ConfigDep
+│   │       from ...schemas.compatibility import CompatibleItemsResponse, SeasonCompatibilityOut, SeasonListResponse
+│   │       from ...season_palettes import SEASON_PALETTES
+│   │
+│   │       router = APIRouter(prefix="/api/v1/compatibility", tags=["Compatibility"])
+│   │
+│   │
+│   │       def validate_internal_auth(request: Request, config: ConfigDep) -> str:
+│   │           """Validate internal service authentication"""
+│   │           if not config.auth_enabled:
+│   │               return "recommendation-service"  # Skip in dev
+│   │
+│   │           api_key = request.headers.get("X-Internal-API-Key")
+│   │           service_name = request.headers.get("X-Service-Name")
+│   │
+│   │           if not api_key or not service_name:
+│   │               raise UnauthorizedError("Missing authentication headers")
+│   │
+│   │           # Validate API key
+│   │           if api_key != config.recommendation_service_api_key:
+│   │               raise UnauthorizedError("Invalid API key")
+│   │
+│   │           # Only recommendation-service allowed
+│   │           if service_name != "recommendation-service":
+│   │               raise ForbiddenError(
+│   │                   "Only recommendation-service can access this endpoint", required_permission="season-compatibility:read"
+│   │               )
+│   │
+│   │           return service_name
+│   │
+│   │
+│   │       @router.get("/items", response_model=ApiResponse[CompatibleItemsResponse], summary="Query compatible items")
+│   │       async def get_compatible_items(
+│   │           request: Request,
+│   │           ctx: RequestContextDep,
+│   │           config: ConfigDep,
+│   │           svc: CompatibilityServiceDep,
+│   │           merchant_id: str = Query(..., description="Merchant identifier"),
+│   │           seasons: str = Query(..., description="Comma-separated season names"),
+│   │           min_score: float = Query(0.7, ge=0.0, le=1.0, description="Minimum score threshold"),
+│   │           limit: int = Query(100, ge=1, le=100, description="Max items to return"),
+│   │       ):
+│   │           """Get items compatible with given seasons (recommendation-service only)"""
+│   │           # Validate auth
+│   │           validate_internal_auth(request, config)
+│   │
+│   │           # Parse seasons
+│   │           season_list = [s.strip() for s in seasons.split(",")]
+│   │
+│   │           # Get compatible items
+│   │           items = await svc.get_compatible_items(
+│   │               merchant_id=merchant_id, seasons=season_list, min_score=min_score, limit=limit
+│   │           )
+│   │
+│   │           response_data = CompatibleItemsResponse(items=items, total=len(items))
+│   │
+│   │           return success_response(data=response_data, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
+│   │
+│   │
+│   │       @router.get("/item/{item_id}", response_model=ApiResponse[SeasonCompatibilityOut], summary="Get single item scores")
+│   │       async def get_item_scores(
+│   │           item_id: str, request: Request, ctx: RequestContextDep, config: ConfigDep, svc: CompatibilityServiceDep
+│   │       ):
+│   │           """Get all season scores for a single item"""
+│   │           # Validate auth
+│   │           validate_internal_auth(request, config)
+│   │
+│   │           # Get item scores
+│   │           scores = await svc.get_item_scores(item_id)
+│   │
+│   │           return success_response(data=scores, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
+│   │
+│   │
+│   │       @router.get("/seasons", response_model=ApiResponse[SeasonListResponse], summary="Get available seasons")
+│   │       async def get_available_seasons(request: Request, ctx: RequestContextDep, config: ConfigDep):
+│   │           """Get list of available seasons"""
+│   │           # Validate auth
+│   │           validate_internal_auth(request, config)
+│   │
+│   │           seasons = list(SEASON_PALETTES.keys())
+│   │
+│   │           response_data = SeasonListResponse(seasons=seasons, total=len(seasons))
+│   │
+│   │           return success_response(data=response_data, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
+│   │       ```
+│   │
+│   └── __init__.py
+├── events/
+│   ├── __init__.py
+│   ├── listeners.py
+│   │
+│   │   ```py
+│   │   # services/season-compatibility/src/events/listeners.py
+│   │   from shared.messaging.listener import Listener
+│   │   from shared.utils.exceptions import ValidationError
+│   │
+│   │   from ..schemas.events import (
+│   │       AIAnalysisCompletedPayload,
+│   │       ComputationMetadata,
+│   │       SeasonComputationCompletedPayload,
+│   │       TopSeasons,
+│   │   )
+│   │
+│   │
+│   │   class AIAnalysisCompletedListener(Listener):
+│   │       """Listen for AI analysis completion events"""
+│   │
+│   │       @property
+│   │       def subject(self) -> str:
+│   │           return "evt.catalog.ai.analysis.completed.v1"
+│   │
+│   │       @property
+│   │       def queue_group(self) -> str:
+│   │           return "season-compatibility-ai-handler"
+│   │
+│   │       @property
+│   │       def service_name(self) -> str:
+│   │           return "season-compatibility"
+│   │
+│   │       def __init__(self, js_client, publisher, service, logger):
+│   │           super().__init__(js_client, logger)
+│   │           self.publisher = publisher
+│   │           self.service = service
+│   │
+│   │       async def on_message(self, data: dict) -> None:
+│   │           """Process AI analysis completed event"""
+│   │           try:
+│   │               # Validate payload
+│   │               payload = AIAnalysisCompletedPayload(**data)
+│   │               correlation_id = data.get("correlation_id", "unknown")
+│   │
+│   │               # Process with service
+│   │               result = await self.service.process_ai_analysis(payload=payload, correlation_id=correlation_id)
+│   │
+│   │               # Prepare event payload
+│   │               event_payload = SeasonComputationCompletedPayload(
+│   │                   item_id=payload.item_id,
+│   │                   merchant_id=payload.merchant_id,
+│   │                   product_id=payload.product_id,
+│   │                   variant_id=payload.variant_id,
+│   │                   correlation_id=correlation_id,
+│   │                   season_scores=result["scores"],
+│   │                   top_seasons=TopSeasons(
+│   │                       primary=result["result"].primary_season,
+│   │                       secondary=result["result"].secondary_season,
+│   │                       tertiary=result["result"].tertiary_season,
+│   │                   ),
+│   │                   max_score=result["result"].max_score,
+│   │                   computation_metadata=ComputationMetadata(
+│   │                       colors_analyzed=len(payload.precise_colors.rgb_values),
+│   │                       attributes_used=list(payload.attributes.model_dump().keys()),
+│   │                       computation_time_ms=result["computation_time_ms"],
+│   │                   ),
+│   │               )
+│   │
+│   │               # Publish success event
+│   │               await self.publisher.season_computation_completed(payload=event_payload, correlation_id=correlation_id)
+│   │
+│   │           except ValidationError as e:
+│   │               # ACK invalid messages (don't retry)
+│   │               self.logger.error(f"Invalid AI analysis event: {e}", extra={"data": data})
+│   │               return
+│   │
+│   │           except Exception as e:
+│   │               # NACK for retry on other errors
+│   │               self.logger.error(f"AI analysis processing failed: {e}")
+│   │               # Publish failure event
+│   │               await self.publisher.season_computation_failed(
+│   │                   item_id=data.get("item_id", "unknown"),
+│   │                   error=str(e),
+│   │                   retry_count=1,
+│   │                   correlation_id=data.get("correlation_id", "unknown"),
+│   │               )
+│   │               raise
+│   │
+│   │       async def on_error(self, error: Exception, data: dict) -> bool:
+│   │           """Error handling with retry logic"""
+│   │           if isinstance(error, ValidationError):
+│   │               return True  # ACK - don't retry validation errors
+│   │           return False  # NACK for retry
+│   │   ```
+│   │
+│   └── publishers.py
+│
+│       ```py
+│       # services/season-compatibility/src/events/publishers.py
+│       from shared.messaging.publisher import Publisher
+│
+│       from ..schemas.events import SeasonComputationCompletedPayload
+│
+│
+│       class SeasonEventPublisher(Publisher):
+│           """Publish season computation events"""
+│
+│           @property
+│           def service_name(self) -> str:
+│               return "season-compatibility"
+│
+│           async def season_computation_completed(
+│               self, payload: SeasonComputationCompletedPayload, correlation_id: str
+│           ) -> str:
+│               """Publish season computation completed event"""
+│               return await self.publish_event(
+│                   subject="evt.season.computation.completed.v1", data=payload.model_dump(), correlation_id=correlation_id
+│               )
+│
+│           async def season_computation_failed(self, item_id: str, error: str, retry_count: int, correlation_id: str) -> str:
+│               """Publish season computation failed event"""
+│               return await self.publish_event(
+│                   subject="evt.season.computation.failed.v1",
+│                   data={"item_id": item_id, "error": error, "retry_count": retry_count},
+│                   correlation_id=correlation_id,
+│               )
+│       ```
+│
+├── external/
+│   └── __init__.py
+├── repositories/
+│   ├── __init__.py
+│   └── compatibility_repository.py
+│
+│       ```py
+│       # services/season-compatibility/src/repositories/compatibility_repository.py
+│
+│       from prisma import Prisma
+│
+│       from ..schemas.compatibility import SeasonCompatibilityOut
+│
+│
+│       class CompatibilityRepository:
+│           """Repository using Prisma client"""
+│
+│           def __init__(self, prisma: Prisma):
+│               self.prisma = prisma
+│
+│           async def upsert(self, data: dict) -> SeasonCompatibilityOut:
+│               """Upsert season compatibility scores"""
+│               result = await self.prisma.seasoncompatibility.upsert(
+│                   where={"merchant_id_item_id": {"merchant_id": data["merchant_id"], "item_id": data["item_id"]}},
+│                   create=data,
+│                   update={**data, "updated_at": "now()"},
+│               )
+│               return SeasonCompatibilityOut.model_validate(result)
+│
+│           async def find_by_item_id(self, item_id: str) -> SeasonCompatibilityOut | None:
+│               """Find compatibility scores by item ID"""
+│               result = await self.prisma.seasoncompatibility.find_unique(where={"item_id": item_id})
+│               return SeasonCompatibilityOut.model_validate(result) if result else None
+│
+│           async def find_compatible_items(
+│               self, merchant_id: str, seasons: list[str], min_score: float = 0.7, limit: int = 100
+│           ) -> list[dict]:
+│               """Find items compatible with given seasons"""
+│               # Build dynamic WHERE clause for seasons
+│               season_conditions = []
+│               for season in seasons:
+│                   season_field = season.lower().replace(" ", "_")
+│                   season_conditions.append({season_field: {"gte": min_score}})
+│
+│               results = await self.prisma.seasoncompatibility.find_many(
+│                   where={"merchant_id": merchant_id, "OR": season_conditions}, order_by={"max_score": "desc"}, take=limit
+│               )
+│
+│               # Format results with matching season
+│               formatted = []
+│               for result in results:
+│                   # Find best matching season from requested seasons
+│                   best_season = None
+│                   best_score = 0
+│                   for season in seasons:
+│                       season_field = season.lower().replace(" ", "_")
+│                       score = getattr(result, season_field, 0)
+│                       if score > best_score:
+│                           best_score = score
+│                           best_season = season
+│
+│                   if best_season and best_score >= min_score:
+│                       formatted.append(
+│                           {
+│                               "item_id": result.item_id,
+│                               "product_id": result.product_id,
+│                               "variant_id": result.variant_id,
+│                               "score": best_score,
+│                               "matching_season": best_season,
+│                           }
+│                       )
+│
+│               return formatted
+│       ```
+│
+├── schemas/
+│   ├── __init__.py
+│   ├── compatibility.py
+│   │
+│   │   ```py
+│   │   # services/season-compatibility/src/schemas/compatibility.py
+│   │   from datetime import datetime
+│   │   from uuid import UUID
+│   │
+│   │   from pydantic import BaseModel, ConfigDict, Field
+│   │
+│   │
+│   │   class SeasonScores(BaseModel):
+│   │       """All 16 season scores"""
+│   │
+│   │       light_spring: float = Field(ge=0.0, le=1.0)
+│   │       true_spring: float = Field(ge=0.0, le=1.0)
+│   │       bright_spring: float = Field(ge=0.0, le=1.0)
+│   │       warm_spring: float = Field(ge=0.0, le=1.0)
+│   │       light_summer: float = Field(ge=0.0, le=1.0)
+│   │       true_summer: float = Field(ge=0.0, le=1.0)
+│   │       soft_summer: float = Field(ge=0.0, le=1.0)
+│   │       cool_summer: float = Field(ge=0.0, le=1.0)
+│   │       soft_autumn: float = Field(ge=0.0, le=1.0)
+│   │       true_autumn: float = Field(ge=0.0, le=1.0)
+│   │       warm_autumn: float = Field(ge=0.0, le=1.0)
+│   │       deep_autumn: float = Field(ge=0.0, le=1.0)
+│   │       bright_winter: float = Field(ge=0.0, le=1.0)
+│   │       true_winter: float = Field(ge=0.0, le=1.0)
+│   │       cool_winter: float = Field(ge=0.0, le=1.0)
+│   │       deep_winter: float = Field(ge=0.0, le=1.0)
+│   │
+│   │
+│   │   class SeasonCompatibilityOut(SeasonScores):
+│   │       """Output DTO for season compatibility"""
+│   │
+│   │       id: UUID
+│   │       item_id: str
+│   │       merchant_id: str
+│   │       product_id: str
+│   │       variant_id: str
+│   │       primary_season: str
+│   │       secondary_season: str
+│   │       tertiary_season: str
+│   │       max_score: float
+│   │       computed_at: datetime
+│   │       updated_at: datetime
+│   │
+│   │       model_config = ConfigDict(from_attributes=True)
+│   │
+│   │
+│   │   class CompatibleItem(BaseModel):
+│   │       """Compatible item for API response"""
+│   │
+│   │       item_id: str
+│   │       product_id: str
+│   │       variant_id: str
+│   │       score: float
+│   │       matching_season: str
+│   │
+│   │
+│   │   class CompatibleItemsResponse(BaseModel):
+│   │       """Response for compatible items query"""
+│   │
+│   │       items: list[CompatibleItem]
+│   │       total: int
+│   │
+│   │
+│   │   class SeasonListResponse(BaseModel):
+│   │       """Response for available seasons"""
+│   │
+│   │       seasons: list[str]
+│   │       total: int = 16
+│   │   ```
+│   │
+│   └── events.py
+│
+│       ```py
+│       # services/season-compatibility/src/schemas/events.py
+│
+│       from pydantic import BaseModel
+│
+│
+│       class PreciseColors(BaseModel):
+│           """Precise RGB colors from AI analysis"""
+│
+│           rgb_values: list[list[int]]
+│
+│
+│       class ColorInfo(BaseModel):
+│           """Color information"""
+│
+│           name: str
+│           hex: str
+│
+│
+│       class Attributes(BaseModel):
+│           """Product attributes from AI analysis"""
+│
+│           colors: list[ColorInfo] = []
+│           materials: list[str] = []
+│           patterns: list[str] = []
+│           styles: list[str] = []
+│
+│
+│       class AIAnalysisCompletedPayload(BaseModel):
+│           """Input event from AI Analysis Service"""
+│
+│           item_id: str
+│           merchant_id: str
+│           product_id: str
+│           variant_id: str
+│           precise_colors: PreciseColors
+│           attributes: Attributes
+│           correlation_id: str | None = None
+│
+│
+│       class TopSeasons(BaseModel):
+│           """Top 3 seasons"""
+│
+│           primary: str
+│           secondary: str
+│           tertiary: str
+│
+│
+│       class ComputationMetadata(BaseModel):
+│           """Metadata about the computation"""
+│
+│           colors_analyzed: int
+│           attributes_used: list[str]
+│           computation_time_ms: float
+│           algorithm_version: str = "v1.0.0"
+│
+│
+│       class SeasonComputationCompletedPayload(BaseModel):
+│           """Output event for Analytics Service"""
+│
+│           item_id: str
+│           merchant_id: str
+│           product_id: str
+│           variant_id: str
+│           correlation_id: str
+│           season_scores: dict[str, float]
+│           top_seasons: TopSeasons
+│           max_score: float
+│           computation_metadata: ComputationMetadata
+│       ```
+│
+├── services/
+│   ├── __init__.py
+│   └── compatibility_service.py
+│
+│       ```py
+│       # services/season-compatibility/src/services/compatibility_service.py
+│       import time
+│
+│       import numpy as np
+│
+│       from shared.utils.exceptions import ValidationError
+│       from shared.utils.logger import ServiceLogger
+│
+│       from ..repositories.compatibility_repository import CompatibilityRepository
+│       from ..schemas.events import AIAnalysisCompletedPayload
+│       from ..season_palettes import SCORING_WEIGHTS, SEASON_PALETTES
+│
+│
+│       class CompatibilityService:
+│           """Business logic for season compatibility computation"""
+│
+│           def __init__(
+│               self,
+│               repository: CompatibilityRepository,
+│               logger: ServiceLogger,
+│           ):
+│               self.repository = repository
+│               self.logger = logger
+│
+│           def _calculate_color_distance(self, rgb1: list[int], rgb2: list[int]) -> float:
+│               """Calculate Euclidean distance between two RGB colors"""
+│               return np.sqrt(sum((c1 - c2) ** 2 for c1, c2 in zip(rgb1, rgb2)))
+│
+│           def _compute_color_compatibility(self, item_colors: list[list[int]], season_palette: dict) -> float:
+│               """Compute color compatibility score for a season"""
+│               if not item_colors:
+│                   return 0.0
+│
+│               reference_colors = season_palette["reference_colors"]
+│               total_score = 0.0
+│
+│               # For each item color, find minimum distance to reference colors
+│               for item_color in item_colors:
+│                   min_distance = min(self._calculate_color_distance(item_color, ref_color) for ref_color in reference_colors)
+│                   # Convert distance to score (0-1, where 1 is perfect match)
+│                   # Max possible distance is ~441 (sqrt(255^2 * 3))
+│                   score = 1.0 - (min_distance / 441.0)
+│                   total_score += score
+│
+│               return total_score / len(item_colors)
+│
+│           def _compute_axis_compatibility(self, item_colors: list[list[int]], season_palette: dict) -> float:
+│               """Compute compatibility based on temperature/value/chroma axes"""
+│               if not item_colors:
+│                   return 0.0
+│
+│               # Simple heuristic: use average color properties
+│               avg_rgb = np.mean(item_colors, axis=0)
+│
+│               # Temperature: Red/Yellow (warm) vs Blue/Purple (cool)
+│               # Simple metric: ratio of red to blue
+│               temperature_score = avg_rgb[0] / (avg_rgb[2] + 1)  # Avoid div by zero
+│               normalized_temp = min(1.0, temperature_score / 255.0)
+│
+│               # Value: Lightness (sum of RGB values)
+│               value_score = sum(avg_rgb) / (255 * 3)
+│
+│               # Chroma: Saturation (distance from gray)
+│               gray_value = np.mean(avg_rgb)
+│               chroma_score = np.std(avg_rgb) / 128.0  # Normalize to 0-1
+│
+│               # Calculate difference from season's ideal scores
+│               temp_diff = abs(normalized_temp - season_palette["temperature_score"])
+│               value_diff = abs(value_score - season_palette["value_score"])
+│               chroma_diff = abs(chroma_score - season_palette["chroma_score"])
+│
+│               # Weighted combination (inverted so 1 is perfect match)
+│               axis_score = 1.0 - (
+│                   SCORING_WEIGHTS["temperature"] * temp_diff
+│                   + SCORING_WEIGHTS["value"] * value_diff
+│                   + SCORING_WEIGHTS["chroma"] * chroma_diff
+│               )
+│
+│               return max(0.0, axis_score)
+│
+│           def compute_all_season_scores(self, rgb_colors: list[list[int]], attributes: dict) -> dict[str, float]:
+│               """Compute compatibility scores for all 16 seasons"""
+│               scores = {}
+│
+│               for season_name, season_palette in SEASON_PALETTES.items():
+│                   # Color-based scoring (60% weight)
+│                   color_score = self._compute_color_compatibility(rgb_colors, season_palette)
+│
+│                   # Axis-based scoring (40% weight)
+│                   axis_score = self._compute_axis_compatibility(rgb_colors, season_palette)
+│
+│                   # Combined score
+│                   final_score = (0.6 * color_score) + (0.4 * axis_score)
+│
+│                   # Store as normalized field name
+│                   field_name = season_name.lower().replace(" ", "_")
+│                   scores[field_name] = round(final_score, 3)
+│
+│               return scores
+│
+│           def get_top_seasons(self, scores: dict[str, float]) -> tuple[str, str, str, float]:
+│               """Get top 3 seasons and max score"""
+│               # Convert field names back to season names
+│               season_scores = []
+│               for field_name, score in scores.items():
+│                   season_name = field_name.replace("_", " ").title()
+│                   # Handle special cases
+│                   if season_name == "Light Spring":
+│                       season_name = "Light Spring"
+│                   elif season_name == "True Spring":
+│                       season_name = "True Spring"
+│                   # Continue for all seasons...
+│                   season_scores.append((season_name, score))
+│
+│               # Sort by score descending
+│               sorted_seasons = sorted(season_scores, key=lambda x: x[1], reverse=True)
+│
+│               primary = sorted_seasons[0][0] if len(sorted_seasons) > 0 else ""
+│               secondary = sorted_seasons[1][0] if len(sorted_seasons) > 1 else ""
+│               tertiary = sorted_seasons[2][0] if len(sorted_seasons) > 2 else ""
+│               max_score = sorted_seasons[0][1] if len(sorted_seasons) > 0 else 0.0
+│
+│               return primary, secondary, tertiary, max_score
+│
+│           async def process_ai_analysis(self, payload: AIAnalysisCompletedPayload, correlation_id: str) -> dict:
+│               """Process AI analysis event and compute season compatibility"""
+│               start_time = time.time()
+│
+│               # Validate RGB colors
+│               for color in payload.precise_colors.rgb_values:
+│                   if len(color) != 3 or any(c < 0 or c > 255 for c in color):
+│                       raise ValidationError("Invalid RGB color values", field="precise_colors", value=str(color))
+│
+│               # Compute scores for all seasons
+│               scores = self.compute_all_season_scores(payload.precise_colors.rgb_values, payload.attributes.model_dump())
+│
+│               # Get top seasons
+│               primary, secondary, tertiary, max_score = self.get_top_seasons(scores)
+│
+│               # Prepare data for storage
+│               data = {
+│                   "item_id": payload.item_id,
+│                   "merchant_id": payload.merchant_id,
+│                   "product_id": payload.product_id,
+│                   "variant_id": payload.variant_id,
+│                   **scores,  # All season scores
+│                   "primary_season": primary,
+│                   "secondary_season": secondary,
+│                   "tertiary_season": tertiary,
+│                   "max_score": max_score,
+│               }
+│
+│               # Store in database
+│               result = await self.repository.upsert(data)
+│
+│               # Calculate computation time
+│               computation_time_ms = (time.time() - start_time) * 1000
+│
+│               self.logger.info(
+│                   "Computed season compatibility",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "item_id": payload.item_id,
+│                       "primary_season": primary,
+│                       "max_score": max_score,
+│                       "computation_time_ms": round(computation_time_ms, 2),
+│                   },
+│               )
+│
+│               # Return data for event publishing
+│               return {"result": result, "scores": scores, "computation_time_ms": computation_time_ms}
+│
+│           async def get_compatible_items(
+│               self, merchant_id: str, seasons: list[str], min_score: float = 0.7, limit: int = 100
+│           ) -> list[dict]:
+│               """Get items compatible with given seasons"""
+│               # Validate seasons
+│               valid_seasons = set(SEASON_PALETTES.keys())
+│               for season in seasons:
+│                   if season not in valid_seasons:
+│                       raise ValidationError(f"Invalid season name: {season}", field="seasons", value=season)
+│
+│               return await self.repository.find_compatible_items(merchant_id, seasons, min_score, limit)
+│
+│           async def get_item_scores(self, item_id: str) -> dict:
+│               """Get all season scores for an item"""
+│               result = await self.repository.find_by_item_id(item_id)
+│               if not result:
+│                   from shared.utils.exceptions import NotFoundError
+│
+│                   raise NotFoundError(f"Item {item_id} not found", resource="season_compatibility", resource_id=item_id)
+│               return result.model_dump()
+│       ```
+│
+├── __init__.py
+├── config.py
+│
+│   ```py
+│   # services/season-compatibility/src/config.py
+│   import os
+│   from functools import lru_cache
+│
+│   from pydantic import BaseModel, ConfigDict, Field, model_validator
+│
+│   from shared.utils import ConfigurationError, load_root_env
+│
+│
+│   class ServiceConfig(BaseModel):
+│       """Service configuration with required shared package integration"""
+│
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           case_sensitive=False,
+│           allow_population_by_field_name=True,
+│       )
+│
+│       # Service identification (required by shared package)
+│       service_name: str = "season-compatibility"
+│       service_version: str = "1.0.0"
+│       service_description: str = "Computes and stores seasonal color compatibility scores"
+│       debug: bool = Field(default=False, alias="DEBUG")
+│
+│       # Required environment variables
+│       environment: str = Field(..., alias="APP_ENV")
+│       api_external_port: int = Field(default=8024, alias="SEASON_API_EXTERNAL_PORT")
+│       database_enabled: bool = Field(default=True, alias="SEASON_DB_ENABLED")
+│
+│       # Required secrets (from .env)
+│       database_url: str = Field(..., alias="DATABASE_URL")
+│       internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
+│
+│       # Service-specific auth
+│       recommendation_service_api_key: str = Field(..., alias="RECOMMENDATION_SERVICE_API_KEY")
+│       auth_enabled: bool = Field(default=True, alias="SEASON_SERVICE_AUTH_ENABLED")
+│
+│       # API configuration
+│       api_host: str = "0.0.0.0"
+│
+│       # Logging (used by shared package logger)
+│       logging_level: str = "INFO"
+│       logging_format: str = "json"
+│
+│       @property
+│       def nats_url(self) -> str:
+│           """NATS URL for event system"""
+│           in_container = os.path.exists("/.dockerenv")
+│           if in_container or self.environment in ["development", "production"]:
+│               return "nats://nats:4222"
+│           return "nats://localhost:4222"
+│
+│       @property
+│       def api_port(self) -> int:
+│           """Port based on environment"""
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│
+│       @model_validator(mode="after")
+│       def validate_config(self):
+│           if self.database_enabled and not self.database_url:
+│               raise ValueError("DATABASE_URL required when database is enabled")
+│           return self
+│
+│
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load configuration once"""
+│       try:
+│           load_root_env()
+│           return ServiceConfig(**os.environ)
+│       except Exception as e:
+│           raise ConfigurationError(f"Failed to load config: {e}", config_key="season-compatibility")
+│   ```
+│
+├── dependencies.py
+│
+│   ```py
+│   # services/season-compatibility/src/dependencies.py
+│   from typing import Annotated
+│
+│   from fastapi import Depends, HTTPException, Request
+│
+│   from shared.api.dependencies import CorrelationIdDep, LoggerDep, RequestContextDep
+│
+│   from .config import ServiceConfig
+│   from .lifecycle import ServiceLifecycle
+│   from .services.compatibility_service import CompatibilityService
+│
+│   # Re-export shared dependencies
+│   __all__ = ["CompatibilityServiceDep", "ConfigDep", "CorrelationIdDep", "LifecycleDep", "LoggerDep", "RequestContextDep"]
+│
+│
+│   # Core dependencies
+│   def get_lifecycle(request: Request) -> ServiceLifecycle:
+│       """Get service lifecycle from app state"""
+│       return request.app.state.lifecycle
+│
+│
+│   def get_config(request: Request) -> ServiceConfig:
+│       """Get service config from app state"""
+│       return request.app.state.config
+│
+│
+│   # Type aliases
+│   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+│   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+│
+│
+│   # Service dependencies
+│   def get_compatibility_service(lifecycle: LifecycleDep) -> CompatibilityService:
+│       """Get compatibility service"""
+│       if not lifecycle.compatibility_service:
+│           raise HTTPException(500, "Compatibility service not initialized")
+│       return lifecycle.compatibility_service
+│
+│
+│   CompatibilityServiceDep = Annotated[CompatibilityService, Depends(get_compatibility_service)]
+│   ```
+│
+├── exceptions.py
+├── lifecycle.py
+│
+│   ```py
+│   # services/season-compatibility/src/lifecycle.py
+│   import asyncio
+│
+│   from prisma import Prisma
+│
+│   from shared.messaging.jetstream_client import JetStreamClient
+│   from shared.utils.logger import ServiceLogger
+│
+│   from .config import ServiceConfig
+│   from .events.listeners import AIAnalysisCompletedListener
+│   from .events.publishers import SeasonEventPublisher
+│   from .repositories.compatibility_repository import CompatibilityRepository
+│   from .services.compatibility_service import CompatibilityService
+│
+│
+│   class ServiceLifecycle:
+│       """Manages all service components lifecycle"""
+│
+│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│           self.config = config
+│           self.logger = logger
+│
+│           # Connections
+│           self.messaging_client: JetStreamClient | None = None
+│           self.prisma: Prisma | None = None
+│           self._db_connected = False
+│
+│           # Components
+│           self.event_publisher: SeasonEventPublisher | None = None
+│           self.compatibility_repo: CompatibilityRepository | None = None
+│           self.compatibility_service: CompatibilityService | None = None
+│
+│           # Listeners
+│           self._listeners: list = []
+│           self._tasks: list[asyncio.Task] = []
+│
+│       async def startup(self) -> None:
+│           """Initialize all components in correct order"""
+│           try:
+│               self.logger.info("Starting service components...")
+│
+│               # 1. Messaging (for events)
+│               await self._init_messaging()
+│
+│               # 2. Database
+│               await self._init_database()
+│
+│               # 3. Repositories (depends on Prisma)
+│               self._init_repositories()
+│
+│               # 4. Services (depends on repositories)
+│               self._init_services()
+│
+│               # 5. Event listeners (depends on services)
+│               await self._init_listeners()
+│
+│               self.logger.info(f"{self.config.service_name} started successfully")
+│
+│           except Exception:
+│               self.logger.critical("Service startup failed", exc_info=True)
+│               await self.shutdown()
+│               raise
+│
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown in reverse order"""
+│           self.logger.info(f"Shutting down {self.config.service_name}")
+│
+│           # Cancel tasks
+│           for task in self._tasks:
+│               task.cancel()
+│           if self._tasks:
+│               await asyncio.gather(*self._tasks, return_exceptions=True)
+│
+│           # Stop listeners
+│           for listener in self._listeners:
+│               try:
+│                   await listener.stop()
+│               except Exception:
+│                   self.logger.error("Listener stop failed", exc_info=True)
+│
+│           # Close messaging
+│           if self.messaging_client:
+│               try:
+│                   await self.messaging_client.close()
+│               except Exception:
+│                   self.logger.error("Messaging close failed", exc_info=True)
+│
+│           # Disconnect database
+│           if self.prisma and self._db_connected:
+│               try:
+│                   await self.prisma.disconnect()
+│               except Exception:
+│                   self.logger.error("Prisma disconnect failed", exc_info=True)
+│
+│           self.logger.info(f"{self.config.service_name} shutdown complete")
+│
+│       async def _init_messaging(self) -> None:
+│           """Initialize NATS/JetStream for events"""
+│           self.messaging_client = JetStreamClient(self.logger)
+│           await self.messaging_client.connect([self.config.nats_url])
+│           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
+│
+│           # Initialize publisher
+│           self.event_publisher = SeasonEventPublisher(jetstream_client=self.messaging_client, logger=self.logger)
+│           self.logger.info("Messaging client and publisher initialized")
+│
+│       async def _init_database(self) -> None:
+│           """Initialize Prisma client"""
+│           if not self.config.database_enabled:
+│               self.logger.info("Database disabled; skipping Prisma initialization")
+│               return
+│
+│           self.prisma = Prisma()
+│           try:
+│               await self.prisma.connect()
+│               self._db_connected = True
+│               self.logger.info("Prisma connected")
+│           except Exception as e:
+│               self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
+│               raise
+│
+│       def _init_repositories(self) -> None:
+│           """Initialize repositories with Prisma client"""
+│           if not self._db_connected:
+│               self.logger.warning("Database not connected, skipping repositories")
+│               return
+│
+│           self.compatibility_repo = CompatibilityRepository(self.prisma)
+│           self.logger.info("Compatibility repository initialized")
+│
+│       def _init_services(self) -> None:
+│           """Initialize business services"""
+│           if not self.compatibility_repo:
+│               raise RuntimeError("Compatibility repository not initialized")
+│
+│           self.compatibility_service = CompatibilityService(repository=self.compatibility_repo, logger=self.logger)
+│           self.logger.info("Compatibility service initialized")
+│
+│       async def _init_listeners(self) -> None:
+│           """Initialize event listeners"""
+│           if not self.messaging_client or not self.compatibility_service:
+│               raise RuntimeError("Messaging or service not ready")
+│
+│           # Create AI analysis listener
+│           listener = AIAnalysisCompletedListener(
+│               js_client=self.messaging_client,
+│               publisher=self.event_publisher,
+│               service=self.compatibility_service,
+│               logger=self.logger,
+│           )
+│
+│           # Start listener
+│           await listener.start()
+│           self._listeners.append(listener)
+│
+│           self.logger.info("Event listeners started")
+│   ```
+│
+├── main.py
+│
+│   ```py
+│   # services/season-compatibility/src/main.py
+│   from contextlib import asynccontextmanager
+│
+│   from fastapi import FastAPI
+│
+│   from shared.api import create_health_router, setup_middleware
+│   from shared.utils import create_logger
+│
+│   from .config import get_service_config
+│   from .lifecycle import ServiceLifecycle
+│
+│   # CRITICAL: Create these at module level (singletons)
+│   config = get_service_config()
+│   logger = create_logger(config.service_name)
+│   lifecycle = ServiceLifecycle(config, logger)
+│
+│
+│   @asynccontextmanager
+│   async def lifespan(app: FastAPI):
+│       """Lifespan management for startup/shutdown"""
+│       # Store in app state for dependencies
+│       app.state.lifecycle = lifecycle
+│       app.state.config = config
+│       app.state.logger = logger  # REQUIRED for middleware
+│
+│       try:
+│           await lifecycle.startup()
+│           yield
+│       finally:
+│           await lifecycle.shutdown()
+│
+│
+│   def create_application() -> FastAPI:
+│       """Create FastAPI app with shared package integration"""
+│       app = FastAPI(
+│           title=config.service_name,
+│           version=config.service_version,
+│           description=config.service_description,
+│           lifespan=lifespan,
+│       )
+│
+│       # CRITICAL: Setup shared middleware (handles ALL errors)
+│       setup_middleware(app, service_name=config.service_name)
+│
+│       # Add health check from shared package
+│       app.include_router(create_health_router(config.service_name))
+│
+│       # Add API routes
+│       from .api.v1 import compatibility
+│
+│       app.include_router(compatibility.router)
+│
+│       return app
+│
+│
+│   app = create_application()
+│
+│   if __name__ == "__main__":
+│       import uvicorn
+│
+│       uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug)
+│   ```
+│
+└── season_palettes.py
+
+    ```py
+    # services/season-compatibility/src/season_palettes.py
+    """Static 16-season palette configuration"""
+
+    SEASON_PALETTES = {
+        "Light Spring": {
+            "temperature": "warm",
+            "value": "light",
+            "chroma": "medium-clear",
+            "temperature_score": 0.7,
+            "value_score": 0.8,
+            "chroma_score": 0.6,
+            "reference_colors": [
+                [255, 229, 180],  # Light peach
+                [152, 255, 152],  # Mint green
+                [255, 218, 185],  # Peachy pink
+                [176, 224, 230],  # Powder blue
+                [255, 239, 213],  # Papaya whip
+            ],
+        },
+        "True Spring": {
+            "temperature": "warm",
+            "value": "medium",
+            "chroma": "clear",
+            "temperature_score": 0.8,
+            "value_score": 0.5,
+            "chroma_score": 0.7,
+            "reference_colors": [
+                [255, 127, 80],  # Coral
+                [64, 224, 208],  # Turquoise
+                [255, 215, 0],  # Gold
+                [255, 99, 71],  # Tomato
+                [127, 255, 0],  # Chartreuse
+            ],
+        },
+        "Bright Spring": {
+            "temperature": "warm",
+            "value": "medium-light",
+            "chroma": "bright",
+            "temperature_score": 0.75,
+            "value_score": 0.6,
+            "chroma_score": 0.9,
+            "reference_colors": [
+                [255, 20, 147],  # Deep pink
+                [0, 255, 127],  # Spring green
+                [255, 140, 0],  # Dark orange
+                [0, 191, 255],  # Deep sky blue
+                [255, 255, 0],  # Yellow
+            ],
+        },
+        "Warm Spring": {
+            "temperature": "warm",
+            "value": "medium",
+            "chroma": "medium",
+            "temperature_score": 0.85,
+            "value_score": 0.5,
+            "chroma_score": 0.5,
+            "reference_colors": [
+                [255, 160, 122],  # Light salmon
+                [154, 205, 50],  # Yellow green
+                [255, 165, 0],  # Orange
+                [240, 128, 128],  # Light coral
+                [189, 183, 107],  # Dark khaki
+            ],
+        },
+        "Light Summer": {
+            "temperature": "cool",
+            "value": "light",
+            "chroma": "soft",
+            "temperature_score": 0.3,
+            "value_score": 0.8,
+            "chroma_score": 0.3,
+            "reference_colors": [
+                [230, 230, 250],  # Lavender
+                [176, 196, 222],  # Light steel blue
+                [255, 182, 193],  # Light pink
+                [211, 211, 211],  # Light gray
+                [216, 191, 216],  # Thistle
+            ],
+        },
+        "True Summer": {
+            "temperature": "cool",
+            "value": "medium",
+            "chroma": "soft",
+            "temperature_score": 0.25,
+            "value_score": 0.5,
+            "chroma_score": 0.35,
+            "reference_colors": [
+                [147, 112, 219],  # Medium purple
+                [100, 149, 237],  # Cornflower blue
+                [188, 143, 143],  # Rosy brown
+                [119, 136, 153],  # Light slate gray
+                [176, 224, 230],  # Powder blue
+            ],
+        },
+        "Soft Summer": {
+            "temperature": "cool-neutral",
+            "value": "medium",
+            "chroma": "soft",
+            "temperature_score": 0.35,
+            "value_score": 0.5,
+            "chroma_score": 0.2,
+            "reference_colors": [
+                [128, 128, 128],  # Gray
+                [143, 188, 143],  # Dark sea green
+                [188, 143, 143],  # Rosy brown
+                [169, 169, 169],  # Dark gray
+                [136, 136, 136],  # Medium gray
+            ],
+        },
+        "Cool Summer": {
+            "temperature": "cool",
+            "value": "medium-light",
+            "chroma": "medium-soft",
+            "temperature_score": 0.2,
+            "value_score": 0.6,
+            "chroma_score": 0.4,
+            "reference_colors": [
+                [70, 130, 180],  # Steel blue
+                [123, 104, 238],  # Medium slate blue
+                [186, 85, 211],  # Medium orchid
+                [95, 158, 160],  # Cadet blue
+                [138, 43, 226],  # Blue violet
+            ],
+        },
+        "Soft Autumn": {
+            "temperature": "warm-neutral",
+            "value": "medium",
+            "chroma": "soft",
+            "temperature_score": 0.65,
+            "value_score": 0.5,
+            "chroma_score": 0.2,
+            "reference_colors": [
+                [188, 143, 143],  # Rosy brown
+                [143, 188, 143],  # Dark sea green
+                [210, 180, 140],  # Tan
+                [160, 160, 160],  # Gray
+                [189, 183, 107],  # Dark khaki
+            ],
+        },
+        "True Autumn": {
+            "temperature": "warm",
+            "value": "medium",
+            "chroma": "medium",
+            "temperature_score": 0.75,
+            "value_score": 0.4,
+            "chroma_score": 0.5,
+            "reference_colors": [
+                [255, 140, 0],  # Dark orange
+                [128, 128, 0],  # Olive
+                [165, 42, 42],  # Brown
+                [218, 165, 32],  # Goldenrod
+                [184, 134, 11],  # Dark goldenrod
+            ],
+        },
+        "Warm Autumn": {
+            "temperature": "warm",
+            "value": "medium",
+            "chroma": "medium-rich",
+            "temperature_score": 0.8,
+            "value_score": 0.45,
+            "chroma_score": 0.6,
+            "reference_colors": [
+                [255, 99, 71],  # Tomato
+                [255, 127, 80],  # Coral
+                [205, 92, 92],  # Indian red
+                [244, 164, 96],  # Sandy brown
+                [210, 105, 30],  # Chocolate
+            ],
+        },
+        "Deep Autumn": {
+            "temperature": "warm",
+            "value": "deep",
+            "chroma": "rich",
+            "temperature_score": 0.7,
+            "value_score": 0.2,
+            "chroma_score": 0.65,
+            "reference_colors": [
+                [139, 69, 19],  # Saddle brown
+                [128, 0, 0],  # Maroon
+                [85, 107, 47],  # Dark olive green
+                [139, 0, 0],  # Dark red
+                [101, 67, 33],  # Dark brown
+            ],
+        },
+        "Bright Winter": {
+            "temperature": "cool",
+            "value": "medium",
+            "chroma": "bright",
+            "temperature_score": 0.25,
+            "value_score": 0.5,
+            "chroma_score": 0.9,
+            "reference_colors": [
+                [255, 0, 255],  # Magenta
+                [0, 255, 255],  # Cyan
+                [255, 20, 147],  # Deep pink
+                [0, 0, 255],  # Blue
+                [255, 255, 0],  # Yellow
+            ],
+        },
+        "True Winter": {
+            "temperature": "cool",
+            "value": "medium",
+            "chroma": "clear",
+            "temperature_score": 0.2,
+            "value_score": 0.4,
+            "chroma_score": 0.75,
+            "reference_colors": [
+                [0, 0, 139],  # Dark blue
+                [128, 0, 128],  # Purple
+                [220, 20, 60],  # Crimson
+                [0, 128, 0],  # Green
+                [255, 255, 255],  # White
+            ],
+        },
+        "Cool Winter": {
+            "temperature": "cool",
+            "value": "medium-deep",
+            "chroma": "medium-clear",
+            "temperature_score": 0.15,
+            "value_score": 0.3,
+            "chroma_score": 0.7,
+            "reference_colors": [
+                [72, 61, 139],  # Dark slate blue
+                [106, 90, 205],  # Slate blue
+                [138, 43, 226],  # Blue violet
+                [75, 0, 130],  # Indigo
+                [128, 0, 128],  # Purple
+            ],
+        },
+        "Deep Winter": {
+            "temperature": "cool",
+            "value": "deep",
+            "chroma": "clear",
+            "temperature_score": 0.2,
+            "value_score": 0.1,
+            "chroma_score": 0.8,
+            "reference_colors": [
+                [0, 0, 0],  # Black
+                [25, 25, 112],  # Midnight blue
+                [139, 0, 139],  # Dark magenta
+                [0, 100, 0],  # Dark green
+                [128, 0, 0],  # Maroon
+            ],
+        },
+    }
+
+    # Axis weights for scoring
+    SCORING_WEIGHTS = {"temperature": 0.4, "value": 0.3, "chroma": 0.3}
+    ```
+
+tests/
+├── integration/
+│   ├── __init__.py
+│   └── test_api.py
+├── unit/
+│   ├── __init__.py
+│   └── test_service.py
+├── __init__.py
+└── conftest.py
+Dockerfile
+
+```
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
+COPY ../shared /shared
+
+# Install dependencies
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi
+
+# Copy application code
+COPY . .
+
+# Generate Prisma client
+RUN poetry run prisma generate
+
+EXPOSE 8000
+
+CMD ["poetry", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+[tool.poetry]
+name = "season-compatibility-service"
+version = "0.1.0"
+description = "season-compatibility-service microservice for GLAM platform"
+authors = ["GLAM Team"]
+readme = "README.md"
+package-mode = false
+
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109"
+uvicorn = {extras = ["standard"], version = "^0.35.0"}
+pydantic = "^2.11.7"
+prisma = "^0.15.0"
+numpy = "^2.3.2"
+scipy = "^1.16.1"
+shared = {path = "../../shared", develop = true}
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+ruff = "^0.12.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

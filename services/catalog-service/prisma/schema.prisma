@@ -13,42 +13,42 @@ datasource db {
 model CatalogItem {
   id                String   @id @default(uuid())
   merchant_id       String
-  
+
   // Platform identifiers
   platform_name     String   // "shopify", "woocommerce"
   platform_shop_id       String   // Shop ID in platform
   shop_domain   String   // example.myshopify.com
-  
+
   // Product/Variant IDs
   product_id        String   // Platform's product ID
   variant_id        String   // Platform's variant ID
   image_id          String?  // Platform's image ID
-  
+
   // Essential product data
   product_title     String
   variant_title     String
   sku               String?
-  price             Decimal  @db.Decimal(10, 2)
+  price             String   @default("0.00") // Store as string to handle currency formatting
   currency          String   @default("USD")
   inventory_quantity Int     @default(0)
-  
+
   // Image reference
   image_url         String?  @db.Text
-  
+
   // Status tracking
   sync_status       String   @default("pending") // pending, synced, failed
   analysis_status   String   @default("pending") // pending, analyzing, analyzed, failed, no_image
-  
+
   // Timestamps
   platform_created_at DateTime?
   platform_updated_at DateTime?
   synced_at         DateTime @default(now())
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
-  
+
   // Relations
   analysis_results  AnalysisResult[]
-  
+
   @@unique([merchant_id, platform_name, variant_id])
   @@index([merchant_id])
   @@index([merchant_id, analysis_status])
@@ -59,25 +59,25 @@ model AnalysisResult {
   id                String   @id @default(uuid())
   item_id           String
   model_version     String
-  
+
   // Core categorization
   category          String?  // "shirts", "pants", "dresses"
   subcategory       String?  // "casual-shirts", "dress-shirts"
   description       String?  @db.Text
   gender            String?  // "male", "female", "unisex"
-  
+
   // Structured attributes
   attributes        Json?    @db.Json
-  
+
   // Quality metrics
-  quality_score     Decimal? @db.Decimal(5, 4)
-  confidence_score  Decimal? @db.Decimal(5, 4)
+  quality_score     String? @default("0.0") // Store as string to handle decimal precision
+  confidence_score  String? @default("0.0") // Store as string to handle decimal precision
   processing_time_ms Int?
   analyzed_at       DateTime @default(now())
-  
+
   // Relations
   catalog_item      CatalogItem @relation(fields: [item_id], references: [id], onDelete: Cascade)
-  
+
   @@unique([item_id, model_version])
   @@index([item_id])
   @@index([category])
@@ -93,24 +93,24 @@ model SyncOperation {
   shop_domain   String
   sync_type         String   @default("full") // full, incremental
   status            String   @default("pending") // pending, running, completed, failed, partial
-  
+
   // Progress tracking
   total_products    Int      @default(0)
   processed_products Int     @default(0)
   failed_products   Int      @default(0)
   analysis_completed Int     @default(0)
-  
+
   // Progress for polling
   progress_percent  Int      @default(0)
   progress_message  String?
-  
+
   // Timing
   started_at        DateTime @default(now())
   completed_at      DateTime?
-  
+
   // Error tracking
   error_message     String?  @db.Text
-  
+
   @@index([merchant_id, status])
   @@index([merchant_id, started_at])
   @@map("sync_operations")

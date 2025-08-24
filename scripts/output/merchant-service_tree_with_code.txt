@@ -3,7 +3,11 @@ Directory Structure: /home/bellabe/glam-app/services/merchant-service
 ================================================================================
 
 merchant-service/
-logs/
+.ruff_cache/
+├── 0.1.9/
+│   └── 608319233369684344
+├── .gitignore
+└── CACHEDIR.TAG
 prisma/
 ├── migrations/
 │   ├── 20250814041744_desktop_pgt_1_cqb/
@@ -17,8 +21,8 @@ prisma/
 │   │       CREATE TABLE "merchants" (
 │   │           "id" UUID NOT NULL,
 │   │           "platform_name" TEXT NOT NULL,
-│   │           "platform_shop_id" TEXT NOT NULL,
-│   │           "shop_domain" TEXT NOT NULL,
+│   │           "platform_id" TEXT NOT NULL,
+│   │           "platform_domain" TEXT NOT NULL,
 │   │           "name" TEXT NOT NULL,
 │   │           "email" TEXT NOT NULL,
 │   │           "primary_domain" TEXT,
@@ -38,19 +42,19 @@ prisma/
 │   │       );
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_platform_shop_id_shop_domain_idx" ON "merchants"("platform_shop_id", "shop_domain");
+│   │       CREATE INDEX "merchants_platform_id_platform_domain_idx" ON "merchants"("platform_id", "platform_domain");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_shop_domain_idx" ON "merchants"("shop_domain");
+│   │       CREATE INDEX "merchants_platform_domain_idx" ON "merchants"("platform_domain");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "merchants_status_idx" ON "merchants"("status");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_shop_id_key" ON "merchants"("platform_name", "platform_shop_id");
+│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_id_key" ON "merchants"("platform_name", "platform_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE UNIQUE INDEX "merchants_platform_name_shop_domain_key" ON "merchants"("platform_name", "shop_domain");
+│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_domain_key" ON "merchants"("platform_name", "platform_domain");
 │   │       ```
 │   │
 │   └── migration_lock.toml
@@ -70,6 +74,7 @@ src/
 │   │   │   ```py
 │   │   │   # services/merchant-service/src/api/v1/__init__.py
 │   │   │   from fastapi import APIRouter
+│   │   │
 │   │   │   from .merchants import merchants_router
 │   │   │
 │   │   │   v1_router = APIRouter(prefix="/v1")
@@ -81,27 +86,30 @@ src/
 │   │
 │   │       ```py
 │   │       # services/merchant-service/src/api/v1/merchants.py
-│   │       from fastapi import APIRouter, status, HTTPException
-│   │       from shared.api import ApiResponse, success_response
-│   │       from shared.api.validation import validate_shop_context
-│   │       from shared.api.dependencies import (
-│   │           RequestContextDep,
-│   │           ClientAuthDep,
-│   │           PlatformContextDep,
-│   │           LoggerDep
-│   │       )
-│   │       from ...dependencies import MerchantServiceDep
-│   │       from ...schemas import MerchantSyncIn, MerchantSyncOut, MerchantSelfOut
-│   │       from ...exceptions import MerchantNotFoundError
+│   │       from fastapi import APIRouter, HTTPException, status
 │   │
-│   │       merchants_router = APIRouter(prefix="/merchants", tags=["merchants"])
+│   │       from shared.api import ApiResponse, success_response
+│   │       from shared.api.dependencies import (
+│   │           ClientAuthDep,
+│   │           LoggerDep,
+│   │           PlatformContextDep,
+│   │           RequestContextDep,
+│   │       )
+│   │       from shared.api.validation import validate_shop_context
+│   │
+│   │       from ...dependencies import MerchantServiceDep
+│   │       from ...exceptions import MerchantNotFoundError
+│   │       from ...schemas import MerchantSelfOut, MerchantSyncIn, MerchantSyncOut
+│   │
+│   │       merchants_router = APIRouter(prefix="/merchants")
+│   │
 │   │
 │   │       @merchants_router.post(
 │   │           "/sync",
 │   │           response_model=ApiResponse[MerchantSyncOut],
 │   │           status_code=status.HTTP_200_OK,
 │   │           summary="Sync merchant from OAuth flow",
-│   │           description="Create or update merchant after OAuth completion. Used in afterAuth hooks."
+│   │           description="Create or update merchant after OAuth completion. Used in afterAuth hooks.",
 │   │       )
 │   │       async def sync_merchant(
 │   │           body: MerchantSyncIn,
@@ -113,17 +121,17 @@ src/
 │   │       ):
 │   │           """Sync merchant after OAuth completion."""
 │   │           validate_shop_context(
-│   │                   client_auth=client_auth,
-│   │                   platform_ctx=platform_ctx,
-│   │                   logger=logger,
-│   │                   body_platform=body.platform_name,
-│   │                   body_domain=body.shop_domain
-│   │               )
+│   │               client_auth=client_auth,
+│   │               platform_ctx=platform_ctx,
+│   │               logger=logger,
+│   │               body_platform=body.platform_name,
+│   │               body_domain=body.shop_domain,
+│   │           )
 │   │
 │   │           logger.set_request_context(
 │   │               platform=platform_ctx.platform,
 │   │               domain=platform_ctx.domain,
-│   │               platform_shop_id=body.platform_shop_id
+│   │               platform_shop_id=body.platform_shop_id,
 │   │           )
 │   │
 │   │           logger.info("Starting merchant sync")
@@ -135,32 +143,26 @@ src/
 │   │                   "Merchant synced successfully",
 │   │                   extra={
 │   │                       "merchant_id": result.merchant_id,
-│   │                       "operation": "create" if result.created else "update"
-│   │                   }
+│   │                       "operation": "create" if result.created else "update",
+│   │                   },
 │   │               )
 │   │
-│   │               return success_response(
-│   │                   result,
-│   │                   ctx.request_id,
-│   │                   ctx.correlation_id
-│   │               )
+│   │               return success_response(result, ctx.request_id, ctx.correlation_id)
 │   │
 │   │           except Exception as e:
 │   │               logger.error(
 │   │                   "Merchant sync failed",
-│   │                   extra={
-│   │                       "error_type": type(e).__name__,
-│   │                       "error_message": str(e)
-│   │                   }
+│   │                   extra={"error_type": type(e).__name__, "error_message": str(e)},
 │   │               )
 │   │               raise
+│   │
 │   │
 │   │       @merchants_router.get(
 │   │           "/self",
 │   │           response_model=ApiResponse[MerchantSelfOut],
 │   │           status_code=status.HTTP_200_OK,
 │   │           summary="Get current merchant",
-│   │           description="Get current merchant using platform context from headers"
+│   │           description="Get current merchant using platform context from headers",
 │   │       )
 │   │       async def get_current_merchant(
 │   │           service: MerchantServiceDep,
@@ -175,10 +177,7 @@ src/
 │   │           if client_auth.shop != platform_ctx.domain:
 │   │               logger.warning(
 │   │                   "Shop domain mismatch between JWT and headers",
-│   │                   extra={
-│   │                       "jwt_shop": client_auth.shop,
-│   │                       "header_domain": platform_ctx.domain
-│   │                   }
+│   │                   extra={"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
 │   │               )
 │   │               raise HTTPException(
 │   │                   status_code=status.HTTP_401_UNAUTHORIZED,
@@ -187,15 +186,12 @@ src/
 │   │                       "message": "Shop domain mismatch between JWT and headers",
 │   │                       "details": {
 │   │                           "jwt_shop": client_auth.shop,
-│   │                           "header_domain": platform_ctx.domain
-│   │                       }
-│   │                   }
+│   │                           "header_domain": platform_ctx.domain,
+│   │                       },
+│   │                   },
 │   │               )
 │   │
-│   │           logger.set_request_context(
-│   │               platform=platform_ctx.platform,
-│   │               domain=platform_ctx.domain
-│   │           )
+│   │           logger.set_request_context(platform=platform_ctx.platform, domain=platform_ctx.domain)
 │   │
 │   │           logger.info("Getting current merchant")
 │   │
@@ -206,14 +202,10 @@ src/
 │   │
 │   │               logger.info(
 │   │                   "Current merchant retrieved successfully",
-│   │                   extra={"merchant_id": merchant.id}
+│   │                   extra={"merchant_id": merchant.id},
 │   │               )
 │   │
-│   │               return success_response(
-│   │                   merchant,
-│   │                   ctx.request_id,
-│   │                   ctx.correlation_id
-│   │               )
+│   │               return success_response(merchant, ctx.request_id, ctx.correlation_id)
 │   │
 │   │           except MerchantNotFoundError:
 │   │               logger.warning("Current merchant not found")
@@ -225,10 +217,10 @@ src/
 │   │                       "message": "Merchant not found for current shop",
 │   │                       "details": {
 │   │                           "platform": platform_ctx.platform,
-│   │                           "domain": platform_ctx.domain
-│   │                       }
-│   │                   }
-│   │               )
+│   │                           "domain": platform_ctx.domain,
+│   │                       },
+│   │                   },
+│   │               ) from MerchantNotFoundError(f"Merchant not found for domain {platform_ctx.domain}")
 │   │       ```
 │   │
 │   └── __init__.py
@@ -236,6 +228,7 @@ src/
 │       ```py
 │       # services/merchant-service/src/api/__init__.py
 │       from fastapi import APIRouter
+│
 │       from .v1 import v1_router
 │
 │       api_router = APIRouter(prefix="/api")
@@ -249,12 +242,12 @@ src/
 │   ├── listeners.py
 │   │
 │   │   ```py
-│   │   from typing import Dict
-│   │   from shared.messaging.listener import Listener
 │   │   from shared.messaging.jetstream_client import JetStreamClient
+│   │   from shared.messaging.listener import Listener
 │   │   from shared.utils.logger import ServiceLogger
+│   │
 │   │   from ..services.merchant_service import MerchantService
-│   │   from ..events.publishers import MerchantEventPublisher
+│   │
 │   │
 │   │   class AppUninstalledListener(Listener):
 │   │       """Listener for app uninstalled webhook events"""
@@ -271,16 +264,11 @@ src/
 │   │       def service_name(self) -> str:
 │   │           return "merchant-service"
 │   │
-│   │       def __init__(
-│   │           self,
-│   │           js_client: JetStreamClient,
-│   │           service: MerchantService,
-│   │           logger: ServiceLogger
-│   │       ):
+│   │       def __init__(self, js_client: JetStreamClient, service: MerchantService, logger: ServiceLogger):
 │   │           super().__init__(js_client, logger)
 │   │           self.service = service
 │   │
-│   │       async def on_message(self, data: Dict) -> None:
+│   │       async def on_message(self, data: dict) -> None:
 │   │           """Handle app uninstalled event"""
 │   │           try:
 │   │               shop_domain = data.get("shop_domain")
@@ -292,32 +280,28 @@ src/
 │   │
 │   │               self.logger.info(
 │   │                   f"Processing app uninstall for {shop_domain}",
-│   │                   extra={
-│   │                       "shop_domain": shop_domain,
-│   │                       "uninstall_reason": uninstall_reason
-│   │                   }
+│   │                   extra={"shop_domain": shop_domain, "uninstall_reason": uninstall_reason},
 │   │               )
 │   │
 │   │               await self.service.handle_app_uninstalled(shop_domain, uninstall_reason)
 │   │
 │   │           except Exception as e:
-│   │               self.logger.error(
-│   │                   f"Failed to process app uninstall: {e}",
-│   │                   exc_info=True,
-│   │                   extra={"data": data}
-│   │               )
+│   │               self.logger.error(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})
 │   │               raise  # NACK for retry
-│   │
 │   │   ```
 │   │
 │   └── publishers.py
 │
 │       ```py
 │       # services/merchant-service/src/events/publishers.py
-│       from datetime import datetime, timezone
-│       from shared.messaging.publisher import Publisher
-│       from ..schemas.merchant import MerchantSyncedPayload, MerchantStatusUpdatedPayload
+│       from datetime import UTC, datetime
+│
 │       from prisma.enums import MerchantStatus
+│
+│       from shared.messaging.publisher import Publisher
+│
+│       from ..schemas.merchant import MerchantStatusUpdatedPayload, MerchantSyncedPayload
+│
 │
 │       class MerchantEventPublisher(Publisher):
 │           """Publisher for merchant domain events"""
@@ -335,21 +319,17 @@ src/
 │               shop_domain: str,
 │               name: str,
 │               email: str,
-│               installed_at: datetime
+│               installed_at: datetime,
 │           ) -> str:
 │               """Publish evt.merchant.installed event"""
 │
 │               self.logger.info(
 │                   "Publishing merchant installed event",
-│                   extra={
-│                       "correlation_id": correlation_id,
-│                       "merchant_id": merchant_id,
-│                       "shop_domain": shop_domain
-│                   }
+│                   extra={"correlation_id": correlation_id, "merchant_id": merchant_id, "shop_domain": shop_domain},
 │               )
 │
 │               return await self.publish_event(
-│                   subject="evt.merchant.installed.v1",
+│                   subject="evt.merchant.created.v1",
 │                   data={
 │                       "merchant_id": merchant_id,
 │                       "platform_name": platform_name,
@@ -357,19 +337,13 @@ src/
 │                       "shop_domain": shop_domain,
 │                       "name": name,
 │                       "email": email,
-│                       "installed_at": installed_at.isoformat()
+│                       "installed_at": installed_at.isoformat(),
 │                   },
-│                   correlation_id=correlation_id
+│                   correlation_id=correlation_id,
 │               )
 │
 │           async def publish_merchant_reinstalled(
-│               self,
-│               correlation_id: str,
-│               merchant_id: str,
-│               platform_shop_id: str,
-│               shop_domain: str,
-│               name: str,
-│               email: str
+│               self, correlation_id: str, merchant_id: str, platform_shop_id: str, shop_domain: str, name: str, email: str
 │           ) -> str:
 │               """Publish evt.merchant.reinstalled event"""
 │               return await self.publish_event(
@@ -380,38 +354,28 @@ src/
 │                       "shop_domain": shop_domain,
 │                       "name": name,
 │                       "email": email,
-│                       "reinstalled_at": datetime.utcnow().isoformat()
+│                       "reinstalled_at": datetime.utcnow().isoformat(),
 │                   },
-│                   correlation_id=correlation_id
+│                   correlation_id=correlation_id,
 │               )
 │
-│           async def publish_merchant_synced(
-│               self,
-│               correlation_id: str,
-│               payload: MerchantSyncedPayload
-│           ) -> str:
+│           async def publish_merchant_synced(self, correlation_id: str, payload: MerchantSyncedPayload) -> str:
 │               """Publish evt.merchant.synced event"""
 │               return await self.publish_event(
-│                   subject="evt.merchant.synced.v1",
-│                   data=payload.model_dump(),
-│                   correlation_id=correlation_id
+│                   subject="evt.merchant.synced.v1", data=payload.model_dump(), correlation_id=correlation_id
 │               )
 │
 │           async def publish_status_changed(
 │               self,
 │               correlation_id: str,  # REQUIRED
 │               old_status: MerchantStatus,
-│               payload: MerchantStatusUpdatedPayload
+│               payload: MerchantStatusUpdatedPayload,
 │           ) -> str:
 │               """Publish evt.merchant.status.changed event"""
 │               return await self.publish_event(
 │                   subject="evt.merchant.status.changed.v1",
-│                   data={
-│                       **payload.model_dump(),
-│                       "old_status": old_status.value,
-│                       "changed_at": datetime.now(timezone.utc).isoformat()
-│                   },
-│                   correlation_id=correlation_id
+│                   data={**payload.model_dump(), "old_status": old_status.value, "changed_at": datetime.now(UTC).isoformat()},
+│                   correlation_id=correlation_id,
 │               )
 │       ```
 │
@@ -433,11 +397,12 @@ src/
 │
 │       ```py
 │       # services/merchant-service/src/repositories/merchant_repository.py
-│       from typing import Optional
-│       from datetime import datetime, timezone
-│       from prisma import Prisma
-│       from prisma.models import Merchant
+│       from datetime import UTC, datetime
+│
+│       from prisma import Prisma  # type: ignore[attr-defined]
 │       from prisma.enums import MerchantStatus
+│       from prisma.models import Merchant
+│
 │       from ..schemas.merchant import MerchantSyncIn
 │
 │
@@ -448,27 +413,18 @@ src/
 │               self.prisma = prisma
 │
 │           async def find_by_platform_shop_identity(
-│               self,
-│               platform_name: str,
-│               shop_domain: str,
-│               platform_shop_id: Optional[str] = None
-│           ) -> Optional[Merchant]:
+│               self, platform_name: str, shop_domain: str, platform_shop_id: str | None = None
+│           ) -> Merchant | None:
 │               """Find merchant by platform identity"""
-│               conditions = [
-│                   {"platform_name": platform_name, "shop_domain": shop_domain.lower()}
-│               ]
+│               conditions = [{"platform_name": platform_name, "shop_domain": shop_domain.lower()}]
 │               if platform_shop_id:
 │                   conditions.append({"platform_name": platform_name, "platform_shop_id": platform_shop_id})
 │
-│               return await self.prisma.merchant.find_first(
-│                   where={"OR": conditions}
-│               )
+│               return await self.prisma.merchant.find_first(where={"OR": conditions})
 │
-│           async def find_by_shop_domain(self, shop_domain: str) -> Optional[Merchant]:
+│           async def find_by_shop_domain(self, shop_domain: str) -> Merchant | None:
 │               """Find merchant by platform domain"""
-│               return await self.prisma.merchant.find_first(
-│                   where={"shop_domain": shop_domain.lower()}
-│               )
+│               return await self.prisma.merchant.find_first(where={"shop_domain": shop_domain.lower()})
 │
 │           async def create(self, data: MerchantSyncIn) -> Merchant:
 │               """Create new merchant"""
@@ -485,8 +441,8 @@ src/
 │                       "platform_version": data.platform_version,
 │                       "scopes": data.scopes,
 │                       "status": MerchantStatus.PENDING,
-│                       "installed_at": datetime.now(timezone.utc),
-│                       "last_sync_at": datetime.now(timezone.utc)
+│                       "installed_at": datetime.now(UTC),
+│                       "last_sync_at": datetime.now(UTC),
 │                   }
 │               )
 │
@@ -503,29 +459,19 @@ src/
 │                       "platform_version": data.platform_version,
 │                       "scopes": data.scopes,
 │                       "last_sync_at": datetime.utcnow(),
-│                       "uninstalled_at": None  # Clear if reinstalling
-│                   }
+│                       "uninstalled_at": None,  # Clear if reinstalling
+│                   },
 │               )
 │
-│           async def update_status(
-│               self,
-│               merchant_id: str,
-│               new_status: MerchantStatus
-│           ) -> Merchant:
+│           async def update_status(self, merchant_id: str, new_status: MerchantStatus) -> Merchant:
 │               """Update merchant status"""
-│               update_data = {
-│                   "status": new_status,
-│                   "status_changed_at": datetime.utcnow()
-│               }
+│               update_data = {"status": new_status, "status_changed_at": datetime.utcnow()}
 │
 │               # Set uninstalled_at if uninstalling
 │               if new_status == MerchantStatus.UNINSTALLED:
 │                   update_data["uninstalled_at"] = datetime.utcnow()
 │
-│               return await self.prisma.merchant.update(
-│                   where={"id": merchant_id},
-│                   data=update_data
-│               )
+│               return await self.prisma.merchant.update(where={"id": merchant_id}, data=update_data)
 │       ```
 │
 ├── schemas/
@@ -533,19 +479,19 @@ src/
 │   │
 │   │   ```py
 │   │   from .merchant import (
+│   │       MerchantSelfOut,
+│   │       MerchantStatusUpdatedPayload,
+│   │       MerchantSyncedPayload,
 │   │       MerchantSyncIn,
 │   │       MerchantSyncOut,
-│   │       MerchantSelfOut,
-│   │       MerchantSyncedPayload,
-│   │       MerchantStatusUpdatedPayload
 │   │   )
 │   │
 │   │   __all__ = [
+│   │       "MerchantSelfOut",
+│   │       "MerchantStatusUpdatedPayload",
 │   │       "MerchantSyncIn",
 │   │       "MerchantSyncOut",
-│   │       "MerchantSelfOut",
 │   │       "MerchantSyncedPayload",
-│   │       "MerchantStatusUpdatedPayload"
 │   │   ]
 │   │   ```
 │   │
@@ -553,54 +499,63 @@ src/
 │
 │       ```py
 │       # services/merchant-service/src/schemas/merchant.py
-│       from pydantic import BaseModel, Field, EmailStr
 │       from prisma.enums import MerchantStatus
+│       from pydantic import BaseModel, Field
+│
 │
 │       # ---------- INPUT DTOs ----------
 │       class MerchantSyncIn(BaseModel):
 │           """Input DTO for syncing merchant"""
+│
 │           platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
 │           platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
 │           shop_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
 │           shop_name: str = Field(..., description="Shop display name")
-│           email: EmailStr = Field(None, description="Shop contact email")
+│           email: str = Field(..., description="Shop contact email")
 │           primary_domain_host: str = Field(..., description="Primary domain of the shop")
 │           currency: str = Field(..., description="Shop currency (e.g., USD)")
 │           country: str = Field(..., description="Shop country code (e.g., US)")
 │           platform_version: str = Field(..., description="Shopify API version (e.g., 2025-01)")
 │           scopes: str = Field(..., description="OAuth scopes granted by the shop")
 │
+│
 │       class MerchantSyncOut(BaseModel):
 │           """Output DTO for merchant sync result"""
+│
 │           created: bool = Field(..., description="Indicates if the merchant was newly created")
 │           merchant_id: str = Field(..., description="Unique identifier of the merchant")
 │
+│
 │       class MerchantSelfOut(BaseModel):
 │           """Output DTO for self merchant"""
+│
 │           id: str
 │           platform_shop_id: str
 │           shop_domain: str
 │           shop_name: str
 │           status: MerchantStatus
 │
+│
 │       # ---------- EVENT PAYLOADS ----------
 │       class MerchantSyncedPayload(BaseModel):
 │           """Payload for evt.merchant.synced"""
+│
 │           merchant_id: str
 │           platform_name: str
 │           platform_shop_id: str
 │           shop_domain: str
-│           contact_email: EmailStr
+│           contact_email: str
 │           name: str
 │           status: MerchantStatus
 │
+│
 │       class MerchantStatusUpdatedPayload(BaseModel):
 │           """Payload for evt.merchant.status_updated"""
+│
 │           merchant_id: str
 │           platform_shop_id: str
 │           shop_domain: str
 │           status: MerchantStatus
-│
 │       ```
 │
 ├── services/
@@ -621,52 +576,35 @@ src/
 │
 │       ```py
 │       # services/merchant-service/src/services/merchant_service.py
-│       from shared.utils.logger import ServiceLogger
-│       from ..repositories.merchant_repository import MerchantRepository
-│       from ..schemas.merchant import (
-│           MerchantSyncIn, MerchantSyncOut, MerchantSelfOut,
-│           MerchantSyncedPayload, MerchantStatusUpdatedPayload
-│       )
-│       from ..events.publishers import MerchantEventPublisher
-│       from ..exceptions import MerchantNotFoundError, InvalidStatusTransitionError
 │       from prisma.enums import MerchantStatus
 │
+│       from shared.utils.logger import ServiceLogger
+│
+│       from ..events.publishers import MerchantEventPublisher
+│       from ..exceptions import InvalidStatusTransitionError, MerchantNotFoundError
+│       from ..repositories.merchant_repository import MerchantRepository
+│       from ..schemas.merchant import (
+│           MerchantSelfOut,
+│           MerchantStatusUpdatedPayload,
+│           MerchantSyncedPayload,
+│           MerchantSyncIn,
+│           MerchantSyncOut,
+│       )
 │
 │       # Status transition rules
 │       STATUS_TRANSITIONS = {
-│           MerchantStatus.PENDING: [
-│               MerchantStatus.ACTIVE,
-│               MerchantStatus.UNINSTALLED
-│           ],
-│           MerchantStatus.ACTIVE: [
-│               MerchantStatus.PAUSED,
-│               MerchantStatus.SUSPENDED,
-│               MerchantStatus.UNINSTALLED
-│           ],
-│           MerchantStatus.PAUSED: [
-│               MerchantStatus.ACTIVE,
-│               MerchantStatus.SUSPENDED,
-│               MerchantStatus.UNINSTALLED
-│           ],
-│           MerchantStatus.SUSPENDED: [
-│               MerchantStatus.ACTIVE,
-│               MerchantStatus.PAUSED,
-│               MerchantStatus.UNINSTALLED
-│           ],
-│           MerchantStatus.UNINSTALLED: [
-│               MerchantStatus.PENDING
-│           ]
+│           MerchantStatus.PENDING: [MerchantStatus.ACTIVE, MerchantStatus.UNINSTALLED],
+│           MerchantStatus.ACTIVE: [MerchantStatus.PAUSED, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
+│           MerchantStatus.PAUSED: [MerchantStatus.ACTIVE, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
+│           MerchantStatus.SUSPENDED: [MerchantStatus.ACTIVE, MerchantStatus.PAUSED, MerchantStatus.UNINSTALLED],
+│           MerchantStatus.UNINSTALLED: [MerchantStatus.PENDING],
 │       }
+│
 │
 │       class MerchantService:
 │           """Business logic for merchant operations"""
 │
-│           def __init__(
-│               self,
-│               repository: MerchantRepository,
-│               publisher: MerchantEventPublisher,
-│               logger: ServiceLogger
-│           ):
+│           def __init__(self, repository: MerchantRepository, publisher: MerchantEventPublisher, logger: ServiceLogger):
 │               self.repository = repository
 │               self.publisher = publisher
 │               self.logger = logger
@@ -679,15 +617,13 @@ src/
 │                   extra={
 │                       "correlation_id": ctx.correlation_id,
 │                       "shop_domain": data.shop_domain,
-│                       "platform_shop_id": data.platform_shop_id
-│                   }
+│                       "platform_shop_id": data.platform_shop_id,
+│                   },
 │               )
 │
 │               # Find existing merchant
 │               existing = await self.repository.find_by_platform_shop_identity(
-│                   platform_name=data.platform_name,
-│                   shop_domain=data.shop_domain,
-│                   platform_shop_id=data.platform_shop_id
+│                   platform_name=data.platform_name, shop_domain=data.shop_domain, platform_shop_id=data.platform_shop_id
 │               )
 │
 │               if existing:
@@ -697,10 +633,7 @@ src/
 │
 │                   # If merchant was uninstalled, set back to PENDING
 │                   if merchant.status == MerchantStatus.UNINSTALLED:
-│                       merchant = await self.repository.update_status(
-│                           merchant.id,
-│                           MerchantStatus.PENDING
-│                       )
+│                       merchant = await self.repository.update_status(merchant.id, MerchantStatus.PENDING)
 │
 │                       # Publish reinstalled event
 │                       await self.publisher.publish_merchant_reinstalled(
@@ -709,7 +642,7 @@ src/
 │                           platform_shop_id=merchant.platform_shop_id,
 │                           shop_domain=merchant.shop_domain,
 │                           name=merchant.name,
-│                           email=merchant.email
+│                           email=merchant.email,
 │                       )
 │               else:
 │                   # Create new merchant
@@ -718,10 +651,7 @@ src/
 │
 │                   self.logger.info(
 │                       f"Created new merchant: {merchant.shop_domain}",
-│                       extra={
-│                           "merchant_id": merchant.id,
-│                           "shop_domain": merchant.shop_domain
-│                       }
+│                       extra={"merchant_id": merchant.id, "shop_domain": merchant.shop_domain},
 │                   )
 │
 │                   # Publish installed event
@@ -733,7 +663,7 @@ src/
 │                       shop_domain=merchant.shop_domain,
 │                       name=merchant.name,
 │                       email=merchant.email,
-│                       installed_at=merchant.installed_at
+│                       installed_at=merchant.installed_at,
 │                   )
 │
 │               # Always publish synced event
@@ -744,18 +674,12 @@ src/
 │                   shop_domain=merchant.shop_domain,
 │                   contact_email=merchant.email,
 │                   name=merchant.name,
-│                   status=merchant.status
+│                   status=merchant.status,
 │               )
 │
-│               await self.publisher.publish_merchant_synced(
-│                   correlation_id=ctx.correlation_id,
-│                   payload=synced_payload
-│               )
+│               await self.publisher.publish_merchant_synced(correlation_id=ctx.correlation_id, payload=synced_payload)
 │
-│               return MerchantSyncOut(
-│                   created=created,
-│                   merchant_id=merchant.id
-│               )
+│               return MerchantSyncOut(created=created, merchant_id=merchant.id)
 │
 │           async def get_merchant_by_domain(self, shop_domain: str) -> MerchantSelfOut:
 │               """Get merchant by platform domain"""
@@ -768,14 +692,10 @@ src/
 │                   platform_shop_id=merchant.platform_shop_id,
 │                   shop_domain=merchant.shop_domain,
 │                   shop_name=merchant.name,
-│                   status=merchant.status
+│                   status=merchant.status,
 │               )
 │
-│           async def update_merchant_status(
-│               self,
-│               shop_domain: str,
-│               new_status: MerchantStatus
-│           ) -> None:
+│           async def update_merchant_status(self, shop_domain: str, new_status: MerchantStatus) -> None:
 │               """Update merchant status (called by event listeners)"""
 │
 │               merchant = await self.repository.find_by_shop_domain(shop_domain)
@@ -788,32 +708,48 @@ src/
 │               if new_status not in STATUS_TRANSITIONS.get(old_status, []):
 │                   self.logger.warning(
 │                       f"Invalid status transition from {old_status} to {new_status}",
-│                       extra={
-│                           "merchant_id": merchant.id,
-│                           "shop_domain": shop_domain
-│                       }
+│                       extra={"merchant_id": merchant.id, "shop_domain": shop_domain},
 │                   )
-│                   raise InvalidStatusTransitionError(
-│                       f"Invalid status transition from {old_status} to {new_status}"
-│                   )
+│                   raise InvalidStatusTransitionError(f"Invalid status transition from {old_status} to {new_status}")
 │
 │               # Update status
-│               updated_merchant = await self.repository.update_status(merchant.id, new_status)
+│               await self.repository.update_status(merchant.id, new_status)
 │
 │               # Publish status changed event
 │               status_payload = MerchantStatusUpdatedPayload(
 │                   merchant_id=merchant.id,
 │                   platform_shop_id=merchant.platform_shop_id,
 │                   shop_domain=merchant.shop_domain,
-│                   status=new_status
+│                   status=new_status,
 │               )
-│
-│
 │
 │               await self.publisher.publish_status_changed(
 │                   correlation_id=merchant.correlation_id,  # TODO: set a propper ctx Assuming this is available in the context
 │                   old_status=old_status,
-│                   payload=status_payload
+│                   payload=status_payload,
+│               )
+│
+│           async def handle_app_uninstalled(self, shop_domain: str, uninstall_reason: str | None = None) -> None:
+│               """Handle app uninstalled event"""
+│               self.logger.info(f"Handling app uninstall for {shop_domain}", extra={"shop_domain": shop_domain})
+│
+│               merchant = await self.repository.find_by_shop_domain(shop_domain)
+│               if not merchant:
+│                   self.logger.warning(f"Merchant not found for uninstall: {shop_domain}")
+│                   return
+│
+│               # Update status to UNINSTALLED
+│               await self.repository.update_status(merchant.id, MerchantStatus.UNINSTALLED)
+│
+│               # Publish uninstalled event
+│               await self.publisher.publish_merchant_uninstalled(
+│                   correlation_id=merchant.correlation_id,  # TODO: set a propper ctx Assuming this is available in the context
+│                   merchant_id=merchant.id,
+│                   platform_shop_id=merchant.platform_shop_id,
+│                   shop_domain=merchant.shop_domain,
+│                   name=merchant.name,
+│                   email=merchant.email,
+│                   uninstall_reason=uninstall_reason,
 │               )
 │       ```
 │
@@ -823,63 +759,56 @@ src/
 │   ```py
 │   import os
 │   from functools import lru_cache
-│   from typing import Optional
-│   from pydantic import BaseModel, Field, ConfigDict, model_validator
-│   from shared.utils.config_loader import merged_config, flatten_config
+│
+│   from pydantic import BaseModel, ConfigDict, Field, model_validator
+│
+│   from shared.utils import load_root_env
 │   from shared.utils.exceptions import ConfigurationError
 │
+│
 │   class ServiceConfig(BaseModel):
-│       """Service configuration from YAML + environment"""
-│       model_config = ConfigDict(populate_by_name=True, extra="ignore")
+│       """Merchant service configuration"""
 │
-│       # Service Identity
-│       service_name: str = Field(..., alias="service.name")
-│       service_version: str = Field(..., alias="service.version")
-│       service_description: str = Field(..., alias="service.description")
-│       debug: bool = Field(..., alias="service.debug")
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           populate_by_name=True,
+│       )
 │
-│       # Environment - from env
+│       service_name: str = "merchant-service"
+│       service_version: str = "1.0.0"
+│       service_description: str = "Merchant management service"
+│       debug: bool = True
+│
 │       environment: str = Field(..., alias="APP_ENV")
-│
-│       # API Configuration
-│       api_host: str = Field(..., alias="api.host")
+│       api_host: str = "0.0.0.0"
 │       api_external_port: int = Field(..., alias="MERCHANT_API_EXTERNAL_PORT")
-│       api_cors_origins: list[str] = Field(..., alias="api.cors_origins")
 │
-│       # Database
 │       database_enabled: bool = Field(..., alias="MERCHANT_DB_ENABLED")
 │       database_url: str = Field(..., alias="DATABASE_URL")
 │
-│       # Logging
-│       logging_level: str = Field(..., alias="logging.level")
-│       logging_format: str = Field(..., alias="logging.format")
-│       logging_file_path: str = Field(..., alias="logging.file_path")
+│       logging_level: str = "INFO"
+│       logging_format: str = "json"
+│       logging_file_path: str = ""
 │
-│       # Monitoring
-│       monitoring_metrics_enabled: bool = Field(..., alias="monitoring.metrics_enabled")
-│       monitoring_tracing_enabled: bool = Field(..., alias="monitoring.tracing_enabled")
+│       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
 │
-│       # Rate limiting
-│       rate_limiting_enabled: bool = Field(..., alias="rate_limiting.enabled")
-│       rate_limiting_window_seconds: int = Field(..., alias="rate_limiting.window_seconds")
-│
-│       # Internal Authentication
-│       internal_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
-│
-│       # Computed properties
 │       @property
 │       def nats_url(self) -> str:
 │           in_container = os.path.exists("/.dockerenv")
-│           if in_container or self.environment in ["development", "production"]:
-│               return "nats://nats:4222"
-│           return "nats://localhost:4222"
+│           return (
+│               "nats://nats:4222"
+│               if in_container or self.environment in ["development", "production"]
+│               else "nats://localhost:4222"
+│           )
 │
 │       @property
 │       def redis_url(self) -> str:
 │           in_container = os.path.exists("/.dockerenv")
-│           if in_container or self.environment in ["development", "production"]:
-│               return "redis://redis:6379"
-│           return "redis://localhost:6379"
+│           return (
+│               "redis://redis:6379"
+│               if in_container or self.environment in ["development", "production"]
+│               else "redis://localhost:6379"
+│           )
 │
 │       @property
 │       def api_port(self) -> int:
@@ -895,43 +824,40 @@ src/
 │
 │   @lru_cache
 │   def get_service_config() -> ServiceConfig:
-│       """Load and cache service configuration"""
 │       try:
-│           # Load YAML + all env vars
-│           cfg_dict = merged_config("merchant-service")
-│           flattened = flatten_config(cfg_dict)
-│           return ServiceConfig(**flattened)
-│
+│           load_root_env()
+│           return ServiceConfig(**os.environ)  # type: ignore[arg-type]
 │       except Exception as e:
-│           print(f"❌ Configuration error: {e}")
 │           raise ConfigurationError(
 │               f"Failed to load service configuration: {e}",
 │               config_key="merchant-service",
-│               expected_value="valid config"
-│           )
+│               expected_value="valid config",
+│           ) from e
 │   ```
 │
 ├── dependencies.py
 │
 │   ```py
 │   from typing import Annotated
-│   from fastapi import Depends, Request, HTTPException, status
-│   from shared.api.dependencies import (
-│       RequestIdDep, PaginationDep, CorrelationIdDep, RequestContextDep
-│   )
-│   from .lifecycle import ServiceLifecycle
+│
+│   from fastapi import Depends, HTTPException, Request, status
+│
+│   from shared.api.dependencies import CorrelationIdDep, PaginationDep, RequestContextDep, RequestIdDep
+│
 │   from .config import ServiceConfig
+│   from .lifecycle import ServiceLifecycle
 │   from .services import MerchantService
 │
 │   __all__ = [
-│       "CorrelationIdDep",
-│       "PaginationDep",
-│       "RequestIdDep",
-│       "RequestContextDep",
-│       "LifecycleDep",
 │       "ConfigDep",
+│       "CorrelationIdDep",
+│       "LifecycleDep",
 │       "MerchantServiceDep",
+│       "PaginationDep",
+│       "RequestContextDep",
+│       "RequestIdDep",
 │   ]
+│
 │
 │   # Core dependencies
 │   def get_lifecycle(request: Request) -> ServiceLifecycle:
@@ -940,14 +866,17 @@ src/
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
 │       return lc
 │
+│
 │   def get_config(request: Request) -> ServiceConfig:
 │       cfg = getattr(request.app.state, "config", None)
 │       if cfg is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
 │       return cfg
 │
+│
 │   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 │   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+│
 │
 │   def get_merchant_service(lifecycle: LifecycleDep) -> MerchantService:
 │       svc = lifecycle.merchant_service
@@ -955,52 +884,60 @@ src/
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "MerchantService not initialized")
 │       return svc
 │
+│
 │   MerchantServiceDep = Annotated[MerchantService, Depends(get_merchant_service)]
 │   ```
 │
 ├── exceptions.py
 │
 │   ```py
-│   from shared.utils.exceptions import (
-│       NotFoundError, ValidationError, ConflictError,
-│       DomainError
-│   )
+│   from shared.utils.exceptions import ConflictError, DomainError, NotFoundError, ValidationError
+│
 │
 │   class MerchantNotFoundError(NotFoundError):
 │       """Raised when merchant is not found"""
+│
 │       def __init__(self, message: str = "Merchant not found"):
 │           super().__init__(message=message, resource="merchant")
 │
+│
 │   class InvalidDomainError(ValidationError):
 │       """Raised when shop domain is invalid"""
+│
 │       def __init__(self, message: str = "Invalid shop domain format"):
 │           super().__init__(message=message, field="shop_domain")
 │
+│
 │   class ConsentViolationError(ConflictError):
 │       """Raised when trying to violate consent rules"""
+│
 │       def __init__(self, message: str = "Cannot unset required consent"):
 │           super().__init__(message=message, conflicting_resource="consent")
 │
+│
 │   class InvalidStatusTransitionError(DomainError):
 │       """Raised when status transition is invalid"""
+│
 │       def __init__(self, message: str):
 │           super().__init__(message=message, code="INVALID_STATUS_TRANSITION")
-│
 │   ```
 │
 ├── lifecycle.py
 │
 │   ```py
 │   # services/merchant-service/src/lifecycle.py
-│   from typing import Optional, List, Dict, Any
 │   import asyncio
-│   from prisma import Prisma
+│
+│   from prisma import Prisma  # type: ignore[attr-defined]
+│
 │   from shared.messaging.jetstream_client import JetStreamClient
 │   from shared.utils.logger import ServiceLogger
+│
 │   from .config import ServiceConfig
+│   from .events.publishers import MerchantEventPublisher
 │   from .repositories import MerchantRepository
 │   from .services.merchant_service import MerchantService
-│   from .events.publishers import MerchantEventPublisher
+│
 │
 │   class ServiceLifecycle:
 │       """Manages service lifecycle and dependencies"""
@@ -1010,20 +947,20 @@ src/
 │           self.logger = logger
 │
 │           # External connections
-│           self.messaging_client: Optional[JetStreamClient] = None
-│           self.prisma: Optional[Prisma] = None
+│           self.messaging_client: JetStreamClient | None = None
+│           self.prisma: Prisma | None = None
 │           self._db_connected: bool = False
 │
 │           # Publisher / listeners
-│           self.event_publisher: Optional[MerchantEventPublisher] = None
+│           self.event_publisher: MerchantEventPublisher | None = None
 │           self._listeners: list = []
 │
 │           # Repositories / mappers / services
-│           self.merchant_repo: Optional[MerchantRepository] = None
-│           self.merchant_service: Optional[MerchantService] = None
+│           self.merchant_repo: MerchantRepository | None = None
+│           self.merchant_service: MerchantService | None = None
 │
 │           # Tasks
-│           self._tasks: List[asyncio.Task] = []
+│           self._tasks: list[asyncio.Task] = []
 │           self._shutdown_event = asyncio.Event()
 │
 │       async def startup(self) -> None:
@@ -1075,10 +1012,7 @@ src/
 │           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 │
 │           # Initialize publisher now (you require it in _init_listeners)
-│           self.event_publisher = MerchantEventPublisher(
-│               jetstream_client=self.messaging_client,
-│               logger=self.logger
-│           )
+│           self.event_publisher = MerchantEventPublisher(jetstream_client=self.messaging_client, logger=self.logger)
 │           self.logger.info("Messaging client and publisher initialized")
 │
 │       async def _init_database(self) -> None:
@@ -1102,7 +1036,6 @@ src/
 │               self.logger.error("Prisma connect failed: %s", e, exc_info=True)
 │               raise
 │
-│       # ---------------------------------------------------------------- repos
 │       def _init_repositories(self) -> None:
 │           if self.config.database_enabled:
 │               if not (self.prisma and self._db_connected):
@@ -1112,20 +1045,14 @@ src/
 │           else:
 │               self.merchant_repo = None  # service must handle db-disabled mode
 │
-│       # ---------------------------------------------------------- local services
 │       def _init_local_services(self) -> None:
-│
 │           if not self.merchant_repo or not self.event_publisher:
 │               raise RuntimeError("Merchant repository not initialized")
 │
 │           self.merchant_service = MerchantService(
-│               repository=self.merchant_repo,
-│               publisher=self.event_publisher,
-│               logger=self.logger
-│
+│               repository=self.merchant_repo, publisher=self.event_publisher, logger=self.logger
 │           )
 │
-│       # -------------------------------------------------------------- listeners
 │       async def _init_listeners(self) -> None:
 │           if not self.messaging_client or not self.merchant_service or not self.event_publisher:
 │               raise RuntimeError("Messaging or service layer not ready")
@@ -1134,7 +1061,7 @@ src/
 │           # await some_listener.start()
 │           # self._listeners.append(some_listener)
 │
-│       # ================================================= convenience helpers
+│       # convenience helpers
 │       def add_task(self, coro) -> asyncio.Task:
 │           t = asyncio.create_task(coro)
 │           self._tasks.append(t)
@@ -1151,29 +1078,36 @@ src/
 
     ```py
     from contextlib import asynccontextmanager
+
     from fastapi import FastAPI
-    from shared.api import setup_middleware, setup_debug_handlers, setup_debug_middleware
+
+    from shared.api import setup_debug_handlers, setup_debug_middleware, setup_middleware
     from shared.api.health import create_health_router
     from shared.utils.logger import create_logger
+
+    from .api import api_router
     from .config import get_service_config
     from .lifecycle import ServiceLifecycle
-    from .api import api_router
 
     # Global singletons
     config = get_service_config()
     logger = create_logger(config.service_name)
     lifecycle = ServiceLifecycle(config, logger)
 
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """FastAPI lifespan adapter"""
-        logger.info(f"Starting {config.service_name}", extra={
-            "service_name": config.service_name,
-            "version": config.service_version,
-            "environment": config.environment,
-            "api_host": config.api_host,
-            "api_port": config.api_port,
-        })
+        logger.info(
+            f"Starting {config.service_name}",
+            extra={
+                "service_name": config.service_name,
+                "version": config.service_version,
+                "environment": config.environment,
+                "api_host": config.api_host,
+                "api_port": config.api_port,
+            },
+        )
 
         app.state.lifecycle = lifecycle
         app.state.config = config
@@ -1185,6 +1119,7 @@ src/
         finally:
             await lifecycle.shutdown()
 
+
     def create_application() -> FastAPI:
         """Create and configure the FastAPI application."""
         app = FastAPI(
@@ -1194,7 +1129,7 @@ src/
             description=config.service_description,
             docs_url="/docs",
             redoc_url="/redoc",
-            exception_handlers={}  # Use shared middleware for exception handling
+            exception_handlers={},  # Use shared middleware for exception handling
         )
 
         if config.debug:
@@ -1202,184 +1137,26 @@ src/
             setup_debug_handlers(app)
             setup_debug_middleware(app)
 
-        setup_middleware(
-            app,
-            service_name=config.service_name,
-            enable_metrics=config.monitoring_metrics_enabled,
-            metrics_path="/metrics"
-        )
+        setup_middleware(app, service_name=config.service_name)
 
         # Include routers
         app.include_router(create_health_router(config.service_name))
         app.include_router(api_router)
 
-
         return app
+
 
     app = create_application()
 
     if __name__ == "__main__":
         import uvicorn
-        uvicorn.run(
-            "src.main:app",
-            host=config.api_host,
-            port=config.api_port,
-            reload=config.debug,
-            workers=1
-        )
 
+        uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug, workers=1)
     ```
 
 tests/
 └── __init__.py
-.env.example
-.pre-commit-config.yaml
-
-```yaml
-repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-
-  - repo: https://github.com/psf/black
-    rev: 23.11.0
-    hooks:
-      - id: black
-        args: [--line-length=100]
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        args: [--profile=black, --line-length=100]
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.1.0
-    hooks:
-      - id: flake8
-        args: [--max-line-length=100, --extend-ignore=E203,W503]
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.1
-    hooks:
-      - id: mypy
-        args: [--strict, --ignore-missing-imports]
-
-  # Custom hooks for ID management
-  - repo: local
-    hooks:
-      - id: check-uuid4-usage
-        name: Check for manual uuid4() usage
-        entry: bash -c 'if grep -r "uuid4()" --include="*.py" --exclude-dir=tests .; then echo "Use uuid7() instead of uuid4() for event IDs"; exit 1; fi'
-        language: system
-        pass_filenames: false
-
-```
-
 .python-version
-__init__.py
-docker-compose.yml
-
-```yml
-version: '3.8'
-
-services:
-  merchant-service:
-    build: .
-    ports:
-      - "8113:8000"
-      - "9090:9090"  # Metrics
-    environment:
-      - DATABASE_URL=postgresql://merchant:password@postgres:5432/merchant_db
-      - REDIS_URL=redis://redis:6379
-      - NATS_URL=nats://nats:4222
-      - BACKEND_API_KEY=test-api-key
-      - LOG_LEVEL=INFO
-      - DEBUG=false
-      - DOCKER_CONTAINER=1
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      nats:
-        condition: service_started
-    volumes:
-      - ./src:/app/src  # Hot reload
-      - ./config:/app/config  # Mount config
-    networks:
-      - merchant-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: merchant_db
-      POSTGRES_USER: merchant
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5413:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - merchant-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U merchant -d merchant_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6313:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - merchant-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  nats:
-    image: nats:2.10-alpine
-    ports:
-      - "4213:4222"
-      - "8213:8222"  # HTTP monitoring
-    command: [
-      "nats-server",
-      "--jetstream",
-      "--store_dir=/data",
-      "--http_port=8222"
-    ]
-    volumes:
-      - nats_data:/data
-    networks:
-      - merchant-network
-
-volumes:
-  postgres_data:
-  redis_data:
-  nats_data:
-
-networks:
-  merchant-network:
-    driver: bridge
-
-```
-
 Dockerfile
 
 ```
@@ -1388,59 +1165,80 @@ Dockerfile
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
+# Allow re-use for any service; default keeps backward compatibility
+ARG SERVICE=merchant-service
+
+# Bump this to force layer invalidation (or pass via compose)
+ARG CACHE_BUSTER=1
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+# Minimal build deps (gcc often required for some wheels)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install poetry
-RUN poetry config virtualenvs.create false
+# Install Poetry (system-wide, no venvs)
+ARG POETRY_VERSION=1.8.3
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
+ && poetry config virtualenvs.create false
 
-# ---- 1️⃣  Install shared package dependencies
+# ---- 0️⃣  Cache bust marker (forces rebuild when you change the arg)
+RUN echo "Cache bust value: ${CACHE_BUSTER}"
+
+# ---- 1️⃣  Install shared package deps
 COPY shared /shared
 WORKDIR /shared
-RUN poetry install --no-dev
+RUN poetry install --no-dev --no-interaction --no-ansi
 
-# ---- 2️⃣  Install service dependencies
+# ---- 2️⃣  Install service deps (copy only manifests first for better caching)
 WORKDIR /app
-COPY services/merchant-service/pyproject.toml services/merchant-service/poetry.lock* ./
+# Copy service manifests (pyproject & optional lock)
+COPY services/${SERVICE}/pyproject.toml services/${SERVICE}/poetry.lock* ./
 RUN poetry install --no-dev --no-interaction --no-ansi
 
 # ---- 3️⃣  Copy Prisma schema and generate client
-COPY services/merchant-service/prisma ./prisma
+# (prisma is provided by prisma-client-py; generation happens here)
+COPY services/${SERVICE}/prisma ./prisma
 RUN prisma generate
 
-# ---- 4️⃣  Copy service code
-COPY services/merchant-service /app
-
-# ---- 5️⃣  Copy config
-COPY config /app/config
+# ---- 4️⃣  Copy service source
+# (copy last to maximize cache hits on deps & generated client)
+COPY services/${SERVICE} /app
 
 # ──────────────────────────────────────────────────────────────
-# 📦  Stage 2 ─ Runtime
+# 🚀  Stage 2 ─ Runtime
 # ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-# Copy everything from builder
+ARG SERVICE=merchant-service
+
+ENV PYTHONPATH="/shared:/app" \
+    DOCKER_CONTAINER=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Copy installed libs, built app, and shared code from builder
 COPY --from=builder /usr/local /usr/local
 COPY --from=builder /app /app
 COPY --from=builder /shared /shared
 
-ENV PYTHONPATH="/shared:/app"
-ENV DOCKER_CONTAINER=1
-
-WORKDIR /app
-
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Non-root user
+RUN useradd -m -u 1000 appuser \
+ && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
 
-# Run migrations and start server
+# Run migrations then start API
+# (prisma CLI is available because poetry installed into system site-packages)
 CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
-
 ```
 
 poetry.lock
@@ -1458,7 +1256,7 @@ pyproject.toml
 [tool.poetry]
 name = "merchant-service"
 version = "1.0.0"
-description = "Merchant identity and consent management service"
+description = "Merchant identity management"
 authors = ["GlamYouUp Team"]
 package-mode = false
 
@@ -1467,112 +1265,17 @@ python = "^3.11"
 fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.25.0"}
 pydantic = "^2.5.0"
-pydantic-settings = "^2.1.0"
-email-validator = "^2.1.0"
 prisma = "^0.15.0"
 nats-py = "^2.6.0"
-redis = "^5.0.1"
-python-multipart = "^0.0.6"
-httpx = "^0.25.2"
-python-dotenv = "^1.0.0"
-prometheus-client = "^0.19.0"
-uuid7 = "^0.1.0"
 shared = { path = "../../shared", develop = true }
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-pytest-asyncio = "^0.21.1"
-pytest-cov = "^4.1.0"
-black = "^23.11.0"
-isort = "^5.12.0"
-flake8 = "^6.1.0"
-mypy = "^1.7.1"
-pre-commit = "^3.6.0"
-
-[tool.poetry.group.test.dependencies]
-httpx = "^0.25.2"
-pytest-mock = "^3.12.0"
-testcontainers = "^3.7.1"
-
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --strict-config"
-testpaths = ["tests"]
-pythonpath = ["src"]
-asyncio_mode = "auto"
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "e2e: End-to-end tests"
-]
-
-[tool.black]
-line-length = 100
-target-version = ['py311']
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-ignore_missing_imports = true
-
-[tool.coverage.run]
-source = ["src"]
-omit = ["tests/*", "*/migrations/*", "*/__init__.py"]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-```
-
-README.md
-
-```md
-# Merchant Service
-
-Merchant identity and consent management service for the GLAM platform.
-
-## Overview
-
-The Merchant Service manages:
-- Merchant identity and installation lifecycle
-- Consent settings (data access, auto-sync, TOS)
-- OAuth sync after Shopify installation
-- Activity tracking for analytics
-- Status management (PENDING, ACTIVE, SUSPENDED, DEACTIVATED)
-
-## Port Configuration
-
-- Internal Port: 8013 (container)
-- External Port: 8113 (local development)
-- Database Port: 5413
-- Redis Port: 6313
-- NATS Port: 4213
-
-## Setup
-
-1. Install dependencies:
-```bash
-poetry install
-```
-
-2. Set up environment:
-```bash
-cp .env.example .env
-# Edit .env with your secrets
-```
-
-3. Generate Prisma client:
-```bash
-prisma generate
-```
-
-4. Run migrations:
-```bash
-prisma migrate dev
-```
-
-5. Start service:
-```bash
 ```
 
 
