@@ -1,3 +1,4 @@
+# services/recommendation-service/Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -7,23 +8,29 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install poetry
+# Copy shared package first
+COPY shared/ /shared/
+WORKDIR /shared
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-dev
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock* ./
-COPY ../shared /shared
-
-# Install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+# Copy service code
+WORKDIR /app
+COPY services/recommendation-service/pyproject.toml services/recommendation-service/poetry.lock ./
+RUN poetry install --no-dev
 
 # Copy application code
-COPY . .
+COPY services/recommendation-service/src ./src
+COPY services/recommendation-service/prisma ./prisma
 
 # Generate Prisma client
-RUN poetry run prisma generate
+RUN prisma generate
 
-EXPOSE 8000
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
 
-CMD ["poetry", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8025
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8025"]
