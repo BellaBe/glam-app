@@ -19,7 +19,10 @@ function signJwt(shop) {
       platform: "shopify",
     },
     process.env.CLIENT_JWT_SECRET,
-    { expiresIn: "180s", algorithm: "HS256" }
+    {
+      expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRE_SECONDS,
+      algorithm: process.env.JWT_ALGORITHM || "HS256",
+    }
   );
   if (!token) throw new Error("Failed to create client JWT");
   return token;

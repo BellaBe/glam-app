@@ -1,0 +1,132 @@
+# services/analytics/src/jobs/aggregation_jobs.py
+"""Scheduled aggregation jobs for analytics"""
+
+from datetime import datetime, date, timedelta
+from typing import Optional
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
+from shared.utils.logger import ServiceLogger
+from ..services.aggregation_service import AggregationService
+from ..config import ServiceConfig
+
+class AggregationJobs:
+    """Manages scheduled aggregation jobs"""
+    
+    def __init__(
+        self,
+        config: ServiceConfig,
+        aggregation_service: AggregationService,
+        logger: ServiceLogger
+    ):
+        self.config = config
+        self.aggregation_service = aggregation_service
+        self.logger = logger
+        self.scheduler: Optional[AsyncIOScheduler] = None
+    
+    async def start(self) -> None:
+        """Initialize and start the scheduler"""
+        if not self.config.aggregation_enabled:
+            self.logger.info("Aggregation jobs disabled by configuration")
+            return
+        
+        self.scheduler = AsyncIOScheduler()
+        
+        # Add event listeners
+        self.scheduler.add_listener(
+            self._job_executed,
+            EVENT_JOB_EXECUTED
+        )
+        self.scheduler.add_listener(
+            self._job_error,
+            EVENT_JOB_ERROR
+        )
+        
+        # Schedule jobs
+        self._schedule_hourly_aggregation()
+        self._schedule_daily_aggregation()
+        self._schedule_weekly_cleanup()
+        
+        # Start scheduler
+        self.scheduler.start()
+        self.logger.info("Aggregation jobs scheduler started")
+    
+    async def stop(self) -> None:
+        """Stop the scheduler"""
+        if self.scheduler and self.scheduler.running:
+            self.scheduler.shutdown(wait=False)
+            self.logger.info("Aggregation jobs scheduler stopped")
+    
+    def _schedule_hourly_aggregation(self) -> None:
+        """Schedule hourly aggregation job"""
+        self.scheduler.add_job(
+            self.aggregation_service.aggregate_hourly_metrics,
+            CronTrigger(minute=self.config.hourly_aggregation_minute),
+            id="hourly_aggregation",
+            name="Hourly metrics aggregation",
+            misfire_grace_time=300,  # 5 minutes grace
+            max_instances=1,  # Only one instance at a time
+            coalesce=True,  # Coalesce missed jobs
+            replace_existing=True
+        )
+        self.logger.info(
+            f"Scheduled hourly aggregation at minute {self.config.hourly_aggregation_minute}"
+        )
+    
+    def _schedule_daily_aggregation(self) -> None:
+        """Schedule daily aggregation job"""
+        self.scheduler.add_job(
+            self.aggregation_service.aggregate_daily_metrics,
+            CronTrigger(
+                hour=self.config.daily_aggregation_hour,
+                minute=self.config.daily_aggregation_minute
+            ),
+            id="daily_aggregation",
+            name="Daily metrics aggregation",
+            misfire_grace_time=1800,  # 30 minutes grace
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True
+        )
+        self.logger.info(
+            f"Scheduled daily aggregation at {self.config.daily_aggregation_hour:02d}:{self.config.daily_aggregation_minute:02d}"
+        )
+    
+    def _schedule_weekly_cleanup(self) -> None:
+        """Schedule weekly cleanup job"""
+        self.scheduler.add_job(
+            self.aggregation_service.cleanup_old_events,
+            CronTrigger(day_of_week=0, hour=2, minute=0),  # Sunday 2:00 AM
+            id="weekly_cleanup",
+            name="Weekly event cleanup",
+            misfire_grace_time=3600,  # 1 hour grace
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True
+        )
+        self.logger.info(
+            "Scheduled weekly cleanup on Sundays at 02:00"
+        )
+    
+    def _job_executed(self, event) -> None:
+        """Log successful job execution"""
+        self.logger.info(
+            f"Job executed successfully",
+            extra={
+                "job_id": event.job_id,
+                "scheduled_run_time": event.scheduled_run_time.isoformat(),
+                "run_time": datetime.now().isoformat()
+            }
+        )
+    
+    def _job_error(self, event) -> None:
+        """Log job execution error"""
+        self.logger.error(
+            f"Job execution failed",
+            extra={
+                "job_id": event.job_id,
+                "scheduled_run_time": event.scheduled_run_time.isoformat(),
+                "exception": str(event.exception),
+                "traceback": event.traceback
+            }
+        )

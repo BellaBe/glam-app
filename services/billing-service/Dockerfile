@@ -28,8 +28,6 @@ RUN prisma generate
 # Copy service code
 COPY services/billing-service /app
 
-# Copy config
-COPY config /app/config
 
 # Stage 2 - Runtime
 FROM python:3.11-slim

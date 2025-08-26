@@ -148,6 +148,28 @@ makefiles/
 ├── prod.mk
 └── services.mk
 scripts/
+├── output/
+│   ├── app_tree_with_code.txt
+│   ├── billing-service_tree_with_code.txt
+│   ├── catalog-ai-analyzer_tree_with_code.txt
+│   ├── catalog-connector_tree_with_code.txt
+│   ├── catalog-service_tree_with_code.txt
+│   ├── credit-service_tree_with_code.txt
+│   ├── glam-app_tree.txt
+│   ├── makefiles_tree_with_code.txt
+│   ├── merchant-service_tree_with_code.txt
+│   ├── notification-service_tree_with_code.txt
+│   ├── season-compatibility-service_tree_with_code.txt
+│   ├── shared_tree_with_code.txt
+│   ├── token-service_tree_with_code.txt
+│   └── webhook-service_tree_with_code.txt
+├── tmp/
+│   ├── .gitkeep
+│   ├── billing_artifact.txt
+│   ├── catalog_artifact.txt
+│   ├── credit_artifact.txt
+│   ├── merchant_artifact.txt
+│   └── webhook_artifact.txt
 ├── clean_up_stream.py
 ├── code_flattener.py
 ├── distribute-artifact.sh
@@ -157,6 +179,58 @@ scripts/
 ├── test_nats_connection.py
 └── wait-for-db.sh
 services/
+├── analytics-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── credits.py
+│   │   │   │   ├── products.py
+│   │   │   │   ├── seasons.py
+│   │   │   │   ├── shoppers.py
+│   │   │   │   └── summary.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   └── listeners.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── jobs/
+│   │   │   └── aggregation_jobs,py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_repository.py
+│   │   │   ├── analytics_repository.py
+│   │   │   └── metrics_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── responses.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_service.py
+│   │   │   └── analytics_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
 ├── billing-service/
 │   ├── prisma/
 │   │   ├── migrations/
@@ -468,6 +542,51 @@ services/
 │   ├── poetry.lock
 │   ├── poetry.toml
 │   └── pyproject.toml
+├── recommendation-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── recommendations.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   ├── __init__.py
+│   │   │   └── season_compatibility_client.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── match_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── recommendation.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── recommendation_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_recommendation_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
 ├── season-compatibility-service/
 │   ├── prisma/
 │   │   └── schema.prisma
@@ -500,6 +619,101 @@ services/
 │   │   ├── lifecycle.py
 │   │   ├── main.py
 │   │   └── season_palettes.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-ai-analyzer/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyze.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── base_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis_service.py
+│   │   │   ├── color_extractor.py
+│   │   │   ├── face_analyzer.py
+│   │   │   └── season_calculator.py
+│   │   ├── utils/
+│   │   │   └── temp_manager.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyses.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── analysis_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── image_processor.py
+│   │   │   └── selfie_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── tasks.py
 │   ├── tests/
 │   │   ├── integration/
 │   │   │   ├── __init__.py
