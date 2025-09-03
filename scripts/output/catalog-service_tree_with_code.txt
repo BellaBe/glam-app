@@ -62,7 +62,7 @@ src/
 │   │               merchant_id=auth.shop,  # Using shop as merchant_id
 │   │               platform_name=platform.platform,
 │   │               platform_shop_id=platform.domain,  # Using domain as platform_shop_id for now
-│   │               shop_domain=platform.domain,
+│   │               domain=platform.domain,
 │   │               sync_type=body.sync_type,
 │   │               correlation_id=ctx.correlation_id
 │   │           )
@@ -72,7 +72,7 @@ src/
 │   │               merchant_id=auth.shop,
 │   │               platform_name=platform.platform,
 │   │               platform_shop_id=platform.domain,
-│   │               shop_domain=platform.domain,
+│   │               domain=platform.domain,
 │   │               sync_id=sync.id,
 │   │               sync_type=body.sync_type,
 │   │               correlation_id=ctx.correlation_id
@@ -321,7 +321,7 @@ src/
 │               merchant_id: str,
 │               platform_name: str,
 │               platform_shop_id: str,
-│               shop_domain: str,
+│               domain: str,
 │               sync_id: str,
 │               sync_type: str,
 │               correlation_id: str
@@ -333,7 +333,7 @@ src/
 │                       "merchant_id": merchant_id,
 │                       "platform_name": platform_name,
 │                       "platform_shop_id": platform_shop_id,
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "sync_id": sync_id,
 │                       "sync_type": sync_type
 │                   },
@@ -422,7 +422,7 @@ src/
 │   │                   "merchant_id": dto.merchant_id,
 │   │                   "platform_name": dto.platform_name,
 │   │                   "platform_shop_id": dto.platform_shop_id,
-│   │                   "shop_domain": dto.shop_domain,
+│   │                   "domain": dto.domain,
 │   │                   "product_id": dto.product_id,
 │   │                   "variant_id": dto.variant_id,
 │   │                   "image_id": dto.image_id,
@@ -502,7 +502,7 @@ src/
 │                       "merchant_id": dto.merchant_id,
 │                       "platform_name": dto.platform_name,
 │                       "platform_shop_id": dto.platform_shop_id,
-│                       "shop_domain": dto.shop_domain,
+│                       "domain": dto.domain,
 │                       "sync_type": dto.sync_type,
 │                       "status": "pending"
 │                   }
@@ -584,7 +584,7 @@ src/
 │   │       merchant_id: str
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       product_id: str
 │   │       variant_id: str
 │   │       image_id: Optional[str] = None
@@ -617,7 +617,7 @@ src/
 │   │       merchant_id: str
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       product_id: str
 │   │       variant_id: str
 │   │       image_id: Optional[str]
@@ -652,7 +652,7 @@ src/
 │   │       sync_id: str
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       products: List[Dict[str, Any]]
 │   │       batch_num: int
 │   │       has_more: bool
@@ -693,7 +693,7 @@ src/
 │           merchant_id: str
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           sync_type: str = "full"
 │
 │       class SyncOperationOut(BaseModel):
@@ -702,7 +702,7 @@ src/
 │           merchant_id: str
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           sync_type: str
 │           status: str
 │           total_products: int
@@ -771,7 +771,7 @@ src/
 │               merchant_id: str,
 │               platform_name: str,
 │               platform_shop_id: str,
-│               shop_domain: str,
+│               domain: str,
 │               sync_type: str,
 │               correlation_id: str
 │           ) -> SyncOperationOut:
@@ -792,7 +792,7 @@ src/
 │                   merchant_id=merchant_id,
 │                   platform_name=platform_name,
 │                   platform_shop_id=platform_shop_id,
-│                   shop_domain=shop_domain,
+│                   domain=domain,
 │                   sync_type=sync_type
 │               )
 │
@@ -875,7 +875,7 @@ src/
 │                       merchant_id=merchant_id,
 │                       platform_name=product.get("platform_name", "shopify"),
 │                       platform_shop_id=product["platform_shop_id"],
-│                       shop_domain=product["shop_domain"],
+│                       domain=product["domain"],
 │                       product_id=product["product_id"],
 │                       variant_id=product["variant_id"],
 │                       image_id=product.get("image_id"),

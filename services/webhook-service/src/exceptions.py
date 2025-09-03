@@ -52,9 +52,7 @@ class InvalidShopDomainError(ValidationError):
     """Invalid shop domain format"""
 
     def __init__(self, domain: str):
-        super().__init__(
-            message="Invalid shop domain - must end with .myshopify.com", field="shop_domain", value=domain
-        )
+        super().__init__(message="Invalid shop domain - must end with .myshopify.com", field="domain", value=domain)
 
 
 class IPNotAllowedError(UnauthorizedError):
@@ -79,4 +77,4 @@ class DomainMismatchError(ValidationError):
             message = "Shop domain mismatch"
             value = header_domain
 
-        super().__init__(message=message, field="shop_domain", value=value)
+        super().__init__(message=message, field="domain", value=value)

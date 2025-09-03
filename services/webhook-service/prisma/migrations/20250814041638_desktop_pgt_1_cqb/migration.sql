@@ -4,7 +4,7 @@ CREATE TABLE "webhook_entries" (
     "platform" VARCHAR(50) NOT NULL,
     "webhook_id" VARCHAR(255) NOT NULL,
     "topic" VARCHAR(255) NOT NULL,
-    "shop_domain" VARCHAR(255) NOT NULL,
+    "domain" VARCHAR(255) NOT NULL,
     "payload" JSONB NOT NULL,
     "status" VARCHAR(20) NOT NULL DEFAULT 'RECEIVED',
     "processing_attempts" INTEGER NOT NULL DEFAULT 0,
@@ -20,7 +20,7 @@ CREATE TABLE "webhook_entries" (
 CREATE UNIQUE INDEX "webhook_entries_webhook_id_key" ON "webhook_entries"("webhook_id");
 
 -- CreateIndex
-CREATE INDEX "webhook_entries_shop_domain_topic_idx" ON "webhook_entries"("shop_domain", "topic");
+CREATE INDEX "webhook_entries_domain_topic_idx" ON "webhook_entries"("domain", "topic");
 
 -- CreateIndex
 CREATE INDEX "webhook_entries_status_processing_attempts_idx" ON "webhook_entries"("status", "processing_attempts");

@@ -11,36 +11,36 @@ generator client {
 
 model Match {
   id                String      @id @default(uuid())
-  
+
   // Merchant context
   merchant_id       String      @db.Uuid
   platform_name     String      // "shopify", "woocommerce", etc
-  platform_domain   String      // "example.myshopify.com"
-  
+  domain   String      // "example.myshopify.com"
+
   // Analysis reference
   analysis_id       String      // Reference to AI analysis
-  
+
   // Shopper identification
   shopper_id        String?     // External shopper ID
   anonymous_id      String?     // Anonymous session ID
-  
+
   // Season analysis results
   primary_season    String      // "True Spring", "Deep Winter", etc
   secondary_season  String?     // Optional secondary preference
   tertiary_season   String?     // Optional tertiary preference
   confidence        Float       // Overall confidence score
   season_scores     Json        // All 16 season scores
-  
+
   // Results
   total_matches     Int         @default(0)
   top_score         Float?      @default(0.0)
-  
+
   // Timestamps
   created_at        DateTime    @default(now())
-  
+
   // Relations
   match_items       MatchItem[]
-  
+
   @@index([merchant_id, created_at])
   @@index([analysis_id])
   @@map("matches")
@@ -49,19 +49,19 @@ model Match {
 model MatchItem {
   id                String   @id @default(uuid())
   match_id          String
-  
+
   // Product identifiers
   item_id           String   // Catalog item ID
   product_id        String   // Platform product ID
   variant_id        String   // Platform variant ID
-  
+
   // Scoring
   score             Float    // 0.0 to 1.0
   matching_season   String   // Which season matched
-  
+
   // Relations
   match             Match    @relation(fields: [match_id], references: [id], onDelete: Cascade)
-  
+
   @@index([match_id])
   @@index([item_id])
   @@map("match_items")

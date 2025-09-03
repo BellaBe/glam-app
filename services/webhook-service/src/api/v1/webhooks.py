@@ -65,7 +65,7 @@ async def receive_shopify_webhook(
     entry_id = await svc.receive_webhook(
         platform=WebhookPlatform.SHOPIFY,
         topic=parse_topic(webhook.topic),
-        shop_domain=platform_ctx.domain,
+        domain=platform_ctx.domain,
         webhook_id=webhook.webhook_id,
         payload=payload,
         correlation_id=ctx.correlation_id,

@@ -6,7 +6,7 @@ CREATE TABLE "merchants" (
     "id" UUID NOT NULL,
     "platform_name" TEXT NOT NULL,
     "platform_id" TEXT NOT NULL,
-    "platform_domain" TEXT NOT NULL,
+    "domain" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "primary_domain" TEXT,
@@ -26,10 +26,10 @@ CREATE TABLE "merchants" (
 );
 
 -- CreateIndex
-CREATE INDEX "merchants_platform_id_platform_domain_idx" ON "merchants"("platform_id", "platform_domain");
+CREATE INDEX "merchants_platform_id_domain_idx" ON "merchants"("platform_id", "domain");
 
 -- CreateIndex
-CREATE INDEX "merchants_platform_domain_idx" ON "merchants"("platform_domain");
+CREATE INDEX "merchants_domain_idx" ON "merchants"("domain");
 
 -- CreateIndex
 CREATE INDEX "merchants_status_idx" ON "merchants"("status");
@@ -38,4 +38,4 @@ CREATE INDEX "merchants_status_idx" ON "merchants"("status");
 CREATE UNIQUE INDEX "merchants_platform_name_platform_id_key" ON "merchants"("platform_name", "platform_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "merchants_platform_name_platform_domain_key" ON "merchants"("platform_name", "platform_domain");
+CREATE UNIQUE INDEX "merchants_platform_name_domain_key" ON "merchants"("platform_name", "domain");

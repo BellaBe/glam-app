@@ -23,18 +23,18 @@ model Merchant {
   // Platform Identity (immutable after creation)
   platform_name          String              // 'shopify', 'woocommerce', etc.
   platform_shop_id       String              // gid://shopify/Shop/123
-  shop_domain   String              // bb-staging-test.myshopify.com (PERMANENT)
+  domain   String              // bb-staging-test.myshopify.com (PERMANENT)
 
   // Basic Info
   name              String              // Shop/Store name
   email             String              // Contact email
   primary_domain    String?             // Current primary domain (could be custom)
-  currency          String @default("USD")
-  country           String?
+  currency          String             // Shop currency (USD, CAD, etc)
+  country           String
 
   // Platform Details
-  platform_version  String              // API version (2024-01, etc.)
-  scopes           String?              // What permissions were granted
+  platform_version  String?              // API version (2024-01, etc.)
+  scopes            String              // What permissions were granted
 
   // Lifecycle
   status            MerchantStatus @default(PENDING)
@@ -49,9 +49,9 @@ model Merchant {
   updated_at        DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([platform_name, platform_shop_id])
-  @@unique([platform_name, shop_domain])
-  @@index([platform_shop_id, shop_domain])
-  @@index([shop_domain])
+  @@unique([platform_name, domain])
+  @@index([platform_shop_id, domain])
+  @@index([domain])
   @@index([status])
   @@map("merchants")
 }

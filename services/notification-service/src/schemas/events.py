@@ -12,7 +12,7 @@ class BaseEventPayload(BaseModel):
     merchant_id: UUID
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
+    domain: str
     correlation_id: str | None = None
 
 
@@ -76,7 +76,7 @@ class EmailSentPayload(BaseModel):
     merchant_id: UUID
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
+    domain: str
     template_type: str
     sent_at: datetime
 
@@ -88,7 +88,7 @@ class EmailFailedPayload(BaseModel):
     merchant_id: UUID
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
+    domain: str
     template_type: str
     error: str
     failed_at: datetime

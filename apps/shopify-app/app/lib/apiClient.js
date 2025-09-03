@@ -1,13 +1,18 @@
 // apps/shopify-bff/app/lib/apiClient.js
 import jwt from "jsonwebtoken";
 
+// === 1. Add correlation ID generator ===
+function generateCorrelationId() {
+  return `corr_${Math.random().toString(16).slice(2, 14)}`;
+}
+
 const svc = {
-  merchant: process.env.MERCHANT_URL, // e.g. http://merchant-service:8000/
-  catalog: process.env.CATALOG_URL, // e.g. http://catalog-service:8000/
+  merchant: process.env.MERCHANT_URL,
+  catalog: process.env.CATALOG_URL,
   credits: process.env.CREDITS_URL,
   analytics: process.env.ANALYTICS_URL,
-  webhook: process.env.WEBHOOK_URL, // e.g. http://localhost:8010/  (base only)
-  billing: process.env.BILLING_URL, // e.g. http://localhost:8004/  (base only)
+  webhook: process.env.WEBHOOK_URL,
+  billing: process.env.BILLING_URL,
 };
 
 function signJwt(shop) {
@@ -28,6 +33,7 @@ function signJwt(shop) {
   return token;
 }
 
+// === 2. Add correlation header to API headers ===
 function addApiHeaders(shop) {
   const token = signJwt(shop);
 
@@ -36,9 +42,11 @@ function addApiHeaders(shop) {
     "Content-Type": "application/json",
     "X-Shop-Platform": "shopify",
     "X-Shop-Domain": shop,
+    "X-Correlation-ID": generateCorrelationId(),
   };
 }
 
+// === 3. Same for webhook headers ===
 function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
   const token = signJwt(shop);
 
@@ -48,6 +56,7 @@ function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
     "X-Shop-Platform": "shopify",
     "X-Shop-Domain": shop,
     "X-Webhook-Platform": "shopify",
+    "X-Correlation-ID": generateCorrelationId(),
   };
 
   if (topic) {
@@ -56,8 +65,7 @@ function addWebhookHeaders(shop, { webhookId = null, topic = null } = {}) {
 
   if (webhookId) {
     headers["X-Webhook-Id"] = webhookId;
-    // Keep Shopify-specific for backward compatibility if needed
-    headers["X-Shopify-Webhook-Id"] = webhookId;
+    headers["X-Shopify-Webhook-Id"] = webhookId; // backward compatibility
   }
 
   return headers;
@@ -74,7 +82,7 @@ async function callAndForget(base, path, { method = "GET", shop, body, webhookId
   const url = buildUrl(base, path);
   const headers = addWebhookHeaders(shop, { webhookId, topic });
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 1500); // don't hang; we're not awaiting
+  setTimeout(() => controller.abort(), 1500);
 
   fetch(url, {
     method,
@@ -102,11 +110,10 @@ async function call(base, path, { method = "GET", shop, body } = {}) {
 }
 
 export default {
-  // Merchant
   syncShop: (payload) =>
     call(svc.merchant, "/merchants/sync", {
       method: "POST",
-      shop: payload.shop_domain,
+      shop: payload.domain,
       body: payload,
     }),
   getMerchant: (shop) => call(svc.merchant, "/merchants/self", { shop }),
@@ -117,14 +124,14 @@ export default {
       shop,
       body: { shop },
     }),
-  // Billing
+
   createSubscription: (shop, plan, id) =>
     call(svc.billing, "/billing/subscription", {
       method: "POST",
       shop,
       body: { shop, plan, charge_id: id },
     }),
-  // Catalog
+
   syncCatalog: (shop) =>
     call(svc.catalog, "/catalog/sync", {
       method: "POST",
@@ -134,14 +141,11 @@ export default {
 
   getCatalogStatus: (shop) => call(svc.catalog, `/catalog/status?shop=${shop}`, { shop }),
 
-  // Credits
   getCreditsStatus: (shop) => call(svc.credits, `/credits/status?shop=${shop}`, { shop }),
 
-  // Analytics
   getAnalytics: (shop, from, to) =>
     call(svc.analytics, `/analysis/overview?shop=${shop}&from=${from}&to=${to}`, { shop }),
 
-  // Webhooks (fire-and-forget)
   relayShopifyWebhook: ({ topic, shop, payload, webhookId }) =>
     callAndForget(svc.webhook, "/webhooks/shopify", {
       method: "POST",

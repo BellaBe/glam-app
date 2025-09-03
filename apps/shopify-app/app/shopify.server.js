@@ -35,7 +35,7 @@ const shopify = shopifyApp({
         const syncData = {
           platform_name: "shopify",
           platform_shop_id: shopData.data.shop.id,
-          shop_domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
+          domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
           shop_name: shopData.data.shop.name,
           email: shopData.data.shop.contactEmail,
           primary_domain_host: shopData.data.shop.primaryDomain.host,
@@ -57,7 +57,7 @@ const shopify = shopifyApp({
           attempts++;
           try {
             // Use simple domain-based lookup
-            merchant = await apiClient.getMerchant(syncData.shop_domain);
+            merchant = await apiClient.getMerchant(syncData.domain);
             break;
           } catch (error) {
             if (error.status === 404 && attempts < maxAttempts) {

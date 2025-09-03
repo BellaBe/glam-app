@@ -20,7 +20,7 @@ class AnalysisCreate(BaseModel):
     merchant_id: str
     platform_name: str
     platform_shop_id: str
-    platform_domain: str
+    domain: str
     customer_id: str | None = None
     anonymous_id: str | None = None
     image_hash: str
@@ -44,7 +44,7 @@ class AnalysisOut(BaseModel):
     merchant_id: str
     platform_name: str
     platform_shop_id: str
-    platform_domain: str
+    domain: str
     customer_id: str | None = None
     anonymous_id: str | None = None
     status: AnalysisStatus

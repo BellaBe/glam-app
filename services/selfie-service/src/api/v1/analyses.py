@@ -51,7 +51,7 @@ async def create_analysis(
         merchant_id=auth.merchant_id,
         platform_name=platform.platform,
         platform_shop_id=auth.platform_shop_id,
-        platform_domain=platform.domain,
+        domain=platform.domain,
         image_bytes=image_bytes,
         metadata=meta,
         correlation_id=ctx.correlation_id,

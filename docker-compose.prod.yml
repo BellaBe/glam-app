@@ -27,9 +27,9 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
    # ----------------- Analytics Service -----------------
-   
+
   analytics-db:
     image: postgres:15-alpine
     container_name: analytics-db
@@ -49,7 +49,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
   analytics-service:
     build:
       context: .
@@ -353,7 +353,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
   recommendation-service:
     build:
       context: .
@@ -440,23 +440,23 @@ services:
 
 
   # ----------------- Selfie Service ----------------
-  
+
   selfie-db:
     image: postgres:15-alpine
     container_name: selfie-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${SELFIE_AI_DB_USER}
-      POSTGRES_PASSWORD: ${SELFIE_AI_DB_PASSWORD}
-      POSTGRES_DB: ${SELFIE_AI_DB_NAME}
+      POSTGRES_USER: ${SELFIE_DB_USER}
+      POSTGRES_PASSWORD: ${SELFIE_DB_PASSWORD}
+      POSTGRES_DB: ${SELFIE_DB_NAME}
     ports:
-      - "${SELFIE_AI_DB_PORT_EXTERNAL}:5432"
+      - "${SELFIE_DB_PORT_EXTERNAL}:5432"
     volumes:
       - selfie-db-data:/var/lib/postgresql/data
     networks:
       - glam-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${SELFIE_AI_DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${SELFIE_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -474,7 +474,7 @@ services:
       selfie-db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${SELFIE_AI_DB_USER}:${SELFIE_AI_DB_PASSWORD}@selfie-db:5432/${SELFIE_AI_DB_NAME}
+      DATABASE_URL: postgresql://${SELFIE_DB_USER}:${SELFIE_DB_PASSWORD}@selfie-db:5432/${SELFIE_DB_NAME}
       APP_ENV: ${APP_ENV:-production}
     ports:
       - "${SELFIE_AI_API_EXTERNAL_PORT}:8000"

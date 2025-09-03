@@ -9,7 +9,7 @@ class MerchantSyncIn(BaseModel):
 
     platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
     platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-    shop_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
+    domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
     shop_name: str = Field(..., description="Shop display name")
     email: str = Field(..., description="Shop contact email")
     primary_domain_host: str = Field(..., description="Primary domain of the shop")
@@ -31,28 +31,6 @@ class MerchantSelfOut(BaseModel):
 
     id: str
     platform_shop_id: str
-    shop_domain: str
+    domain: str
     shop_name: str
-    status: MerchantStatus
-
-
-# ---------- EVENT PAYLOADS ----------
-class MerchantSyncedPayload(BaseModel):
-    """Payload for evt.merchant.synced"""
-
-    merchant_id: str
-    platform_name: str
-    platform_shop_id: str
-    shop_domain: str
-    contact_email: str
-    name: str
-    status: MerchantStatus
-
-
-class MerchantStatusUpdatedPayload(BaseModel):
-    """Payload for evt.merchant.status_updated"""
-
-    merchant_id: str
-    platform_shop_id: str
-    shop_domain: str
     status: MerchantStatus

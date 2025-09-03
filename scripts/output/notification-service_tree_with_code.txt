@@ -21,7 +21,7 @@ prisma/
 │   │           "merchant_id" UUID NOT NULL,
 │   │           "platform_name" VARCHAR(255) NOT NULL,
 │   │           "platform_id" VARCHAR(255) NOT NULL,
-│   │           "platform_domain" VARCHAR(255) NOT NULL,
+│   │           "domain" VARCHAR(255) NOT NULL,
 │   │           "recipient_email" VARCHAR(255) NOT NULL,
 │   │           "template_type" VARCHAR(100) NOT NULL,
 │   │           "subject" TEXT NOT NULL,
@@ -55,7 +55,7 @@ prisma/
 │   │       CREATE INDEX "notifications_platform_name_platform_id_idx" ON "notifications"("platform_name", "platform_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "notifications_platform_domain_idx" ON "notifications"("platform_domain");
+│   │       CREATE INDEX "notifications_domain_idx" ON "notifications"("domain");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "notifications_status_idx" ON "notifications"("status");
@@ -399,7 +399,7 @@ src/
 │                   merchant_id=notification.merchant_id,
 │                   platform_name=notification.platform_name,
 │                   platform_shop_id=notification.platform_shop_id,
-│                   shop_domain=notification.shop_domain,
+│                   domain=notification.domain,
 │                   template_type=notification.template_type,
 │                   sent_at=notification.sent_at or notification.created_at,
 │               )
@@ -424,7 +424,7 @@ src/
 │                   merchant_id=notification.merchant_id,
 │                   platform_name=notification.platform_name,
 │                   platform_shop_id=notification.platform_shop_id,
-│                   shop_domain=notification.shop_domain,
+│                   domain=notification.domain,
 │                   template_type=notification.template_type,
 │                   error=error,
 │                   failed_at=notification.failed_at or notification.created_at,
@@ -808,7 +808,7 @@ src/
 │   │       merchant_id: UUID
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       correlation_id: str | None = None
 │   │
 │   │
@@ -872,7 +872,7 @@ src/
 │   │       merchant_id: UUID
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       template_type: str
 │   │       sent_at: datetime
 │   │
@@ -884,7 +884,7 @@ src/
 │   │       merchant_id: UUID
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       template_type: str
 │   │       error: str
 │   │       failed_at: datetime
@@ -908,7 +908,7 @@ src/
 │           merchant_id: UUID
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           recipient_email: str
 │           template_type: str
 │           subject: str
@@ -1164,7 +1164,7 @@ src/
 │   │                       "merchant_id": str(event_data.get("merchant_id")),
 │   │                       "platform_name": event_data.get("platform_name"),
 │   │                       "platform_shop_id": event_data.get("platform_shop_id"),
-│   │                       "shop_domain": event_data.get("shop_domain"),
+│   │                       "domain": event_data.get("domain"),
 │   │                       "recipient_email": recipient_email,
 │   │                       "template_type": template_type,
 │   │                       "subject": subject,
@@ -1208,9 +1208,9 @@ src/
 │   │               "merchant_id": event_data.get("merchant_id"),
 │   │               "platform_name": event_data.get("platform_name"),
 │   │               "platform_shop_id": event_data.get("platform_shop_id"),
-│   │               "shop_domain": event_data.get("shop_domain"),
-│   │               "shop_domain": event_data.get("shop_domain"),  # Alias
-│   │               "shop_name": event_data.get("shop_name", event_data.get("shop_domain")),
+│   │               "domain": event_data.get("domain"),
+│   │               "domain": event_data.get("domain"),  # Alias
+│   │               "shop_name": event_data.get("shop_name", event_data.get("domain")),
 │   │               "current_year": datetime.now().year,
 │   │               "support_email": "support@glamyouup.com",
 │   │               "app_url": "https://app.glamyouup.com",
@@ -1237,7 +1237,7 @@ src/
 │   │                   "merchant_id": str(event_data.get("merchant_id")),
 │   │                   "platform_name": event_data.get("platform_name"),
 │   │                   "platform_shop_id": event_data.get("platform_shop_id"),
-│   │                   "shop_domain": event_data.get("shop_domain"),
+│   │                   "domain": event_data.get("domain"),
 │   │                   "recipient_email": recipient_email,
 │   │                   "template_type": template_type,
 │   │                   "subject": "",  # No subject for failed
@@ -2429,9 +2429,6 @@ RUN poetry install --no-root --no-ansi \
 # ---- 3️⃣  Copy service source -------------------------------------------------
 COPY services/notification-service /app
 
-# ---- 4️⃣  Copy config -----------------------------------------------------
-
-COPY config /app/config
 
 # ──────────────────────────────────────────────────────────────
 # 📦  Stage 2 ─ Runtime

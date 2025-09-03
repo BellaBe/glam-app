@@ -57,7 +57,7 @@ services:
       MERCHANT_DB_PASSWORD: ${MERCHANT_DB_PASSWORD}
       NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
       SEASON_COMPATIBILITY_DB_PASSWORD: ${SEASON_COMPATIBILITY_DB_PASSWORD}
-      SELFIE_AI_DB_PASSWORD: ${SELFIE_AI_DB_PASSWORD}
+      SELFIE_DB_PASSWORD: ${SELFIE_DB_PASSWORD}
       RECOMMENDATION_DB_PASSWORD: ${RECOMMENDATION_DB_PASSWORD}
       TOKEN_DB_PASSWORD: ${TOKEN_DB_PASSWORD}
       WEBHOOK_DB_PASSWORD: ${WEBHOOK_DB_PASSWORD}
@@ -126,7 +126,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 10s
-      
+
   # ----------------- Shopify App -----------------
   shopify-app:
     build:
@@ -167,7 +167,7 @@ services:
       - public-network
 
   # ----------------- Services -----------------
-  
+
   # Analytics Service
   analytics-service:
     build:
@@ -458,7 +458,7 @@ services:
       nats:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${SELFIE_DB_USER}:${SELFIE_DB_PASSWORD}@postgres:5432/${SELFIE_AI_DB_NAME}
+      DATABASE_URL: postgresql://${SELFIE_DB_USER}:${SELFIE_DB_PASSWORD}@postgres:5432/${SELFIE_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
     networks:

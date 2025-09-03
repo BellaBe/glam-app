@@ -4,14 +4,12 @@ Clean, generic, production-ready dependencies.
 """
 
 import os
-import re
+import uuid
 from typing import TYPE_CHECKING, Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-
-from .correlation import get_correlation_id
 
 if TYPE_CHECKING:
     from shared.utils.logger import ServiceLogger
@@ -39,18 +37,17 @@ def get_pagination_params(
 PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
 
 
+# Logger
 def get_logger(request: Request) -> "ServiceLogger":
-    """Get the service logger from app state."""
     return request.app.state.logger
 
 
 LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
 
 
-def get_request_id(request: Request) -> str:
-    if not hasattr(request.state, "request_id"):
-        raise RuntimeError("Request ID not found. Ensure APIMiddleware is properly configured.")
-    return request.state.request_id
+# Request Context Utilities
+def get_correlation_id(request: Request) -> str:
+    return request.headers.get("X-Correlation-ID", f"corr_{uuid.uuid4().hex[:12]}")
 
 
 def get_client_ip(request: Request) -> str:
@@ -67,7 +64,6 @@ def get_content_type(request: Request) -> str | None:
 class RequestContext(BaseModel):
     """Essential request context for logging/auditing."""
 
-    request_id: str
     correlation_id: str
     method: str
     path: str
@@ -77,7 +73,6 @@ class RequestContext(BaseModel):
     @classmethod
     def from_request(cls, request: Request) -> "RequestContext":
         return cls(
-            request_id=get_request_id(request),
             correlation_id=get_correlation_id(request),
             method=request.method,
             path=str(request.url.path),
@@ -90,136 +85,15 @@ def get_request_context(request: Request) -> RequestContext:
     return RequestContext.from_request(request)
 
 
-# Type annotations
-ClientIpDep = Annotated[str, Depends(get_client_ip)]
-RequestIdDep = Annotated[str, Depends(get_request_id)]
-ContentTypeDep = Annotated[str | None, Depends(get_content_type)]
-CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
 RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
 
 
+# Platform headers
 SUPPORTED_PLATFORMS = {"shopify", "bigcommerce", "woocommerce", "magento", "squarespace", "custom"}
 
 
-class PlatformContext(BaseModel):
-    """Generic platform and domain information."""
-
-    platform: str
-    domain: str
-
-    @property
-    def is_shopify(self) -> bool:
-        return self.platform == "shopify"
-
-    @property
-    def is_custom_domain(self) -> bool:
-        """Check if domain appears to be a custom domain vs platform default."""
-        if self.platform == "shopify":
-            return not self.domain.endswith(".myshopify.com")
-        elif self.platform == "bigcommerce":
-            return not self.domain.endswith(".mybigcommerce.com")
-        return True
-
-
-def _validate_platform(platform: str) -> str:
-    """Validate and normalize platform name."""
-    platform_norm = platform.strip().lower()
-
-    if platform_norm not in SUPPORTED_PLATFORMS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "UNSUPPORTED_PLATFORM",
-                "message": f"Platform '{platform}' is not supported",
-                "details": {"received": platform, "supported_platforms": sorted(SUPPORTED_PLATFORMS)},
-            },
-        )
-
-    return platform_norm
-
-
-def _validate_domain(domain: str) -> str:
-    """Generic domain validation - works for any platform."""
-    domain_norm = domain.strip().lower()
-
-    # Basic domain format validation
-    domain_pattern = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
-
-    if not re.match(domain_pattern, domain_norm):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "INVALID_DOMAIN_FORMAT",
-                "message": f"Invalid domain format: '{domain}'",
-                "details": {
-                    "received": domain,
-                    "expected_format": "Valid domain name (e.g., shop.example.com, my-store.myshopify.com)",
-                },
-            },
-        )
-
-    if len(domain_norm) > 255:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Domain name too long (max 255 characters)")
-
-    return domain_norm
-
-
-def require_platform_context(request: Request) -> PlatformContext:
-    """
-    Extract and validate shop platform and domain from headers.
-
-    Expected headers:
-    - X-Shop-Platform: The e-commerce platform (shopify, bigcommerce, etc.)
-    - X-Shop-Domain: The shop's domain (can be platform domain or custom)
-    """
-
-    platform = request.headers.get("X-Shop-Platform")
-    if not platform:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "MISSING_PLATFORM_HEADER",
-                "message": "Missing required shop platform header",
-                "details": {"expected_header": "X-Shop-Platform", "supported_platforms": sorted(SUPPORTED_PLATFORMS)},
-            },
-        )
-
-    domain = request.headers.get("X-Shop-Domain")
-    if not domain:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "MISSING_DOMAIN_HEADER",
-                "message": "Missing required shop domain header",
-                "details": {"expected_header": "X-Shop-Domain"},
-            },
-        )
-
-    platform_norm = _validate_platform(platform)
-    domain_norm = _validate_domain(domain)
-
-    return PlatformContext(platform=platform_norm, domain=domain_norm)
-
-
-def require_shop_platform(request: Request) -> str:
-    """Extract just the platform."""
-    return require_platform_context(request).platform
-
-
-def require_shop_domain(request: Request) -> str:
-    """Extract just the domain."""
-    return require_platform_context(request).domain
-
-
-# Type annotations
-PlatformContextDep = Annotated[PlatformContext, Depends(require_platform_context)]
-ShopPlatformDep = Annotated[str, Depends(require_shop_platform)]
-ShopDomainDep = Annotated[str, Depends(require_shop_domain)]
-
-
+# Authentication
 class ClientAuthContext(BaseModel):
-    """Client authentication result with shop context."""
-
     shop: str
     scope: str
     token: str
@@ -230,9 +104,7 @@ class ClientAuthContext(BaseModel):
 
 
 class InternalAuthContext(BaseModel):
-    """Internal service-to-service authentication result."""
-
-    service: str  # Identifying which service made the request
+    service: str
     token: str
 
     @property
@@ -241,7 +113,6 @@ class InternalAuthContext(BaseModel):
 
 
 def _get_bearer_token(request: Request) -> str:
-    """Extract bearer token from Authorization header."""
     auth = request.headers.get("Authorization")
     if not auth or not auth.lower().startswith("bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
@@ -249,10 +120,6 @@ def _get_bearer_token(request: Request) -> str:
 
 
 def require_client_auth(request: Request) -> ClientAuthContext:
-    """
-    Client authentication using JWTs.
-    For requests from client applications with shop context.
-    """
     token = _get_bearer_token(request)
     secret = os.getenv("CLIENT_JWT_SECRET", "")
     if not secret:
@@ -263,20 +130,19 @@ def require_client_auth(request: Request) -> ClientAuthContext:
     except jwt.PyJWTError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {e!s}") from e
 
-    return ClientAuthContext(shop=payload.get("sub", ""), scope=payload.get("scope", ""), token=token)
+    return ClientAuthContext(
+        shop=payload.get("sub", ""),
+        scope=payload.get("scope", ""),
+        token=token,
+    )
 
 
 def require_internal_auth(request: Request) -> InternalAuthContext:
-    """
-    Internal service-to-service authentication.
-    Uses static API keys for simplicity and performance.
-    """
     token = _get_bearer_token(request)
     raw = os.getenv("INTERNAL_JWT_SECRET", "")
     if not raw:
         raise RuntimeError("INTERNAL_JWT_SECRET not configured")
 
-    # Format: "service1:key1,service2:key2" or just "key1,key2"
     allowed = {}
     for entry in raw.split(","):
         entry = entry.strip()
@@ -294,29 +160,21 @@ def require_internal_auth(request: Request) -> InternalAuthContext:
     return InternalAuthContext(service=allowed[token], token=token)
 
 
-# Type annotations
 ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
 InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
 
 
+# Webhooks
 class WebhookHeaders(BaseModel):
-    """Pure webhook metadata - platform-agnostic."""
-
     topic: str
     webhook_id: str | None = None
 
     @property
     def event_type(self) -> str:
-        """Normalized event type from topic."""
-        # e.g., "orders/create" -> "order.created"
         return self.topic.replace("/", ".").replace("_", ".")
 
 
 def get_webhook_headers(request: Request) -> WebhookHeaders:
-    """
-    Extract webhook-specific headers only.
-    Platform/domain handled by PlatformContext.
-    """
     topic = request.headers.get("X-Webhook-Topic")
     if not topic:
         raise HTTPException(
@@ -329,15 +187,11 @@ def get_webhook_headers(request: Request) -> WebhookHeaders:
         )
 
     if len(topic) > 256:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Topic too long (max 256 characters)"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Topic too long")
 
     webhook_id = request.headers.get("X-Webhook-Id")
     if webhook_id and len(webhook_id) > 256:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Id too long (max 256 characters)"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Id too long")
 
     return WebhookHeaders(topic=topic, webhook_id=webhook_id)
 

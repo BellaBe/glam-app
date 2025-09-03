@@ -9,49 +9,79 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+// Define enum in Prisma schema
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+enum AttemptStatus {
+  success
+  failed
+  timeout
+}
 
 model Notification {
   id                  String    @id @default(uuid()) @db.Uuid
 
-  // Full merchant identification
+  // Queryable merchant identification
   merchant_id         String    @db.Uuid
   platform_name       String    @db.VarChar(255)
-  platform_shop_id         String    @db.VarChar(255)
-  shop_domain     String    @db.VarChar(255)
+  platform_shop_id    String    @db.VarChar(255)
 
-  // Email details
+  // Essential notification data
   recipient_email     String    @db.VarChar(255)
   template_type       String    @db.VarChar(100)
-  subject            String    @db.Text
 
-  // Delivery status
-  status             String    @default("pending") @db.VarChar(50) // pending, sent, failed, bounced
-  provider           String?   @db.VarChar(50) // 'sendgrid', 'mailhog'
-  provider_message_id String?  @unique @db.VarChar(255)
+  // Delivery tracking with enum
+  status              NotificationStatus @default(pending)
+  provider_message_id String?   @unique @db.VarChar(255)
 
-  // Error tracking
-  error_message      String?   @db.Text
-  retry_count        Int       @default(0)
+  // Idempotency & tracing
+  idempotency_key     String    @unique @db.VarChar(255)
+  trigger_event       String    @db.VarChar(255)
 
-  // Event tracking
-  trigger_event      String    @db.VarChar(255)
-  trigger_event_id   String?   @db.VarChar(100)
-  idempotency_key    String    @unique @db.VarChar(255)
-
-  // Metadata
-  template_variables Json?     @db.Json
-  extra_metadata     Json?     @db.Json
+  // Template context
+  template_variables  Json      @db.Json
 
   // Timestamps
-  created_at         DateTime  @default(now()) @db.Timestamptz(3)
-  sent_at           DateTime? @db.Timestamptz(3)
-  failed_at         DateTime? @db.Timestamptz(3)
+  created_at          DateTime  @default(now()) @db.Timestamptz(3)
+  updated_at          DateTime  @updatedAt @db.Timestamptz(3)
 
+  // Relations
+  attempts            NotificationAttempt[]
+
+  // Indexes
   @@index([merchant_id, created_at])
   @@index([platform_name, platform_shop_id])
-  @@index([shop_domain])
-  @@index([status])
+  @@index([status, created_at])
   @@index([template_type])
   @@index([idempotency_key])
   @@map("notifications")
+}
+
+model NotificationAttempt {
+  id                  String    @id @default(uuid()) @db.Uuid
+  notification_id     String    @db.Uuid
+
+  // Attempt details
+  attempt_number      Int
+  provider            String    @db.VarChar(50)
+
+  // Outcome with enum
+  status              AttemptStatus
+  error_message       String?   @db.Text
+  provider_response   Json?     @db.Json
+
+  // Timestamp
+  attempted_at        DateTime  @default(now()) @db.Timestamptz(3)
+
+  // Relations
+  notification        Notification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([notification_id, attempt_number])
+  @@unique([notification_id, attempt_number])
+  @@map("notification_attempts")
 }

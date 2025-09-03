@@ -16,7 +16,7 @@ prisma/
 │   │           "platform" VARCHAR(50) NOT NULL,
 │   │           "webhook_id" VARCHAR(255) NOT NULL,
 │   │           "topic" VARCHAR(255) NOT NULL,
-│   │           "shop_domain" VARCHAR(255) NOT NULL,
+│   │           "domain" VARCHAR(255) NOT NULL,
 │   │           "payload" JSONB NOT NULL,
 │   │           "status" VARCHAR(20) NOT NULL DEFAULT 'RECEIVED',
 │   │           "processing_attempts" INTEGER NOT NULL DEFAULT 0,
@@ -32,7 +32,7 @@ prisma/
 │   │       CREATE UNIQUE INDEX "webhook_entries_webhook_id_key" ON "webhook_entries"("webhook_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "webhook_entries_shop_domain_topic_idx" ON "webhook_entries"("shop_domain", "topic");
+│   │       CREATE INDEX "webhook_entries_domain_topic_idx" ON "webhook_entries"("domain", "topic");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "webhook_entries_status_processing_attempts_idx" ON "webhook_entries"("status", "processing_attempts");
@@ -369,7 +369,7 @@ src/
 │   │           entry_id = await svc.receive_webhook(
 │   │               platform=WebhookPlatform.SHOPIFY,
 │   │               topic=parse_topic(webhook.topic),
-│   │               shop_domain=platform_ctx.domain,
+│   │               domain=platform_ctx.domain,
 │   │               webhook_id=webhook.webhook_id,
 │   │               payload=payload,
 │   │               correlation_id=ctx.correlation_id,
@@ -417,22 +417,22 @@ src/
 │           def service_name(self) -> str:
 │               return "webhook-service"
 │
-│           async def app_uninstalled(self, shop_domain: str, webhook_id: str, correlation_id: str) -> str:
+│           async def app_uninstalled(self, domain: str, webhook_id: str, correlation_id: str) -> str:
 │               """Publish app uninstalled event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.app.uninstalled",
-│                   data={"shop_domain": shop_domain, "webhook_id": webhook_id},
+│                   data={"domain": domain, "webhook_id": webhook_id},
 │                   correlation_id=correlation_id,
 │               )
 │
 │           async def app_subscription_updated(
-│               self, shop_domain: str, subscription_id: str, status: str, webhook_id: str, correlation_id: str
+│               self, domain: str, subscription_id: str, status: str, webhook_id: str, correlation_id: str
 │           ) -> str:
 │               """Publish app subscription updated event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.app.subscription_updated",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "subscription_id": subscription_id,
 │                       "status": status,
 │                       "webhook_id": webhook_id,
@@ -441,13 +441,13 @@ src/
 │               )
 │
 │           async def app_purchase_updated(
-│               self, shop_domain: str, charge_id: str, status: str, test: bool, webhook_id: str, correlation_id: str
+│               self, domain: str, charge_id: str, status: str, test: bool, webhook_id: str, correlation_id: str
 │           ) -> str:
 │               """Publish app purchase updated event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.app.purchase_updated",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "charge_id": charge_id,
 │                       "status": status,
 │                       "test": test,
@@ -458,7 +458,7 @@ src/
 │
 │           async def order_created(
 │               self,
-│               shop_domain: str,
+│               domain: str,
 │               order_id: str,
 │               total_price: str,
 │               currency: str,
@@ -471,7 +471,7 @@ src/
 │               return await self.publish_event(
 │                   subject="evt.webhook.order.created",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "order_id": order_id,
 │                       "total_price": total_price,
 │                       "currency": currency,
@@ -485,7 +485,7 @@ src/
 │           async def catalog_product_event(
 │               self,
 │               event_type: str,  # created, updated, deleted
-│               shop_domain: str,
+│               domain: str,
 │               product_id: str,
 │               updated_at: str | None,
 │               webhook_id: str,
@@ -493,7 +493,7 @@ src/
 │           ) -> str:
 │               """Publish catalog product event"""
 │               subject = f"evt.webhook.catalog.product_{event_type}"
-│               data = {"shop_domain": shop_domain, "product_id": product_id, "webhook_id": webhook_id}
+│               data = {"domain": domain, "product_id": product_id, "webhook_id": webhook_id}
 │               if updated_at and event_type == "updated":
 │                   data["updated_at"] = updated_at
 │
@@ -502,7 +502,7 @@ src/
 │           async def catalog_collection_event(
 │               self,
 │               event_type: str,  # created, updated, deleted
-│               shop_domain: str,
+│               domain: str,
 │               collection_id: str,
 │               updated_at: str | None,
 │               webhook_id: str,
@@ -510,7 +510,7 @@ src/
 │           ) -> str:
 │               """Publish catalog collection event"""
 │               subject = f"evt.webhook.catalog.collection_{event_type}"
-│               data = {"shop_domain": shop_domain, "collection_id": collection_id, "webhook_id": webhook_id}
+│               data = {"domain": domain, "collection_id": collection_id, "webhook_id": webhook_id}
 │               if updated_at and event_type == "updated":
 │                   data["updated_at"] = updated_at
 │
@@ -518,7 +518,7 @@ src/
 │
 │           async def inventory_updated(
 │               self,
-│               shop_domain: str,
+│               domain: str,
 │               inventory_item_id: str,
 │               location_id: str,
 │               available: int,
@@ -529,7 +529,7 @@ src/
 │               return await self.publish_event(
 │                   subject="evt.webhook.inventory.updated",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "inventory_item_id": inventory_item_id,
 │                       "location_id": location_id,
 │                       "available": available,
@@ -539,13 +539,13 @@ src/
 │               )
 │
 │           async def gdpr_data_request(
-│               self, shop_domain: str, customer_id: str, orders_requested: list[str], webhook_id: str, correlation_id: str
+│               self, domain: str, customer_id: str, orders_requested: list[str], webhook_id: str, correlation_id: str
 │           ) -> str:
 │               """Publish GDPR data request event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.gdpr.data_request",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "customer_id": customer_id,
 │                       "orders_requested": orders_requested,
 │                       "webhook_id": webhook_id,
@@ -554,13 +554,13 @@ src/
 │               )
 │
 │           async def gdpr_customer_redact(
-│               self, shop_domain: str, customer_id: str, orders_to_redact: list[str], webhook_id: str, correlation_id: str
+│               self, domain: str, customer_id: str, orders_to_redact: list[str], webhook_id: str, correlation_id: str
 │           ) -> str:
 │               """Publish GDPR customer redact event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.gdpr.customer_redact",
 │                   data={
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "customer_id": customer_id,
 │                       "orders_to_redact": orders_to_redact,
 │                       "webhook_id": webhook_id,
@@ -568,11 +568,11 @@ src/
 │                   correlation_id=correlation_id,
 │               )
 │
-│           async def gdpr_shop_redact(self, shop_domain: str, webhook_id: str, correlation_id: str) -> str:
+│           async def gdpr_shop_redact(self, domain: str, webhook_id: str, correlation_id: str) -> str:
 │               """Publish GDPR shop redact event"""
 │               return await self.publish_event(
 │                   subject="evt.webhook.gdpr.shop_redact",
-│                   data={"shop_domain": shop_domain, "webhook_id": webhook_id},
+│                   data={"domain": domain, "webhook_id": webhook_id},
 │                   correlation_id=correlation_id,
 │               )
 │       ```
@@ -671,7 +671,7 @@ src/
 │               platform: str,
 │               webhook_id: str,
 │               topic: str,
-│               shop_domain: str,
+│               domain: str,
 │               payload: dict,
 │           ) -> tuple[Any, bool]:
 │               """
@@ -690,7 +690,7 @@ src/
 │                           "platform": platform,
 │                           "webhook_id": webhook_id,
 │                           "topic": topic,
-│                           "shop_domain": shop_domain.lower(),
+│                           "domain": domain.lower(),
 │                           "payload": payload,
 │                           "status": WebhookStatus.RECEIVED.value,
 │                       }
@@ -788,7 +788,7 @@ src/
 │               *,
 │               platform: WebhookPlatform,
 │               topic: ShopifyWebhookTopic,
-│               shop_domain: str,
+│               domain: str,
 │               webhook_id: str,
 │               payload: dict,
 │               correlation_id: str,
@@ -804,7 +804,7 @@ src/
 │                       extra={
 │                           "topic_enum": topic.name,
 │                           "topic": topic.value,
-│                           "shop_domain": shop_domain,
+│                           "domain": domain,
 │                           "webhook_id": webhook_id,
 │                           "correlation_id": correlation_id,
 │                       },
@@ -815,7 +815,7 @@ src/
 │                   platform=platform.value,
 │                   webhook_id=webhook_id,
 │                   topic=topic.value,
-│                   shop_domain=shop_domain,
+│                   domain=domain,
 │                   payload=payload,
 │               )
 │
@@ -826,7 +826,7 @@ src/
 │                       extra={
 │                           "topic_enum": topic.name,
 │                           "topic": topic.value,
-│                           "shop_domain": shop_domain,
+│                           "domain": domain,
 │                           "webhook_id": webhook_id,
 │                           "correlation_id": correlation_id,
 │                           "entry_id": entry.id,
@@ -836,7 +836,7 @@ src/
 │
 │               await self._publish_domain_event(
 │                   topic=topic,
-│                   shop_domain=shop_domain,
+│                   domain=domain,
 │                   webhook_id=webhook_id,
 │                   payload=payload,
 │                   correlation_id=correlation_id,
@@ -847,7 +847,7 @@ src/
 │                   extra={
 │                       "topic": topic,
 │                       "topic_enum": topic.value,
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "webhook_id": webhook_id,
 │                       "correlation_id": correlation_id,
 │                       "entry_id": entry.id,
@@ -859,7 +859,7 @@ src/
 │           async def _publish_domain_event(
 │               self,
 │               topic: ShopifyWebhookTopic,
-│               shop_domain: str,
+│               domain: str,
 │               webhook_id: str,
 │               payload: dict[Any, Any],
 │               correlation_id: str,
@@ -869,14 +869,14 @@ src/
 │               # Map webhook topics to domain events
 │               if topic is ShopifyWebhookTopic.APP_UNINSTALLED:
 │                   await self.publisher.app_uninstalled(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
 │
 │               elif topic is ShopifyWebhookTopic.ORDERS_CREATE:
 │                   await self.publisher.order_created(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       order_id=str(payload.get("id", "")),
 │                       total_price=payload.get("total_price", "0.00"),
 │                       currency=payload.get("currency", "USD"),
@@ -889,7 +889,7 @@ src/
 │               elif topic is ShopifyWebhookTopic.APP_SUBSCRIPTIONS_UPDATE:
 │                   subscription = payload.get("app_subscription", {})
 │                   await self.publisher.app_subscription_updated(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       subscription_id=str(subscription.get("id", "")),
 │                       status=subscription.get("status", ""),
 │                       webhook_id=webhook_id,
@@ -899,7 +899,7 @@ src/
 │               elif topic is ShopifyWebhookTopic.APP_PURCHASES_ONE_TIME_UPDATE:
 │                   purchase = payload.get("app_purchase_one_time", {})
 │                   await self.publisher.app_purchase_updated(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       charge_id=str(purchase.get("id", "")),
 │                       status=purchase.get("status", ""),
 │                       test=purchase.get("test", False),
@@ -920,7 +920,7 @@ src/
 │                   event_type = action_map[topic]
 │                   await self.publisher.catalog_product_event(
 │                       event_type=event_type,
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       product_id=str(payload.get("id", "")),
 │                       updated_at=payload.get("updated_at") if event_type == "updated" else None,
 │                       webhook_id=webhook_id,
@@ -940,7 +940,7 @@ src/
 │                   event_type = action_map[topic]
 │                   await self.publisher.catalog_collection_event(
 │                       event_type=event_type,
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       collection_id=str(payload.get("id", "")),
 │                       updated_at=payload.get("updated_at") if event_type == "updated" else None,
 │                       webhook_id=webhook_id,
@@ -949,7 +949,7 @@ src/
 │
 │               elif topic is ShopifyWebhookTopic.INVENTORY_LEVELS_UPDATE:
 │                   await self.publisher.inventory_updated(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       inventory_item_id=str(payload.get("inventory_item_id", "")),
 │                       location_id=str(payload.get("location_id", "")),
 │                       available=payload.get("available", 0),
@@ -960,7 +960,7 @@ src/
 │               elif topic is ShopifyWebhookTopic.CUSTOMERS_DATA_REQUEST:
 │                   customer = payload.get("customer", {})
 │                   await self.publisher.gdpr_data_request(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       customer_id=str(customer.get("id", "")),
 │                       orders_requested=payload.get("orders_requested", []),
 │                       webhook_id=webhook_id,
@@ -970,7 +970,7 @@ src/
 │               elif topic is ShopifyWebhookTopic.CUSTOMERS_REDACT:
 │                   customer = payload.get("customer", {})
 │                   await self.publisher.gdpr_customer_redact(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       customer_id=str(customer.get("id", "")),
 │                       orders_to_redact=payload.get("orders_to_redact", []),
 │                       webhook_id=webhook_id,
@@ -979,7 +979,7 @@ src/
 │
 │               elif topic is ShopifyWebhookTopic.SHOP_REDACT:
 │                   await self.publisher.gdpr_shop_redact(
-│                       shop_domain=shop_domain,
+│                       domain=domain,
 │                       webhook_id=webhook_id,
 │                       correlation_id=correlation_id,
 │                   )
@@ -989,7 +989,7 @@ src/
 │                       f"No domain event mapping for topic: {topic}",
 │                       extra={
 │                           "topic": topic.value,
-│                           "shop_domain": shop_domain,
+│                           "domain": domain,
 │                           "correlation_id": correlation_id,
 │                       },
 │                   )
@@ -1194,7 +1194,7 @@ src/
 │
 │       def __init__(self, domain: str):
 │           super().__init__(
-│               message="Invalid shop domain - must end with .myshopify.com", field="shop_domain", value=domain
+│               message="Invalid shop domain - must end with .myshopify.com", field="domain", value=domain
 │           )
 │
 │
@@ -1220,7 +1220,7 @@ src/
 │               message = "Shop domain mismatch"
 │               value = header_domain
 │
-│           super().__init__(message=message, field="shop_domain", value=value)
+│           super().__init__(message=message, field="domain", value=value)
 │   ```
 │
 ├── lifecycle.py

@@ -11,7 +11,7 @@ class MerchantCreatedPayload(BaseModel):
 
     merchant_id: UUID
     platform: str  # 'shopify', 'woocommerce', etc
-    shop_domain: str
+    domain: str
     shop_gid: str  # Platform-specific ID
 
 

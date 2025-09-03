@@ -1,0 +1,448 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/shared/shared/messaging
+================================================================================
+
+messaging/
+__init__.py
+
+```py
+# shared/messaging/__init__.py
+"""Shared messaging module for publisher, subscriber, event context, stream client, subject, and payloads."""
+
+from .jetstream_client import JetStreamClient
+from .listener import Listener
+from .publisher import Publisher
+from .subjects import Subjects
+
+__all__ = [
+    "JetStreamClient",
+    "Listener",
+    "Publisher",
+    "Subjects",
+]
+```
+
+jetstream_client.py
+
+```py
+# shared/shared/messaging/jetstream_client.py
+"""Pure JetStream client - only connection + stream management."""
+
+import os
+
+import nats
+from nats.aio.client import Client
+from nats.js import JetStreamContext
+from nats.js.api import RetentionPolicy, StorageType, StreamConfig
+from nats.js.errors import NotFoundError
+
+from shared.utils.logger import ServiceLogger
+
+
+class JetStreamClient:
+    """Pure JetStream client - only connection + stream management."""
+
+    def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
+        self._client: Client | None = None
+        self._js: JetStreamContext | None = None
+        self.logger = logger
+
+    # context-manager helpers --------------------------------------------------
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_t, exc, tb):
+        await self.close()
+
+    # public accessors ---------------------------------------------------------
+    @property
+    def client(self) -> Client:
+        if not self._client:
+            raise RuntimeError("NATS client not connected")
+        return self._client
+
+    @property
+    def js(self) -> JetStreamContext:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        return self._js
+
+    # connection ---------------------------------------------------------------
+    async def connect(self, servers: list[str]) -> None:
+        opts = {
+            "servers": servers,
+            "max_reconnect_attempts": -1,
+            "reconnect_time_wait": 2,
+        }
+        if user := os.getenv("NATS_USER"):
+            opts.update(user=user, password=os.getenv("NATS_PASSWORD", ""))
+
+        self._client = await nats.connect(**opts)
+        self._js = self._client.jetstream()
+        if self.logger:
+            self.logger.info("Connected to NATS %s", servers)
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.close()
+            if self.logger:
+                self.logger.info("NATS connection closed")
+
+    def is_connected(self) -> bool:
+        return bool(self._client and self._client.is_connected)
+
+    # stream helpers -----------------------------------------------------------
+    async def ensure_stream(
+        self,
+        name: str,
+        subjects: list[str],
+        **kw,
+    ) -> None:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+
+        cfg = StreamConfig(
+            name=name,
+            subjects=subjects,
+            retention=RetentionPolicy.LIMITS,
+            max_age=24 * 60 * 60,
+            max_msgs=1_000_000,
+            storage=StorageType.FILE,
+        )
+
+        try:
+            await self._js.stream_info(name)
+            if self.logger:
+                self.logger.debug("Using existing stream: %s", name)
+        except NotFoundError:
+            await self._js.add_stream(cfg)
+            if self.logger:
+                self.logger.info("Created new stream: %s", name)
+
+    async def delete_stream(self, name: str) -> None:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        await self._js.delete_stream(name)
+        if self.logger:
+            self.logger.info("Deleted stream: %s", name)
+
+    async def get_stream_info(self, name: str) -> dict:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        info = await self._js.stream_info(name)
+        return {
+            "name": info.config.name,
+            "subjects": info.config.subjects,
+            "messages": info.state.messages,
+            "bytes": info.state.bytes,
+        }
+```
+
+listener.py
+
+```py
+# shared/messaging/js_listener.py
+"""A thin, “safe” JetStream listener with JSON decode guard and error handling."""
+
+import asyncio
+import contextlib
+import json
+from abc import ABC, abstractmethod
+from typing import Any
+
+from nats.errors import TimeoutError as NATSTimeoutError
+from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
+from nats.js.errors import NotFoundError
+
+from shared.utils.logger import ServiceLogger
+
+from .jetstream_client import JetStreamClient
+
+# from .event_context import set_correlation_id, set_source_service
+
+
+class Listener(ABC):
+    """
+    A thin, “safe” JetStream listener:
+    • one subject
+    • JSON decode guard
+    • soft-fail vs. hard-fail error handling
+    """
+
+    stream_name: str = "GLAM_EVENTS"
+    batch_size: int = 10
+    ack_wait_sec: int = 30
+    max_deliver: int = 3
+    _task: asyncio.Task | None = None
+    _running: bool = False
+    idle_sleep_sec: float = 0.05  # avoid spin when idle
+    poll_window_sec: float = 2.0  # server-side fetch window
+
+    # ---- subclasses MUST fill these --------------------------------------
+    @property
+    @abstractmethod
+    def service_name(self) -> str:
+        """Name of the owning micro-service (used for durable name)."""
+        pass
+
+    @property
+    @abstractmethod
+    def subject(self) -> str:
+        """Full NATS subject to consume, e.g. ``evt.email.sent.v1``."""
+        pass
+
+    @property
+    @abstractmethod
+    def queue_group(self) -> str:
+        """Queue group so replicas share the workload."""
+        pass
+
+    # ----------------------------------------------------------------------
+    def __init__(self, js_client: JetStreamClient, logger: ServiceLogger) -> None:
+        self._js = js_client.js
+        self.logger = logger
+        self._sub = None
+
+    async def start(self) -> None:
+        await self._ensure_stream()
+        await self._ensure_consumer()
+        await self._create_subscription()
+        self.logger.info("Listening on %s", self.subject)
+        self._running = True
+        self._task = asyncio.create_task(self._poll_loop(), name=f"{self.service_name}:{self.subject}")
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+        if self._sub:
+            await self._sub.unsubscribe()
+
+    @abstractmethod
+    async def on_message(self, data: dict[str, Any]) -> None: ...
+
+    # stream
+    async def _ensure_stream(self) -> None:
+        """Stream must exist and cover ``evt.*`` **and** ``cmd.*``."""
+        from nats.js.api import RetentionPolicy, StorageType, StreamConfig  # local to avoid circulars
+
+        try:
+            await self._js.stream_info(self.stream_name)
+        except NotFoundError:
+            cfg = StreamConfig(
+                name=self.stream_name,
+                subjects=["evt.>", "cmd.>"],
+                retention=RetentionPolicy.LIMITS,
+                max_age=24 * 60 * 60,
+                max_msgs=1_000_000,
+                storage=StorageType.FILE,
+            )
+            await self._js.add_stream(cfg)
+            self.logger.info("Created stream %s", self.stream_name)
+
+    # consumer
+    async def _ensure_consumer(self) -> None:
+        durable = f"{self.service_name}-{self.queue_group}"
+        try:
+            await self._js.consumer_info(self.stream_name, durable)
+        except NotFoundError:
+            cfg = ConsumerConfig(
+                durable_name=durable,
+                deliver_policy=DeliverPolicy.ALL,
+                ack_policy=AckPolicy.EXPLICIT,
+                max_deliver=self.max_deliver,
+                max_ack_pending=self.batch_size * 5,  # tame inflight
+                filter_subject=self.subject,
+            )
+            await self._js.add_consumer(self.stream_name, cfg)
+
+    # subscription
+    async def _create_subscription(self) -> None:
+        self._sub = await self._js.pull_subscribe(
+            self.subject,
+            durable=f"{self.service_name}-{self.queue_group}",
+            stream=self.stream_name,
+        )
+
+    async def _poll_loop(self) -> None:
+        try:
+            while self._running:
+                if not self._sub:
+                    self.logger.error("Subscription not initialized, skipping poll")
+                    await asyncio.sleep(1)
+                    continue
+                try:
+                    msgs = await self._sub.fetch(
+                        batch=self.batch_size,
+                        timeout=self.poll_window_sec,
+                    )
+                except (TimeoutError, NATSTimeoutError):
+                    # Normal: no messages in window
+                    await asyncio.sleep(self.idle_sleep_sec)
+                    continue
+
+                if not msgs:
+                    await asyncio.sleep(self.idle_sleep_sec)
+                    continue
+
+                for m in msgs:
+                    await self._safe_handle(m)
+
+        except asyncio.CancelledError:
+            self.logger.info("Poll loop cancelled for %s", self.subject)
+        except Exception:
+            self.logger.critical("Poll loop crashed for %s", self.subject)
+        # no finally cleanup here; stop() handles unsubscribe
+
+    # safe handler
+    async def _safe_handle(self, msg) -> None:
+        try:
+            envelope = json.loads(msg.data.decode())
+        except json.JSONDecodeError:
+            self.logger.error("Bad JSON on %s; acking (dropping)", self.subject)
+            await msg.ack()
+            return
+
+        for f in ("event_id", "event_type", "data"):
+            if f not in envelope:
+                self.logger.error("Missing %s; acking (dropping)", f)
+                await msg.ack()
+                return
+
+        if envelope.get("event_type") and envelope["event_type"] != self.subject:
+            print("Subject:", self.subject)
+            self.logger.warning(
+                "Event-type mismatch; acking (subject=%s, event_type=%s)", self.subject, envelope["event_type"]
+            )
+            await msg.ack()
+            return
+
+        md = getattr(msg, "metadata", None)
+        if md and getattr(md, "num_delivered", None) is not None and md.num_delivered >= self.max_deliver:
+            self.logger.error("Final delivery hit; dropping msg on subject %s", self.subject)
+
+        try:
+            await self.on_message(envelope["data"])
+            await msg.ack()
+        except Exception as exc:
+            should_ack = await self.on_error(exc, envelope["data"])
+            try:
+                if should_ack:
+                    await msg.ack()
+                else:
+                    await msg.nak()
+            except Exception:
+                self.logger.critical("Failed to ack/nak message")
+
+    # default hook
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        self.logger.error("Error on %s: %s", self.subject, error, exc_info=True)
+        return False
+```
+
+publisher.py
+
+```py
+# shared/messaging/publisher.py
+"""Publisher base class for domain events and commands."""
+
+import json
+from abc import ABC, abstractmethod
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from shared.utils.logger import ServiceLogger
+
+from .jetstream_client import JetStreamClient
+
+
+class Publisher(ABC):
+    """Publishes domain facts (evt.*) and commands (cmd.*)"""
+
+    @property
+    @abstractmethod
+    def service_name(self) -> str: ...
+
+    def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
+        self.js_client = jetstream_client
+        self.logger = logger
+
+    async def publish_event(
+        self,
+        subject: str,
+        data: dict,
+        correlation_id: str,
+        metadata: dict[str, dict] | None = None,
+    ) -> str:
+        """Publish an event to JetStream"""
+
+        self.logger.info("Publishing event %s", subject)
+
+        if not (subject.startswith("evt.") or subject.startswith("cmd.")):
+            raise ValueError("subject must start with 'evt.' or 'cmd.'")
+
+        event_id = str(uuid4())
+
+        envelope = {
+            "event_id": event_id,
+            "event_type": subject,
+            "correlation_id": correlation_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "source_service": self.service_name,
+            "data": data,
+            "metadata": metadata or {},
+        }
+
+        try:
+            # Publish directly - stream already exists
+            ack = await self.js_client.js.publish(subject, json.dumps(envelope).encode())
+
+            self.logger.info("Published %s [event_id=%s, seq=%s]", subject, event_id, ack.seq if ack else "unknown")
+            return event_id
+
+        except Exception as e:
+            self.logger.error("Failed to publish event %s: %s", subject, str(e), exc_info=True)
+            raise
+```
+
+subjects.py
+
+```py
+# shared/shared/messaging/subjects.py
+"""NATS subjects for microservices."""
+
+from enum import Enum
+
+
+class Subjects(str, Enum):
+    """NATS subjects for the notification service"""
+
+    # Notification subjects
+    NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent.v1"
+    NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed.v1"
+
+    # Billing subjects
+    BILLING_TRIAL_STARTED = "evt.billing.trial.started.v1"
+    BILLING_TRIAL_EXPIRED = "evt.billing.trial.expired.v1"
+    BILLING_CREDITS_PURCHASED = "evt.billing.credits.purchased.v1"
+
+    # Merchant subjects
+    MERCHANT_CREATED = "evt.merchant.created.v1"
+
+    # Catalog subjects
+    CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"
+    CATALOG_SYNC_COMPLETED = "evt.catalog.sync.completed.v1"
+    CATALOG_SYNC_FAILED = "evt.catalog.sync.failed.v1"
+
+    # Credit subjects
+    CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
+    CREDIT_BALANCE_DEPLETED = "evt.credit.balance.depleted.v1"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

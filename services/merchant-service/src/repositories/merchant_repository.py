@@ -15,18 +15,18 @@ class MerchantRepository:
         self.prisma = prisma
 
     async def find_by_platform_shop_identity(
-        self, platform_name: str, shop_domain: str, platform_shop_id: str | None = None
+        self, platform_name: str, domain: str, platform_shop_id: str | None = None
     ) -> Merchant | None:
         """Find merchant by platform identity"""
-        conditions = [{"platform_name": platform_name, "shop_domain": shop_domain.lower()}]
+        conditions = [{"platform_name": platform_name, "domain": domain.lower()}]
         if platform_shop_id:
             conditions.append({"platform_name": platform_name, "platform_shop_id": platform_shop_id})
 
         return await self.prisma.merchant.find_first(where={"OR": conditions})
 
-    async def find_by_shop_domain(self, shop_domain: str) -> Merchant | None:
+    async def find_by_domain(self, domain: str) -> Merchant | None:
         """Find merchant by platform domain"""
-        return await self.prisma.merchant.find_first(where={"shop_domain": shop_domain.lower()})
+        return await self.prisma.merchant.find_first(where={"domain": domain.lower()})
 
     async def create(self, data: MerchantSyncIn) -> Merchant:
         """Create new merchant"""
@@ -34,7 +34,7 @@ class MerchantRepository:
             data={
                 "platform_name": data.platform_name.lower(),
                 "platform_shop_id": data.platform_shop_id,
-                "shop_domain": data.shop_domain.lower(),  # myshopify domain
+                "domain": data.domain.lower(),  # myshopify domain
                 "name": data.shop_name,
                 "email": data.email,
                 "primary_domain": data.primary_domain_host,  # could be custom domain

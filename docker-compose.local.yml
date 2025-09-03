@@ -39,6 +39,27 @@ services:
       start_period: 5s
 
   # ----------------- Billing Database -----------------
+
+  analytics-db:
+    image: postgres:15-alpine
+    container_name: analytics-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ANALYTICS_DB_USER}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      POSTGRES_DB: ${ANALYTICS_DB_NAME}
+    ports:
+      - "${ANALYTICS_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - analytics-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ANALYTICS_DB_USER}"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 10s
   billing-db:
     image: postgres:15-alpine
     container_name: billing-db-local
@@ -146,6 +167,27 @@ services:
       retries: 5
       start_period: 10s
 
+  # ----------------- Recommendation Database -----------------
+  recommendation-db:
+    image: postgres:15-alpine
+    container_name: recommendation-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${RECOMMENDATION_DB_USER}
+      POSTGRES_PASSWORD: ${RECOMMENDATION_DB_PASSWORD}
+      POSTGRES_DB: ${RECOMMENDATION_DB_NAME}
+    ports:
+      - "${RECOMMENDATION_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - recommendation-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RECOMMENDATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
   # ----------------- Season Compatibility Database -----------------
   season-compatibility-db:
     image: postgres:15-alpine
@@ -163,6 +205,27 @@ services:
       - glam-local-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SEASON_COMPATIBILITY_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  # ----------------- Selfie Database -----------------
+  selfie-db:
+    image: postgres:15-alpine
+    container_name: selfie-db-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SELFIE_DB_USER}
+      POSTGRES_PASSWORD: ${SELFIE_DB_PASSWORD}
+      POSTGRES_DB: ${SELFIE_DB_NAME}
+    ports:
+      - "${SELFIE_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - selfie-db-local-data:/var/lib/postgresql/data
+    networks:
+      - glam-local-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SELFIE_DB_USER}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -214,11 +277,14 @@ networks:
 
 volumes:
   nats-local-data:
+  analytics-db-local-data:
   billing-db-local-data:
   catalog-db-local-data:
   credit-db-local-data:
   merchant-db-local-data:
   notification-db-local-data:
+  recommendation-db-local-data:
   season-compatibility-db-local-data:
+  selfie-db-local-data:
   token-db-local-data:
   webhook-db-local-data:

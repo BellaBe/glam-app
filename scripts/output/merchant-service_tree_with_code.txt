@@ -22,7 +22,7 @@ prisma/
 │   │           "id" UUID NOT NULL,
 │   │           "platform_name" TEXT NOT NULL,
 │   │           "platform_id" TEXT NOT NULL,
-│   │           "platform_domain" TEXT NOT NULL,
+│   │           "domain" TEXT NOT NULL,
 │   │           "name" TEXT NOT NULL,
 │   │           "email" TEXT NOT NULL,
 │   │           "primary_domain" TEXT,
@@ -42,10 +42,10 @@ prisma/
 │   │       );
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_platform_id_platform_domain_idx" ON "merchants"("platform_id", "platform_domain");
+│   │       CREATE INDEX "merchants_platform_id_domain_idx" ON "merchants"("platform_id", "domain");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "merchants_platform_domain_idx" ON "merchants"("platform_domain");
+│   │       CREATE INDEX "merchants_domain_idx" ON "merchants"("domain");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "merchants_status_idx" ON "merchants"("status");
@@ -54,7 +54,7 @@ prisma/
 │   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_id_key" ON "merchants"("platform_name", "platform_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE UNIQUE INDEX "merchants_platform_name_platform_domain_key" ON "merchants"("platform_name", "platform_domain");
+│   │       CREATE UNIQUE INDEX "merchants_platform_name_domain_key" ON "merchants"("platform_name", "domain");
 │   │       ```
 │   │
 │   └── migration_lock.toml
@@ -125,7 +125,7 @@ src/
 │   │               platform_ctx=platform_ctx,
 │   │               logger=logger,
 │   │               body_platform=body.platform_name,
-│   │               body_domain=body.shop_domain,
+│   │               body_domain=body.domain,
 │   │           )
 │   │
 │   │           logger.set_request_context(
@@ -182,7 +182,7 @@ src/
 │   │               raise HTTPException(
 │   │                   status_code=status.HTTP_401_UNAUTHORIZED,
 │   │                   detail={
-│   │                       "code": "SHOP_DOMAIN_MISMATCH",
+│   │                       "code": "domain_MISMATCH",
 │   │                       "message": "Shop domain mismatch between JWT and headers",
 │   │                       "details": {
 │   │                           "jwt_shop": client_auth.shop,
@@ -197,7 +197,7 @@ src/
 │   │
 │   │           try:
 │   │               merchant = await service.get_merchant_by_domain(
-│   │                   shop_domain=platform_ctx.domain,
+│   │                   domain=platform_ctx.domain,
 │   │               )
 │   │
 │   │               logger.info(
@@ -271,19 +271,19 @@ src/
 │   │       async def on_message(self, data: dict) -> None:
 │   │           """Handle app uninstalled event"""
 │   │           try:
-│   │               shop_domain = data.get("shop_domain")
+│   │               domain = data.get("domain")
 │   │               uninstall_reason = data.get("uninstall_reason")
 │   │
-│   │               if not shop_domain:
-│   │                   self.logger.error("Missing shop_domain in uninstall event", extra={"data": data})
+│   │               if not domain:
+│   │                   self.logger.error("Missing domain in uninstall event", extra={"data": data})
 │   │                   return
 │   │
 │   │               self.logger.info(
-│   │                   f"Processing app uninstall for {shop_domain}",
-│   │                   extra={"shop_domain": shop_domain, "uninstall_reason": uninstall_reason},
+│   │                   f"Processing app uninstall for {domain}",
+│   │                   extra={"domain": domain, "uninstall_reason": uninstall_reason},
 │   │               )
 │   │
-│   │               await self.service.handle_app_uninstalled(shop_domain, uninstall_reason)
+│   │               await self.service.handle_app_uninstalled(domain, uninstall_reason)
 │   │
 │   │           except Exception as e:
 │   │               self.logger.error(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})
@@ -316,7 +316,7 @@ src/
 │               merchant_id: str,
 │               platform_name: str,
 │               platform_shop_id: str,
-│               shop_domain: str,
+│               domain: str,
 │               name: str,
 │               email: str,
 │               installed_at: datetime,
@@ -325,7 +325,7 @@ src/
 │
 │               self.logger.info(
 │                   "Publishing merchant installed event",
-│                   extra={"correlation_id": correlation_id, "merchant_id": merchant_id, "shop_domain": shop_domain},
+│                   extra={"correlation_id": correlation_id, "merchant_id": merchant_id, "domain": domain},
 │               )
 │
 │               return await self.publish_event(
@@ -334,7 +334,7 @@ src/
 │                       "merchant_id": merchant_id,
 │                       "platform_name": platform_name,
 │                       "platform_shop_id": platform_shop_id,
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "name": name,
 │                       "email": email,
 │                       "installed_at": installed_at.isoformat(),
@@ -343,7 +343,7 @@ src/
 │               )
 │
 │           async def publish_merchant_reinstalled(
-│               self, correlation_id: str, merchant_id: str, platform_shop_id: str, shop_domain: str, name: str, email: str
+│               self, correlation_id: str, merchant_id: str, platform_shop_id: str, domain: str, name: str, email: str
 │           ) -> str:
 │               """Publish evt.merchant.reinstalled event"""
 │               return await self.publish_event(
@@ -351,7 +351,7 @@ src/
 │                   data={
 │                       "merchant_id": merchant_id,
 │                       "platform_shop_id": platform_shop_id,
-│                       "shop_domain": shop_domain,
+│                       "domain": domain,
 │                       "name": name,
 │                       "email": email,
 │                       "reinstalled_at": datetime.utcnow().isoformat(),
@@ -413,18 +413,18 @@ src/
 │               self.prisma = prisma
 │
 │           async def find_by_platform_shop_identity(
-│               self, platform_name: str, shop_domain: str, platform_shop_id: str | None = None
+│               self, platform_name: str, domain: str, platform_shop_id: str | None = None
 │           ) -> Merchant | None:
 │               """Find merchant by platform identity"""
-│               conditions = [{"platform_name": platform_name, "shop_domain": shop_domain.lower()}]
+│               conditions = [{"platform_name": platform_name, "domain": domain.lower()}]
 │               if platform_shop_id:
 │                   conditions.append({"platform_name": platform_name, "platform_shop_id": platform_shop_id})
 │
 │               return await self.prisma.merchant.find_first(where={"OR": conditions})
 │
-│           async def find_by_shop_domain(self, shop_domain: str) -> Merchant | None:
+│           async def find_by_domain(self, domain: str) -> Merchant | None:
 │               """Find merchant by platform domain"""
-│               return await self.prisma.merchant.find_first(where={"shop_domain": shop_domain.lower()})
+│               return await self.prisma.merchant.find_first(where={"domain": domain.lower()})
 │
 │           async def create(self, data: MerchantSyncIn) -> Merchant:
 │               """Create new merchant"""
@@ -432,7 +432,7 @@ src/
 │                   data={
 │                       "platform_name": data.platform_name.lower(),
 │                       "platform_shop_id": data.platform_shop_id,
-│                       "shop_domain": data.shop_domain.lower(),  # myshopify domain
+│                       "domain": data.domain.lower(),  # myshopify domain
 │                       "name": data.shop_name,
 │                       "email": data.email,
 │                       "primary_domain": data.primary_domain_host,  # could be custom domain
@@ -509,7 +509,7 @@ src/
 │
 │           platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
 │           platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-│           shop_domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
+│           domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
 │           shop_name: str = Field(..., description="Shop display name")
 │           email: str = Field(..., description="Shop contact email")
 │           primary_domain_host: str = Field(..., description="Primary domain of the shop")
@@ -531,7 +531,7 @@ src/
 │
 │           id: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           shop_name: str
 │           status: MerchantStatus
 │
@@ -543,7 +543,7 @@ src/
 │           merchant_id: str
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           contact_email: str
 │           name: str
 │           status: MerchantStatus
@@ -554,7 +554,7 @@ src/
 │
 │           merchant_id: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           status: MerchantStatus
 │       ```
 │
@@ -613,17 +613,17 @@ src/
 │               """Sync merchant from OAuth flow"""
 │
 │               self.logger.info(
-│                   f"Syncing merchant: {data.shop_domain}",
+│                   f"Syncing merchant: {data.domain}",
 │                   extra={
 │                       "correlation_id": ctx.correlation_id,
-│                       "shop_domain": data.shop_domain,
+│                       "domain": data.domain,
 │                       "platform_shop_id": data.platform_shop_id,
 │                   },
 │               )
 │
 │               # Find existing merchant
 │               existing = await self.repository.find_by_platform_shop_identity(
-│                   platform_name=data.platform_name, shop_domain=data.shop_domain, platform_shop_id=data.platform_shop_id
+│                   platform_name=data.platform_name, domain=data.domain, platform_shop_id=data.platform_shop_id
 │               )
 │
 │               if existing:
@@ -640,7 +640,7 @@ src/
 │                           correlation_id=ctx.correlation_id,
 │                           merchant_id=merchant.id,
 │                           platform_shop_id=merchant.platform_shop_id,
-│                           shop_domain=merchant.shop_domain,
+│                           domain=merchant.domain,
 │                           name=merchant.name,
 │                           email=merchant.email,
 │                       )
@@ -650,8 +650,8 @@ src/
 │                   created = True
 │
 │                   self.logger.info(
-│                       f"Created new merchant: {merchant.shop_domain}",
-│                       extra={"merchant_id": merchant.id, "shop_domain": merchant.shop_domain},
+│                       f"Created new merchant: {merchant.domain}",
+│                       extra={"merchant_id": merchant.id, "domain": merchant.domain},
 │                   )
 │
 │                   # Publish installed event
@@ -660,7 +660,7 @@ src/
 │                       merchant_id=merchant.id,
 │                       platform_name=merchant.platform_name,
 │                       platform_shop_id=merchant.platform_shop_id,
-│                       shop_domain=merchant.shop_domain,
+│                       domain=merchant.domain,
 │                       name=merchant.name,
 │                       email=merchant.email,
 │                       installed_at=merchant.installed_at,
@@ -671,7 +671,7 @@ src/
 │                   merchant_id=merchant.id,
 │                   platform_name=merchant.platform_name,
 │                   platform_shop_id=merchant.platform_shop_id,
-│                   shop_domain=merchant.shop_domain,
+│                   domain=merchant.domain,
 │                   contact_email=merchant.email,
 │                   name=merchant.name,
 │                   status=merchant.status,
@@ -681,26 +681,26 @@ src/
 │
 │               return MerchantSyncOut(created=created, merchant_id=merchant.id)
 │
-│           async def get_merchant_by_domain(self, shop_domain: str) -> MerchantSelfOut:
+│           async def get_merchant_by_domain(self, domain: str) -> MerchantSelfOut:
 │               """Get merchant by platform domain"""
-│               merchant = await self.repository.find_by_shop_domain(shop_domain)
+│               merchant = await self.repository.find_by_domain(domain)
 │               if not merchant:
-│                   raise MerchantNotFoundError(f"Merchant not found: {shop_domain}")
+│                   raise MerchantNotFoundError(f"Merchant not found: {domain}")
 │
 │               return MerchantSelfOut(
 │                   id=merchant.id,
 │                   platform_shop_id=merchant.platform_shop_id,
-│                   shop_domain=merchant.shop_domain,
+│                   domain=merchant.domain,
 │                   shop_name=merchant.name,
 │                   status=merchant.status,
 │               )
 │
-│           async def update_merchant_status(self, shop_domain: str, new_status: MerchantStatus) -> None:
+│           async def update_merchant_status(self, domain: str, new_status: MerchantStatus) -> None:
 │               """Update merchant status (called by event listeners)"""
 │
-│               merchant = await self.repository.find_by_shop_domain(shop_domain)
+│               merchant = await self.repository.find_by_domain(domain)
 │               if not merchant:
-│                   raise MerchantNotFoundError(f"Merchant not found: {shop_domain}")
+│                   raise MerchantNotFoundError(f"Merchant not found: {domain}")
 │
 │               old_status = merchant.status
 │
@@ -708,7 +708,7 @@ src/
 │               if new_status not in STATUS_TRANSITIONS.get(old_status, []):
 │                   self.logger.warning(
 │                       f"Invalid status transition from {old_status} to {new_status}",
-│                       extra={"merchant_id": merchant.id, "shop_domain": shop_domain},
+│                       extra={"merchant_id": merchant.id, "domain": domain},
 │                   )
 │                   raise InvalidStatusTransitionError(f"Invalid status transition from {old_status} to {new_status}")
 │
@@ -719,7 +719,7 @@ src/
 │               status_payload = MerchantStatusUpdatedPayload(
 │                   merchant_id=merchant.id,
 │                   platform_shop_id=merchant.platform_shop_id,
-│                   shop_domain=merchant.shop_domain,
+│                   domain=merchant.domain,
 │                   status=new_status,
 │               )
 │
@@ -729,13 +729,13 @@ src/
 │                   payload=status_payload,
 │               )
 │
-│           async def handle_app_uninstalled(self, shop_domain: str, uninstall_reason: str | None = None) -> None:
+│           async def handle_app_uninstalled(self, domain: str, uninstall_reason: str | None = None) -> None:
 │               """Handle app uninstalled event"""
-│               self.logger.info(f"Handling app uninstall for {shop_domain}", extra={"shop_domain": shop_domain})
+│               self.logger.info(f"Handling app uninstall for {domain}", extra={"domain": domain})
 │
-│               merchant = await self.repository.find_by_shop_domain(shop_domain)
+│               merchant = await self.repository.find_by_domain(domain)
 │               if not merchant:
-│                   self.logger.warning(f"Merchant not found for uninstall: {shop_domain}")
+│                   self.logger.warning(f"Merchant not found for uninstall: {domain}")
 │                   return
 │
 │               # Update status to UNINSTALLED
@@ -746,7 +746,7 @@ src/
 │                   correlation_id=merchant.correlation_id,  # TODO: set a propper ctx Assuming this is available in the context
 │                   merchant_id=merchant.id,
 │                   platform_shop_id=merchant.platform_shop_id,
-│                   shop_domain=merchant.shop_domain,
+│                   domain=merchant.domain,
 │                   name=merchant.name,
 │                   email=merchant.email,
 │                   uninstall_reason=uninstall_reason,
@@ -905,7 +905,7 @@ src/
 │       """Raised when shop domain is invalid"""
 │
 │       def __init__(self, message: str = "Invalid shop domain format"):
-│           super().__init__(message=message, field="shop_domain")
+│           super().__init__(message=message, field="domain")
 │
 │
 │   class ConsentViolationError(ConflictError):

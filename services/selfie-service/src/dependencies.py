@@ -34,13 +34,13 @@ class ExtendedClientAuthContext(ClientAuthContext):
 
     merchant_id: str
     platform_shop_id: str
-    platform_domain: str
+    domain: str
 
 
 def require_extended_client_auth(request: Request) -> ExtendedClientAuthContext:
     """
     Client authentication with extended merchant context.
-    JWT must contain: merchant_id, platform_name, platform_shop_id, platform_domain
+    JWT must contain: merchant_id, platform_name, platform_shop_id, domain
     """
     auth = request.headers.get("Authorization")
     if not auth or not auth.lower().startswith("bearer "):
@@ -55,7 +55,7 @@ def require_extended_client_auth(request: Request) -> ExtendedClientAuthContext:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
 
         # Validate required fields
-        required_fields = ["sub", "scope", "merchant_id", "platform_shop_id", "platform_domain"]
+        required_fields = ["sub", "scope", "merchant_id", "platform_shop_id", "domain"]
         for field in required_fields:
             if field not in payload:
                 raise HTTPException(status_code=401, detail=f"JWT missing required field: {field}")
@@ -68,12 +68,12 @@ def require_extended_client_auth(request: Request) -> ExtendedClientAuthContext:
                 raise HTTPException(status_code=401, detail="TOKEN_EXPIRED")
 
         return ExtendedClientAuthContext(
-            shop=payload["sub"],  # This should be platform_domain
+            shop=payload["sub"],  # This should be domain
             scope=payload["scope"],
             token=token,
             merchant_id=payload["merchant_id"],
             platform_shop_id=payload["platform_shop_id"],
-            platform_domain=payload["platform_domain"],
+            domain=payload["domain"],
         )
 
     except jwt.PyJWTError as e:

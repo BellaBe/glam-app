@@ -38,7 +38,7 @@ async def sync_merchant(
         platform_ctx=platform_ctx,
         logger=logger,
         body_platform=body.platform_name,
-        body_domain=body.shop_domain,
+        body_domain=body.domain,
     )
 
     logger.set_request_context(
@@ -95,7 +95,7 @@ async def get_current_merchant(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
-                "code": "SHOP_DOMAIN_MISMATCH",
+                "code": "domain_MISMATCH",
                 "message": "Shop domain mismatch between JWT and headers",
                 "details": {
                     "jwt_shop": client_auth.shop,
@@ -110,7 +110,7 @@ async def get_current_merchant(
 
     try:
         merchant = await service.get_merchant_by_domain(
-            shop_domain=platform_ctx.domain,
+            domain=platform_ctx.domain,
         )
 
         logger.info(

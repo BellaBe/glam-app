@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .enums import AttemptStatus, NotificationStatus
+
 
 # Output DTOs
 class NotificationOut(BaseModel):
@@ -13,22 +15,39 @@ class NotificationOut(BaseModel):
     merchant_id: UUID
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
     recipient_email: str
     template_type: str
-    subject: str
-    status: str
-    provider: str | None = None
+    status: NotificationStatus
     provider_message_id: str | None = None
-    error_message: str | None = None
-    retry_count: int
     trigger_event: str
-    trigger_event_id: str | None = None
+    idempotency_key: str
+    template_variables: dict  # JSON field
     created_at: datetime
-    sent_at: datetime | None = None
-    failed_at: datetime | None = None
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationAttemptOut(BaseModel):
+    """DTO for notification attempt"""
+
+    id: UUID
+    notification_id: UUID
+    attempt_number: int
+    provider: str
+    status: AttemptStatus
+    error_message: str | None = None
+    provider_response: dict | None = None
+    attempted_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationWithAttemptsOut(BaseModel):
+    """DTO for notification with attempts"""
+
+    notification: NotificationOut
+    attempts: list[NotificationAttemptOut] = Field(default_factory=list)
 
 
 class NotificationStats(BaseModel):

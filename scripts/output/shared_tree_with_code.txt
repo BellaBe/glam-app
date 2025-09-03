@@ -1,2262 +1,2284 @@
 ================================================================================
-Directory Structure: /home/bellabe/glam-app/shared
+Directory Structure: /home/bellabe/glam-app/shared/shared
 ================================================================================
 
 shared/
-.ruff_cache/
-├── 0.1.9/
-│   └── 17774126697928094529
-├── .gitignore
-└── CACHEDIR.TAG
-shared/
-├── api/
+api/
+├── __init__.py
+│   
+│   ```py
+│   # -------------------------------
+│   # shared/api/__init__.py
+│   # -------------------------------
+│   
+│   """
+│   Unified API response models and utilities for glam-app microservices.
+│   
+│   This module provides a single, consistent approach to API responses
+│   across all services.
+│   """
+│   
+│   from .debug import (
+│       setup_debug_handlers,
+│       # Debugging utilities
+│       setup_debug_middleware,
+│   )
+│   from .dependencies import (
+│       ClientAuthDep,
+│       InternalAuthDep,
+│       LoggerDep,
+│       PaginationDep,
+│       RequestContextDep,
+│       WebhookHeadersDep,
+│   )
+│   from .health import (
+│       # Health check utilities
+│       create_health_router,
+│   )
+│   from .middleware import (
+│       # Middleware
+│       APIMiddleware,
+│       setup_middleware,
+│   )
+│   from .models import (
+│       # Core models
+│       ApiResponse,
+│       ErrorDetail,
+│       Links,
+│       Meta,
+│       Pagination,
+│   )
+│   from .responses import (
+│       # Response helpers
+│       create_response,
+│       error_response,
+│       paginated_response,
+│       success_response,
+│   )
+│   from .validation import validate_shop_context
+│   
+│   __all__ = [
+│       "ApiResponse",
+│       "Meta",
+│       "Pagination",
+│       "Links",
+│       "ErrorDetail",
+│       "create_response",
+│       "success_response",
+│       "error_response",
+│       "paginated_response",
+│       "ClientAuthDep",
+│       "InternalAuthDep",
+│       "LoggerDep",
+│       "PaginationDep",
+│       "RequestContextDep",
+│       "WebhookHeadersDep",
+│       "setup_debug_middleware",
+│       "setup_debug_handlers",
+│       "APIMiddleware",
+│       "setup_middleware",
+│       "create_health_router",
+│       "validate_shop_context",
+│   ]
+│   ```
+│   
+├── debug.py
+│   
+│   ```py
+│   # shared/api/debug.py
+│   # ruff: noqa: T201
+│   """Debug utilities for FastAPI applications."""
+│   
+│   import json
+│   import logging
+│   from collections.abc import Callable
+│   
+│   from fastapi import FastAPI, HTTPException, Request
+│   from fastapi.exceptions import RequestValidationError
+│   from fastapi.responses import JSONResponse
+│   from starlette.middleware.base import BaseHTTPMiddleware
+│   
+│   logger = logging.getLogger(__name__)
+│   
+│   
+│   class EarlyDebugMiddleware(BaseHTTPMiddleware):
+│       """Debug middleware that runs before any dependencies or validation."""
+│   
+│       async def dispatch(self, request: Request, call_next: Callable):
+│           print("\n" + "=" * 60)
+│           print("🔍 EARLY DEBUG - REQUEST RECEIVED")
+│           print("=" * 60)
+│   
+│           # Log all request details
+│           print(f"🌐 URL: {request.url}")
+│           print(f"📍 Path: {request.url.path}")
+│           print(f"🔧 Method: {request.method}")
+│           print(f"❓ Query Params: {dict(request.query_params)}")
+│   
+│           # Log all headers
+│           print("📋 Headers:")
+│           for name, value in request.headers.items():
+│               # Mask authorization for security
+│               if name.lower() == "authorization":
+│                   value = f"Bearer {value[7:17]}..." if value.startswith("Bearer ") else "***"
+│               print(f"   {name}: {value}")
+│   
+│           # Log body for POST/PUT/PATCH WITHOUT consuming it
+│           body_logged = False
+│           if request.method in ["POST", "PUT", "PATCH"]:
+│               try:
+│                   # Read body once and store it
+│                   body = await request.body()
+│                   if body:
+│                       try:
+│                           body_json = json.loads(body)
+│                           print("📦 Body (JSON):")
+│                           print(json.dumps(body_json, indent=2))
+│                           body_logged = True
+│                       except json.JSONDecodeError:
+│                           body_str = body.decode("utf-8", errors="ignore")
+│                           print(f"📦 Body (Raw): {body_str[:200]}{'...' if len(body_str) > 200 else ''}")
+│                           body_logged = True
+│                   else:
+│                       print("📦 Body: (empty)")
+│                       body_logged = True
+│   
+│               except Exception as e:
+│                   print(f"📦 Body: (error reading: {e})")
+│   
+│           if not body_logged:
+│               print("📦 Body: (no body for GET request)")
+│   
+│           print("⏳ Calling next middleware/handler...")
+│           print("=" * 60)
+│   
+│           try:
+│               response = await call_next(request)
+│   
+│               print("\n" + "=" * 60)
+│               print("✅ EARLY DEBUG - RESPONSE READY")
+│               print("=" * 60)
+│               print(f"📤 Status: {response.status_code}")
+│               print(f"📤 Headers: {dict(response.headers)}")
+│               print("=" * 60 + "\n")
+│   
+│               return response
+│   
+│           except Exception as e:
+│               print("\n" + "=" * 60)
+│               print("❌ EARLY DEBUG - EXCEPTION CAUGHT")
+│               print("=" * 60)
+│               print(f"💥 Exception Type: {type(e).__name__}")
+│               print(f"💥 Exception Message: {e!s}")
+│               print(f"💥 Exception Details: {getattr(e, 'detail', 'No details')}")
+│               if hasattr(e, "status_code"):
+│                   print(f"💥 Status Code: {e.status_code}")
+│               print("=" * 60 + "\n")
+│               raise  # Re-raise to let other handlers deal with it
+│   
+│   
+│   def setup_debug_middleware(app: FastAPI):
+│       """Add debug middleware as the first middleware."""
+│       app.add_middleware(EarlyDebugMiddleware)
+│   
+│   
+│   def setup_debug_handlers(app: FastAPI):
+│       """Add debug exception handlers to catch errors before middleware."""
+│   
+│       @app.exception_handler(RequestValidationError)
+│       async def validation_exception_handler(request: Request, exc: RequestValidationError):
+│           """Debug validation errors in detail."""
+│   
+│           print("=" * 50)
+│           print("🚨 VALIDATION ERROR CAUGHT!")
+│           print("=" * 50)
+│   
+│           # Log request details
+│           print(f"📥 Request URL: {request.url}")
+│           print(f"📥 Request Method: {request.method}")
+│           print("📥 Request Headers:")
+│           for name, value in request.headers.items():
+│               print(f"   {name}: {value}")
+│   
+│           # Log request body if available
+│           try:
+│               if request.method in ["POST", "PUT", "PATCH"]:
+│                   # Try to get body (might be consumed already)
+│                   body = await request.body()
+│                   if body:
+│                       try:
+│                           body_json = json.loads(body)
+│                           print(f"📥 Request Body (JSON): {json.dumps(body_json, indent=2)}")
+│                       except Exception:
+│                           print(f"📥 Request Body (Raw): {body.decode('utf-8', errors='ignore')[:500]}...")
+│                   else:
+│                       print("📥 Request Body: (empty)")
+│           except Exception as e:
+│               print(f"📥 Request Body: (error reading: {e})")
+│   
+│           # Log validation errors in detail
+│           print(f"❌ Validation Errors ({len(exc.errors())} total):")
+│           for i, error in enumerate(exc.errors()):
+│               print(f"   {i + 1}. Field: {error.get('loc', 'unknown')}")
+│               print(f"      Type: {error.get('type', 'unknown')}")
+│               print(f"      Message: {error.get('msg', 'unknown')}")
+│               print(f"      Input: {error.get('input', 'not provided')}")
+│               print()
+│   
+│           print("=" * 50)
+│   
+│           # Return structured error response
+│           validation_errors = []
+│           for error in exc.errors():
+│               field_path = ".".join(str(loc) for loc in error["loc"])
+│               validation_errors.append(
+│                   {"field": field_path, "message": error["msg"], "type": error["type"], "input": error.get("input")}
+│               )
+│   
+│           return JSONResponse(
+│               status_code=422,
+│               content={
+│                   "error": {
+│                       "code": "VALIDATION_ERROR",
+│                       "message": "Request validation failed",
+│                       "details": {"validation_errors": validation_errors, "total_errors": len(validation_errors)},
+│                   }
+│               },
+│           )
+│   
+│       @app.exception_handler(HTTPException)
+│       async def http_exception_handler(request: Request, exc: HTTPException):
+│           """Debug HTTP exceptions."""
+│   
+│           print("=" * 50)
+│           print(f"🚨 HTTP EXCEPTION: {exc.status_code}")
+│           print("=" * 50)
+│           print(f"📥 Request URL: {request.url}")
+│           print(f"📥 Request Method: {request.method}")
+│           print(f"❌ Exception Detail: {exc.detail}")
+│           print(f"❌ Exception Type: {type(exc.detail)}")
+│           print("=" * 50)
+│   
+│           # Let your middleware handle this
+│           raise exc
+│   
+│       @app.exception_handler(Exception)
+│       async def general_exception_handler(request: Request, exc: Exception):
+│           """Catch any other exceptions."""
+│   
+│           print("=" * 50)
+│           print(f"🚨 GENERAL EXCEPTION: {type(exc).__name__}")
+│           print("=" * 50)
+│           print(f"📥 Request URL: {request.url}")
+│           print(f"📥 Request Method: {request.method}")
+│           print(f"❌ Exception: {exc}")
+│           print("=" * 50)
+│   
+│           # Let your middleware handle this
+│           raise exc
+│   ```
+│   
+├── dependencies.py
+│   
+│   ```py
+│   """
+│   FastAPI dependencies for standardized API behavior.
+│   Clean, generic, production-ready dependencies.
+│   """
+│   
+│   import os
+│   import uuid
+│   from typing import TYPE_CHECKING, Annotated
+│   
+│   import jwt
+│   from fastapi import Depends, HTTPException, Query, Request, status
+│   from pydantic import BaseModel, Field
+│   
+│   if TYPE_CHECKING:
+│       from shared.utils.logger import ServiceLogger
+│   
+│   
+│   # Pagination
+│   class PaginationParams(BaseModel):
+│       """Standard pagination parameters."""
+│   
+│       page: int = Field(default=1, ge=1)
+│       limit: int = Field(default=50, ge=1, le=1000)
+│   
+│       @property
+│       def offset(self) -> int:
+│           return (self.page - 1) * self.limit
+│   
+│   
+│   def get_pagination_params(
+│       page: int = Query(1, ge=1, description="Page number"),
+│       limit: int = Query(50, ge=1, le=1000, description="Items per page"),
+│   ) -> PaginationParams:
+│       return PaginationParams(page=page, limit=limit)
+│   
+│   
+│   PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
+│   
+│   
+│   # Logger
+│   def get_logger(request: Request) -> "ServiceLogger":
+│       return request.app.state.logger
+│   
+│   
+│   LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
+│   
+│   
+│   # Request Context Utilities
+│   def get_correlation_id(request: Request) -> str:
+│       return request.headers.get("X-Correlation-ID", f"corr_{uuid.uuid4().hex[:12]}")
+│   
+│   
+│   def get_client_ip(request: Request) -> str:
+│       forwarded_for = request.headers.get("X-Forwarded-For")
+│       if forwarded_for:
+│           return forwarded_for.split(",")[0].strip()
+│       return request.client.host if request.client else "unknown"
+│   
+│   
+│   def get_content_type(request: Request) -> str | None:
+│       return request.headers.get("Content-Type")
+│   
+│   
+│   class RequestContext(BaseModel):
+│       """Essential request context for logging/auditing."""
+│   
+│       correlation_id: str
+│       method: str
+│       path: str
+│       content_type: str | None = None
+│       ip_client: str | None = None
+│   
+│       @classmethod
+│       def from_request(cls, request: Request) -> "RequestContext":
+│           return cls(
+│               correlation_id=get_correlation_id(request),
+│               method=request.method,
+│               path=str(request.url.path),
+│               ip_client=get_client_ip(request),
+│               content_type=get_content_type(request),
+│           )
+│   
+│   
+│   def get_request_context(request: Request) -> RequestContext:
+│       return RequestContext.from_request(request)
+│   
+│   
+│   RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
+│   
+│   
+│   # Platform headers
+│   SUPPORTED_PLATFORMS = {"shopify", "bigcommerce", "woocommerce", "magento", "squarespace", "custom"}
+│   
+│   
+│   # Authentication
+│   class ClientAuthContext(BaseModel):
+│       shop: str
+│       scope: str
+│       token: str
+│   
+│       @property
+│       def audience(self) -> str:
+│           return "client"
+│   
+│   
+│   class InternalAuthContext(BaseModel):
+│       service: str
+│       token: str
+│   
+│       @property
+│       def audience(self) -> str:
+│           return "internal"
+│   
+│   
+│   def _get_bearer_token(request: Request) -> str:
+│       auth = request.headers.get("Authorization")
+│       if not auth or not auth.lower().startswith("bearer "):
+│           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+│       return auth.split(" ", 1)[1].strip()
+│   
+│   
+│   def require_client_auth(request: Request) -> ClientAuthContext:
+│       token = _get_bearer_token(request)
+│       secret = os.getenv("CLIENT_JWT_SECRET", "")
+│       if not secret:
+│           raise RuntimeError("CLIENT_JWT_SECRET not configured")
+│   
+│       try:
+│           payload = jwt.decode(token, secret, algorithms=["HS256"])
+│       except jwt.PyJWTError as e:
+│           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {e!s}") from e
+│   
+│       return ClientAuthContext(
+│           shop=payload.get("sub", ""),
+│           scope=payload.get("scope", ""),
+│           token=token,
+│       )
+│   
+│   
+│   def require_internal_auth(request: Request) -> InternalAuthContext:
+│       token = _get_bearer_token(request)
+│       raw = os.getenv("INTERNAL_JWT_SECRET", "")
+│       if not raw:
+│           raise RuntimeError("INTERNAL_JWT_SECRET not configured")
+│   
+│       allowed = {}
+│       for entry in raw.split(","):
+│           entry = entry.strip()
+│           if not entry:
+│               continue
+│           if ":" in entry:
+│               service, key = entry.split(":", 1)
+│               allowed[key.strip()] = service.strip()
+│           else:
+│               allowed[entry] = "unknown"
+│   
+│       if token not in allowed:
+│           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
+│   
+│       return InternalAuthContext(service=allowed[token], token=token)
+│   
+│   
+│   ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
+│   InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
+│   
+│   
+│   # Webhooks
+│   class WebhookHeaders(BaseModel):
+│       topic: str
+│       webhook_id: str | None = None
+│   
+│       @property
+│       def event_type(self) -> str:
+│           return self.topic.replace("/", ".").replace("_", ".")
+│   
+│   
+│   def get_webhook_headers(request: Request) -> WebhookHeaders:
+│       topic = request.headers.get("X-Webhook-Topic")
+│       if not topic:
+│           raise HTTPException(
+│               status_code=status.HTTP_400_BAD_REQUEST,
+│               detail={
+│                   "code": "MISSING_WEBHOOK_TOPIC",
+│                   "message": "Missing required webhook topic header",
+│                   "details": {"expected_header": "X-Webhook-Topic"},
+│               },
+│           )
+│   
+│       if len(topic) > 256:
+│           raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Topic too long")
+│   
+│       webhook_id = request.headers.get("X-Webhook-Id")
+│       if webhook_id and len(webhook_id) > 256:
+│           raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Id too long")
+│   
+│       return WebhookHeaders(topic=topic, webhook_id=webhook_id)
+│   
+│   
+│   WebhookHeadersDep = Annotated[WebhookHeaders, Depends(get_webhook_headers)]
+│   ```
+│   
+├── health.py
+│   
+│   ```py
+│   # glam-app/shared/api/health.py
+│   
+│   from datetime import UTC, datetime
+│   
+│   from fastapi import APIRouter, Request
+│   
+│   from shared.api.responses import success_response
+│   
+│   
+│   def create_health_router(service_name: str) -> APIRouter:
+│       router = APIRouter()
+│   
+│       @router.get("/health", tags=["Health"])
+│       async def health_check(request: Request):
+│           """Basic health check endpoint with service name and timestamp"""
+│           return success_response(
+│               data={
+│                   "status": "healthy",
+│                   "service": service_name,
+│                   "timestamp": datetime.now(UTC).isoformat(),
+│               },
+│               request_id=getattr(request.state, "request_id", None),
+│               correlation_id=getattr(request.state, "correlation_id", None),
+│           )
+│   
+│       return router
+│   ```
+│   
+├── middleware.py
+│   
+│   ```py
+│   # shared/api/middleware.py
+│   
+│   """API middleware."""
+│   
+│   import time
+│   from collections.abc import Callable
+│   
+│   from fastapi import FastAPI, Request, Response
+│   from fastapi.exceptions import HTTPException, RequestValidationError
+│   from fastapi.responses import JSONResponse
+│   from starlette.middleware.base import BaseHTTPMiddleware
+│   
+│   from shared.utils.exceptions import GlamBaseError
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from .responses import error_response
+│   
+│   
+│   class APIMiddleware(BaseHTTPMiddleware):
+│       """Unified middleware for request/response handling."""
+│   
+│       def __init__(self, app: FastAPI, *, service_name: str = "glam-service"):
+│           super().__init__(app)
+│           self.service_name = service_name
+│   
+│       async def dispatch(self, request: Request, call_next: Callable) -> Response:
+│           correlation_id = request.headers.get("X-Correlation-ID")
+│           logger: ServiceLogger = request.app.state.logger
+│   
+│           start_time = time.perf_counter()
+│   
+│           try:
+│               response = await call_next(request)
+│           except Exception as exc:
+│               status_code, error_resp = self._handle_exception(exc, correlation_id)
+│   
+│               logger.error(
+│                   "Request failed",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "method": request.method,
+│                       "path": request.url.path,
+│                       "status": status_code,
+│                       "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+│                       "error_code": error_resp.error.code if error_resp.error else "UNKNOWN",
+│                       "service": self.service_name,
+│                   },
+│               )
+│   
+│               response = JSONResponse(
+│                   content=error_resp.model_dump(mode="json", exclude_none=True),
+│                   status_code=status_code,
+│               )
+│   
+│           response.headers["X-Correlation-ID"] = correlation_id
+│           response.headers["X-Service-Name"] = self.service_name
+│           return response
+│   
+│       def _handle_exception(self, exc: Exception, correlation_id: str):
+│           """Convert exception to standardized error response."""
+│   
+│           if isinstance(exc, GlamBaseError):
+│               return exc.status, error_response(
+│                   code=exc.code,
+│                   message=exc.message,
+│                   details=exc.details,
+│                   correlation_id=correlation_id,
+│               )
+│   
+│           elif isinstance(exc, RequestValidationError):
+│               validation_errors = [
+│                   {
+│                       "field": ".".join(str(loc) for loc in error["loc"]),
+│                       "message": error["msg"],
+│                       "type": error["type"],
+│                   }
+│                   for error in exc.errors()
+│               ]
+│               return 422, error_response(
+│                   code="VALIDATION_ERROR",
+│                   message="Request validation failed",
+│                   details={"validation_errors": validation_errors},
+│                   correlation_id=correlation_id,
+│               )
+│   
+│           elif isinstance(exc, HTTPException):
+│               if isinstance(exc.detail, dict):
+│                   return exc.status_code, error_response(
+│                       code=exc.detail.get("code", f"HTTP_{exc.status_code}"),
+│                       message=exc.detail.get("message", str(exc.detail)),
+│                       details=exc.detail.get("details", exc.detail),
+│                       correlation_id=correlation_id,
+│                   )
+│               return exc.status_code, error_response(
+│                   code=f"HTTP_{exc.status_code}",
+│                   message=str(exc.detail),
+│                   details=None,
+│                   correlation_id=correlation_id,
+│               )
+│   
+│           # Unknown/unhandled exception
+│           return 500, error_response(
+│               code="INTERNAL_ERROR",
+│               message=f"An unexpected error occurred: {exc!s}",
+│               details={"type": type(exc).__name__},
+│               correlation_id=correlation_id,
+│           )
+│   
+│   
+│   def setup_middleware(app: FastAPI, *, service_name: str):
+│       """Add core middleware to FastAPI app."""
+│       app.add_middleware(APIMiddleware, service_name=service_name)
+│   ```
+│   
+├── models.py
+│   
+│   ```py
+│   # -------------------------------
+│   # shared/api/models.py
+│   # -------------------------------
+│   
+│   """
+│   Unified API response models for glam-app services.
+│   Consolidates all response structures into a single, consistent pattern.
+│   """
+│   
+│   from datetime import UTC, datetime
+│   from typing import Any, Generic, TypeVar
+│   
+│   from pydantic import BaseModel, ConfigDict, Field
+│   
+│   # Generic type for response data
+│   T = TypeVar("T")
+│   
+│   
+│   class Meta(BaseModel):
+│       """Metadata included in all responses."""
+│   
+│       request_id: str = Field(description="Unique request identifier")
+│       correlation_id: str | None = Field(None, description="Distributed tracing ID")
+│       timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Response timestamp in UTC")
+│   
+│       model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+│   
+│   
+│   class Pagination(BaseModel):
+│       """Pagination metadata for list responses."""
+│   
+│       page: int = Field(ge=1)
+│       limit: int = Field(ge=1, le=1000)
+│       total: int = Field(ge=0)
+│       pages: int = Field(ge=0)
+│       has_next: bool
+│       has_previous: bool
+│   
+│       @classmethod
+│       def create(cls, page: int, limit: int, total: int) -> "Pagination":
+│           """Create pagination from parameters."""
+│           pages = (total + limit - 1) // limit if total > 0 else 0
+│           return cls(page=page, limit=limit, total=total, pages=pages, has_next=page < pages, has_previous=page > 1)
+│   
+│   
+│   class Links(BaseModel):
+│       """HATEOAS links for resource navigation."""
+│   
+│       self: str
+│       next: str | None = None
+│       previous: str | None = None
+│       first: str | None = None
+│       last: str | None = None
+│   
+│       @classmethod
+│       def create_paginated(cls, base_url: str, page: int, limit: int, pages: int, **query_params) -> "Links":
+│           """Create pagination links."""
+│   
+│           def build_url(page_num: int) -> str:
+│               params = {**query_params, "page": page_num, "limit": limit}
+│               query = "&".join(f"{k}={v}" for k, v in params.items())
+│               return f"{base_url}?{query}"
+│   
+│           return cls(
+│               self=build_url(page),
+│               next=build_url(page + 1) if page < pages else None,
+│               previous=build_url(page - 1) if page > 1 else None,
+│               first=build_url(1) if pages > 0 else None,
+│               last=build_url(pages) if pages > 0 else None,
+│           )
+│   
+│   
+│   class ErrorDetail(BaseModel):
+│       """Error information."""
+│   
+│       code: str
+│       message: str
+│       details: dict[str, Any] | None = None
+│   
+│   
+│   class ApiResponse(BaseModel, Generic[T]):
+│       """
+│       Unified API response structure.
+│       Used for both success and error responses.
+│       """
+│   
+│       # For success responses
+│       data: T | None = None
+│   
+│       # For error responses
+│       error: ErrorDetail | None = None
+│   
+│       # Always present
+│       meta: Meta
+│   
+│       # Optional for paginated responses
+│       pagination: Pagination | None = None
+│       links: Links | None = None
+│   
+│       model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+│   ```
+│   
+├── responses.py
+│   
+│   ```py
+│   # -------------------------------
+│   # shared/api/responses.py
+│   # -------------------------------
+│   
+│   """Response helper functions."""
+│   
+│   import uuid
+│   from typing import Any
+│   
+│   from .models import ApiResponse, ErrorDetail, Links, Meta, Pagination, T
+│   
+│   
+│   def create_response(
+│       data: T | None = None,
+│       error: ErrorDetail | None = None,
+│       request_id: str | None = None,
+│       correlation_id: str | None = None,
+│       pagination: Pagination | None = None,
+│       links: Links | None = None,
+│   ) -> ApiResponse[T]:
+│       """Create a unified API response."""
+│       if request_id is None:
+│           request_id = f"req_{uuid.uuid4().hex[:12]}"
+│   
+│       meta = Meta(request_id=request_id, correlation_id=correlation_id)
+│   
+│       return ApiResponse(data=data, error=error, meta=meta, pagination=pagination, links=links)
+│   
+│   
+│   def success_response(
+│       data: T, request_id: str | None = None, correlation_id: str | None = None, links: Links | None = None
+│   ) -> ApiResponse[T]:
+│       """Create a success response."""
+│       return create_response(data=data, request_id=request_id, correlation_id=correlation_id, links=links)
+│   
+│   
+│   def error_response(
+│       code: str,
+│       message: str,
+│       details: dict[str, Any] | None = None,
+│       request_id: str | None = None,
+│       correlation_id: str | None = None,
+│   ) -> ApiResponse[None]:
+│       """Create an error response."""
+│       error = ErrorDetail(code=code, message=message, details=details)
+│       return create_response(error=error, request_id=request_id, correlation_id=correlation_id)
+│   
+│   
+│   def paginated_response(
+│       data: list[T],
+│       page: int,
+│       limit: int,
+│       total: int,
+│       base_url: str,
+│       request_id: str | None = None,
+│       correlation_id: str | None = None,
+│       **query_params,
+│   ) -> ApiResponse[list[T]]:
+│       """Create a paginated response."""
+│       pagination = Pagination.create(page, limit, total)
+│       links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
+│   
+│       return create_response(
+│           data=data, request_id=request_id, correlation_id=correlation_id, pagination=pagination, links=links
+│       )
+│   ```
+│   
+└── validation.py
+    
+    ```py
+    # shared/api/validation.py
+    from typing import Any
+    
+    from fastapi import HTTPException, status
+    
+    from shared.api.dependencies import ClientAuthContext, InternalAuthContext, PlatformContext
+    from shared.utils.logger import ServiceLogger
+    
+    
+    def validate_shop_context(
+        client_auth: ClientAuthContext,
+        platform_ctx: PlatformContext,
+        logger: ServiceLogger,
+        body_platform: str | None = None,
+        body_domain: str | None = None,
+        expected_platform: str | None = None,
+        expected_scope: str | None = None,
+        webhook_payload: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Unified validation for shop context across auth, headers, body, and webhooks.
+    
+        Args:
+            client_auth: JWT authentication context
+            platform_ctx: Platform context from headers
+            logger: Service logger
+            body_platform: Platform from request body (if applicable)
+            body_domain: Domain from request body (if applicable)
+            expected_platform: Expected platform for this endpoint (e.g., "shopify")
+            expected_scope: Expected JWT scope (e.g., "bff:call")
+            webhook_payload: Webhook payload for platform-specific validation
+    
+        Raises:
+            HTTPException: On any validation failure
+        """
+    
+        # 1. Validate expected platform (for platform-specific endpoints)
+        if expected_platform and platform_ctx.platform != expected_platform:
+            logger.warning(
+                f"Invalid platform for {expected_platform}-only endpoint",
+                extra={"received_platform": platform_ctx.platform, "expected_platform": expected_platform},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "INVALID_PLATFORM",
+                    "message": f"This endpoint only accepts {expected_platform} requests",
+                    "details": {"received": platform_ctx.platform, "expected": expected_platform},
+                },
+            )
+    
+        # 2. Validate JWT shop matches header domain
+        if client_auth.shop != platform_ctx.domain:
+            logger.warning(
+                "Shop domain mismatch between JWT and headers",
+                extra={"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "code": "domain_MISMATCH",
+                    "message": "Shop domain mismatch between JWT and headers",
+                    "details": {"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
+                },
+            )
+    
+        # 3. Validate JWT scope if specified
+        if expected_scope and client_auth.scope != expected_scope:
+            logger.warning(
+                "Invalid JWT scope", extra={"received_scope": client_auth.scope, "expected_scope": expected_scope}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "INVALID_SCOPE",
+                    "message": "Invalid JWT scope",
+                    "details": {"received": client_auth.scope, "expected": expected_scope},
+                },
+            )
+    
+        # 4. Validate body domain if provided
+        if body_domain and body_domain.lower() != platform_ctx.domain.lower():
+            logger.warning(
+                "Domain mismatch between request body and header",
+                extra={"body_domain": body_domain, "header_domain": platform_ctx.domain},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "BODY_DOMAIN_MISMATCH",
+                    "message": "Domain mismatch between request body and header",
+                    "details": {"body_domain": body_domain, "header_domain": platform_ctx.domain},
+                },
+            )
+    
+        # 5. Validate body platform if provided
+        if body_platform and body_platform.lower() != platform_ctx.platform.lower():
+            logger.warning(
+                "Platform mismatch between request body and header",
+                extra={"body_platform": body_platform, "header_platform": platform_ctx.platform},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "PLATFORM_MISMATCH",
+                    "message": "Platform mismatch between request body and header",
+                    "details": {"body_platform": body_platform, "header_platform": platform_ctx.platform},
+                },
+            )
+    
+        # 6. Platform-specific webhook payload validation
+        if webhook_payload and platform_ctx.is_shopify:
+            # Shopify-specific validation
+            payload_domain = (webhook_payload.get("myshopify_domain") or webhook_payload.get("domain") or "").lower()
+    
+            if payload_domain and payload_domain != platform_ctx.domain:
+                logger.warning(
+                    "Shopify webhook payload domain mismatch",
+                    extra={"payload_domain": payload_domain, "header_domain": platform_ctx.domain},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": "WEBHOOK_DOMAIN_MISMATCH",
+                        "message": "Webhook payload domain doesn't match header domain",
+                        "details": {"payload_domain": payload_domain, "header_domain": platform_ctx.domain},
+                    },
+                )
+    
+        # Add other platform-specific validations as needed
+        # elif platform_ctx.platform == "bigcommerce":
+        #     ...
+    
+    
+    # Usage patterns:
+    
+    # Minimal validation (just auth consistency)
+    # validate_shop_context(client_auth, platform_ctx, logger)
+    
+    # # With body validation
+    # validate_shop_context(
+    #     client_auth, platform_ctx, logger,
+    #     body_platform=body.platform,
+    #     body_domain=body.domain
+    # )
+    
+    # # Platform-specific endpoint
+    # validate_shop_context(
+    #     client_auth, platform_ctx, logger,
+    #     expected_platform="shopify"
+    # )
+    
+    # # Webhook with all validations
+    # validate_shop_context(
+    #     client_auth, platform_ctx, logger,
+    #     expected_platform="shopify",
+    #     expected_scope="bff:call",
+    #     webhook_payload=payload
+    # )
+    
+    # shared/api/validation.py - ADD this function to existing file
+    
+    
+    def validate_service_context(
+        internal_auth: InternalAuthContext,
+        logger: ServiceLogger,
+        allowed_services: list[str] | None = None,
+        operation: str | None = None,
+    ) -> None:
+        """
+        Validate internal service-to-service calls.
+    
+        Args:
+            internal_auth: Internal service authentication context
+            logger: Service logger
+            allowed_services: List of services allowed to make this call
+            operation: Operation being performed (for logging)
+    
+        Raises:
+            HTTPException: On validation failure
+        """
+    
+        # Check if service is in allowed list
+        if allowed_services and internal_auth.service not in allowed_services:
+            logger.warning(
+                "Unauthorized service access attempt",
+                extra={
+                    "requesting_service": internal_auth.service,
+                    "allowed_services": allowed_services,
+                    "operation": operation,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "SERVICE_NOT_ALLOWED",
+                    "message": f"Service '{internal_auth.service}' not authorized for this operation",
+                    "details": {
+                        "service": internal_auth.service,
+                        "operation": operation,
+                        "allowed_services": allowed_services,
+                    },
+                },
+            )
+    
+        logger.info("Service access validated", extra={"requesting_service": internal_auth.service, "operation": operation})
+    ```
+    
+messaging/
+├── events/
 │   ├── __init__.py
+│   ├── analytics.py
+│   ├── base.py
 │   │   
 │   │   ```py
-│   │   # -------------------------------
-│   │   # shared/api/__init__.py
-│   │   # -------------------------------
-│   │   
-│   │   """
-│   │   Unified API response models and utilities for glam-app microservices.
-│   │   
-│   │   This module provides a single, consistent approach to API responses
-│   │   across all services.
-│   │   """
-│   │   
-│   │   from .correlation import (
-│   │       add_correlation_header,
-│   │       add_correlation_to_event,
-│   │       extract_correlation_from_event,
-│   │       get_correlation_context,
-│   │       # Correlation utilities
-│   │       get_correlation_id,
-│   │       set_correlation_context,
-│   │   )
-│   │   from .debug import (
-│   │       setup_debug_handlers,
-│   │       # Debugging utilities
-│   │       setup_debug_middleware,
-│   │   )
-│   │   from .dependencies import (
-│   │       ClientAuthContext,
-│   │       ClientIpDep,
-│   │       ContentTypeDep,
-│   │       CorrelationIdDep,
-│   │       InternalAuthDep,
-│   │       LoggerDep,
-│   │       # FastAPI dependencies
-│   │       PaginationDep,
-│   │       PlatformContextDep,
-│   │       RequestContextDep,
-│   │       RequestIdDep,
-│   │       ShopDomainDep,
-│   │       ShopPlatformDep,
-│   │       WebhookHeadersDep,
-│   │   )
-│   │   from .health import (
-│   │       # Health check utilities
-│   │       create_health_router,
-│   │   )
-│   │   from .middleware import (
-│   │       # Middleware
-│   │       APIMiddleware,
-│   │       setup_middleware,
-│   │   )
-│   │   from .models import (
-│   │       # Core models
-│   │       ApiResponse,
-│   │       ErrorDetail,
-│   │       Links,
-│   │       Meta,
-│   │       Pagination,
-│   │   )
-│   │   from .responses import (
-│   │       # Response helpers
-│   │       create_response,
-│   │       error_response,
-│   │       paginated_response,
-│   │       success_response,
-│   │   )
-│   │   from .validation import validate_shop_context
-│   │   
-│   │   __all__ = [
-│   │       # Models
-│   │       "ApiResponse",
-│   │       "Meta",
-│   │       "Pagination",
-│   │       "Links",
-│   │       "ErrorDetail",
-│   │       # Response helpers
-│   │       "create_response",
-│   │       "success_response",
-│   │       "error_response",
-│   │       "paginated_response",
-│   │       # Dependencies
-│   │       "PaginationDep",
-│   │       "RequestContextDep",
-│   │       "LoggerDep",
-│   │       "ClientIpDep",
-│   │       "RequestIdDep",
-│   │       "ContentTypeDep",
-│   │       "CorrelationIdDep",
-│   │       "RequestContextDep",
-│   │       "PlatformContextDep",
-│   │       "ShopDomainDep",
-│   │       "ShopPlatformDep",
-│   │       "ClientAuthContext",
-│   │       "InternalAuthDep",
-│   │       "WebhookHeadersDep",
-│   │       # Debugging
-│   │       "setup_debug_middleware",
-│   │       "setup_debug_handlers",
-│   │       # Correlation
-│   │       "get_correlation_id",
-│   │       "set_correlation_context",
-│   │       "get_correlation_context",
-│   │       "add_correlation_header",
-│   │       "add_correlation_to_event",
-│   │       "extract_correlation_from_event",
-│   │       # Middleware
-│   │       "APIMiddleware",
-│   │       "setup_middleware",
-│   │       # Health checks
-│   │       "create_health_router",
-│   │       # Validation
-│   │       "validate_shop_context",
-│   │   ]
-│   │   ```
-│   │   
-│   ├── correlation.py
-│   │   
-│   │   ```py
-│   │   # File: shared/api/correlation.py
-│   │   
-│   │   """
-│   │   Simplified correlation ID support for distributed tracing.
-│   │   
-│   │   Focuses on the essential functionality needed for request tracing
-│   │   across services without over-engineering.
-│   │   """
-│   │   
-│   │   import uuid
-│   │   from contextvars import ContextVar
-│   │   from typing import Annotated
-│   │   
-│   │   from fastapi import Depends, Request
-│   │   
-│   │   # Context variable for async operations
-│   │   _correlation_context: ContextVar[str | None] = ContextVar("correlation_id", default=None)
-│   │   
-│   │   
-│   │   def get_correlation_id(request: Request) -> str:
-│   │       """
-│   │       Get or generate correlation ID for the current request.
-│   │   
-│   │       Priority:
-│   │       1. Request state (set by middleware)
-│   │       2. X-Correlation-ID header (from upstream service)
-│   │       3. Generate new one (originating request)
-│   │       """
-│   │       # Check request state first
-│   │       if hasattr(request.state, "correlation_id"):
-│   │           return request.state.correlation_id
-│   │   
-│   │       # Check headers from upstream service
-│   │       correlation_id = request.headers.get("X-Correlation-ID")
-│   │       if correlation_id:
-│   │           return correlation_id
-│   │   
-│   │       # Generate new one
-│   │       return f"corr_{uuid.uuid4().hex[:12]}"
-│   │   
-│   │   
-│   │   # FastAPI dependency
-│   │   CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
-│   │   
-│   │   
-│   │   def set_correlation_context(correlation_id: str) -> None:
-│   │       """Set correlation ID in async context."""
-│   │       _correlation_context.set(correlation_id)
-│   │   
-│   │   
-│   │   def get_correlation_context() -> str | None:
-│   │       """Get correlation ID from async context."""
-│   │       return _correlation_context.get()
-│   │   
-│   │   
-│   │   # Essential integrations only
-│   │   
-│   │   
-│   │   def add_correlation_header(headers: dict) -> dict:
-│   │       """
-│   │       Add correlation ID to outgoing HTTP headers.
-│   │   
-│   │       Usage:
-│   │           headers = add_correlation_header({"Content-Type": "application/json"})
-│   │           response = await client.get(url, headers=headers)
-│   │       """
-│   │       correlation_id = get_correlation_context()
-│   │       if correlation_id:
-│   │           headers["X-Correlation-ID"] = correlation_id
-│   │       return headers
-│   │   
-│   │   
-│   │   def add_correlation_to_event(event_data: dict) -> dict:
-│   │       """
-│   │       Add correlation ID to message bus events.
-│   │   
-│   │       Usage:
-│   │           event_data = {"subject": "ORDER_CREATED", "data": {...}}
-│   │           event_with_correlation = add_correlation_to_event(event_data)
-│   │       """
-│   │       correlation_id = get_correlation_context()
-│   │       if correlation_id:
-│   │           if "metadata" not in event_data:
-│   │               event_data["metadata"] = {}
-│   │           event_data["metadata"]["correlation_id"] = correlation_id
-│   │       return event_data
-│   │   
-│   │   
-│   │   def extract_correlation_from_event(event_data: dict) -> str | None:
-│   │       """Extract correlation ID from event data."""
-│   │       return event_data.get("metadata", {}).get("correlation_id")
-│   │   ```
-│   │   
-│   ├── debug.py
-│   │   
-│   │   ```py
-│   │   # shared/api/debug.py
-│   │   # ruff: noqa: T201
-│   │   """Debug utilities for FastAPI applications."""
-│   │   
-│   │   import json
-│   │   import logging
-│   │   from collections.abc import Callable
-│   │   
-│   │   from fastapi import FastAPI, HTTPException, Request
-│   │   from fastapi.exceptions import RequestValidationError
-│   │   from fastapi.responses import JSONResponse
-│   │   from starlette.middleware.base import BaseHTTPMiddleware
-│   │   
-│   │   logger = logging.getLogger(__name__)
-│   │   
-│   │   
-│   │   class EarlyDebugMiddleware(BaseHTTPMiddleware):
-│   │       """Debug middleware that runs before any dependencies or validation."""
-│   │   
-│   │       async def dispatch(self, request: Request, call_next: Callable):
-│   │           print("\n" + "=" * 60)
-│   │           print("🔍 EARLY DEBUG - REQUEST RECEIVED")
-│   │           print("=" * 60)
-│   │   
-│   │           # Log all request details
-│   │           print(f"🌐 URL: {request.url}")
-│   │           print(f"📍 Path: {request.url.path}")
-│   │           print(f"🔧 Method: {request.method}")
-│   │           print(f"❓ Query Params: {dict(request.query_params)}")
-│   │   
-│   │           # Log all headers
-│   │           print("📋 Headers:")
-│   │           for name, value in request.headers.items():
-│   │               # Mask authorization for security
-│   │               if name.lower() == "authorization":
-│   │                   value = f"Bearer {value[7:17]}..." if value.startswith("Bearer ") else "***"
-│   │               print(f"   {name}: {value}")
-│   │   
-│   │           # Log body for POST/PUT/PATCH WITHOUT consuming it
-│   │           body_logged = False
-│   │           if request.method in ["POST", "PUT", "PATCH"]:
-│   │               try:
-│   │                   # Read body once and store it
-│   │                   body = await request.body()
-│   │                   if body:
-│   │                       try:
-│   │                           body_json = json.loads(body)
-│   │                           print("📦 Body (JSON):")
-│   │                           print(json.dumps(body_json, indent=2))
-│   │                           body_logged = True
-│   │                       except json.JSONDecodeError:
-│   │                           body_str = body.decode("utf-8", errors="ignore")
-│   │                           print(f"📦 Body (Raw): {body_str[:200]}{'...' if len(body_str) > 200 else ''}")
-│   │                           body_logged = True
-│   │                   else:
-│   │                       print("📦 Body: (empty)")
-│   │                       body_logged = True
-│   │   
-│   │               except Exception as e:
-│   │                   print(f"📦 Body: (error reading: {e})")
-│   │   
-│   │           if not body_logged:
-│   │               print("📦 Body: (no body for GET request)")
-│   │   
-│   │           print("⏳ Calling next middleware/handler...")
-│   │           print("=" * 60)
-│   │   
-│   │           try:
-│   │               response = await call_next(request)
-│   │   
-│   │               print("\n" + "=" * 60)
-│   │               print("✅ EARLY DEBUG - RESPONSE READY")
-│   │               print("=" * 60)
-│   │               print(f"📤 Status: {response.status_code}")
-│   │               print(f"📤 Headers: {dict(response.headers)}")
-│   │               print("=" * 60 + "\n")
-│   │   
-│   │               return response
-│   │   
-│   │           except Exception as e:
-│   │               print("\n" + "=" * 60)
-│   │               print("❌ EARLY DEBUG - EXCEPTION CAUGHT")
-│   │               print("=" * 60)
-│   │               print(f"💥 Exception Type: {type(e).__name__}")
-│   │               print(f"💥 Exception Message: {e!s}")
-│   │               print(f"💥 Exception Details: {getattr(e, 'detail', 'No details')}")
-│   │               if hasattr(e, "status_code"):
-│   │                   print(f"💥 Status Code: {e.status_code}")
-│   │               print("=" * 60 + "\n")
-│   │               raise  # Re-raise to let other handlers deal with it
-│   │   
-│   │   
-│   │   def setup_debug_middleware(app: FastAPI):
-│   │       """Add debug middleware as the first middleware."""
-│   │       app.add_middleware(EarlyDebugMiddleware)
-│   │   
-│   │   
-│   │   def setup_debug_handlers(app: FastAPI):
-│   │       """Add debug exception handlers to catch errors before middleware."""
-│   │   
-│   │       @app.exception_handler(RequestValidationError)
-│   │       async def validation_exception_handler(request: Request, exc: RequestValidationError):
-│   │           """Debug validation errors in detail."""
-│   │   
-│   │           print("=" * 50)
-│   │           print("🚨 VALIDATION ERROR CAUGHT!")
-│   │           print("=" * 50)
-│   │   
-│   │           # Log request details
-│   │           print(f"📥 Request URL: {request.url}")
-│   │           print(f"📥 Request Method: {request.method}")
-│   │           print("📥 Request Headers:")
-│   │           for name, value in request.headers.items():
-│   │               print(f"   {name}: {value}")
-│   │   
-│   │           # Log request body if available
-│   │           try:
-│   │               if request.method in ["POST", "PUT", "PATCH"]:
-│   │                   # Try to get body (might be consumed already)
-│   │                   body = await request.body()
-│   │                   if body:
-│   │                       try:
-│   │                           body_json = json.loads(body)
-│   │                           print(f"📥 Request Body (JSON): {json.dumps(body_json, indent=2)}")
-│   │                       except Exception:
-│   │                           print(f"📥 Request Body (Raw): {body.decode('utf-8', errors='ignore')[:500]}...")
-│   │                   else:
-│   │                       print("📥 Request Body: (empty)")
-│   │           except Exception as e:
-│   │               print(f"📥 Request Body: (error reading: {e})")
-│   │   
-│   │           # Log validation errors in detail
-│   │           print(f"❌ Validation Errors ({len(exc.errors())} total):")
-│   │           for i, error in enumerate(exc.errors()):
-│   │               print(f"   {i + 1}. Field: {error.get('loc', 'unknown')}")
-│   │               print(f"      Type: {error.get('type', 'unknown')}")
-│   │               print(f"      Message: {error.get('msg', 'unknown')}")
-│   │               print(f"      Input: {error.get('input', 'not provided')}")
-│   │               print()
-│   │   
-│   │           print("=" * 50)
-│   │   
-│   │           # Return structured error response
-│   │           validation_errors = []
-│   │           for error in exc.errors():
-│   │               field_path = ".".join(str(loc) for loc in error["loc"])
-│   │               validation_errors.append(
-│   │                   {"field": field_path, "message": error["msg"], "type": error["type"], "input": error.get("input")}
-│   │               )
-│   │   
-│   │           return JSONResponse(
-│   │               status_code=422,
-│   │               content={
-│   │                   "error": {
-│   │                       "code": "VALIDATION_ERROR",
-│   │                       "message": "Request validation failed",
-│   │                       "details": {"validation_errors": validation_errors, "total_errors": len(validation_errors)},
-│   │                   }
-│   │               },
-│   │           )
-│   │   
-│   │       @app.exception_handler(HTTPException)
-│   │       async def http_exception_handler(request: Request, exc: HTTPException):
-│   │           """Debug HTTP exceptions."""
-│   │   
-│   │           print("=" * 50)
-│   │           print(f"🚨 HTTP EXCEPTION: {exc.status_code}")
-│   │           print("=" * 50)
-│   │           print(f"📥 Request URL: {request.url}")
-│   │           print(f"📥 Request Method: {request.method}")
-│   │           print(f"❌ Exception Detail: {exc.detail}")
-│   │           print(f"❌ Exception Type: {type(exc.detail)}")
-│   │           print("=" * 50)
-│   │   
-│   │           # Let your middleware handle this
-│   │           raise exc
-│   │   
-│   │       @app.exception_handler(Exception)
-│   │       async def general_exception_handler(request: Request, exc: Exception):
-│   │           """Catch any other exceptions."""
-│   │   
-│   │           print("=" * 50)
-│   │           print(f"🚨 GENERAL EXCEPTION: {type(exc).__name__}")
-│   │           print("=" * 50)
-│   │           print(f"📥 Request URL: {request.url}")
-│   │           print(f"📥 Request Method: {request.method}")
-│   │           print(f"❌ Exception: {exc}")
-│   │           print("=" * 50)
-│   │   
-│   │           # Let your middleware handle this
-│   │           raise exc
-│   │   ```
-│   │   
-│   ├── dependencies.py
-│   │   
-│   │   ```py
-│   │   """
-│   │   FastAPI dependencies for standardized API behavior.
-│   │   Clean, generic, production-ready dependencies.
-│   │   """
-│   │   
-│   │   import os
-│   │   import re
-│   │   from typing import TYPE_CHECKING, Annotated
-│   │   
-│   │   import jwt
-│   │   from fastapi import Depends, HTTPException, Query, Request, status
-│   │   from pydantic import BaseModel, Field
-│   │   
-│   │   from .correlation import get_correlation_id
-│   │   
-│   │   if TYPE_CHECKING:
-│   │       from shared.utils.logger import ServiceLogger
-│   │   
-│   │   
-│   │   # Pagination
-│   │   class PaginationParams(BaseModel):
-│   │       """Standard pagination parameters."""
-│   │   
-│   │       page: int = Field(default=1, ge=1)
-│   │       limit: int = Field(default=50, ge=1, le=1000)
-│   │   
-│   │       @property
-│   │       def offset(self) -> int:
-│   │           return (self.page - 1) * self.limit
-│   │   
-│   │   
-│   │   def get_pagination_params(
-│   │       page: int = Query(1, ge=1, description="Page number"),
-│   │       limit: int = Query(50, ge=1, le=1000, description="Items per page"),
-│   │   ) -> PaginationParams:
-│   │       return PaginationParams(page=page, limit=limit)
-│   │   
-│   │   
-│   │   PaginationDep = Annotated[PaginationParams, Depends(get_pagination_params)]
-│   │   
-│   │   
-│   │   def get_logger(request: Request) -> "ServiceLogger":
-│   │       """Get the service logger from app state."""
-│   │       return request.app.state.logger
-│   │   
-│   │   
-│   │   LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
-│   │   
-│   │   
-│   │   def get_request_id(request: Request) -> str:
-│   │       if not hasattr(request.state, "request_id"):
-│   │           raise RuntimeError("Request ID not found. Ensure APIMiddleware is properly configured.")
-│   │       return request.state.request_id
-│   │   
-│   │   
-│   │   def get_client_ip(request: Request) -> str:
-│   │       forwarded_for = request.headers.get("X-Forwarded-For")
-│   │       if forwarded_for:
-│   │           return forwarded_for.split(",")[0].strip()
-│   │       return request.client.host if request.client else "unknown"
-│   │   
-│   │   
-│   │   def get_content_type(request: Request) -> str | None:
-│   │       return request.headers.get("Content-Type")
-│   │   
-│   │   
-│   │   class RequestContext(BaseModel):
-│   │       """Essential request context for logging/auditing."""
-│   │   
-│   │       request_id: str
-│   │       correlation_id: str
-│   │       method: str
-│   │       path: str
-│   │       content_type: str | None = None
-│   │       ip_client: str | None = None
-│   │   
-│   │       @classmethod
-│   │       def from_request(cls, request: Request) -> "RequestContext":
-│   │           return cls(
-│   │               request_id=get_request_id(request),
-│   │               correlation_id=get_correlation_id(request),
-│   │               method=request.method,
-│   │               path=str(request.url.path),
-│   │               ip_client=get_client_ip(request),
-│   │               content_type=get_content_type(request),
-│   │           )
-│   │   
-│   │   
-│   │   def get_request_context(request: Request) -> RequestContext:
-│   │       return RequestContext.from_request(request)
-│   │   
-│   │   
-│   │   # Type annotations
-│   │   ClientIpDep = Annotated[str, Depends(get_client_ip)]
-│   │   RequestIdDep = Annotated[str, Depends(get_request_id)]
-│   │   ContentTypeDep = Annotated[str | None, Depends(get_content_type)]
-│   │   CorrelationIdDep = Annotated[str, Depends(get_correlation_id)]
-│   │   RequestContextDep = Annotated[RequestContext, Depends(get_request_context)]
-│   │   
-│   │   
-│   │   SUPPORTED_PLATFORMS = {"shopify", "bigcommerce", "woocommerce", "magento", "squarespace", "custom"}
-│   │   
-│   │   
-│   │   class PlatformContext(BaseModel):
-│   │       """Generic platform and domain information."""
-│   │   
-│   │       platform: str
-│   │       domain: str
-│   │   
-│   │       @property
-│   │       def is_shopify(self) -> bool:
-│   │           return self.platform == "shopify"
-│   │   
-│   │       @property
-│   │       def is_custom_domain(self) -> bool:
-│   │           """Check if domain appears to be a custom domain vs platform default."""
-│   │           if self.platform == "shopify":
-│   │               return not self.domain.endswith(".myshopify.com")
-│   │           elif self.platform == "bigcommerce":
-│   │               return not self.domain.endswith(".mybigcommerce.com")
-│   │           return True
-│   │   
-│   │   
-│   │   def _validate_platform(platform: str) -> str:
-│   │       """Validate and normalize platform name."""
-│   │       platform_norm = platform.strip().lower()
-│   │   
-│   │       if platform_norm not in SUPPORTED_PLATFORMS:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST,
-│   │               detail={
-│   │                   "code": "UNSUPPORTED_PLATFORM",
-│   │                   "message": f"Platform '{platform}' is not supported",
-│   │                   "details": {"received": platform, "supported_platforms": sorted(SUPPORTED_PLATFORMS)},
-│   │               },
-│   │           )
-│   │   
-│   │       return platform_norm
-│   │   
-│   │   
-│   │   def _validate_domain(domain: str) -> str:
-│   │       """Generic domain validation - works for any platform."""
-│   │       domain_norm = domain.strip().lower()
-│   │   
-│   │       # Basic domain format validation
-│   │       domain_pattern = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
-│   │   
-│   │       if not re.match(domain_pattern, domain_norm):
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST,
-│   │               detail={
-│   │                   "code": "INVALID_DOMAIN_FORMAT",
-│   │                   "message": f"Invalid domain format: '{domain}'",
-│   │                   "details": {
-│   │                       "received": domain,
-│   │                       "expected_format": "Valid domain name (e.g., shop.example.com, my-store.myshopify.com)",
-│   │                   },
-│   │               },
-│   │           )
-│   │   
-│   │       if len(domain_norm) > 255:
-│   │           raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Domain name too long (max 255 characters)")
-│   │   
-│   │       return domain_norm
-│   │   
-│   │   
-│   │   def require_platform_context(request: Request) -> PlatformContext:
-│   │       """
-│   │       Extract and validate shop platform and domain from headers.
-│   │   
-│   │       Expected headers:
-│   │       - X-Shop-Platform: The e-commerce platform (shopify, bigcommerce, etc.)
-│   │       - X-Shop-Domain: The shop's domain (can be platform domain or custom)
-│   │       """
-│   │   
-│   │       platform = request.headers.get("X-Shop-Platform")
-│   │       if not platform:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST,
-│   │               detail={
-│   │                   "code": "MISSING_PLATFORM_HEADER",
-│   │                   "message": "Missing required shop platform header",
-│   │                   "details": {"expected_header": "X-Shop-Platform", "supported_platforms": sorted(SUPPORTED_PLATFORMS)},
-│   │               },
-│   │           )
-│   │   
-│   │       domain = request.headers.get("X-Shop-Domain")
-│   │       if not domain:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST,
-│   │               detail={
-│   │                   "code": "MISSING_DOMAIN_HEADER",
-│   │                   "message": "Missing required shop domain header",
-│   │                   "details": {"expected_header": "X-Shop-Domain"},
-│   │               },
-│   │           )
-│   │   
-│   │       platform_norm = _validate_platform(platform)
-│   │       domain_norm = _validate_domain(domain)
-│   │   
-│   │       return PlatformContext(platform=platform_norm, domain=domain_norm)
-│   │   
-│   │   
-│   │   def require_shop_platform(request: Request) -> str:
-│   │       """Extract just the platform."""
-│   │       return require_platform_context(request).platform
-│   │   
-│   │   
-│   │   def require_shop_domain(request: Request) -> str:
-│   │       """Extract just the domain."""
-│   │       return require_platform_context(request).domain
-│   │   
-│   │   
-│   │   # Type annotations
-│   │   PlatformContextDep = Annotated[PlatformContext, Depends(require_platform_context)]
-│   │   ShopPlatformDep = Annotated[str, Depends(require_shop_platform)]
-│   │   ShopDomainDep = Annotated[str, Depends(require_shop_domain)]
-│   │   
-│   │   
-│   │   class ClientAuthContext(BaseModel):
-│   │       """Client authentication result with shop context."""
-│   │   
-│   │       shop: str
-│   │       scope: str
-│   │       token: str
-│   │   
-│   │       @property
-│   │       def audience(self) -> str:
-│   │           return "client"
-│   │   
-│   │   
-│   │   class InternalAuthContext(BaseModel):
-│   │       """Internal service-to-service authentication result."""
-│   │   
-│   │       service: str  # Identifying which service made the request
-│   │       token: str
-│   │   
-│   │       @property
-│   │       def audience(self) -> str:
-│   │           return "internal"
-│   │   
-│   │   
-│   │   def _get_bearer_token(request: Request) -> str:
-│   │       """Extract bearer token from Authorization header."""
-│   │       auth = request.headers.get("Authorization")
-│   │       if not auth or not auth.lower().startswith("bearer "):
-│   │           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-│   │       return auth.split(" ", 1)[1].strip()
-│   │   
-│   │   
-│   │   def require_client_auth(request: Request) -> ClientAuthContext:
-│   │       """
-│   │       Client authentication using JWTs.
-│   │       For requests from client applications with shop context.
-│   │       """
-│   │       token = _get_bearer_token(request)
-│   │       secret = os.getenv("CLIENT_JWT_SECRET", "")
-│   │       if not secret:
-│   │           raise RuntimeError("CLIENT_JWT_SECRET not configured")
-│   │   
-│   │       try:
-│   │           payload = jwt.decode(token, secret, algorithms=["HS256"])
-│   │       except jwt.PyJWTError as e:
-│   │           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {e!s}") from e
-│   │   
-│   │       return ClientAuthContext(shop=payload.get("sub", ""), scope=payload.get("scope", ""), token=token)
-│   │   
-│   │   
-│   │   def require_internal_auth(request: Request) -> InternalAuthContext:
-│   │       """
-│   │       Internal service-to-service authentication.
-│   │       Uses static API keys for simplicity and performance.
-│   │       """
-│   │       token = _get_bearer_token(request)
-│   │       raw = os.getenv("INTERNAL_API_KEYS", "")
-│   │       if not raw:
-│   │           raise RuntimeError("INTERNAL_API_KEYS not configured")
-│   │   
-│   │       # Format: "service1:key1,service2:key2" or just "key1,key2"
-│   │       allowed = {}
-│   │       for entry in raw.split(","):
-│   │           entry = entry.strip()
-│   │           if not entry:
-│   │               continue
-│   │           if ":" in entry:
-│   │               service, key = entry.split(":", 1)
-│   │               allowed[key.strip()] = service.strip()
-│   │           else:
-│   │               allowed[entry] = "unknown"
-│   │   
-│   │       if token not in allowed:
-│   │           raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
-│   │   
-│   │       return InternalAuthContext(service=allowed[token], token=token)
-│   │   
-│   │   
-│   │   # Type annotations
-│   │   ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
-│   │   InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
-│   │   
-│   │   
-│   │   class WebhookHeaders(BaseModel):
-│   │       """Pure webhook metadata - platform-agnostic."""
-│   │   
-│   │       topic: str
-│   │       webhook_id: str | None = None
-│   │   
-│   │       @property
-│   │       def event_type(self) -> str:
-│   │           """Normalized event type from topic."""
-│   │           # e.g., "orders/create" -> "order.created"
-│   │           return self.topic.replace("/", ".").replace("_", ".")
-│   │   
-│   │   
-│   │   def get_webhook_headers(request: Request) -> WebhookHeaders:
-│   │       """
-│   │       Extract webhook-specific headers only.
-│   │       Platform/domain handled by PlatformContext.
-│   │       """
-│   │       topic = request.headers.get("X-Webhook-Topic")
-│   │       if not topic:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST,
-│   │               detail={
-│   │                   "code": "MISSING_WEBHOOK_TOPIC",
-│   │                   "message": "Missing required webhook topic header",
-│   │                   "details": {"expected_header": "X-Webhook-Topic"},
-│   │               },
-│   │           )
-│   │   
-│   │       if len(topic) > 256:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Topic too long (max 256 characters)"
-│   │           )
-│   │   
-│   │       webhook_id = request.headers.get("X-Webhook-Id")
-│   │       if webhook_id and len(webhook_id) > 256:
-│   │           raise HTTPException(
-│   │               status_code=status.HTTP_400_BAD_REQUEST, detail="X-Webhook-Id too long (max 256 characters)"
-│   │           )
-│   │   
-│   │       return WebhookHeaders(topic=topic, webhook_id=webhook_id)
-│   │   
-│   │   
-│   │   WebhookHeadersDep = Annotated[WebhookHeaders, Depends(get_webhook_headers)]
-│   │   ```
-│   │   
-│   ├── health.py
-│   │   
-│   │   ```py
-│   │   # glam-app/shared/api/health.py
-│   │   
-│   │   from datetime import UTC, datetime
-│   │   
-│   │   from fastapi import APIRouter, Request
-│   │   
-│   │   from shared.api.responses import success_response
-│   │   
-│   │   
-│   │   def create_health_router(service_name: str) -> APIRouter:
-│   │       router = APIRouter()
-│   │   
-│   │       @router.get("/health", tags=["Health"])
-│   │       async def health_check(request: Request):
-│   │           """Basic health check endpoint with service name and timestamp"""
-│   │           return success_response(
-│   │               data={
-│   │                   "status": "healthy",
-│   │                   "service": service_name,
-│   │                   "timestamp": datetime.now(UTC).isoformat(),
-│   │               },
-│   │               request_id=getattr(request.state, "request_id", None),
-│   │               correlation_id=getattr(request.state, "correlation_id", None),
-│   │           )
-│   │   
-│   │       return router
-│   │   ```
-│   │   
-│   ├── middleware.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/api/middleware.py
-│   │   # -------------------------------
-│   │   
-│   │   """Simplified API middleware."""
-│   │   
-│   │   import time
-│   │   import uuid
-│   │   from collections.abc import Callable
-│   │   
-│   │   from fastapi import FastAPI, Request, Response
-│   │   from fastapi.exceptions import HTTPException, RequestValidationError
-│   │   from fastapi.responses import JSONResponse
-│   │   from starlette.middleware.base import BaseHTTPMiddleware
-│   │   
-│   │   from shared.utils.exceptions import GlamBaseError
-│   │   from shared.utils.logger import ServiceLogger
-│   │   
-│   │   from .correlation import get_correlation_id, set_correlation_context
-│   │   from .responses import error_response
-│   │   
-│   │   
-│   │   class APIMiddleware(BaseHTTPMiddleware):
-│   │       """Unified middleware for request/response handling."""
-│   │   
-│   │       def __init__(self, app, *, service_name: str = "glam-service"):
-│   │           super().__init__(app)
-│   │           self.service_name = service_name
-│   │   
-│   │       async def dispatch(self, request: Request, call_next: Callable) -> Response:
-│   │           # Generate IDs
-│   │           request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:12]}")
-│   │   
-│   │           # Get correlation ID (this will check headers and generate if needed)
-│   │           correlation_id = get_correlation_id(request)
-│   │   
-│   │           # Store in request state for easy access in the request
-│   │           request.state.request_id = request_id
-│   │           request.state.correlation_id = correlation_id
-│   │   
-│   │           # IMPORTANT: Set correlation context for async operations
-│   │           # This makes correlation_id available throughout the request lifecycle
-│   │           set_correlation_context(correlation_id)
-│   │   
-│   │           logger = request.app.state.logger
-│   │           logger.set_request_context(
-│   │               request_id=request_id,
-│   │               correlation_id=correlation_id,
-│   │               method=request.method,
-│   │               path=request.url.path,
-│   │               ip_client=request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-│   │               or (request.client.host if request.client else "unknown"),
-│   │           )
-│   │   
-│   │           # Track timing
-│   │           start_time = time.perf_counter()
-│   │   
-│   │           try:
-│   │               response = await call_next(request)
-│   │   
-│   │               # Add standard headers
-│   │               response.headers["X-Request-ID"] = request_id
-│   │               response.headers["X-Correlation-ID"] = correlation_id
-│   │               response.headers["X-Service-Name"] = self.service_name
-│   │   
-│   │               return response
-│   │   
-│   │           except Exception as exc:
-│   │               # Convert to standard error response
-│   │               error_resp = self._handle_exception(exc, request_id, correlation_id, logger)
-│   │   
-│   │               # Determine status code
-│   │               status_code = 500
-│   │               if isinstance(exc, GlamBaseError):
-│   │                   status_code = exc.status
-│   │               elif isinstance(exc, HTTPException):
-│   │                   status_code = exc.status_code
-│   │               elif isinstance(exc, RequestValidationError):
-│   │                   status_code = 422
-│   │   
-│   │               # Log error
-│   │               duration_ms = (time.perf_counter() - start_time) * 1000
-│   │               logger.error(
-│   │                   "Request failed",
-│   │                   extra={
-│   │                       "request_id": request_id,
-│   │                       "correlation_id": correlation_id,
-│   │                       "method": request.method,
-│   │                       "path": request.url.path,
-│   │                       "status": status_code,
-│   │                       "duration_ms": round(duration_ms, 2),
-│   │                       "error_code": error_resp.error.code if error_resp.error else "UNKNOWN",
-│   │                       "service": self.service_name,
-│   │                   },
-│   │               )
-│   │   
-│   │               response = JSONResponse(
-│   │                   content=error_resp.model_dump(mode="json", exclude_none=True), status_code=status_code
-│   │               )
-│   │   
-│   │               # Add standard headers
-│   │               response.headers["X-Request-ID"] = request_id
-│   │               response.headers["X-Correlation-ID"] = correlation_id
-│   │               response.headers["X-Service-Name"] = self.service_name
-│   │   
-│   │               return response
-│   │   
-│   │       def _handle_exception(self, exc: Exception, request_id: str, correlation_id: str, logger: ServiceLogger):
-│   │           """Convert exception to error response using the standard error_response function."""
-│   │   
-│   │           if isinstance(exc, GlamBaseError):
-│   │               return error_response(
-│   │                   code=exc.code,
-│   │                   message=exc.message,
-│   │                   details=exc.details,
-│   │                   request_id=request_id,
-│   │                   correlation_id=correlation_id,
-│   │               )
-│   │   
-│   │           elif isinstance(exc, RequestValidationError):
-│   │               validation_errors = []
-│   │               for error in exc.errors():
-│   │                   field_path = ".".join(str(loc) for loc in error["loc"])
-│   │                   validation_errors.append({"field": field_path, "message": error["msg"], "type": error["type"]})
-│   │   
-│   │               return error_response(
-│   │                   code="VALIDATION_ERROR",
-│   │                   message="Request validation failed",
-│   │                   details={"validation_errors": validation_errors},
-│   │                   request_id=request_id,
-│   │                   correlation_id=correlation_id,
-│   │               )
-│   │   
-│   │           elif isinstance(exc, HTTPException):
-│   │               # CRITICAL FIX: Properly extract structured details from HTTPException
-│   │               if isinstance(exc.detail, dict):
-│   │                   # Dependency raised HTTPException with structured detail
-│   │                   return error_response(
-│   │                       code=exc.detail.get("code", f"HTTP_{exc.status_code}"),
-│   │                       message=exc.detail.get("message", str(exc.detail)),
-│   │                       details=exc.detail.get("details", exc.detail),  # Pass ALL details
-│   │                       request_id=request_id,
-│   │                       correlation_id=correlation_id,
-│   │                   )
-│   │               else:
-│   │                   # Simple string detail
-│   │                   return error_response(
-│   │                       code=f"HTTP_{exc.status_code}",
-│   │                       message=str(exc.detail),
-│   │                       details=None,
-│   │                       request_id=request_id,
-│   │                       correlation_id=correlation_id,
-│   │                   )
-│   │   
-│   │           else:
-│   │               # Unexpected errors - include actual error message
-│   │               logger.critical(
-│   │                   "Unhandled exception",
-│   │                   extra={
-│   │                       "request_id": request_id,
-│   │                       "correlation_id": correlation_id,
-│   │                       "error_type": type(exc).__name__,
-│   │                       "error_str": str(exc),
-│   │                   },
-│   │               )
-│   │   
-│   │               return error_response(
-│   │                   code="INTERNAL_ERROR",
-│   │                   message=f"An unexpected error occurred: {exc!s}",  # Include actual error
-│   │                   details={"type": type(exc).__name__},
-│   │                   request_id=request_id,
-│   │                   correlation_id=correlation_id,
-│   │               )
-│   │   
-│   │   
-│   │   def setup_middleware(app: FastAPI, *, service_name: str):
-│   │       """
-│   │       Set up all standard middleware for a service.
-│   │   
-│   │       This sets up middleware in the correct order:
-│   │       1. Prometheus metrics (if enabled) - captures all requests
-│   │       2. API middleware - handles responses and errors
-│   │   
-│   │       Args:
-│   │           app: FastAPI application
-│   │           service_name: Name of the service
-│   │           debug: Whether to include error details in responses
-│   │       """
-│   │   
-│   │       # Add API middleware for standardized responses
-│   │       app.add_middleware(APIMiddleware, service_name=service_name)
-│   │   ```
-│   │   
-│   ├── models.py
-│   │   
-│   │   ```py
-│   │   # -------------------------------
-│   │   # shared/api/models.py
-│   │   # -------------------------------
-│   │   
-│   │   """
-│   │   Unified API response models for glam-app services.
-│   │   Consolidates all response structures into a single, consistent pattern.
-│   │   """
+│   │   # shared/messaging/models.py
+│   │   """Standardized event models for GLAM messaging system."""
 │   │   
 │   │   from datetime import UTC, datetime
 │   │   from typing import Any, Generic, TypeVar
+│   │   from uuid import UUID, uuid4
 │   │   
-│   │   from pydantic import BaseModel, ConfigDict, Field
+│   │   from pydantic import BaseModel, ConfigDict, Field, field_validator
 │   │   
-│   │   # Generic type for response data
-│   │   T = TypeVar("T")
-│   │   
-│   │   
-│   │   class Meta(BaseModel):
-│   │       """Metadata included in all responses."""
-│   │   
-│   │       request_id: str = Field(description="Unique request identifier")
-│   │       correlation_id: str | None = Field(None, description="Distributed tracing ID")
-│   │       timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Response timestamp in UTC")
-│   │   
-│   │       model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+│   │   # Type variable for payload data
+│   │   T = TypeVar("T", bound=BaseModel)
 │   │   
 │   │   
-│   │   class Pagination(BaseModel):
-│   │       """Pagination metadata for list responses."""
+│   │   class PlatformContext(BaseModel):
+│   │       """Platform identification context - REQUIRED for all events."""
 │   │   
-│   │       page: int = Field(ge=1)
-│   │       limit: int = Field(ge=1, le=1000)
-│   │       total: int = Field(ge=0)
-│   │       pages: int = Field(ge=0)
-│   │       has_next: bool
-│   │       has_previous: bool
+│   │       merchant_id: UUID = Field(..., description="Internal merchant identifier")
+│   │       platform_name: str = Field(..., description="Platform type: shopify, woocommerce, etc")
+│   │       platform_shop_id: str = Field(..., description="Platform-specific ID (shop_gid for Shopify)")
+│   │       domain: str = Field(..., description="Full platform domain")
+│   │   
+│   │       @field_validator("merchant_id", mode="before")
+│   │       @classmethod
+│   │       def coerce_merchant_id(cls, v):
+│   │           """Convert string UUID to UUID object"""
+│   │           if isinstance(v, str):
+│   │               return UUID(v)
+│   │           return v
+│   │   
+│   │   
+│   │   class BaseEventPayload(BaseModel):
+│   │       """
+│   │       Base class for all event payloads.
+│   │       Services should extend this for their specific events.
+│   │       """
+│   │   
+│   │       model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
+│   │       platform: PlatformContext = Field(..., description="Complete platform identification")
+│   │   
+│   │   
+│   │   class EventEnvelope(BaseModel, Generic[T]):
+│   │       """
+│   │       Standard envelope for all events in GLAM_EVENTS stream.
+│   │       Source service is encoded in the event_type subject.
+│   │       """
+│   │   
+│   │       model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
+│   │   
+│   │       # Required envelope fields
+│   │       event_id: str = Field(default_factory=lambda: str(uuid4()))
+│   │       event_type: str = Field(..., description="Subject: evt.{service}.{action}.v1")
+│   │       correlation_id: str = Field(..., description="Request correlation ID")
+│   │       source_service: str = Field(..., description="Service name (redundant with subject)")
+│   │       timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="When published to stream")
+│   │   
+│   │       # Typed payload with platform context
+│   │       data: T = Field(..., description="Event payload extending BaseEventPayload")
+│   │   
+│   │       def to_bytes(self) -> bytes:
+│   │           """Serialize to JSON bytes for NATS."""
+│   │           return self.model_dump_json().encode("utf-8")
 │   │   
 │   │       @classmethod
-│   │       def create(cls, page: int, limit: int, total: int) -> "Pagination":
-│   │           """Create pagination from parameters."""
-│   │           pages = (total + limit - 1) // limit if total > 0 else 0
-│   │           return cls(page=page, limit=limit, total=total, pages=pages, has_next=page < pages, has_previous=page > 1)
+│   │       def from_bytes(cls, data: bytes) -> "EventEnvelope":
+│   │           """Deserialize from NATS message."""
+│   │           return cls.model_validate_json(data)
 │   │   
 │   │   
-│   │   class Links(BaseModel):
-│   │       """HATEOAS links for resource navigation."""
+│   │   class ErrorPayload(BaseEventPayload):
+│   │       """Payload for error/failure events."""
 │   │   
-│   │       self: str
-│   │       next: str | None = None
-│   │       previous: str | None = None
-│   │       first: str | None = None
-│   │       last: str | None = None
-│   │   
-│   │       @classmethod
-│   │       def create_paginated(cls, base_url: str, page: int, limit: int, pages: int, **query_params) -> "Links":
-│   │           """Create pagination links."""
-│   │   
-│   │           def build_url(page_num: int) -> str:
-│   │               params = {**query_params, "page": page_num, "limit": limit}
-│   │               query = "&".join(f"{k}={v}" for k, v in params.items())
-│   │               return f"{base_url}?{query}"
-│   │   
-│   │           return cls(
-│   │               self=build_url(page),
-│   │               next=build_url(page + 1) if page < pages else None,
-│   │               previous=build_url(page - 1) if page > 1 else None,
-│   │               first=build_url(1) if pages > 0 else None,
-│   │               last=build_url(pages) if pages > 0 else None,
-│   │           )
-│   │   
-│   │   
-│   │   class ErrorDetail(BaseModel):
-│   │       """Error information."""
-│   │   
-│   │       code: str
-│   │       message: str
-│   │       details: dict[str, Any] | None = None
-│   │   
-│   │   
-│   │   class ApiResponse(BaseModel, Generic[T]):
-│   │       """
-│   │       Unified API response structure.
-│   │       Used for both success and error responses.
-│   │       """
-│   │   
-│   │       # For success responses
-│   │       data: T | None = None
-│   │   
-│   │       # For error responses
-│   │       error: ErrorDetail | None = None
-│   │   
-│   │       # Always present
-│   │       meta: Meta
-│   │   
-│   │       # Optional for paginated responses
-│   │       pagination: Pagination | None = None
-│   │       links: Links | None = None
-│   │   
-│   │       model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+│   │       error_code: str
+│   │       error_message: str
+│   │       failed_operation: str
+│   │       retry_count: int = 0
+│   │       max_retries: int = 3
+│   │       original_data: dict[str, Any] | None = None
 │   │   ```
 │   │   
-│   ├── responses.py
+│   ├── billing.py
+│   ├── catalog.py
 │   │   
 │   │   ```py
-│   │   # -------------------------------
-│   │   # shared/api/responses.py
-│   │   # -------------------------------
-│   │   
-│   │   """Response helper functions."""
-│   │   
-│   │   import uuid
-│   │   from typing import Any
-│   │   
-│   │   from .models import ApiResponse, ErrorDetail, Links, Meta, Pagination, T
-│   │   
-│   │   
-│   │   def create_response(
-│   │       data: T | None = None,
-│   │       error: ErrorDetail | None = None,
-│   │       request_id: str | None = None,
-│   │       correlation_id: str | None = None,
-│   │       pagination: Pagination | None = None,
-│   │       links: Links | None = None,
-│   │   ) -> ApiResponse[T]:
-│   │       """Create a unified API response."""
-│   │       if request_id is None:
-│   │           request_id = f"req_{uuid.uuid4().hex[:12]}"
-│   │   
-│   │       meta = Meta(request_id=request_id, correlation_id=correlation_id)
-│   │   
-│   │       return ApiResponse(data=data, error=error, meta=meta, pagination=pagination, links=links)
-│   │   
-│   │   
-│   │   def success_response(
-│   │       data: T, request_id: str | None = None, correlation_id: str | None = None, links: Links | None = None
-│   │   ) -> ApiResponse[T]:
-│   │       """Create a success response."""
-│   │       return create_response(data=data, request_id=request_id, correlation_id=correlation_id, links=links)
-│   │   
-│   │   
-│   │   def error_response(
-│   │       code: str,
-│   │       message: str,
-│   │       details: dict[str, Any] | None = None,
-│   │       request_id: str | None = None,
-│   │       correlation_id: str | None = None,
-│   │   ) -> ApiResponse[None]:
-│   │       """Create an error response."""
-│   │       error = ErrorDetail(code=code, message=message, details=details)
-│   │       return create_response(error=error, request_id=request_id, correlation_id=correlation_id)
-│   │   
-│   │   
-│   │   def paginated_response(
-│   │       data: list[T],
-│   │       page: int,
-│   │       limit: int,
-│   │       total: int,
-│   │       base_url: str,
-│   │       request_id: str | None = None,
-│   │       correlation_id: str | None = None,
-│   │       **query_params,
-│   │   ) -> ApiResponse[list[T]]:
-│   │       """Create a paginated response."""
-│   │       pagination = Pagination.create(page, limit, total)
-│   │       links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
-│   │   
-│   │       return create_response(
-│   │           data=data, request_id=request_id, correlation_id=correlation_id, pagination=pagination, links=links
-│   │       )
-│   │   ```
-│   │   
-│   └── validation.py
-│       
-│       ```py
-│       # shared/api/validation.py
-│       from typing import Any
-│       
-│       from fastapi import HTTPException, status
-│       
-│       from shared.api.dependencies import ClientAuthContext, PlatformContext
-│       from shared.utils.logger import ServiceLogger
-│       
-│       
-│       def validate_shop_context(
-│           client_auth: ClientAuthContext,
-│           platform_ctx: PlatformContext,
-│           logger: ServiceLogger,
-│           body_platform: str | None = None,
-│           body_domain: str | None = None,
-│           expected_platform: str | None = None,
-│           expected_scope: str | None = None,
-│           webhook_payload: dict[str, Any] | None = None,
-│       ) -> None:
-│           """
-│           Unified validation for shop context across auth, headers, body, and webhooks.
-│       
-│           Args:
-│               client_auth: JWT authentication context
-│               platform_ctx: Platform context from headers
-│               logger: Service logger
-│               body_platform: Platform from request body (if applicable)
-│               body_domain: Domain from request body (if applicable)
-│               expected_platform: Expected platform for this endpoint (e.g., "shopify")
-│               expected_scope: Expected JWT scope (e.g., "bff:call")
-│               webhook_payload: Webhook payload for platform-specific validation
-│       
-│           Raises:
-│               HTTPException: On any validation failure
-│           """
-│       
-│           # 1. Validate expected platform (for platform-specific endpoints)
-│           if expected_platform and platform_ctx.platform != expected_platform:
-│               logger.warning(
-│                   f"Invalid platform for {expected_platform}-only endpoint",
-│                   extra={"received_platform": platform_ctx.platform, "expected_platform": expected_platform},
-│               )
-│               raise HTTPException(
-│                   status_code=status.HTTP_400_BAD_REQUEST,
-│                   detail={
-│                       "code": "INVALID_PLATFORM",
-│                       "message": f"This endpoint only accepts {expected_platform} requests",
-│                       "details": {"received": platform_ctx.platform, "expected": expected_platform},
-│                   },
-│               )
-│       
-│           # 2. Validate JWT shop matches header domain
-│           if client_auth.shop != platform_ctx.domain:
-│               logger.warning(
-│                   "Shop domain mismatch between JWT and headers",
-│                   extra={"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
-│               )
-│               raise HTTPException(
-│                   status_code=status.HTTP_401_UNAUTHORIZED,
-│                   detail={
-│                       "code": "SHOP_DOMAIN_MISMATCH",
-│                       "message": "Shop domain mismatch between JWT and headers",
-│                       "details": {"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
-│                   },
-│               )
-│       
-│           # 3. Validate JWT scope if specified
-│           if expected_scope and client_auth.scope != expected_scope:
-│               logger.warning(
-│                   "Invalid JWT scope", extra={"received_scope": client_auth.scope, "expected_scope": expected_scope}
-│               )
-│               raise HTTPException(
-│                   status_code=status.HTTP_403_FORBIDDEN,
-│                   detail={
-│                       "code": "INVALID_SCOPE",
-│                       "message": "Invalid JWT scope",
-│                       "details": {"received": client_auth.scope, "expected": expected_scope},
-│                   },
-│               )
-│       
-│           # 4. Validate body domain if provided
-│           if body_domain and body_domain.lower() != platform_ctx.domain.lower():
-│               logger.warning(
-│                   "Domain mismatch between request body and header",
-│                   extra={"body_domain": body_domain, "header_domain": platform_ctx.domain},
-│               )
-│               raise HTTPException(
-│                   status_code=status.HTTP_400_BAD_REQUEST,
-│                   detail={
-│                       "code": "BODY_DOMAIN_MISMATCH",
-│                       "message": "Domain mismatch between request body and header",
-│                       "details": {"body_domain": body_domain, "header_domain": platform_ctx.domain},
-│                   },
-│               )
-│       
-│           # 5. Validate body platform if provided
-│           if body_platform and body_platform.lower() != platform_ctx.platform.lower():
-│               logger.warning(
-│                   "Platform mismatch between request body and header",
-│                   extra={"body_platform": body_platform, "header_platform": platform_ctx.platform},
-│               )
-│               raise HTTPException(
-│                   status_code=status.HTTP_400_BAD_REQUEST,
-│                   detail={
-│                       "code": "PLATFORM_MISMATCH",
-│                       "message": "Platform mismatch between request body and header",
-│                       "details": {"body_platform": body_platform, "header_platform": platform_ctx.platform},
-│                   },
-│               )
-│       
-│           # 6. Platform-specific webhook payload validation
-│           if webhook_payload and platform_ctx.is_shopify:
-│               # Shopify-specific validation
-│               payload_domain = (webhook_payload.get("myshopify_domain") or webhook_payload.get("domain") or "").lower()
-│       
-│               if payload_domain and payload_domain != platform_ctx.domain:
-│                   logger.warning(
-│                       "Shopify webhook payload domain mismatch",
-│                       extra={"payload_domain": payload_domain, "header_domain": platform_ctx.domain},
-│                   )
-│                   raise HTTPException(
-│                       status_code=status.HTTP_400_BAD_REQUEST,
-│                       detail={
-│                           "code": "WEBHOOK_DOMAIN_MISMATCH",
-│                           "message": "Webhook payload domain doesn't match header domain",
-│                           "details": {"payload_domain": payload_domain, "header_domain": platform_ctx.domain},
-│                       },
-│                   )
-│       
-│           # Add other platform-specific validations as needed
-│           # elif platform_ctx.platform == "bigcommerce":
-│           #     ...
-│       
-│       
-│       # Usage patterns:
-│       
-│       # Minimal validation (just auth consistency)
-│       # validate_shop_context(client_auth, platform_ctx, logger)
-│       
-│       # # With body validation
-│       # validate_shop_context(
-│       #     client_auth, platform_ctx, logger,
-│       #     body_platform=body.platform,
-│       #     body_domain=body.domain
-│       # )
-│       
-│       # # Platform-specific endpoint
-│       # validate_shop_context(
-│       #     client_auth, platform_ctx, logger,
-│       #     expected_platform="shopify"
-│       # )
-│       
-│       # # Webhook with all validations
-│       # validate_shop_context(
-│       #     client_auth, platform_ctx, logger,
-│       #     expected_platform="shopify",
-│       #     expected_scope="bff:call",
-│       #     webhook_payload=payload
-│       # )
-│       ```
-│       
-├── messaging/
-│   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   # shared/messaging/__init__.py
-│   │   """Shared messaging module for publisher, subscriber, event context, stream client, subject, and payloads."""
-│   │   
-│   │   from .jetstream_client import JetStreamClient
-│   │   from .listener import Listener
-│   │   from .publisher import Publisher
-│   │   from .subjects import Subjects
-│   │   
-│   │   __all__ = [
-│   │       "JetStreamClient",
-│   │       "Listener",
-│   │       "Publisher",
-│   │       "Subjects",
-│   │   ]
-│   │   ```
-│   │   
-│   ├── jetstream_client.py
-│   │   
-│   │   ```py
-│   │   # shared/shared/messaging/jetstream_client.py
-│   │   """Pure JetStream client - only connection + stream management."""
-│   │   
-│   │   import os
-│   │   
-│   │   import nats
-│   │   from nats.aio.client import Client
-│   │   from nats.js import JetStreamContext
-│   │   from nats.js.api import RetentionPolicy, StorageType, StreamConfig
-│   │   from nats.js.errors import NotFoundError
-│   │   
-│   │   from shared.utils.logger import ServiceLogger
-│   │   
-│   │   
-│   │   class JetStreamClient:
-│   │       """Pure JetStream client - only connection + stream management."""
-│   │   
-│   │       def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
-│   │           self._client: Client | None = None
-│   │           self._js: JetStreamContext | None = None
-│   │           self.logger = logger
-│   │   
-│   │       # context-manager helpers --------------------------------------------------
-│   │       async def __aenter__(self):
-│   │           return self
-│   │   
-│   │       async def __aexit__(self, exc_t, exc, tb):
-│   │           await self.close()
-│   │   
-│   │       # public accessors ---------------------------------------------------------
-│   │       @property
-│   │       def client(self) -> Client:
-│   │           if not self._client:
-│   │               raise RuntimeError("NATS client not connected")
-│   │           return self._client
-│   │   
-│   │       @property
-│   │       def js(self) -> JetStreamContext:
-│   │           if not self._js:
-│   │               raise RuntimeError("JetStream not initialized")
-│   │           return self._js
-│   │   
-│   │       # connection ---------------------------------------------------------------
-│   │       async def connect(self, servers: list[str]) -> None:
-│   │           opts = {
-│   │               "servers": servers,
-│   │               "max_reconnect_attempts": -1,
-│   │               "reconnect_time_wait": 2,
-│   │           }
-│   │           if user := os.getenv("NATS_USER"):
-│   │               opts.update(user=user, password=os.getenv("NATS_PASSWORD", ""))
-│   │   
-│   │           self._client = await nats.connect(**opts)
-│   │           self._js = self._client.jetstream()
-│   │           if self.logger:
-│   │               self.logger.info("Connected to NATS %s", servers)
-│   │   
-│   │       async def close(self) -> None:
-│   │           if self._client and not self._client.is_closed:
-│   │               await self._client.close()
-│   │               if self.logger:
-│   │                   self.logger.info("NATS connection closed")
-│   │   
-│   │       def is_connected(self) -> bool:
-│   │           return bool(self._client and self._client.is_connected)
-│   │   
-│   │       # stream helpers -----------------------------------------------------------
-│   │       async def ensure_stream(
-│   │           self,
-│   │           name: str,
-│   │           subjects: list[str],
-│   │           **kw,
-│   │       ) -> None:
-│   │           if not self._js:
-│   │               raise RuntimeError("JetStream not initialized")
-│   │   
-│   │           cfg = StreamConfig(
-│   │               name=name,
-│   │               subjects=subjects,
-│   │               retention=RetentionPolicy.LIMITS,
-│   │               max_age=24 * 60 * 60,
-│   │               max_msgs=1_000_000,
-│   │               storage=StorageType.FILE,
-│   │           )
-│   │   
-│   │           try:
-│   │               await self._js.stream_info(name)
-│   │               if self.logger:
-│   │                   self.logger.debug("Using existing stream: %s", name)
-│   │           except NotFoundError:
-│   │               await self._js.add_stream(cfg)
-│   │               if self.logger:
-│   │                   self.logger.info("Created new stream: %s", name)
-│   │   
-│   │       async def delete_stream(self, name: str) -> None:
-│   │           if not self._js:
-│   │               raise RuntimeError("JetStream not initialized")
-│   │           await self._js.delete_stream(name)
-│   │           if self.logger:
-│   │               self.logger.info("Deleted stream: %s", name)
-│   │   
-│   │       async def get_stream_info(self, name: str) -> dict:
-│   │           if not self._js:
-│   │               raise RuntimeError("JetStream not initialized")
-│   │           info = await self._js.stream_info(name)
-│   │           return {
-│   │               "name": info.config.name,
-│   │               "subjects": info.config.subjects,
-│   │               "messages": info.state.messages,
-│   │               "bytes": info.state.bytes,
-│   │           }
-│   │   ```
-│   │   
-│   ├── listener.py
-│   │   
-│   │   ```py
-│   │   # shared/messaging/js_listener.py
-│   │   """A thin, “safe” JetStream listener with JSON decode guard and error handling."""
-│   │   
-│   │   import asyncio
-│   │   import contextlib
-│   │   import json
-│   │   from abc import ABC, abstractmethod
-│   │   from typing import Any
-│   │   
-│   │   from nats.errors import TimeoutError as NATSTimeoutError
-│   │   from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
-│   │   from nats.js.errors import NotFoundError
-│   │   
-│   │   from shared.utils.logger import ServiceLogger
-│   │   
-│   │   from .jetstream_client import JetStreamClient
-│   │   
-│   │   # from .event_context import set_correlation_id, set_source_service
-│   │   
-│   │   
-│   │   class Listener(ABC):
-│   │       """
-│   │       A thin, “safe” JetStream listener:
-│   │       • one subject
-│   │       • JSON decode guard
-│   │       • soft-fail vs. hard-fail error handling
-│   │       """
-│   │   
-│   │       stream_name: str = "GLAM_EVENTS"
-│   │       batch_size: int = 10
-│   │       ack_wait_sec: int = 30
-│   │       max_deliver: int = 3
-│   │       _task: asyncio.Task | None = None
-│   │       _running: bool = False
-│   │       idle_sleep_sec: float = 0.05  # avoid spin when idle
-│   │       poll_window_sec: float = 2.0  # server-side fetch window
-│   │   
-│   │       # ---- subclasses MUST fill these --------------------------------------
-│   │       @property
-│   │       @abstractmethod
-│   │       def service_name(self) -> str:
-│   │           """Name of the owning micro-service (used for durable name)."""
-│   │           pass
-│   │   
-│   │       @property
-│   │       @abstractmethod
-│   │       def subject(self) -> str:
-│   │           """Full NATS subject to consume, e.g. ``evt.email.sent.v1``."""
-│   │           pass
-│   │   
-│   │       @property
-│   │       @abstractmethod
-│   │       def queue_group(self) -> str:
-│   │           """Queue group so replicas share the workload."""
-│   │           pass
-│   │   
-│   │       # ----------------------------------------------------------------------
-│   │       def __init__(self, js_client: JetStreamClient, logger: ServiceLogger) -> None:
-│   │           self._js = js_client.js
-│   │           self.logger = logger
-│   │           self._sub = None
-│   │   
-│   │       async def start(self) -> None:
-│   │           await self._ensure_stream()
-│   │           await self._ensure_consumer()
-│   │           await self._create_subscription()
-│   │           self.logger.info("Listening on %s", self.subject)
-│   │           self._running = True
-│   │           self._task = asyncio.create_task(self._poll_loop(), name=f"{self.service_name}:{self.subject}")
-│   │   
-│   │       async def stop(self) -> None:
-│   │           self._running = False
-│   │           if self._task:
-│   │               self._task.cancel()
-│   │               with contextlib.suppress(asyncio.CancelledError):
-│   │                   await self._task
-│   │               self._task = None
-│   │           if self._sub:
-│   │               await self._sub.unsubscribe()
-│   │   
-│   │       @abstractmethod
-│   │       async def on_message(self, data: dict[str, Any]) -> None: ...
-│   │   
-│   │       # stream
-│   │       async def _ensure_stream(self) -> None:
-│   │           """Stream must exist and cover ``evt.*`` **and** ``cmd.*``."""
-│   │           from nats.js.api import RetentionPolicy, StorageType, StreamConfig  # local to avoid circulars
-│   │   
-│   │           try:
-│   │               await self._js.stream_info(self.stream_name)
-│   │           except NotFoundError:
-│   │               cfg = StreamConfig(
-│   │                   name=self.stream_name,
-│   │                   subjects=["evt.>", "cmd.>"],
-│   │                   retention=RetentionPolicy.LIMITS,
-│   │                   max_age=24 * 60 * 60,
-│   │                   max_msgs=1_000_000,
-│   │                   storage=StorageType.FILE,
-│   │               )
-│   │               await self._js.add_stream(cfg)
-│   │               self.logger.info("Created stream %s", self.stream_name)
-│   │   
-│   │       # consumer
-│   │       async def _ensure_consumer(self) -> None:
-│   │           durable = f"{self.service_name}-{self.queue_group}"
-│   │           try:
-│   │               await self._js.consumer_info(self.stream_name, durable)
-│   │           except NotFoundError:
-│   │               cfg = ConsumerConfig(
-│   │                   durable_name=durable,
-│   │                   deliver_policy=DeliverPolicy.ALL,
-│   │                   ack_policy=AckPolicy.EXPLICIT,
-│   │                   max_deliver=self.max_deliver,
-│   │                   max_ack_pending=self.batch_size * 5,  # tame inflight
-│   │                   filter_subject=self.subject,
-│   │               )
-│   │               await self._js.add_consumer(self.stream_name, cfg)
-│   │   
-│   │       # subscription
-│   │       async def _create_subscription(self) -> None:
-│   │           self._sub = await self._js.pull_subscribe(
-│   │               self.subject,
-│   │               durable=f"{self.service_name}-{self.queue_group}",
-│   │               stream=self.stream_name,
-│   │           )
-│   │   
-│   │       async def _poll_loop(self) -> None:
-│   │           try:
-│   │               while self._running:
-│   │                   if not self._sub:
-│   │                       self.logger.error("Subscription not initialized, skipping poll")
-│   │                       await asyncio.sleep(1)
-│   │                       continue
-│   │                   try:
-│   │                       msgs = await self._sub.fetch(
-│   │                           batch=self.batch_size,
-│   │                           timeout=self.poll_window_sec,
-│   │                       )
-│   │                   except (TimeoutError, NATSTimeoutError):
-│   │                       # Normal: no messages in window
-│   │                       await asyncio.sleep(self.idle_sleep_sec)
-│   │                       continue
-│   │   
-│   │                   if not msgs:
-│   │                       await asyncio.sleep(self.idle_sleep_sec)
-│   │                       continue
-│   │   
-│   │                   for m in msgs:
-│   │                       await self._safe_handle(m)
-│   │   
-│   │           except asyncio.CancelledError:
-│   │               self.logger.info("Poll loop cancelled for %s", self.subject)
-│   │           except Exception:
-│   │               self.logger.critical("Poll loop crashed for %s", self.subject)
-│   │           # no finally cleanup here; stop() handles unsubscribe
-│   │   
-│   │       # safe handler
-│   │       async def _safe_handle(self, msg) -> None:
-│   │           try:
-│   │               envelope = json.loads(msg.data.decode())
-│   │           except json.JSONDecodeError:
-│   │               self.logger.error("Bad JSON on %s; acking (dropping)", self.subject)
-│   │               await msg.ack()
-│   │               return
-│   │   
-│   │           for f in ("event_id", "event_type", "data"):
-│   │               if f not in envelope:
-│   │                   self.logger.error("Missing %s; acking (dropping)", f)
-│   │                   await msg.ack()
-│   │                   return
-│   │   
-│   │           if envelope.get("event_type") and envelope["event_type"] != self.subject:
-│   │               self.logger.warning(
-│   │                   "Event-type mismatch; acking (subject=%s, event_type=%s)", self.subject, envelope["event_type"]
-│   │               )
-│   │               await msg.ack()
-│   │               return
-│   │   
-│   │           md = getattr(msg, "metadata", None)
-│   │           if md and getattr(md, "num_delivered", None) is not None and md.num_delivered >= self.max_deliver:
-│   │               self.logger.error("Final delivery hit; dropping msg on subject %s", self.subject)
-│   │   
-│   │           try:
-│   │               await self.on_message(envelope["data"])
-│   │               await msg.ack()
-│   │           except Exception as exc:
-│   │               should_ack = await self.on_error(exc, envelope["data"])
-│   │               try:
-│   │                   if should_ack:
-│   │                       await msg.ack()
-│   │                   else:
-│   │                       await msg.nak()
-│   │               except Exception:
-│   │                   self.logger.critical("Failed to ack/nak message")
-│   │   
-│   │       # default hook
-│   │       async def on_error(self, error: Exception, data: dict) -> bool:
-│   │           self.logger.error("Error on %s: %s", self.subject, error, exc_info=True)
-│   │           return False
-│   │   ```
-│   │   
-│   ├── publisher.py
-│   │   
-│   │   ```py
-│   │   # shared/messaging/publisher.py
-│   │   """Publisher base class for domain events and commands."""
-│   │   
-│   │   import json
-│   │   from abc import ABC, abstractmethod
-│   │   from datetime import UTC, datetime
-│   │   from uuid import uuid4
-│   │   
-│   │   from shared.utils.logger import ServiceLogger
-│   │   
-│   │   from .jetstream_client import JetStreamClient
-│   │   
-│   │   
-│   │   class Publisher(ABC):
-│   │       """Publishes domain facts (evt.*) and commands (cmd.*)"""
-│   │   
-│   │       @property
-│   │       @abstractmethod
-│   │       def service_name(self) -> str: ...
-│   │   
-│   │       def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
-│   │           self.js_client = jetstream_client
-│   │           self.logger = logger
-│   │   
-│   │       async def publish_event(
-│   │           self,
-│   │           subject: str,
-│   │           data: dict,
-│   │           correlation_id: str,
-│   │           metadata: dict[str, dict] | None = None,
-│   │       ) -> str:
-│   │           """Publish an event to JetStream"""
-│   │   
-│   │           self.logger.info("Publishing event %s", subject)
-│   │   
-│   │           if not (subject.startswith("evt.") or subject.startswith("cmd.")):
-│   │               raise ValueError("subject must start with 'evt.' or 'cmd.'")
-│   │   
-│   │           event_id = str(uuid4())
-│   │   
-│   │           envelope = {
-│   │               "event_id": event_id,
-│   │               "event_type": subject,
-│   │               "correlation_id": correlation_id,
-│   │               "timestamp": datetime.now(UTC).isoformat(),
-│   │               "source_service": self.service_name,
-│   │               "data": data,
-│   │               "metadata": metadata or {},
-│   │           }
-│   │   
-│   │           try:
-│   │               # Publish directly - stream already exists
-│   │               ack = await self.js_client.js.publish(subject, json.dumps(envelope).encode())
-│   │   
-│   │               self.logger.info("Published %s [event_id=%s, seq=%s]", subject, event_id, ack.seq if ack else "unknown")
-│   │               return event_id
-│   │   
-│   │           except Exception as e:
-│   │               self.logger.error("Failed to publish event %s: %s", subject, str(e), exc_info=True)
-│   │               raise
-│   │   ```
-│   │   
-│   └── subjects.py
-│       
-│       ```py
-│       # shared/shared/messaging/subjects.py
-│       """NATS subjects for microservices."""
-│       
-│       from enum import Enum
-│       
-│       
-│       class Subjects(str, Enum):
-│           """NATS subjects for the notification service"""
-│       
-│           # Notification subjects
-│           NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent.v1"
-│           NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed.v1"
-│       
-│           # Billing subjects
-│           BILLING_TRIAL_STARTED = "evt.billing.trial.started.v1"
-│           BILLING_TRIAL_EXPIRED = "evt.billing.trial.expired.v1"
-│           BILLING_CREDITS_PURCHASED = "evt.billing.credits.purchased.v1"
-│       
-│           # Merchant subjects
-│           MERCHANT_CREATED = "evt.merchant.created.v1"
-│       
-│           # Catalog subjects
-│           CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"
-│           CATALOG_SYNC_COMPLETED = "evt.catalog.sync.completed.v1"
-│           CATALOG_SYNC_FAILED = "evt.catalog.sync.failed.v1"
-│       
-│           # Credit subjects
-│           CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
-│           CREDIT_BALANCE_DEPLETED = "evt.credit.balance.depleted.v1"
-│       ```
-│       
-├── utils/
-│   ├── __init__.py
-│   │   
-│   │   ```py
-│   │   from .config_loader import load_root_env
-│   │   from .exceptions import (
-│   │       ConfigurationError,
-│   │       DomainError,
-│   │       ForbiddenError,
-│   │       GlamBaseError,
-│   │       InfrastructureError,
-│   │       InternalError,
-│   │       NotFoundError,
-│   │       RateLimitExceededError,
-│   │       RequestTimeoutError,
-│   │       ServiceUnavailableError,
-│   │       UnauthorizedError,
-│   │       ValidationError,
-│   │   )
-│   │   from .idempotency_key import generate_idempotency_key
-│   │   from .logger import ServiceLogger, create_logger
-│   │   
-│   │   __all__ = [
-│   │       # Config loader
-│   │       "load_root_env",
-│   │       # Exceptions
-│   │       "GlamBaseError",
-│   │       "ConfigurationError",
-│   │       "InternalError",
-│   │       "RequestTimeoutError",
-│   │       "ServiceUnavailableError",
-│   │       "RateLimitExceededError",
-│   │       "ForbiddenError",
-│   │       "UnauthorizedError",
-│   │       "NotFoundError",
-│   │       "ValidationError",
-│   │       "DomainError",
-│   │       "InfrastructureError",
-│   │       # Logger
-│   │       "create_logger",
-│   │       "ServiceLogger",
-│   │       # Idempotency key
-│   │       "generate_idempotency_key",
-│   │   ]
-│   │   ```
-│   │   
-│   ├── config_loader.py
-│   │   
-│   │   ```py
-│   │   # shared/shared/utils/config_loader.py
-│   │   
-│   │   import os
-│   │   from pathlib import Path
-│   │   
-│   │   from dotenv import load_dotenv
-│   │   
-│   │   
-│   │   def load_root_env():
-│   │       """Load .env from repository root"""
-│   │       # Don't load in Docker containers
-│   │       if os.path.exists("/.dockerenv"):
-│   │           return
-│   │       # Find repo root
-│   │       current = Path(__file__).resolve()
-│   │       while current.name != "glam-app":
-│   │           if current.parent == current:
-│   │               break
-│   │           current = current.parent
-│   │       else:
-│   │           env_file = current / ".env"
-│   │           if env_file.exists():
-│   │               load_dotenv(env_file, override=False)
-│   │   ```
-│   │   
-│   ├── exceptions.py
-│   │   
-│   │   ```py
-│   │   # shared/utils/exceptions.py
-│   │   
-│   │   """
-│   │   Base error classes for the glam-app error hierarchy.
-│   │   
-│   │   This module defines the fundamental error types that all other
-│   │   errors inherit from, following a three-tier model:
-│   │   1. GlamBaseError - Root of all application errors
-│   │   2. InfrastructureError - External system failures
-│   │   3. DomainError - Business logic violations
-│   │   """
-│   │   
-│   │   from typing import Any
-│   │   
-│   │   
-│   │   class GlamBaseError(Exception):
-│   │       """
-│   │       Base class for all glam-app errors.
-│   │   
-│   │       Attributes:
-│   │           code: Stable error code for clients (e.g., "VALIDATION_ERROR")
-│   │           status: HTTP status code (default 500)
-│   │           message: Human-readable error message
-│   │           details: Additional error context
-│   │           __cause__: Original exception if wrapped
-│   │       """
-│   │   
-│   │       code: str = "INTERNAL_ERROR"
-│   │       status: int = 500
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str,
-│   │           *,
-│   │           code: str | None = None,
-│   │           status: int | None = None,
-│   │           details: dict[str, Any] | None = None,
-│   │           cause: Exception | None = None,
-│   │       ):
-│   │           super().__init__(message)
-│   │   
-│   │           if code is not None:
-│   │               self.code = code
-│   │           if status is not None:
-│   │               self.status = status
-│   │   
-│   │           self.message = message
-│   │           self.details = details or {}
-│   │   
-│   │           # Preserve the original exception chain
-│   │           if cause is not None:
-│   │               self.__cause__ = cause
-│   │   
-│   │       def to_dict(self) -> dict[str, Any]:
-│   │           """Convert error to dictionary for JSON serialization."""
-│   │           result: dict[str, Any] = {
-│   │               "code": self.code,
-│   │               "message": self.message,
-│   │           }
-│   │   
-│   │           if self.details:
-│   │               result["details"] = self.details
-│   │   
-│   │           return result
-│   │   
-│   │   
-│   │   class InfrastructureError(GlamBaseError):
-│   │       """
-│   │       Infrastructure/external system errors.
-│   │   
-│   │       These are failures in external dependencies like databases,
-│   │       APIs, message queues, etc. They may be retryable.
-│   │       """
-│   │   
-│   │       code = "INFRASTRUCTURE_ERROR"
-│   │       status = 503  # Service Unavailable
-│   │   
-│   │       def __init__(self, message: str, *, service: str | None = None, retryable: bool = True, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if service:
-│   │               self.details["service"] = service
-│   │   
-│   │           self.details["retryable"] = retryable
-│   │           self.retryable = retryable
-│   │   
-│   │   
-│   │   class DomainError(GlamBaseError):
-│   │       """
-│   │       Domain/business logic errors.
-│   │   
-│   │       These represent violations of business rules or invalid
-│   │       operations within the application domain.
-│   │       """
-│   │   
-│   │       code = "DOMAIN_ERROR"
-│   │       status = 400  # Bad Request
-│   │   
-│   │   
-│   │   # Common domain errors used across services
-│   │   
-│   │   
-│   │   class ValidationError(DomainError):
-│   │       """Invalid request data or parameters."""
-│   │   
-│   │       code = "VALIDATION_ERROR"
-│   │       status = 422  # Unprocessable Entity
-│   │   
-│   │       def __init__(self, message: str, *, field: str | None = None, value: Any | None = None, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if field:
-│   │               self.details["field"] = field
-│   │           if value is not None:
-│   │               self.details["value"] = str(value)
-│   │   
-│   │   
-│   │   class NotFoundError(DomainError):
-│   │       """Requested resource not found."""
-│   │   
-│   │       code = "NOT_FOUND"
-│   │       status = 404
-│   │   
-│   │       def __init__(self, message: str, *, resource: str | None = None, resource_id: Any | None = None, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if resource:
-│   │               self.details["resource"] = resource
-│   │           if resource_id is not None:
-│   │               self.details["resource_id"] = str(resource_id)
-│   │   
-│   │   
-│   │   class ConflictError(DomainError):
-│   │       """Operation conflicts with current state."""
-│   │   
-│   │       code = "CONFLICT"
-│   │       status = 409
-│   │   
-│   │       def __init__(
-│   │           self, message: str, *, conflicting_resource: str | None = None, current_state: str | None = None, **kwargs
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if conflicting_resource:
-│   │               self.details["conflicting_resource"] = conflicting_resource
-│   │           if current_state:
-│   │               self.details["current_state"] = current_state
-│   │   
-│   │   
-│   │   class UnauthorizedError(DomainError):
-│   │       """Authentication required or failed."""
-│   │   
-│   │       code = "UNAUTHORIZED"
-│   │       status = 401
-│   │   
-│   │       def __init__(self, message: str = "Authentication required", *, auth_type: str | None = None, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if auth_type:
-│   │               self.details["auth_type"] = auth_type
-│   │   
-│   │   
-│   │   class ForbiddenError(DomainError):
-│   │       """Authenticated but insufficient permissions."""
-│   │   
-│   │       code = "FORBIDDEN"
-│   │       status = 403
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Insufficient permissions",
-│   │           *,
-│   │           required_permission: str | None = None,
-│   │           resource: str | None = None,
-│   │           **kwargs,
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if required_permission:
-│   │               self.details["required_permission"] = required_permission
-│   │           if resource:
-│   │               self.details["resource"] = resource
-│   │   
-│   │   
-│   │   class RateLimitExceededError(DomainError):
-│   │       """Too many requests."""
-│   │   
-│   │       code = "RATE_LIMITED"
-│   │       status = 429
-│   │   
-│   │       def __init__(
-│   │           self,
-│   │           message: str = "Rate limit exceeded",
-│   │           *,
-│   │           limit: int | None = None,
-│   │           window: str | None = None,
-│   │           retry_after: int | None = None,
-│   │           **kwargs,
-│   │       ):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if limit:
-│   │               self.details["limit"] = limit
-│   │           if window:
-│   │               self.details["window"] = window
-│   │           if retry_after:
-│   │               self.details["retry_after"] = retry_after
-│   │   
-│   │   
-│   │   class ServiceUnavailableError(InfrastructureError):
-│   │       """Service temporarily unavailable."""
-│   │   
-│   │       code = "SERVICE_UNAVAILABLE"
-│   │       status = 503
-│   │   
-│   │   
-│   │   class RequestTimeoutError(InfrastructureError):
-│   │       """Operation timed out."""
-│   │   
-│   │       code = "TIMEOUT"
-│   │       status = 504
-│   │   
-│   │       def __init__(self, message: str, *, timeout_seconds: float | None = None, operation: str | None = None, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if timeout_seconds:
-│   │               self.details["timeout_seconds"] = timeout_seconds
-│   │           if operation:
-│   │               self.details["operation"] = operation
-│   │   
-│   │   
-│   │   class InternalError(GlamBaseError):
-│   │       """Unexpected internal server error."""
-│   │   
-│   │       code = "INTERNAL_ERROR"
-│   │       status = 500
-│   │   
-│   │       def __init__(self, message: str = "An unexpected error occurred", *, error_id: str | None = None, **kwargs):
-│   │           # Never expose internal details in production
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if error_id:
-│   │               self.details["error_id"] = error_id
-│   │   
-│   │   
-│   │   class ConfigurationError(GlamBaseError):
-│   │       """Configuration errors in the application."""
-│   │   
-│   │       code = "CONFIGURATION_ERROR"
-│   │       status = 500
-│   │   
-│   │       def __init__(self, message: str, *, config_key: str | None = None, expected_value: Any | None = None, **kwargs):
-│   │           super().__init__(message, **kwargs)
-│   │   
-│   │           if config_key:
-│   │               self.details["config_key"] = config_key
-│   │           if expected_value is not None:
-│   │               self.details["expected_value"] = expected_value
-│   │   ```
-│   │   
-│   ├── idempotency_key.py
-│   │   
-│   │   ```py
-│   │   # shared/utils/idempotency.py
-│   │   """Simple idempotency key generator."""
+│   │   # shared/shared/messaging/events/catalog.py
 │   │   
 │   │   from uuid import UUID
 │   │   
+│   │   from pydantic import Field
 │   │   
-│   │   def generate_idempotency_key(
-│   │       system: str, operation_type: str, identifier: str | int | UUID, extra: str | None = None
-│   │   ) -> str:
-│   │       """
-│   │       Generate idempotency key: SYSTEM_OPERATION_ID[_EXTRA]
+│   │   from shared.messaging.events.base import BaseEventPayload
 │   │   
-│   │       Examples:
-│   │           generate_idempotency_key("SHOPIFY", "ORDER", "123456")
-│   │           → "SHOPIFY_ORDER_123456"
 │   │   
-│   │           generate_idempotency_key("STRIPE", "PAYMENT", "pi_abc123")
-│   │           → "STRIPE_PAYMENT_pi_abc123"
+│   │   class CatalogSyncStartedPayload(BaseEventPayload):
+│   │       """Payload for catalog sync started event"""
 │   │   
-│   │           generate_idempotency_key("SHOPIFY", "ORDER", "123", "TESTSTORE")
-│   │           → "SHOPIFY_ORDER_123_TESTSTORE"
-│   │       """
-│   │       # Normalize inputs
-│   │       system = str(system).upper().replace("-", "_").replace(".", "_")
-│   │       operation_type = str(operation_type).upper().replace("-", "_").replace(".", "_")
-│   │       identifier = str(identifier)
+│   │       sync_id: UUID = Field(..., description="Unique sync operation ID")
+│   │       total_items: int = Field(..., description="Total items to sync")
+│   │       status: str = Field(..., description="Initial sync status")
 │   │   
-│   │       # Build key
-│   │       parts = [system, operation_type, identifier]
 │   │   
-│   │       if extra:
-│   │           parts.append(str(extra).upper().replace("-", "_").replace(".", "_"))
+│   │   class CatalogSyncCompletedPayload(BaseEventPayload):
+│   │       """Payload for catalog sync completed event"""
 │   │   
-│   │       return "_".join(parts)
+│   │       sync_id: UUID = Field(..., description="Unique sync operation ID")
+│   │       total_items: int = Field(..., description="Total items synced")
+│   │       status: str = Field(..., description="Final sync status")
+│   │       first_sync: bool = Field(default=False, description="Is this the first sync?")
+│   │       has_changes: bool = Field(default=False, description="Were there any changes?")
+│   │       email: str | None = Field(None, description="Merchant email if available")
 │   │   ```
 │   │   
-│   └── logger.py
-│       
-│       ```py
-│       # shared/utils/logger.py
-│       import logging
-│       import sys
-│       from typing import Any
-│       
-│       
-│       class ServiceLogger:
-│           """Service logger that wraps Python's standard logger"""
-│       
-│           def __init__(self, service_name: str):
-│               self.service_name = service_name
-│               self.logger = logging.getLogger(service_name)
-│               self._request_context: dict[str, Any] = {}
-│       
-│               # Only add handler if root logger has no handlers
-│               # This prevents duplicate handlers in reload
-│               if not logging.root.handlers:
-│                   handler = logging.StreamHandler(sys.stdout)
-│                   formatter = logging.Formatter(
-│                       "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+│   ├── credit.py
+│   │   
+│   │   ```py
+│   │   # shared/shared/messaging/events/credit.py
+│   │   
+│   │   from datetime import datetime
+│   │   
+│   │   from pydantic import Field
+│   │   
+│   │   from shared.messaging.events.base import BaseEventPayload
+│   │   
+│   │   
+│   │   class CreditBalanceLowPayload(BaseEventPayload):
+│   │       """Payload for credit balance low event"""
+│   │   
+│   │       balance: float = Field(..., description="Current credit balance")
+│   │       threshold: float = Field(..., description="Low balance threshold")
+│   │       email: str | None = Field(None, description="Merchant email if available")
+│   │   
+│   │   
+│   │   class CreditBalanceDepletedPayload(BaseEventPayload):
+│   │       """Payload for credit balance depleted event"""
+│   │   
+│   │       depleted_at: datetime = Field(..., description="When balance hit zero")
+│   │       email: str | None = Field(None, description="Merchant email if available")
+│   │   ```
+│   │   
+│   ├── merchant.py
+│   │   
+│   │   ```py
+│   │   from shared.messaging.events.base import BaseEventPayload
+│   │   
+│   │   
+│   │   class MerchantCreatedPayload(BaseEventPayload):
+│   │       """Payload for merchant.created.v1 event."""
+│   │   
+│   │       shop_name: str
+│   │       email: str
+│   │       country: str
+│   │       currency: str
+│   │       timezone: str
+│   │       platform_version: str
+│   │       scopes: str
+│   │       status: str
+│   │   ```
+│   │   
+│   ├── notification.py
+│   │   
+│   │   ```py
+│   │   # shared/shared/messaging/events/notification.py
+│   │   from uuid import UUID
+│   │   
+│   │   from shared.messaging.events.base import BaseEventPayload
+│   │   
+│   │   
+│   │   class EmailSentPayload(BaseEventPayload):
+│   │       """Payload for email sent event"""
+│   │   
+│   │       notification_id: UUID
+│   │       template_type: str
+│   │       recipient_email: str
+│   │       provider: str
+│   │       provider_message_id: str
+│   │   
+│   │   
+│   │   class EmailFailedPayload(BaseEventPayload):
+│   │       """Payload for email failed event"""
+│   │   
+│   │       notification_id: UUID
+│   │       template_type: str
+│   │       recipient_email: str
+│   │       error_code: str
+│   │       error_message: str
+│   │       retry_count: int = 0
+│   │   ```
+│   │   
+│   ├── recommendation.py
+│   └── webhook.py
+├── __init__.py
+│   
+│   ```py
+│   # shared/messaging/__init__.py
+│   """Shared messaging module for publisher, subscriber, event context, stream client, subject, and payloads."""
+│   
+│   from .jetstream_client import JetStreamClient
+│   from .listener import Listener
+│   from .publisher import Publisher
+│   from .subjects import Subjects
+│   
+│   __all__ = [
+│       "JetStreamClient",
+│       "Listener",
+│       "Publisher",
+│       "Subjects",
+│   ]
+│   ```
+│   
+├── jetstream_client.py
+│   
+│   ```py
+│   # shared/shared/messaging/jetstream_client.py
+│   """Pure JetStream client - only connection + stream management."""
+│   
+│   import os
+│   
+│   import nats
+│   from nats.aio.client import Client
+│   from nats.js import JetStreamContext
+│   from nats.js.api import RetentionPolicy, StorageType, StreamConfig
+│   from nats.js.errors import NotFoundError
+│   
+│   from shared.utils.logger import ServiceLogger
+│   
+│   
+│   class JetStreamClient:
+│       """Pure JetStream client - only connection + stream management."""
+│   
+│       def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
+│           self._client: Client | None = None
+│           self._js: JetStreamContext | None = None
+│           self.logger = logger
+│   
+│       # context-manager helpers --------------------------------------------------
+│       async def __aenter__(self):
+│           return self
+│   
+│       async def __aexit__(self, exc_t, exc, tb):
+│           await self.close()
+│   
+│       # public accessors ---------------------------------------------------------
+│       @property
+│       def client(self) -> Client:
+│           if not self._client:
+│               raise RuntimeError("NATS client not connected")
+│           return self._client
+│   
+│       @property
+│       def js(self) -> JetStreamContext:
+│           if not self._js:
+│               raise RuntimeError("JetStream not initialized")
+│           return self._js
+│   
+│       # connection ---------------------------------------------------------------
+│       async def connect(self, servers: list[str]) -> None:
+│           opts = {
+│               "servers": servers,
+│               "max_reconnect_attempts": -1,
+│               "reconnect_time_wait": 2,
+│           }
+│           if user := os.getenv("NATS_USER"):
+│               opts.update(user=user, password=os.getenv("NATS_PASSWORD", ""))
+│   
+│           self._client = await nats.connect(**opts)
+│           self._js = self._client.jetstream()
+│           if self.logger:
+│               self.logger.info("Connected to NATS %s", servers)
+│   
+│       async def close(self) -> None:
+│           if self._client and not self._client.is_closed:
+│               await self._client.close()
+│               if self.logger:
+│                   self.logger.info("NATS connection closed")
+│   
+│       def is_connected(self) -> bool:
+│           return bool(self._client and self._client.is_connected)
+│   
+│       # stream helpers -----------------------------------------------------------
+│       async def ensure_stream(
+│           self,
+│           name: str,
+│           subjects: list[str],
+│           **kw,
+│       ) -> None:
+│           if not self._js:
+│               raise RuntimeError("JetStream not initialized")
+│   
+│           cfg = StreamConfig(
+│               name=name,
+│               subjects=subjects,
+│               retention=RetentionPolicy.LIMITS,
+│               max_age=24 * 60 * 60,
+│               max_msgs=1_000_000,
+│               storage=StorageType.FILE,
+│           )
+│   
+│           try:
+│               await self._js.stream_info(name)
+│               if self.logger:
+│                   self.logger.debug("Using existing stream: %s", name)
+│           except NotFoundError:
+│               await self._js.add_stream(cfg)
+│               if self.logger:
+│                   self.logger.info("Created new stream: %s", name)
+│   
+│       async def delete_stream(self, name: str) -> None:
+│           if not self._js:
+│               raise RuntimeError("JetStream not initialized")
+│           await self._js.delete_stream(name)
+│           if self.logger:
+│               self.logger.info("Deleted stream: %s", name)
+│   
+│       async def get_stream_info(self, name: str) -> dict:
+│           if not self._js:
+│               raise RuntimeError("JetStream not initialized")
+│           info = await self._js.stream_info(name)
+│           return {
+│               "name": info.config.name,
+│               "subjects": info.config.subjects,
+│               "messages": info.state.messages,
+│               "bytes": info.state.bytes,
+│           }
+│   ```
+│   
+├── listener.py
+│   
+│   ```py
+│   # shared/messaging/listener.py
+│   """Enhanced listener with automatic envelope unpacking and type safety."""
+│   
+│   import asyncio
+│   import contextlib
+│   import json
+│   from abc import ABC, abstractmethod
+│   from datetime import datetime
+│   from typing import Generic, TypeVar
+│   
+│   from nats.errors import TimeoutError as NATSTimeoutError
+│   from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
+│   from nats.js.errors import NotFoundError
+│   
+│   from shared.api.correlation import set_correlation_context
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from .events.base import BaseEventPayload
+│   from .jetstream_client import JetStreamClient
+│   
+│   T = TypeVar("T", bound=BaseEventPayload)
+│   
+│   
+│   class Listener(ABC, Generic[T]):
+│       """
+│       Enhanced listener with type-safe payload handling.
+│       """
+│   
+│       stream_name: str = "GLAM_EVENTS"
+│       batch_size: int = 10
+│       ack_wait_sec: int = 30
+│       max_deliver: int = 3
+│       idle_sleep_sec: float = 0.05
+│       poll_window_sec: float = 2.0
+│   
+│       _task: asyncio.Task | None = None
+│       _running: bool = False
+│       _sub = None
+│   
+│       @property
+│       @abstractmethod
+│       def service_name(self) -> str:
+│           """Service name for consumer identification."""
+│           ...
+│   
+│       @property
+│       @abstractmethod
+│       def subject(self) -> str:
+│           """NATS subject to listen to (evt.* or cmd.*)."""
+│           ...
+│   
+│       @property
+│       @abstractmethod
+│       def queue_group(self) -> str:
+│           """Queue group for load balancing."""
+│           ...
+│   
+│       @property
+│       @abstractmethod
+│       def payload_class(self) -> type[T]:
+│           """Payload class for type validation."""
+│           ...
+│   
+│       def __init__(self, js_client: JetStreamClient, logger: ServiceLogger) -> None:
+│           self._js = js_client.js
+│           self.logger = logger
+│           # Track delivery attempts for DLQ logic
+│           self._delivery_attempts: dict[str, int] = {}
+│   
+│       async def start(self) -> None:
+│           """Start listening for events."""
+│           await self._ensure_consumer()
+│           await self._create_subscription()
+│           self.logger.info("Listener started", extra={"subject": self.subject, "service": self.service_name})
+│           self._running = True
+│           self._task = asyncio.create_task(self._poll_loop(), name=f"{self.service_name}:{self.subject}")
+│   
+│       async def stop(self) -> None:
+│           """Stop listening gracefully."""
+│           self._running = False
+│           if self._task:
+│               self._task.cancel()
+│               with contextlib.suppress(asyncio.CancelledError):
+│                   await self._task
+│               self._task = None
+│           if self._sub:
+│               await self._sub.unsubscribe()
+│           self.logger.info("Listener stopped", extra={"subject": self.subject, "service": self.service_name})
+│   
+│       @abstractmethod
+│       async def on_message(
+│           self, payload: T, event_id: str, correlation_id: str, source_service: str, timestamp: datetime
+│       ) -> None:
+│           """
+│           Process message with typed payload and metadata.
+│   
+│           Args:
+│               payload: Typed and validated payload
+│               event_id: Unique event ID
+│               correlation_id: Correlation ID for tracing
+│               source_service: Service that published the event
+│               timestamp: When the event was published
+│           """
+│           ...
+│   
+│       async def on_error(self, error: Exception, event_id: str, correlation_id: str, delivery_count: int) -> bool:
+│           """
+│           Handle processing errors.
+│   
+│           Returns:
+│               True to ACK (don't retry), False to NACK (retry)
+│           """
+│           self.logger.error(
+│               "Error processing message",
+│               extra={
+│                   "subject": self.subject,
+│                   "event_id": event_id,
+│                   "correlation_id": correlation_id,
+│                   "delivery_count": delivery_count,
+│                   "error": str(error),
+│               },
+│           )
+│   
+│           # Default: retry until max_deliver
+│           return delivery_count >= self.max_deliver
+│   
+│       async def _ensure_consumer(self) -> None:
+│           """Ensure consumer exists for this listener."""
+│           durable = f"{self.service_name}-{self.queue_group}"
+│   
+│           try:
+│               await self._js.consumer_info(self.stream_name, durable)
+│               self.logger.debug("Consumer exists: %s", durable)
+│           except NotFoundError:
+│               cfg = ConsumerConfig(
+│                   durable_name=durable,
+│                   deliver_policy=DeliverPolicy.ALL,
+│                   ack_policy=AckPolicy.EXPLICIT,
+│                   max_deliver=self.max_deliver,
+│                   max_ack_pending=self.batch_size * 5,
+│                   filter_subject=self.subject,
+│                   ack_wait=self.ack_wait_sec,
+│               )
+│               await self._js.add_consumer(self.stream_name, cfg)
+│               self.logger.info("Created consumer: %s", durable)
+│   
+│       async def _create_subscription(self) -> None:
+│           """Create pull subscription."""
+│           durable = f"{self.service_name}-{self.queue_group}"
+│           self._sub = await self._js.pull_subscribe(
+│               self.subject,
+│               durable=durable,
+│               stream=self.stream_name,
+│           )
+│   
+│       async def _poll_loop(self) -> None:
+│           """Main polling loop."""
+│           try:
+│               while self._running:
+│                   if not self._sub:
+│                       self.logger.error("Subscription not initialized")
+│                       await asyncio.sleep(1)
+│                       continue
+│   
+│                   try:
+│                       msgs = await self._sub.fetch(
+│                           batch=self.batch_size,
+│                           timeout=self.poll_window_sec,
+│                       )
+│                   except (TimeoutError, NATSTimeoutError):
+│                       # Normal: no messages available
+│                       await asyncio.sleep(self.idle_sleep_sec)
+│                       continue
+│   
+│                   if not msgs:
+│                       await asyncio.sleep(self.idle_sleep_sec)
+│                       continue
+│   
+│                   # Process batch
+│                   for msg in msgs:
+│                       await self._process_message(msg)
+│   
+│           except asyncio.CancelledError:
+│               self.logger.info("Poll loop cancelled")
+│           except Exception:
+│               self.logger.critical("Poll loop crashed", exc_info=True)
+│   
+│       async def _process_message(self, msg) -> None:
+│           """Process a single message with envelope unpacking."""
+│           delivery_count = 1
+│   
+│           try:
+│               # Get delivery count from metadata
+│               md = getattr(msg, "metadata", None)
+│               if md:
+│                   delivery_count = getattr(md, "num_delivered", 1)
+│   
+│               # Parse the JSON envelope
+│               try:
+│                   envelope_data = json.loads(msg.data.decode("utf-8"))
+│               except json.JSONDecodeError as e:
+│                   self.logger.error("Failed to parse message JSON", extra={"error": str(e)})
+│                   await msg.ack()  # ACK corrupt messages
+│                   return
+│   
+│               # Extract envelope fields
+│               event_id = envelope_data.get("event_id")
+│               event_type = envelope_data.get("event_type")
+│               correlation_id = envelope_data.get("correlation_id")
+│               source_service = envelope_data.get("source_service")
+│               timestamp_str = envelope_data.get("timestamp")
+│               data = envelope_data.get("data")
+│   
+│               # Validate required fields
+│               if not all([event_id, event_type, correlation_id, source_service, timestamp_str, data]):
+│                   self.logger.error("Missing required envelope fields", extra={"envelope": envelope_data})
+│                   await msg.ack()
+│                   return
+│   
+│               # Validate event type matches subject
+│               if event_type != self.subject:
+│                   self.logger.warning(
+│                       "Subject mismatch", extra={"expected": self.subject, "received": event_type, "event_id": event_id}
 │                   )
-│                   handler.setFormatter(formatter)
-│                   logging.root.addHandler(handler)
-│                   logging.root.setLevel(logging.INFO)
-│       
-│           def set_request_context(self, **kwargs):
-│               """Set request-scoped context"""
-│               self._request_context = kwargs
-│       
-│           def clear_request_context(self):
-│               """Clear request context"""
-│               self._request_context = {}
-│       
-│           def _add_context(self, extra: dict | None) -> dict:
-│               """Add request context to extra fields"""
-│               combined = self._request_context.copy()
-│               if extra:
-│                   combined.update(extra)
-│               return combined if combined else None
-│       
-│           def info(self, msg, *args, **kwargs):
-│               extra = kwargs.pop("extra", None)
-│               self.logger.info(msg, *args, extra=self._add_context(extra), **kwargs)
-│       
-│           def error(self, msg, *args, **kwargs):
-│               extra = kwargs.pop("extra", None)
-│               self.logger.error(msg, *args, extra=self._add_context(extra), **kwargs)
-│       
-│           def warning(self, msg, *args, **kwargs):
-│               extra = kwargs.pop("extra", None)
-│               self.logger.warning(msg, *args, extra=self._add_context(extra), **kwargs)
-│       
-│           def debug(self, msg, *args, **kwargs):
-│               extra = kwargs.pop("extra", None)
-│               self.logger.debug(msg, *args, extra=self._add_context(extra), **kwargs)
-│       
-│           def critical(self, msg, *args, **kwargs):
-│               extra = kwargs.pop("extra", None)
-│               self.logger.critical(msg, *args, extra=self._add_context(extra), **kwargs)
-│       
-│       
-│       def create_logger(service_name: str) -> ServiceLogger:
-│           return ServiceLogger(service_name)
-│       ```
-│       
-└── __init__.py
-tests/
-└── __init__.py
-.python-version
-poetry.lock
-pyproject.toml
-
-```toml
-# shared/pyproject.toml
-[tool.poetry]
-name = "shared"
-version = "0.1.0"
-description = "Shared utilities for GLAM system services"
-authors = ["GLAM Team <team@glam.com>"]
-package-mode = true
-
-[tool.poetry.dependencies]
-python = "^3.11"
-nats-py = "^2.6.0"
-pydantic = "^2.5.0"
-python-json-logger = "^2.0.7"
-tenacity = "^8.2.3"
-pydantic-settings = "^2.10.1"
-asyncio = "^3.4.3"
-python-dotenv = "^1.1.1"
-uuid7 = "^0.1.0"
-pyjwt = "^2.10.1"
-fastapi = "^0.109.0"
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-ruff = "^0.1.9"
-```
-
-README.md
+│                   await msg.ack()
+│                   return
+│   
+│               # Parse timestamp
+│               try:
+│                   timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+│               except (ValueError, AttributeError):
+│                   timestamp = datetime.utcnow()
+│   
+│               # Validate and parse payload
+│               try:
+│                   typed_payload = self.payload_class.model_validate(data)
+│               except Exception as e:
+│                   self.logger.error(
+│                       "Payload validation failed", extra={"event_id": event_id, "error": str(e), "data": data}
+│                   )
+│                   await msg.ack()
+│                   return
+│   
+│               # Set correlation context
+│               set_correlation_context(correlation_id)
+│   
+│               # Process message
+│               try:
+│                   await self.on_message(typed_payload, event_id, correlation_id, source_service, timestamp)
+│                   await msg.ack()
+│   
+│                   # Clear delivery tracking on success
+│                   if event_id in self._delivery_attempts:
+│                       del self._delivery_attempts[event_id]
+│   
+│               except Exception as e:
+│                   # Track delivery attempts
+│                   self._delivery_attempts[event_id] = delivery_count
+│   
+│                   # Let subclass decide on retry strategy
+│                   should_ack = await self.on_error(e, event_id, correlation_id, delivery_count)
+│   
+│                   if should_ack:
+│                       await msg.ack()
+│                       if event_id in self._delivery_attempts:
+│                           del self._delivery_attempts[event_id]
+│                   else:
+│                       await msg.nak()
+│   
+│           except Exception as e:
+│               self.logger.critical("Message processing failed catastrophically", extra={"error": str(e)}, exc_info=True)
+│               await msg.ack()
+│   ```
+│   
+├── publisher.py
+│   
+│   ```py
+│   # shared/messaging/publisher.py
+│   """Enhanced publisher with standardized envelope and auto-correlation."""
+│   
+│   from abc import ABC, abstractmethod
+│   from typing import TypeVar
+│   
+│   from shared.api.correlation import get_correlation_context
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from .events.base import BaseEventPayload, EventEnvelope
+│   from .jetstream_client import JetStreamClient
+│   
+│   T = TypeVar("T", bound=BaseEventPayload)
+│   
+│   
+│   class Publisher(ABC):
+│       """Base publisher with standardized event publishing."""
+│   
+│       stream_name: str = "GLAM_EVENTS"  # Single stream for all events
+│   
+│       @property
+│       @abstractmethod
+│       def service_name(self) -> str:
+│           """Service identifier for source tracking."""
+│           ...
+│   
+│       def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
+│           self.js_client = jetstream_client
+│           self.logger = logger
+│           self._ensure_stream_created = False
+│   
+│       async def _ensure_stream(self) -> None:
+│           """Ensure GLAM_EVENTS stream exists (called once)."""
+│           if self._ensure_stream_created:
+│               return
+│   
+│           await self.js_client.ensure_stream(
+│               self.stream_name,
+│               subjects=["evt.>", "cmd.>", "dlq.>"],  # Prepared for DLQ
+│           )
+│           self._ensure_stream_created = True
+│   
+│       async def publish_event(
+│           self,
+│           subject: str,
+│           payload: T,
+│           correlation_id: str | None = None,
+│           metadata: dict | None = None,
+│       ) -> str:
+│           """
+│           Publish an event with automatic envelope wrapping.
+│   
+│           Args:
+│               subject: NATS subject (evt.* or cmd.*)
+│               payload: Typed event payload extending BaseEventPayload
+│               correlation_id: Optional - will use context if not provided
+│               metadata: Additional metadata
+│   
+│           Returns:
+│               event_id of the published event
+│           """
+│           # Validate subject pattern
+│           if not (subject.startswith("evt.") or subject.startswith("cmd.") or subject.startswith("dlq.")):
+│               raise ValueError(f"Invalid subject pattern: {subject}. Must start with evt., cmd., or dlq.")
+│   
+│           # Auto-detect correlation ID from context if not provided
+│           if not correlation_id:
+│               correlation_id = get_correlation_context()
+│               if not correlation_id:
+│                   # Generate new one if no context
+│                   from uuid import uuid4
+│   
+│                   correlation_id = f"corr_{uuid4().hex[:12]}"
+│   
+│           # Create envelope with typed payload
+│           envelope = EventEnvelope[type(payload)](
+│               event_type=subject,
+│               correlation_id=correlation_id,
+│               source_service=self.service_name,
+│               data=payload,
+│               metadata=metadata or {},
+│           )
+│   
+│           self.logger.info(
+│               "Publishing event",
+│               extra={
+│                   "event_id": envelope.event_id,
+│                   "event_type": subject,
+│                   "correlation_id": correlation_id,
+│                   "service": self.service_name,
+│               },
+│           )
+│   
+│           try:
+│               # Ensure stream exists
+│               await self._ensure_stream()
+│   
+│               # Publish with envelope
+│               ack = await self.js_client.js.publish(subject, envelope.to_bytes())
+│   
+│               self.logger.info(
+│                   "Event published successfully",
+│                   extra={"event_id": envelope.event_id, "event_type": subject, "sequence": ack.seq if ack else None},
+│               )
+│   
+│               return envelope.event_id
+│   
+│           except Exception as e:
+│               self.logger.error(
+│                   "Failed to publish event", extra={"event_id": envelope.event_id, "event_type": subject, "error": str(e)}
+│               )
+│               raise
+│   
+│       async def publish_to_dlq(
+│           self,
+│           original_subject: str,
+│           error_payload: dict,
+│           correlation_id: str,
+│           error: Exception,
+│       ) -> str:
+│           """
+│           Publish failed event to dead letter queue.
+│   
+│           Args:
+│               original_subject: Original event subject that failed
+│               error_payload: Original payload that failed processing
+│               correlation_id: Original correlation ID
+│               error: The exception that occurred
+│           """
+│           # Convert subject to DLQ pattern: evt.order.created -> dlq.order.created
+│           dlq_subject = original_subject.replace("evt.", "dlq.").replace("cmd.", "dlq.")
+│   
+│           from .events.models import ErrorPayload
+│   
+│           error_data = ErrorPayload(
+│               error_code=type(error).__name__,
+│               error_message=str(error),
+│               failed_operation=original_subject,
+│               original_data=error_payload,
+│           )
+│   
+│           return await self.publish_event(
+│               subject=dlq_subject,
+│               payload=error_data,
+│               correlation_id=correlation_id,
+│               metadata={"original_subject": original_subject},
+│           )
+│   ```
+│   
+└── subjects.py
+    
+    ```py
+    # shared/shared/messaging/subjects.py
+    """NATS subjects for microservices."""
+    
+    from enum import Enum
+    
+    
+    class Subjects(str, Enum):
+        """NATS subjects for the notification service"""
+    
+        # Notification events
+        NOTIFICATION_EMAIL_REQUESTED = "cmd.notification.email.send.v1"
+        NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent.v1"
+        NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed.v1"
+    
+        # Billing subjects
+        BILLING_TRIAL_STARTED = "evt.billing.trial.started.v1"
+        BILLING_TRIAL_EXPIRED = "evt.billing.trial.expired.v1"
+        BILLING_CREDITS_PURCHASED = "evt.billing.credits.purchased.v1"
+    
+        # Merchant subjects
+        MERCHANT_CREATED = "evt.merchant.created.v1"
+    
+        # Catalog subjects
+        CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"
+        CATALOG_SYNC_COMPLETED = "evt.catalog.sync.completed.v1"
+        CATALOG_SYNC_FAILED = "evt.catalog.sync.failed.v1"
+    
+        # Credit events
+        CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
+        CREDIT_BALANCE_DEPLETED = "evt.credit.balance.depleted.v1"
+        CREDITS_CONSUMED = "evt.credits.consumed.v1"
+        CREDITS_RESET = "evt.credits.reset.v1"
+    
+        # Analytics events
+        ANALYTICS_EVENT_TRACKED = "evt.analytics.tracked.v1"
+        ANALYTICS_AGGREGATED = "evt.analytics.aggregated.v1"
+    
+        # Webhook events
+        WEBHOOK_RECEIVED = "evt.webhook.received.v1"
+        WEBHOOK_PROCESSED = "evt.webhook.processed.v1"
+        WEBHOOK_FAILED = "evt.webhook.failed.v1"
+    ```
+    
+utils/
+├── __init__.py
+│   
+│   ```py
+│   from .config_loader import load_root_env
+│   from .exceptions import (
+│       ConfigurationError,
+│       DomainError,
+│       ForbiddenError,
+│       GlamBaseError,
+│       InfrastructureError,
+│       InternalError,
+│       NotFoundError,
+│       RateLimitExceededError,
+│       RequestTimeoutError,
+│       ServiceUnavailableError,
+│       UnauthorizedError,
+│       ValidationError,
+│   )
+│   from .idempotency_key import generate_idempotency_key
+│   from .logger import ServiceLogger, create_logger
+│   
+│   __all__ = [
+│       # Config loader
+│       "load_root_env",
+│       # Exceptions
+│       "GlamBaseError",
+│       "ConfigurationError",
+│       "InternalError",
+│       "RequestTimeoutError",
+│       "ServiceUnavailableError",
+│       "RateLimitExceededError",
+│       "ForbiddenError",
+│       "UnauthorizedError",
+│       "NotFoundError",
+│       "ValidationError",
+│       "DomainError",
+│       "InfrastructureError",
+│       # Logger
+│       "create_logger",
+│       "ServiceLogger",
+│       # Idempotency key
+│       "generate_idempotency_key",
+│   ]
+│   ```
+│   
+├── config_loader.py
+│   
+│   ```py
+│   # shared/shared/utils/config_loader.py
+│   
+│   import os
+│   from pathlib import Path
+│   
+│   from dotenv import load_dotenv
+│   
+│   
+│   def load_root_env():
+│       """Load .env from repository root"""
+│       # Don't load in Docker containers
+│       if os.path.exists("/.dockerenv"):
+│           return
+│       # Find repo root
+│       current = Path(__file__).resolve()
+│       while current.name != "glam-app":
+│           if current.parent == current:
+│               break
+│           current = current.parent
+│       else:
+│           env_file = current / ".env"
+│           if env_file.exists():
+│               load_dotenv(env_file, override=False)
+│   ```
+│   
+├── exceptions.py
+│   
+│   ```py
+│   # shared/utils/exceptions.py
+│   
+│   """
+│   Base error classes for the glam-app error hierarchy.
+│   
+│   This module defines the fundamental error types that all other
+│   errors inherit from, following a three-tier model:
+│   1. GlamBaseError - Root of all application errors
+│   2. InfrastructureError - External system failures
+│   3. DomainError - Business logic violations
+│   """
+│   
+│   from typing import Any
+│   
+│   
+│   class GlamBaseError(Exception):
+│       """
+│       Base class for all glam-app errors.
+│   
+│       Attributes:
+│           code: Stable error code for clients (e.g., "VALIDATION_ERROR")
+│           status: HTTP status code (default 500)
+│           message: Human-readable error message
+│           details: Additional error context
+│           __cause__: Original exception if wrapped
+│       """
+│   
+│       code: str = "INTERNAL_ERROR"
+│       status: int = 500
+│   
+│       def __init__(
+│           self,
+│           message: str,
+│           *,
+│           code: str | None = None,
+│           status: int | None = None,
+│           details: dict[str, Any] | None = None,
+│           cause: Exception | None = None,
+│       ):
+│           super().__init__(message)
+│   
+│           if code is not None:
+│               self.code = code
+│           if status is not None:
+│               self.status = status
+│   
+│           self.message = message
+│           self.details = details or {}
+│   
+│           # Preserve the original exception chain
+│           if cause is not None:
+│               self.__cause__ = cause
+│   
+│       def to_dict(self) -> dict[str, Any]:
+│           """Convert error to dictionary for JSON serialization."""
+│           result: dict[str, Any] = {
+│               "code": self.code,
+│               "message": self.message,
+│           }
+│   
+│           if self.details:
+│               result["details"] = self.details
+│   
+│           return result
+│   
+│   
+│   class InfrastructureError(GlamBaseError):
+│       """
+│       Infrastructure/external system errors.
+│   
+│       These are failures in external dependencies like databases,
+│       APIs, message queues, etc. They may be retryable.
+│       """
+│   
+│       code = "INFRASTRUCTURE_ERROR"
+│       status = 503  # Service Unavailable
+│   
+│       def __init__(self, message: str, *, service: str | None = None, retryable: bool = True, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if service:
+│               self.details["service"] = service
+│   
+│           self.details["retryable"] = retryable
+│           self.retryable = retryable
+│   
+│   
+│   class DomainError(GlamBaseError):
+│       """
+│       Domain/business logic errors.
+│   
+│       These represent violations of business rules or invalid
+│       operations within the application domain.
+│       """
+│   
+│       code = "DOMAIN_ERROR"
+│       status = 400  # Bad Request
+│   
+│   
+│   # Common domain errors used across services
+│   
+│   
+│   class ValidationError(DomainError):
+│       """Invalid request data or parameters."""
+│   
+│       code = "VALIDATION_ERROR"
+│       status = 422  # Unprocessable Entity
+│   
+│       def __init__(self, message: str, *, field: str | None = None, value: Any | None = None, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if field:
+│               self.details["field"] = field
+│           if value is not None:
+│               self.details["value"] = str(value)
+│   
+│   
+│   class NotFoundError(DomainError):
+│       """Requested resource not found."""
+│   
+│       code = "NOT_FOUND"
+│       status = 404
+│   
+│       def __init__(self, message: str, *, resource: str | None = None, resource_id: Any | None = None, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if resource:
+│               self.details["resource"] = resource
+│           if resource_id is not None:
+│               self.details["resource_id"] = str(resource_id)
+│   
+│   
+│   class ConflictError(DomainError):
+│       """Operation conflicts with current state."""
+│   
+│       code = "CONFLICT"
+│       status = 409
+│   
+│       def __init__(
+│           self, message: str, *, conflicting_resource: str | None = None, current_state: str | None = None, **kwargs
+│       ):
+│           super().__init__(message, **kwargs)
+│   
+│           if conflicting_resource:
+│               self.details["conflicting_resource"] = conflicting_resource
+│           if current_state:
+│               self.details["current_state"] = current_state
+│   
+│   
+│   class UnauthorizedError(DomainError):
+│       """Authentication required or failed."""
+│   
+│       code = "UNAUTHORIZED"
+│       status = 401
+│   
+│       def __init__(self, message: str = "Authentication required", *, auth_type: str | None = None, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if auth_type:
+│               self.details["auth_type"] = auth_type
+│   
+│   
+│   class ForbiddenError(DomainError):
+│       """Authenticated but insufficient permissions."""
+│   
+│       code = "FORBIDDEN"
+│       status = 403
+│   
+│       def __init__(
+│           self,
+│           message: str = "Insufficient permissions",
+│           *,
+│           required_permission: str | None = None,
+│           resource: str | None = None,
+│           **kwargs,
+│       ):
+│           super().__init__(message, **kwargs)
+│   
+│           if required_permission:
+│               self.details["required_permission"] = required_permission
+│           if resource:
+│               self.details["resource"] = resource
+│   
+│   
+│   class RateLimitExceededError(DomainError):
+│       """Too many requests."""
+│   
+│       code = "RATE_LIMITED"
+│       status = 429
+│   
+│       def __init__(
+│           self,
+│           message: str = "Rate limit exceeded",
+│           *,
+│           limit: int | None = None,
+│           window: str | None = None,
+│           retry_after: int | None = None,
+│           **kwargs,
+│       ):
+│           super().__init__(message, **kwargs)
+│   
+│           if limit:
+│               self.details["limit"] = limit
+│           if window:
+│               self.details["window"] = window
+│           if retry_after:
+│               self.details["retry_after"] = retry_after
+│   
+│   
+│   class ServiceUnavailableError(InfrastructureError):
+│       """Service temporarily unavailable."""
+│   
+│       code = "SERVICE_UNAVAILABLE"
+│       status = 503
+│   
+│   
+│   class RequestTimeoutError(InfrastructureError):
+│       """Operation timed out."""
+│   
+│       code = "TIMEOUT"
+│       status = 504
+│   
+│       def __init__(self, message: str, *, timeout_seconds: float | None = None, operation: str | None = None, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if timeout_seconds:
+│               self.details["timeout_seconds"] = timeout_seconds
+│           if operation:
+│               self.details["operation"] = operation
+│   
+│   
+│   class InternalError(GlamBaseError):
+│       """Unexpected internal server error."""
+│   
+│       code = "INTERNAL_ERROR"
+│       status = 500
+│   
+│       def __init__(self, message: str = "An unexpected error occurred", *, error_id: str | None = None, **kwargs):
+│           # Never expose internal details in production
+│           super().__init__(message, **kwargs)
+│   
+│           if error_id:
+│               self.details["error_id"] = error_id
+│   
+│   
+│   class ConfigurationError(GlamBaseError):
+│       """Configuration errors in the application."""
+│   
+│       code = "CONFIGURATION_ERROR"
+│       status = 500
+│   
+│       def __init__(self, message: str, *, config_key: str | None = None, expected_value: Any | None = None, **kwargs):
+│           super().__init__(message, **kwargs)
+│   
+│           if config_key:
+│               self.details["config_key"] = config_key
+│           if expected_value is not None:
+│               self.details["expected_value"] = expected_value
+│   ```
+│   
+├── idempotency_key.py
+│   
+│   ```py
+│   # shared/utils/idempotency.py
+│   """Simple idempotency key generator."""
+│   
+│   from uuid import UUID
+│   
+│   
+│   def generate_idempotency_key(
+│       system: str, operation_type: str, identifier: str | int | UUID, extra: str | None = None
+│   ) -> str:
+│       """
+│       Generate idempotency key: SYSTEM_OPERATION_ID[_EXTRA]
+│   
+│       Examples:
+│           generate_idempotency_key("SHOPIFY", "ORDER", "123456")
+│           → "SHOPIFY_ORDER_123456"
+│   
+│           generate_idempotency_key("STRIPE", "PAYMENT", "pi_abc123")
+│           → "STRIPE_PAYMENT_pi_abc123"
+│   
+│           generate_idempotency_key("SHOPIFY", "ORDER", "123", "TESTSTORE")
+│           → "SHOPIFY_ORDER_123_TESTSTORE"
+│       """
+│       # Normalize inputs
+│       system = str(system).upper().replace("-", "_").replace(".", "_")
+│       operation_type = str(operation_type).upper().replace("-", "_").replace(".", "_")
+│       identifier = str(identifier)
+│   
+│       # Build key
+│       parts = [system, operation_type, identifier]
+│   
+│       if extra:
+│           parts.append(str(extra).upper().replace("-", "_").replace(".", "_"))
+│   
+│       return "_".join(parts)
+│   ```
+│   
+└── logger.py
+    
+    ```py
+    # shared/utils/logger.py
+    import json
+    import logging
+    import sys
+    from typing import Any
+    
+    
+    class JsonFormatter(logging.Formatter):
+        def format(self, record):
+            log_record = {
+                "timestamp": self.formatTime(record, self.datefmt),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
+            # Add all custom fields set in `extra`
+            log_record.update({k: v for k, v in record.__dict__.items() if k not in logging.LogRecord.__dict__})
+            return json.dumps(log_record)
+    
+    
+    class ServiceLogger:
+        """Service logger that wraps Python's standard logger"""
+    
+        def __init__(self, service_name: str):
+            self.service_name = service_name
+            self.logger = logging.getLogger(service_name)
+            self._request_context: dict[str, Any] = {}
+    
+            # Only add handler if root logger has no handlers
+            # This prevents duplicate handlers in reload
+            if not logging.root.handlers:
+                handler = logging.StreamHandler(sys.stdout)
+                formatter = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
+                handler.setFormatter(formatter)
+                logging.root.addHandler(handler)
+                logging.root.setLevel(logging.INFO)
+    
+        def set_request_context(self, **kwargs):
+            """Set request-scoped context"""
+            self._request_context = kwargs
+    
+        def clear_request_context(self):
+            """Clear request context"""
+            self._request_context = {}
+    
+        def _add_context(self, extra: dict | None) -> dict:
+            """Add request context to extra fields"""
+            combined = self._request_context.copy()
+            if extra:
+                combined.update(extra)
+            return combined if combined else None
+    
+        def info(self, msg, *args, **kwargs):
+            extra = kwargs.pop("extra", None)
+            self.logger.info(msg, *args, extra=self._add_context(extra), **kwargs)
+    
+        def error(self, msg, *args, **kwargs):
+            extra = kwargs.pop("extra", None)
+            self.logger.error(msg, *args, extra=self._add_context(extra), **kwargs)
+    
+        def warning(self, msg, *args, **kwargs):
+            extra = kwargs.pop("extra", None)
+            self.logger.warning(msg, *args, extra=self._add_context(extra), **kwargs)
+    
+        def debug(self, msg, *args, **kwargs):
+            extra = kwargs.pop("extra", None)
+            self.logger.debug(msg, *args, extra=self._add_context(extra), **kwargs)
+    
+        def critical(self, msg, *args, **kwargs):
+            extra = kwargs.pop("extra", None)
+            self.logger.critical(msg, *args, extra=self._add_context(extra), **kwargs)
+    
+    
+    def create_logger(service_name: str) -> ServiceLogger:
+        return ServiceLogger(service_name)
+    ```
+    
+__init__.py
 
 ================================================================================
 Output includes file contents

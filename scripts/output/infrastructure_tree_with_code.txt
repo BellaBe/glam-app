@@ -5,52 +5,52 @@ Directory Structure: /home/bellabe/glam-app/infrastructure
 infrastructure/
 configs/
 └── nats.conf
-    
+
     ```conf
     # configs/nats.conf
     # NATS Server Configuration for GLAM Platform
-    
+
     # Server name and listen address
     server_name: "glam-nats"
     listen: 0.0.0.0:4222
-    
+
     # Monitoring
     http_port: 8222
-    
+
     # Limits
     max_connections: 1000
     max_control_line: 4KB
     max_payload: 2MB
     max_pending: 32MB
-    
+
     # Timeouts
     ping_interval: "30s"
     ping_max: 3
-    
+
     # JetStream Configuration
     jetstream {
         # Storage directory
         store_dir: "/data/jetstream"
-        
+
         # Memory storage limit
         max_memory_store: 100MB
-        
+
         # File storage limit
         max_file_store: 5GB
-        
+
         # Enable JetStream
         enabled: true
     }
-    
+
     # Logging
     debug: false
     trace: false
     logtime: true
     log_file: "/data/nats.log"
-    
+
     # System Account (for monitoring)
     system_account: "SYS"
-    
+
     accounts: {
         SYS: {
             users: [
@@ -59,39 +59,39 @@ configs/
         }
     }
     ```
-    
+
 nginx/
 └── nginx.conf
-    
+
     ```conf
     user nginx;
     worker_processes auto;
     error_log /var/log/nginx/error.log warn;
     pid /var/run/nginx.pid;
-    
+
     events {
         worker_connections 1024;
     }
-    
+
     http {
         include /etc/nginx/mime.types;
         default_type application/octet-stream;
-        
+
         sendfile on;
         keepalive_timeout 65;
         client_max_body_size 10M;
-    
+
         server {
             listen 80;
             server_name _;
-    
+
             # Health check
             location /health {
                 access_log off;
                 return 200 "OK\n";
                 add_header Content-Type text/plain;
             }
-    
+
             # For now, show a simple message
             location / {
                 return 200 "GLAM Platform Running\n";
@@ -100,28 +100,28 @@ nginx/
         }
     }
     ```
-    
+
 scripts/
 ├── backup.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   # scripts/backup.sh
 │   # Daily backup script for GLAM platform
-│   
+│
 │   set -e
-│   
+│
 │   # Configuration
 │   BACKUP_DIR="/backups"
 │   DATE=$(date +%Y%m%d_%H%M%S)
 │   BACKUP_PATH="${BACKUP_DIR}/${DATE}"
 │   RETENTION_DAYS=7
-│   
+│
 │   # Create backup directory
 │   mkdir -p "${BACKUP_PATH}"
-│   
+│
 │   echo "Starting backup at $(date)"
-│   
+│
 │   # Backup all PostgreSQL databases
 │   echo "Backing up databases..."
 │   DATABASES=(
@@ -138,67 +138,67 @@ scripts/
 │       "token_db"
 │       "webhook_db"
 │   )
-│   
+│
 │   for db in "${DATABASES[@]}"; do
 │       echo "  Backing up ${db}..."
 │       docker exec glam_postgres pg_dump -U postgres -Fc "${db}" > "${BACKUP_PATH}/${db}.dump"
 │   done
-│   
+│
 │   # Backup environment file (without secrets)
 │   echo "Backing up configuration..."
 │   grep -v "PASS\|KEY\|SECRET" .env > "${BACKUP_PATH}/env.backup" || true
-│   
+│
 │   # Create compressed archive
 │   echo "Compressing backup..."
 │   tar -czf "${BACKUP_PATH}.tar.gz" -C "${BACKUP_DIR}" "${DATE}"
 │   rm -rf "${BACKUP_PATH}"
-│   
+│
 │   # Remove old backups
 │   echo "Cleaning old backups..."
 │   find "${BACKUP_DIR}" -name "*.tar.gz" -mtime +${RETENTION_DAYS} -delete
-│   
+│
 │   echo "Backup completed: ${BACKUP_PATH}.tar.gz"
 │   echo "Backup size: $(du -h ${BACKUP_PATH}.tar.gz | cut -f1)"
 │   ```
-│   
+│
 ├── check-metrics.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   echo "CPU Usage:"
 │   top -bn1 | grep "Cpu(s)" | awk '{print $2}'
-│   
+│
 │   echo "Memory Usage:"
 │   free -h
-│   
+│
 │   echo "Disk Usage:"
 │   df -h /
-│   
+│
 │   echo "Docker Stats:"
 │   docker stats --no-stream
 │   ```
-│   
+│
 ├── deploy.sh
 ├── health-check.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   # scripts/health-check.sh
 │   # Health check script for all GLAM services
-│   
+│
 │   set -e
-│   
+│
 │   echo "==================================="
 │   echo "GLAM Platform Health Check"
 │   echo "Time: $(date)"
 │   echo "==================================="
-│   
+│
 │   # Check if Docker is running
 │   if ! docker info > /dev/null 2>&1; then
 │       echo "❌ Docker is not running!"
 │       exit 1
 │   fi
-│   
+│
 │   # Services to check
 │   SERVICES=(
 │       "glam_nginx:80:/health"
@@ -214,16 +214,16 @@ scripts/
 │       "glam_platform_connector:8019:/health"
 │       "glam_recommendation_service:8025:/health"
 │   )
-│   
+│
 │   echo ""
 │   echo "Service Health Status:"
 │   echo "----------------------"
-│   
+│
 │   FAILED=0
-│   
+│
 │   for service_info in "${SERVICES[@]}"; do
 │       IFS=':' read -r container port endpoint <<< "$service_info"
-│       
+│
 │       if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
 │           if docker exec "${container}" wget -q -O - "http://localhost:${port}${endpoint}" > /dev/null 2>&1; then
 │               echo "✅ ${container}: Healthy"
@@ -236,26 +236,26 @@ scripts/
 │           FAILED=$((FAILED + 1))
 │       fi
 │   done
-│   
+│
 │   # Check PostgreSQL
 │   echo ""
 │   echo "Database Status:"
 │   echo "----------------"
 │   if docker exec glam_postgres pg_isready -U postgres > /dev/null 2>&1; then
 │       echo "✅ PostgreSQL: Ready"
-│       
+│
 │       # Check database sizes
 │       docker exec glam_postgres psql -U postgres -c "
-│           SELECT datname as database, 
-│                  pg_size_pretty(pg_database_size(datname)) as size 
-│           FROM pg_database 
+│           SELECT datname as database,
+│                  pg_size_pretty(pg_database_size(datname)) as size
+│           FROM pg_database
 │           WHERE datname NOT IN ('postgres', 'template0', 'template1')
 │           ORDER BY pg_database_size(datname) DESC;" 2>/dev/null
 │   else
 │       echo "❌ PostgreSQL: Not ready"
 │       FAILED=$((FAILED + 1))
 │   fi
-│   
+│
 │   # Check NATS
 │   echo ""
 │   echo "Message Bus Status:"
@@ -266,7 +266,7 @@ scripts/
 │       echo "❌ NATS: Not healthy"
 │       FAILED=$((FAILED + 1))
 │   fi
-│   
+│
 │   # Check disk usage
 │   echo ""
 │   echo "System Resources:"
@@ -274,7 +274,7 @@ scripts/
 │   df -h / | tail -n 1
 │   echo ""
 │   docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
-│   
+│
 │   echo ""
 │   echo "==================================="
 │   if [ $FAILED -eq 0 ]; then
@@ -283,21 +283,21 @@ scripts/
 │       echo "⚠️  ${FAILED} service(s) need attention"
 │   fi
 │   echo "==================================="
-│   
+│
 │   exit $FAILED
 │   ```
-│   
+│
 └── postgres-init.sh
-    
+
     ```sh
     #!/bin/bash
     set -e
-    
+
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-        
+
         -- Create all databases
         CREATE DATABASE "shopify_session_db";
-        
+
         CREATE DATABASE "analytics_db";
         CREATE DATABASE "billing_db";
         CREATE DATABASE "catalog_db";
@@ -309,11 +309,11 @@ scripts/
         CREATE DATABASE "selfie_db";
         CREATE DATABASE "token_db";
         CREATE DATABASE "webhook_db";
-        
+
         -- Create all users
-        
+
         CREATE USER shopify_session_db_user WITH PASSWORD '$SHOPIFY_SESSION_DB_PASSWORD';
-        
+
         CREATE USER analytics_db_user WITH PASSWORD '$ANALYTICS_DB_PASSWORD';
         CREATE USER billing_db_user WITH PASSWORD '$BILLING_DB_PASSWORD';
         CREATE USER catalog_db_user WITH PASSWORD '$CATALOG_DB_PASSWORD';
@@ -322,14 +322,14 @@ scripts/
         CREATE USER notification_db_user WITH PASSWORD '$NOTIFICATION_DB_PASSWORD';
         CREATE USER recommendation_db_user WITH PASSWORD '$RECOMMENDATION_DB_PASSWORD';
         CREATE USER season_compatibility_db_user WITH PASSWORD '$SEASON_COMPATIBILITY_DB_PASSWORD';
-        CREATE USER selfie_db_user WITH PASSWORD '$SELFIE_AI_DB_PASSWORD';
+        CREATE USER selfie_db_user WITH PASSWORD '$SELFIE_DB_PASSWORD';
         CREATE USER token_db_user WITH PASSWORD '$TOKEN_DB_PASSWORD';
         CREATE USER webhook_db_user WITH PASSWORD '$WEBHOOK_DB_PASSWORD';
-        
-        
+
+
         -- Grant all privileges
         GRANT ALL PRIVILEGES ON DATABASE "shopify_session_db" TO shopify_session_db_user;
-    
+
         GRANT ALL PRIVILEGES ON DATABASE "analytics_db" TO analytics_db_user;
         GRANT ALL PRIVILEGES ON DATABASE "billing_db" TO billing_db_user;
         GRANT ALL PRIVILEGES ON DATABASE "catalog_db" TO catalog_db_user;
@@ -341,10 +341,10 @@ scripts/
         GRANT ALL PRIVILEGES ON DATABASE "selfie_db" TO selfie_db_user;
         GRANT ALL PRIVILEGES ON DATABASE "token_db" TO token_db_user;
         GRANT ALL PRIVILEGES ON DATABASE "webhook_db" TO webhook_db_user;
-        
+
     EOSQL
     ```
-    
+
 
 ================================================================================
 Output includes file contents

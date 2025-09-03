@@ -22,7 +22,7 @@ model Analysis {
   // Platform info
   platform_name     String         @db.VarChar(50)
   platform_shop_id  String         @db.VarChar(255)
-  platform_domain   String         @db.VarChar(255)
+  domain   String         @db.VarChar(255)
 
   // Identity (one required)
   customer_id       String?        @db.VarChar(255)

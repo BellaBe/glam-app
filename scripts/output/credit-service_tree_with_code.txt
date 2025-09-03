@@ -25,7 +25,7 @@ prisma/
 │   │           "merchant_id" UUID NOT NULL,
 │   │           "platform_name" TEXT NOT NULL,
 │   │           "platform_id" TEXT NOT NULL,
-│   │           "platform_domain" TEXT NOT NULL,
+│   │           "domain" TEXT NOT NULL,
 │   │           "balance" INTEGER NOT NULL DEFAULT 0,
 │   │           "total_granted" INTEGER NOT NULL DEFAULT 0,
 │   │           "total_consumed" INTEGER NOT NULL DEFAULT 0,
@@ -60,7 +60,7 @@ prisma/
 │   │       CREATE INDEX "credit_accounts_merchant_id_idx" ON "credit_accounts"("merchant_id");
 │   │
 │   │       -- CreateIndex
-│   │       CREATE INDEX "credit_accounts_platform_domain_idx" ON "credit_accounts"("platform_domain");
+│   │       CREATE INDEX "credit_accounts_domain_idx" ON "credit_accounts"("domain");
 │   │
 │   │       -- CreateIndex
 │   │       CREATE INDEX "credit_accounts_platform_name_platform_id_idx" ON "credit_accounts"("platform_name", "platform_id");
@@ -136,7 +136,7 @@ src/
 │               # Get balance - service raises NotFoundError if missing
 │               balance = await svc.get_balance(
 │                   merchant_id=UUID(auth.shop),
-│                   shop_domain=platform.domain,
+│                   domain=platform.domain,
 │                   correlation_id=ctx.correlation_id,
 │               )
 │
@@ -507,7 +507,7 @@ src/
 │               merchant_id: UUID,
 │               platform_name: str,
 │               platform_shop_id: str,
-│               shop_domain: str,
+│               domain: str,
 │           ) -> dict:
 │               """Create credit account with platform context"""
 │               try:
@@ -516,7 +516,7 @@ src/
 │                           "merchant_id": str(merchant_id),
 │                           "platform_name": platform_name,
 │                           "platform_shop_id": platform_shop_id,
-│                           "shop_domain": shop_domain,
+│                           "domain": domain,
 │                           "balance": 0,
 │                           "total_granted": 0,
 │                           "total_consumed": 0,
@@ -535,9 +535,9 @@ src/
 │               account = await self.prisma.creditaccount.find_unique(where={"merchant_id": str(merchant_id)})
 │               return account
 │
-│           async def find_by_shop_domain(self, shop_domain: str) -> dict | None:
+│           async def find_by_domain(self, domain: str) -> dict | None:
 │               """Find credit account by platform domain"""
-│               account = await self.prisma.creditaccount.find_first(where={"shop_domain": shop_domain})
+│               account = await self.prisma.creditaccount.find_first(where={"domain": domain})
 │               return account
 │
 │           async def update_balance(
@@ -656,7 +656,7 @@ src/
 │   │       total_granted: int = Field(..., description="Total credits ever granted")
 │   │       total_consumed: int = Field(..., description="Total credits ever consumed")
 │   │       platform_name: str = Field(..., description="Platform name (shopify, etc)")
-│   │       shop_domain: str = Field(..., description="Platform domain")
+│   │       domain: str = Field(..., description="Platform domain")
 │   │
 │   │       model_config = ConfigDict(from_attributes=True)
 │   │
@@ -703,7 +703,7 @@ src/
 │
 │           merchant_id: UUID
 │           platform: str  # 'shopify', 'woocommerce', etc
-│           shop_domain: str
+│           domain: str
 │           shop_gid: str  # Platform-specific ID
 │
 │
@@ -810,7 +810,7 @@ src/
 │
 │           # Read operations (for API)
 │
-│           async def get_balance(self, merchant_id: UUID, shop_domain: str, correlation_id: str) -> CreditBalanceOut:
+│           async def get_balance(self, merchant_id: UUID, domain: str, correlation_id: str) -> CreditBalanceOut:
 │               """Get credit balance with platform context"""
 │
 │               # Find by merchant_id
@@ -818,7 +818,7 @@ src/
 │
 │               if not account:
 │                   # Also try by domain for backwards compatibility
-│                   account = await self.repository.find_by_shop_domain(shop_domain)
+│                   account = await self.repository.find_by_domain(domain)
 │
 │               if not account:
 │                   raise NotFoundError(
@@ -828,14 +828,14 @@ src/
 │                   )
 │
 │               # Verify domain matches
-│               if account.shop_domain != shop_domain:
+│               if account.domain != domain:
 │                   self.logger.warning(
 │                       "Platform domain mismatch in credit lookup",
 │                       extra={
 │                           "correlation_id": correlation_id,
 │                           "merchant_id": str(merchant_id),
-│                           "expected_domain": shop_domain,
-│                           "account_domain": account.shop_domain,
+│                           "expected_domain": domain,
+│                           "account_domain": account.domain,
 │                       },
 │                   )
 │
@@ -844,7 +844,7 @@ src/
 │                   total_granted=account.total_granted,
 │                   total_consumed=account.total_consumed,
 │                   platform_name=account.platform_name,
-│                   shop_domain=account.shop_domain,
+│                   domain=account.domain,
 │               )
 │
 │           async def get_transactions(
@@ -877,7 +877,7 @@ src/
 │                       "correlation_id": correlation_id,
 │                       "merchant_id": str(event.merchant_id),
 │                       "platform": event.platform,
-│                       "shop_domain": event.shop_domain,
+│                       "domain": event.domain,
 │                   },
 │               )
 │
@@ -885,7 +885,7 @@ src/
 │                   merchant_id=event.merchant_id,
 │                   platform_name=event.platform,
 │                   platform_shop_id=event.shop_gid,
-│                   shop_domain=event.shop_domain,
+│                   domain=event.domain,
 │               )
 │
 │               return {

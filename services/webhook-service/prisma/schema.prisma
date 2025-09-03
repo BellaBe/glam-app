@@ -14,7 +14,7 @@ model WebhookEntry {
   platform            String    @db.VarChar(50)
   webhook_id          String    @unique @db.VarChar(255)  // Idempotency key
   topic               String    @db.VarChar(255)  // Original: "orders/create"
-  shop_domain         String    @db.VarChar(255)
+  domain         String    @db.VarChar(255)
   payload             Json      // The actual webhook payload
   status              String    @default("RECEIVED") @db.VarChar(20)
   processing_attempts Int       @default(0)
@@ -23,7 +23,7 @@ model WebhookEntry {
   created_at          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updated_at          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  @@index([shop_domain, topic])
+  @@index([domain, topic])
   @@index([status, processing_attempts])
   @@map("webhook_entries")
 }

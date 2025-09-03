@@ -28,7 +28,7 @@ class SelfieEventPublisher(Publisher):
             platform={
                 "name": analysis.platform_name,
                 "shop_id": analysis.platform_shop_id,
-                "domain": analysis.platform_domain,
+                "domain": analysis.domain,
             },
             customer_id=analysis.customer_id,
             anonymous_id=analysis.anonymous_id,

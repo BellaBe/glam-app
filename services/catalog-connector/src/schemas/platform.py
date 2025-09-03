@@ -1,32 +1,37 @@
 # services/platform-connector/src/schemas/platform.py
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel
+
 
 class PlatformProduct(BaseModel):
     """Internal platform product format"""
+
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
+    domain: str
     product_id: str
     variant_id: str
     product_title: str
     variant_title: str
-    sku: Optional[str]
+    sku: str | None
     price: float
     currency: str
     inventory: int
-    image_url: Optional[str]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    image_url: str | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
 
 class ProductBatch(BaseModel):
     """Batch of products from platform"""
+
     merchant_id: str
     sync_id: str
     platform_name: str
     platform_shop_id: str
-    shop_domain: str
-    products: List[Dict[str, Any]]
+    domain: str
+    products: list[dict[str, Any]]
     batch_num: int
     has_more: bool

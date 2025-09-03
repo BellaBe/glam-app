@@ -1,80 +1,105 @@
 # services/notification-service/src/services/notification_service.py
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
+from shared.messaging.events.base import BaseEventPayload
 from shared.utils import generate_idempotency_key
 from shared.utils.exceptions import NotFoundError
 from shared.utils.logger import ServiceLogger
 
 from ..repositories.notification_repository import NotificationRepository
-from ..schemas.notification import NotificationOut, NotificationStats
-from .email_service import EmailService
-from .template_service import TemplateService
+from ..schemas.notification import NotificationOut, NotificationStats, NotificationStatus
 
 
 class NotificationService:
-    """Core notification business logic"""
+    """
+    Core notification service - handles notification creation and tracking.
+    Single responsibility: Record and manage notification state.
+    """
 
     # Event to template mapping
     EVENT_TEMPLATE_MAP: ClassVar[dict[str, str]] = {
         "evt.merchant.created.v1": "welcome",
         "evt.credit.balance.low.v1": "credit_warning",
         "evt.credit.balance.depleted.v1": "zero_balance",
+        "evt.catalog.sync.started.v1": "catalog_sync_started",
+        "evt.catalog.sync.completed.v1": "catalog_sync_completed",
     }
 
     def __init__(
         self,
         repository: NotificationRepository,
-        template_service: TemplateService,
-        email_service: EmailService,
         logger: ServiceLogger,
-        max_retries: int = 3,
     ):
         self.repository = repository
-        self.template_service = template_service
-        self.email_service = email_service
         self.logger = logger
-        self.max_retries = max_retries
 
-    def determine_template_type(self, event_type: str, event_data: dict[str, Any]) -> str | None:
+    def _determine_template_type(self, event_type: str, data: BaseEventPayload) -> str | None:
         """Determine template type based on event"""
-        # Special handling for catalog sync
-        if event_type == "evt.catalog.sync.completed":
-            if event_data.get("first_sync"):
+        if event_type == "evt.catalog.sync.completed.v1":
+            if hasattr(data, "first_sync") and data.first_sync:
                 return "registration_complete"
-            elif event_data.get("has_changes"):
+            elif hasattr(data, "has_changes") and data.has_changes:
                 return "registration_update"
             return None
 
-        # Standard mapping
         return self.EVENT_TEMPLATE_MAP.get(event_type)
 
-    def generate_idempotency_key_for_event(self, event_type: str, event_data: dict[str, Any]) -> str:
-        """Generate idempotency key for an event"""
-        merchant_id = event_data.get("merchant_id", "unknown")
-        event_id = event_data.get("correlation_id", "unknown")
+    def _extract_recipient_email(self, data: BaseEventPayload) -> str | None:
+        """Extract recipient email from event data"""
+        if hasattr(data, "email"):
+            return data.email
+        # Future: Implement merchant service lookup
+        return None
 
-        return generate_idempotency_key(
-            system="NOTIFICATION",
-            operation_type=event_type.replace(".", "_").upper(),
-            identifier=merchant_id,
-            extra=event_id,
-        )
+    def _prepare_template_variables(self, event_type: str, data: BaseEventPayload) -> dict:
+        """Prepare template variables for storage"""
+        platform_ctx = data.platform
+
+        # Base context
+        variables = {
+            # Platform context (includes domain)
+            "domain": platform_ctx.domain,
+            "platform_name": platform_ctx.platform_name,
+            "platform_shop_id": platform_ctx.platform_shop_id,
+            # Global template variables
+            "current_year": datetime.now().year,
+            "support_email": "support@glamyouup.com",
+            "app_url": "https://app.glamyouup.com",
+        }
+
+        # Add event-specific data (excluding platform)
+        event_data = data.model_dump(exclude={"platform"})
+        variables.update(event_data)
+
+        # Event-specific enrichment
+        if event_type == "evt.merchant.created.v1" and hasattr(data, "shop_name"):
+            variables["shop_name"] = data.shop_name or platform_ctx.domain
+
+        if event_type == "evt.credit.balance.low.v1" and hasattr(data, "balance"):
+            variables["balance_percentage"] = round((data.balance / data.threshold) * 100, 1)
+
+        return variables
 
     async def process_event(
-        self, event_type: str, event_data: dict[str, Any], correlation_id: str
+        self,
+        event_type: str,
+        data: BaseEventPayload,
+        event_id: str,
+        correlation_id: str,
+        delivery_service: "NotificationDeliveryService" = None,
     ) -> NotificationOut | None:
         """
-        Process an event and send notification if needed
-
-        Returns:
-            NotificationOut if sent, None if skipped
+        Process an event and create notification record.
+        Optionally trigger immediate delivery via delivery service.
         """
-        # Generate idempotency key
-        idempotency_key = self.generate_idempotency_key_for_event(event_type, event_data)
+        platform_ctx = data.platform
 
-        # Check if already processed
+        # Generate idempotency key
+        idempotency_key = generate_idempotency_key(platform_ctx.platform_name, "notification", event_id)
+
+        # Check idempotency
         existing = await self.repository.find_by_idempotency_key(idempotency_key)
         if existing:
             self.logger.info(
@@ -82,172 +107,56 @@ class NotificationService:
                 extra={
                     "idempotency_key": idempotency_key,
                     "notification_id": str(existing.id),
-                    "correlation_id": correlation_id,
                 },
             )
             return existing
 
-        # Determine template type
-        template_type = self.determine_template_type(event_type, event_data)
+        # Determine template
+        template_type = self._determine_template_type(event_type, data)
         if not template_type:
-            self.logger.info(
-                "No template for event",
-                extra={"event_type": event_type, "correlation_id": correlation_id},
-            )
+            self.logger.info("No template for event", extra={"event_type": event_type})
             return None
 
-        # Extract recipient email
-        recipient_email = event_data.get("email")
+        # Extract recipient
+        recipient_email = self._extract_recipient_email(data)
         if not recipient_email:
-            # Try to get from merchant service if needed
             self.logger.warning(
-                "No email in event data",
-                extra={"event_type": event_type, "correlation_id": correlation_id},
+                "No recipient email found",
+                extra={"event_type": event_type, "merchant_id": str(platform_ctx.merchant_id)},
             )
             return None
 
-        # Prepare template context
-        context = self._prepare_template_context(event_data)
+        # Prepare template variables
+        template_variables = self._prepare_template_variables(event_type, data)
 
-        # Render email
-        try:
-            subject, html_body, text_body = self.template_service.render_email(template_type, context)
-        except NotFoundError:
-            self.logger.error(
-                f"Template not found: {template_type}",
-                extra={"correlation_id": correlation_id},
-            )
-            # Store failed notification
-            return await self._store_failed_notification(
-                event_type=event_type,
-                event_data=event_data,
-                template_type=template_type,
-                recipient_email=recipient_email,
-                error="Template not found",
-                idempotency_key=idempotency_key,
-                correlation_id=correlation_id,
-            )
-        except Exception as e:
-            self.logger.error(
-                f"Template rendering failed: {e!s}",
-                extra={"correlation_id": correlation_id},
-            )
-            return await self._store_failed_notification(
-                event_type=event_type,
-                event_data=event_data,
-                template_type=template_type,
-                recipient_email=recipient_email,
-                error=str(e),
-                idempotency_key=idempotency_key,
-                correlation_id=correlation_id,
-            )
-
-        # Send email
-        try:
-            provider_message_id = await self.email_service.send(
-                to=recipient_email,
-                subject=subject,
-                html=html_body,
-                text=text_body,
-                metadata={
-                    "merchant_id": str(event_data.get("merchant_id")),
-                    "template_type": template_type,
-                    "correlation_id": correlation_id,
-                },
-            )
-
-            # Store successful notification
-            notification = await self.repository.create(
-                {
-                    "merchant_id": str(event_data.get("merchant_id")),
-                    "platform_name": event_data.get("platform_name"),
-                    "platform_shop_id": event_data.get("platform_shop_id"),
-                    "shop_domain": event_data.get("shop_domain"),
-                    "recipient_email": recipient_email,
-                    "template_type": template_type,
-                    "subject": subject,
-                    "status": "sent",
-                    "provider": self.email_service.provider_name,
-                    "provider_message_id": provider_message_id,
-                    "trigger_event": event_type,
-                    "trigger_event_id": correlation_id,
-                    "idempotency_key": idempotency_key,
-                    "template_variables": context,
-                    "sent_at": datetime.utcnow(),
-                }
-            )
-
-            self.logger.info(
-                "Notification sent successfully",
-                extra={
-                    "notification_id": str(notification.id),
-                    "template_type": template_type,
-                    "correlation_id": correlation_id,
-                },
-            )
-
-            return notification
-
-        except Exception as e:
-            self.logger.error(f"Email send failed: {e!s}", extra={"correlation_id": correlation_id})
-            return await self._store_failed_notification(
-                event_type=event_type,
-                event_data=event_data,
-                template_type=template_type,
-                recipient_email=recipient_email,
-                error=str(e),
-                idempotency_key=idempotency_key,
-                correlation_id=correlation_id,
-            )
-
-    def _prepare_template_context(self, event_data: dict[str, Any]) -> dict[str, Any]:
-        """Prepare context for template rendering"""
-        context = {
-            "merchant_id": event_data.get("merchant_id"),
-            "platform_name": event_data.get("platform_name"),
-            "platform_shop_id": event_data.get("platform_shop_id"),
-            "shop_domain": event_data.get("shop_domain"),
-            "shop_domain": event_data.get("shop_domain"),  # Alias
-            "shop_name": event_data.get("shop_name", event_data.get("shop_domain")),
-            "current_year": datetime.now().year,
-            "support_email": "support@glamyouup.com",
-            "app_url": "https://app.glamyouup.com",
-        }
-
-        # Add all event data
-        context.update(event_data)
-
-        return context
-
-    async def _store_failed_notification(
-        self,
-        event_type: str,
-        event_data: dict[str, Any],
-        template_type: str,
-        recipient_email: str,
-        error: str,
-        idempotency_key: str,
-        correlation_id: str,
-    ) -> NotificationOut:
-        """Store a failed notification record"""
+        # Create notification record
         notification = await self.repository.create(
             {
-                "merchant_id": str(event_data.get("merchant_id")),
-                "platform_name": event_data.get("platform_name"),
-                "platform_shop_id": event_data.get("platform_shop_id"),
-                "shop_domain": event_data.get("shop_domain"),
+                "merchant_id": str(platform_ctx.merchant_id),
+                "platform_name": platform_ctx.platform_name,
+                "platform_shop_id": platform_ctx.platform_shop_id,
                 "recipient_email": recipient_email,
                 "template_type": template_type,
-                "subject": "",  # No subject for failed
-                "status": "failed",
-                "error_message": error,
+                "status": NotificationStatus.PENDING,
                 "trigger_event": event_type,
-                "trigger_event_id": correlation_id,
                 "idempotency_key": idempotency_key,
-                "template_variables": event_data,
-                "failed_at": datetime.utcnow(),
+                "template_variables": template_variables,  # Includes domain
             }
         )
+
+        self.logger.info(
+            "Notification created",
+            extra={
+                "notification_id": str(notification.id),
+                "template_type": template_type,
+            },
+        )
+
+        # Trigger delivery if service provided
+        if delivery_service:
+            await delivery_service.deliver_notification(notification.id)
+            # Refresh to get updated status
+            notification = await self.repository.find_by_id(notification.id)
 
         return notification
 
@@ -256,9 +165,7 @@ class NotificationService:
         notification = await self.repository.find_by_id(notification_id)
         if not notification:
             raise NotFoundError(
-                f"Notification {notification_id} not found",
-                resource="notification",
-                resource_id=str(notification_id),
+                f"Notification {notification_id} not found", resource="notification", resource_id=str(notification_id)
             )
         return notification
 

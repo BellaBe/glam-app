@@ -1,60 +1,147 @@
 # shared/messaging/publisher.py
-"""Publisher base class for domain events and commands."""
+"""Enhanced publisher with standardized envelope and auto-correlation."""
 
-import json
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime
-from uuid import uuid4
+from typing import TypeVar
 
+from shared.api.correlation import get_correlation_context
 from shared.utils.logger import ServiceLogger
 
+from .events.base import BaseEventPayload, EventEnvelope
 from .jetstream_client import JetStreamClient
+
+T = TypeVar("T", bound=BaseEventPayload)
 
 
 class Publisher(ABC):
-    """Publishes domain facts (evt.*) and commands (cmd.*)"""
+    """Base publisher with standardized event publishing."""
+
+    stream_name: str = "GLAM_EVENTS"  # Single stream for all events
 
     @property
     @abstractmethod
-    def service_name(self) -> str: ...
+    def service_name(self) -> str:
+        """Service identifier for source tracking."""
+        ...
 
     def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
         self.js_client = jetstream_client
         self.logger = logger
+        self._ensure_stream_created = False
+
+    async def _ensure_stream(self) -> None:
+        """Ensure GLAM_EVENTS stream exists (called once)."""
+        if self._ensure_stream_created:
+            return
+
+        await self.js_client.ensure_stream(
+            self.stream_name,
+            subjects=["evt.>", "cmd.>", "dlq.>"],  # Prepared for DLQ
+        )
+        self._ensure_stream_created = True
 
     async def publish_event(
         self,
         subject: str,
-        data: dict,
-        correlation_id: str,
-        metadata: dict[str, dict] | None = None,
+        payload: T,
+        correlation_id: str | None = None,
+        metadata: dict | None = None,
     ) -> str:
-        """Publish an event to JetStream"""
+        """
+        Publish an event with automatic envelope wrapping.
 
-        self.logger.info("Publishing event %s", subject)
+        Args:
+            subject: NATS subject (evt.* or cmd.*)
+            payload: Typed event payload extending BaseEventPayload
+            correlation_id: Optional - will use context if not provided
+            metadata: Additional metadata
 
-        if not (subject.startswith("evt.") or subject.startswith("cmd.")):
-            raise ValueError("subject must start with 'evt.' or 'cmd.'")
+        Returns:
+            event_id of the published event
+        """
+        # Validate subject pattern
+        if not (subject.startswith("evt.") or subject.startswith("cmd.") or subject.startswith("dlq.")):
+            raise ValueError(f"Invalid subject pattern: {subject}. Must start with evt., cmd., or dlq.")
 
-        event_id = str(uuid4())
+        # Auto-detect correlation ID from context if not provided
+        if not correlation_id:
+            correlation_id = get_correlation_context()
+            if not correlation_id:
+                # Generate new one if no context
+                from uuid import uuid4
 
-        envelope = {
-            "event_id": event_id,
-            "event_type": subject,
-            "correlation_id": correlation_id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "source_service": self.service_name,
-            "data": data,
-            "metadata": metadata or {},
-        }
+                correlation_id = f"corr_{uuid4().hex[:12]}"
+
+        # Create envelope with typed payload
+        envelope = EventEnvelope[type(payload)](
+            event_type=subject,
+            correlation_id=correlation_id,
+            source_service=self.service_name,
+            data=payload,
+            metadata=metadata or {},
+        )
+
+        self.logger.info(
+            "Publishing event",
+            extra={
+                "event_id": envelope.event_id,
+                "event_type": subject,
+                "correlation_id": correlation_id,
+                "service": self.service_name,
+            },
+        )
 
         try:
-            # Publish directly - stream already exists
-            ack = await self.js_client.js.publish(subject, json.dumps(envelope).encode())
+            # Ensure stream exists
+            await self._ensure_stream()
 
-            self.logger.info("Published %s [event_id=%s, seq=%s]", subject, event_id, ack.seq if ack else "unknown")
-            return event_id
+            # Publish with envelope
+            ack = await self.js_client.js.publish(subject, envelope.to_bytes())
+
+            self.logger.info(
+                "Event published successfully",
+                extra={"event_id": envelope.event_id, "event_type": subject, "sequence": ack.seq if ack else None},
+            )
+
+            return envelope.event_id
 
         except Exception as e:
-            self.logger.error("Failed to publish event %s: %s", subject, str(e), exc_info=True)
+            self.logger.error(
+                "Failed to publish event", extra={"event_id": envelope.event_id, "event_type": subject, "error": str(e)}
+            )
             raise
+
+    async def publish_to_dlq(
+        self,
+        original_subject: str,
+        error_payload: dict,
+        correlation_id: str,
+        error: Exception,
+    ) -> str:
+        """
+        Publish failed event to dead letter queue.
+
+        Args:
+            original_subject: Original event subject that failed
+            error_payload: Original payload that failed processing
+            correlation_id: Original correlation ID
+            error: The exception that occurred
+        """
+        # Convert subject to DLQ pattern: evt.order.created -> dlq.order.created
+        dlq_subject = original_subject.replace("evt.", "dlq.").replace("cmd.", "dlq.")
+
+        from .events.models import ErrorPayload
+
+        error_data = ErrorPayload(
+            error_code=type(error).__name__,
+            error_message=str(error),
+            failed_operation=original_subject,
+            original_data=error_payload,
+        )
+
+        return await self.publish_event(
+            subject=dlq_subject,
+            payload=error_data,
+            correlation_id=correlation_id,
+            metadata={"original_subject": original_subject},
+        )

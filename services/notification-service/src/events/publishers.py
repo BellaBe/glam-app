@@ -20,9 +20,8 @@ class NotificationEventPublisher(Publisher):
             merchant_id=notification.merchant_id,
             platform_name=notification.platform_name,
             platform_shop_id=notification.platform_shop_id,
-            shop_domain=notification.shop_domain,
             template_type=notification.template_type,
-            sent_at=notification.sent_at or notification.created_at,
+            sent_at=notification.created_at,
         )
 
         # Get correlation ID from context (set by listener)
@@ -45,7 +44,7 @@ class NotificationEventPublisher(Publisher):
             merchant_id=notification.merchant_id,
             platform_name=notification.platform_name,
             platform_shop_id=notification.platform_shop_id,
-            shop_domain=notification.shop_domain,
+            domain=notification.domain,
             template_type=notification.template_type,
             error=error,
             failed_at=notification.failed_at or notification.created_at,

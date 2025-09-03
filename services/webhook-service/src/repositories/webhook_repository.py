@@ -17,7 +17,7 @@ class WebhookRepository:
         platform: str,
         webhook_id: str,
         topic: str,
-        shop_domain: str,
+        domain: str,
         payload: dict,
     ) -> tuple[Any, bool]:
         """
@@ -36,7 +36,7 @@ class WebhookRepository:
                     "platform": platform,
                     "webhook_id": webhook_id,
                     "topic": topic,
-                    "shop_domain": shop_domain.lower(),
+                    "domain": domain.lower(),
                     "payload": payload,
                     "status": WebhookStatus.RECEIVED.value,
                 }

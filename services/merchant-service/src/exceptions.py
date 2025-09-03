@@ -12,7 +12,7 @@ class InvalidDomainError(ValidationError):
     """Raised when shop domain is invalid"""
 
     def __init__(self, message: str = "Invalid shop domain format"):
-        super().__init__(message=message, field="shop_domain")
+        super().__init__(message=message, field="domain")
 
 
 class ConsentViolationError(ConflictError):

@@ -27,19 +27,19 @@ class AppUninstalledListener(Listener):
     async def on_message(self, data: dict) -> None:
         """Handle app uninstalled event"""
         try:
-            shop_domain = data.get("shop_domain")
+            domain = data.get("domain")
             uninstall_reason = data.get("uninstall_reason")
 
-            if not shop_domain:
-                self.logger.error("Missing shop_domain in uninstall event", extra={"data": data})
+            if not domain:
+                self.logger.error("Missing domain in uninstall event", extra={"data": data})
                 return
 
             self.logger.info(
-                f"Processing app uninstall for {shop_domain}",
-                extra={"shop_domain": shop_domain, "uninstall_reason": uninstall_reason},
+                f"Processing app uninstall for {domain}",
+                extra={"domain": domain, "uninstall_reason": uninstall_reason},
             )
 
-            await self.service.handle_app_uninstalled(shop_domain, uninstall_reason)
+            await self.service.handle_app_uninstalled(domain, uninstall_reason)
 
         except Exception as e:
             self.logger.error(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})

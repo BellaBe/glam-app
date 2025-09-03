@@ -13,37 +13,37 @@ datasource db {
 
 model PlatformToken {
   id                String    @id @default(uuid())
-  
+
   // Internal merchant reference
   merchant_id       String    // Our internal merchant ID
-  
+
   // Platform identification (complete platform context)
   platform_name     String    // "shopify", "woocommerce", "bigcommerce"
   platform_shop_id  String    // Shop's ID in the platform (e.g., "12345678")
-  shop_domain   String    // Full domain (e.g., "example.myshopify.com")
-  
+  domain   String    // Full domain (e.g., "example.myshopify.com")
+
   // Encrypted token data
   encrypted_token   String    @db.Text // Encrypted JSON containing credentials
   encryption_key_id String    // Key rotation support
-  
+
   // Token metadata
   token_type        String    // "oauth", "api_key", "basic_auth"
   expires_at        DateTime? @db.Timestamptz(3) // Token expiration if applicable
   scopes            String?   // OAuth scopes if applicable
-  
+
   // Audit fields
   last_accessed_by  String?   // Last service to retrieve token
   last_accessed_at  DateTime? @db.Timestamptz(3)
   access_count      Int       @default(0)
-  
+
   // Timestamps
   created_at        DateTime  @default(now()) @db.Timestamptz(3)
   updated_at        DateTime  @updatedAt @db.Timestamptz(3)
-  
+
   @@unique([merchant_id, platform_name])
   @@index([merchant_id])
   @@index([platform_name])
-  @@index([shop_domain])
+  @@index([domain])
   @@map("platform_tokens")
 }
 
@@ -57,7 +57,7 @@ model TokenAccessLog {
   success           Boolean
   error_message     String?
   accessed_at       DateTime @default(now()) @db.Timestamptz(3)
-  
+
   @@index([token_id])
   @@index([accessed_by])
   @@index([accessed_at])

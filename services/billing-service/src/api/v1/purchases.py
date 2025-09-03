@@ -27,7 +27,7 @@ async def create_purchase(
     """Create credit pack purchase"""
     merchant_id = UUID(auth.shop)
 
-    result = await purchase_service.create_purchase(merchant_id=merchant_id, shop_domain=platform.domain, data=body)
+    result = await purchase_service.create_purchase(merchant_id=merchant_id, domain=platform.domain, data=body)
 
     return success_response(data=result, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
 

@@ -160,7 +160,7 @@ src/
 │   │   │       """Create credit pack purchase"""
 │   │   │       merchant_id = UUID(auth.shop)
 │   │   │
-│   │   │       result = await purchase_service.create_purchase(merchant_id=merchant_id, shop_domain=platform.domain, data=body)
+│   │   │       result = await purchase_service.create_purchase(merchant_id=merchant_id, domain=platform.domain, data=body)
 │   │   │
 │   │   │       return success_response(data=result, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
 │   │   │
@@ -681,7 +681,7 @@ src/
 │           merchant_id: UUID
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           name: str
 │           email: str
 │           installed_at: datetime
@@ -891,7 +891,7 @@ src/
 │               self.publisher = publisher
 │               self.logger = logger
 │
-│           async def create_purchase(self, merchant_id: UUID, shop_domain: str, data: PurchaseCreateIn) -> PurchaseCreatedOut:
+│           async def create_purchase(self, merchant_id: UUID, domain: str, data: PurchaseCreateIn) -> PurchaseCreatedOut:
 │               """Create credit purchase"""
 │               # Validate merchant exists
 │               billing_record = await self.billing_repo.find_by_merchant_id(merchant_id)
@@ -919,7 +919,7 @@ src/
 │               if data.platform == Platform.SHOPIFY:
 │                   try:
 │                       result = await self.shopify_client.create_charge(
-│                           shop_domain=shop_domain,
+│                           domain=domain,
 │                           amount=pack["price"],
 │                           name=f"{pack['credits']} Credits Pack",
 │                           return_url=data.return_url,
@@ -1055,7 +1055,7 @@ src/
 │               self.logger = logger
 │               self.api_version = config.shopify_api_version
 │
-│           async def create_charge(self, shop_domain: str, amount: str, name: str, return_url: str) -> dict:
+│           async def create_charge(self, domain: str, amount: str, name: str, return_url: str) -> dict:
 │               """Create Shopify recurring charge"""
 │               try:
 │                   # This is a simplified implementation
@@ -1072,14 +1072,14 @@ src/
 │                   # Mock response for development
 │                   if self.config.debug:
 │                       return {
-│                           "charge_id": f"charge_{shop_domain}_{amount}",
-│                           "confirmation_url": f"https://{shop_domain}/admin/charges/confirm",
+│                           "charge_id": f"charge_{domain}_{amount}",
+│                           "confirmation_url": f"https://{domain}/admin/charges/confirm",
 │                       }
 │
 │                   # Real Shopify API call would go here
 │                   async with httpx.AsyncClient() as client:
 │                       response = await client.post(
-│                           f"https://{shop_domain}/admin/api/{self.api_version}/recurring_application_charges.json",
+│                           f"https://{domain}/admin/api/{self.api_version}/recurring_application_charges.json",
 │                           json=charge_data,
 │                           headers={
 │                               "X-Shopify-Access-Token": "shop_access_token",  # Would come from merchant record

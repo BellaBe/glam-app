@@ -1,7 +1,21 @@
 # shared/utils/logger.py
+import json
 import logging
 import sys
 from typing import Any
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        # Add all custom fields set in `extra`
+        log_record.update({k: v for k, v in record.__dict__.items() if k not in logging.LogRecord.__dict__})
+        return json.dumps(log_record)
 
 
 class ServiceLogger:
@@ -16,9 +30,7 @@ class ServiceLogger:
         # This prevents duplicate handlers in reload
         if not logging.root.handlers:
             handler = logging.StreamHandler(sys.stdout)
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-            )
+            formatter = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
             handler.setFormatter(formatter)
             logging.root.addHandler(handler)
             logging.root.setLevel(logging.INFO)

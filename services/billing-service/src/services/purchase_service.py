@@ -33,7 +33,7 @@ class PurchaseService:
         self.publisher = publisher
         self.logger = logger
 
-    async def create_purchase(self, merchant_id: UUID, shop_domain: str, data: PurchaseCreateIn) -> PurchaseCreatedOut:
+    async def create_purchase(self, merchant_id: UUID, domain: str, data: PurchaseCreateIn) -> PurchaseCreatedOut:
         """Create credit purchase"""
         # Validate merchant exists
         billing_record = await self.billing_repo.find_by_merchant_id(merchant_id)
@@ -61,7 +61,7 @@ class PurchaseService:
         if data.platform == Platform.SHOPIFY:
             try:
                 result = await self.shopify_client.create_charge(
-                    shop_domain=shop_domain,
+                    domain=domain,
                     amount=pack["price"],
                     name=f"{pack['credits']} Credits Pack",
                     return_url=data.return_url,

@@ -27,7 +27,7 @@ class WebhookService:
         *,
         platform: WebhookPlatform,
         topic: ShopifyWebhookTopic,
-        shop_domain: str,
+        domain: str,
         webhook_id: str,
         payload: dict,
         correlation_id: str,
@@ -43,7 +43,7 @@ class WebhookService:
                 extra={
                     "topic_enum": topic.name,
                     "topic": topic.value,
-                    "shop_domain": shop_domain,
+                    "domain": domain,
                     "webhook_id": webhook_id,
                     "correlation_id": correlation_id,
                 },
@@ -54,7 +54,7 @@ class WebhookService:
             platform=platform.value,
             webhook_id=webhook_id,
             topic=topic.value,
-            shop_domain=shop_domain,
+            domain=domain,
             payload=payload,
         )
 
@@ -65,7 +65,7 @@ class WebhookService:
                 extra={
                     "topic_enum": topic.name,
                     "topic": topic.value,
-                    "shop_domain": shop_domain,
+                    "domain": domain,
                     "webhook_id": webhook_id,
                     "correlation_id": correlation_id,
                     "entry_id": entry.id,
@@ -75,7 +75,7 @@ class WebhookService:
 
         await self._publish_domain_event(
             topic=topic,
-            shop_domain=shop_domain,
+            domain=domain,
             webhook_id=webhook_id,
             payload=payload,
             correlation_id=correlation_id,
@@ -86,7 +86,7 @@ class WebhookService:
             extra={
                 "topic": topic,
                 "topic_enum": topic.value,
-                "shop_domain": shop_domain,
+                "domain": domain,
                 "webhook_id": webhook_id,
                 "correlation_id": correlation_id,
                 "entry_id": entry.id,
@@ -98,7 +98,7 @@ class WebhookService:
     async def _publish_domain_event(
         self,
         topic: ShopifyWebhookTopic,
-        shop_domain: str,
+        domain: str,
         webhook_id: str,
         payload: dict[Any, Any],
         correlation_id: str,
@@ -108,14 +108,14 @@ class WebhookService:
         # Map webhook topics to domain events
         if topic is ShopifyWebhookTopic.APP_UNINSTALLED:
             await self.publisher.app_uninstalled(
-                shop_domain=shop_domain,
+                domain=domain,
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
 
         elif topic is ShopifyWebhookTopic.ORDERS_CREATE:
             await self.publisher.order_created(
-                shop_domain=shop_domain,
+                domain=domain,
                 order_id=str(payload.get("id", "")),
                 total_price=payload.get("total_price", "0.00"),
                 currency=payload.get("currency", "USD"),
@@ -128,7 +128,7 @@ class WebhookService:
         elif topic is ShopifyWebhookTopic.APP_SUBSCRIPTIONS_UPDATE:
             subscription = payload.get("app_subscription", {})
             await self.publisher.app_subscription_updated(
-                shop_domain=shop_domain,
+                domain=domain,
                 subscription_id=str(subscription.get("id", "")),
                 status=subscription.get("status", ""),
                 webhook_id=webhook_id,
@@ -138,7 +138,7 @@ class WebhookService:
         elif topic is ShopifyWebhookTopic.APP_PURCHASES_ONE_TIME_UPDATE:
             purchase = payload.get("app_purchase_one_time", {})
             await self.publisher.app_purchase_updated(
-                shop_domain=shop_domain,
+                domain=domain,
                 charge_id=str(purchase.get("id", "")),
                 status=purchase.get("status", ""),
                 test=purchase.get("test", False),
@@ -159,7 +159,7 @@ class WebhookService:
             event_type = action_map[topic]
             await self.publisher.catalog_product_event(
                 event_type=event_type,
-                shop_domain=shop_domain,
+                domain=domain,
                 product_id=str(payload.get("id", "")),
                 updated_at=payload.get("updated_at") if event_type == "updated" else None,
                 webhook_id=webhook_id,
@@ -179,7 +179,7 @@ class WebhookService:
             event_type = action_map[topic]
             await self.publisher.catalog_collection_event(
                 event_type=event_type,
-                shop_domain=shop_domain,
+                domain=domain,
                 collection_id=str(payload.get("id", "")),
                 updated_at=payload.get("updated_at") if event_type == "updated" else None,
                 webhook_id=webhook_id,
@@ -188,7 +188,7 @@ class WebhookService:
 
         elif topic is ShopifyWebhookTopic.INVENTORY_LEVELS_UPDATE:
             await self.publisher.inventory_updated(
-                shop_domain=shop_domain,
+                domain=domain,
                 inventory_item_id=str(payload.get("inventory_item_id", "")),
                 location_id=str(payload.get("location_id", "")),
                 available=payload.get("available", 0),
@@ -199,7 +199,7 @@ class WebhookService:
         elif topic is ShopifyWebhookTopic.CUSTOMERS_DATA_REQUEST:
             customer = payload.get("customer", {})
             await self.publisher.gdpr_data_request(
-                shop_domain=shop_domain,
+                domain=domain,
                 customer_id=str(customer.get("id", "")),
                 orders_requested=payload.get("orders_requested", []),
                 webhook_id=webhook_id,
@@ -209,7 +209,7 @@ class WebhookService:
         elif topic is ShopifyWebhookTopic.CUSTOMERS_REDACT:
             customer = payload.get("customer", {})
             await self.publisher.gdpr_customer_redact(
-                shop_domain=shop_domain,
+                domain=domain,
                 customer_id=str(customer.get("id", "")),
                 orders_to_redact=payload.get("orders_to_redact", []),
                 webhook_id=webhook_id,
@@ -218,7 +218,7 @@ class WebhookService:
 
         elif topic is ShopifyWebhookTopic.SHOP_REDACT:
             await self.publisher.gdpr_shop_redact(
-                shop_domain=shop_domain,
+                domain=domain,
                 webhook_id=webhook_id,
                 correlation_id=correlation_id,
             )
@@ -228,7 +228,7 @@ class WebhookService:
                 f"No domain event mapping for topic: {topic}",
                 extra={
                     "topic": topic.value,
-                    "shop_domain": shop_domain,
+                    "domain": domain,
                     "correlation_id": correlation_id,
                 },
             )

@@ -14,7 +14,7 @@ class ShopifyClient:
         self.logger = logger
         self.api_version = config.shopify_api_version
 
-    async def create_charge(self, shop_domain: str, amount: str, name: str, return_url: str) -> dict:
+    async def create_charge(self, domain: str, amount: str, name: str, return_url: str) -> dict:
         """Create Shopify recurring charge"""
         try:
             # This is a simplified implementation
@@ -31,14 +31,14 @@ class ShopifyClient:
             # Mock response for development
             if self.config.debug:
                 return {
-                    "charge_id": f"charge_{shop_domain}_{amount}",
-                    "confirmation_url": f"https://{shop_domain}/admin/charges/confirm",
+                    "charge_id": f"charge_{domain}_{amount}",
+                    "confirmation_url": f"https://{domain}/admin/charges/confirm",
                 }
 
             # Real Shopify API call would go here
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"https://{shop_domain}/admin/api/{self.api_version}/recurring_application_charges.json",
+                    f"https://{domain}/admin/api/{self.api_version}/recurring_application_charges.json",
                     json=charge_data,
                     headers={
                         "X-Shopify-Access-Token": "shop_access_token",  # Would come from merchant record

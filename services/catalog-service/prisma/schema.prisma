@@ -17,7 +17,7 @@ model CatalogItem {
   // Platform identifiers
   platform_name     String   // "shopify", "woocommerce"
   platform_shop_id       String   // Shop ID in platform
-  shop_domain   String   // example.myshopify.com
+  domain   String   // example.myshopify.com
 
   // Product/Variant IDs
   product_id        String   // Platform's product ID
@@ -90,7 +90,7 @@ model SyncOperation {
   merchant_id       String
   platform_name     String
   platform_shop_id       String
-  shop_domain   String
+  domain   String
   sync_type         String   @default("full") // full, incremental
   status            String   @default("pending") // pending, running, completed, failed, partial
 

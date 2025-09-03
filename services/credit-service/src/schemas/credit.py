@@ -13,7 +13,7 @@ class CreditBalanceOut(BaseModel):
     total_granted: int = Field(..., description="Total credits ever granted")
     total_consumed: int = Field(..., description="Total credits ever consumed")
     platform_name: str = Field(..., description="Platform name (shopify, etc)")
-    shop_domain: str = Field(..., description="Platform domain")
+    domain: str = Field(..., description="Platform domain")
 
     model_config = ConfigDict(from_attributes=True)
 

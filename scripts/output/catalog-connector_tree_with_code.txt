@@ -32,7 +32,7 @@ src/
 │   │           self,
 │   │           merchant_id: str,
 │   │           platform_shop_id: str,
-│   │           shop_domain: str,
+│   │           domain: str,
 │   │           sync_id: str,
 │   │           correlation_id: str
 │   │       ) -> AsyncIterator[Dict[str, Any]]:
@@ -118,16 +118,16 @@ src/
 │   │
 │   │       async def authenticate(self, credentials: Dict[str, Any]) -> str:
 │   │           """Get access token from Token Service"""
-│   │           shop_domain = credentials.get("shop_domain")
+│   │           domain = credentials.get("domain")
 │   │           correlation_id = credentials.get("correlation_id", "unknown")
 │   │
-│   │           if not shop_domain:
-│   │               raise ValueError("shop_domain required for Shopify authentication")
+│   │           if not domain:
+│   │               raise ValueError("domain required for Shopify authentication")
 │   │
 │   │           try:
 │   │               # Get token from Token Service
 │   │               token = await self.token_client.get_shopify_token(
-│   │                   shop_domain=shop_domain,
+│   │                   domain=domain,
 │   │                   correlation_id=correlation_id
 │   │               )
 │   │
@@ -136,15 +136,15 @@ src/
 │   │           except NotFoundError:
 │   │               # Token not found in Token Service
 │   │               raise UnauthorizedError(
-│   │                   f"No Shopify access token found for shop: {shop_domain}",
+│   │                   f"No Shopify access token found for shop: {domain}",
 │   │                   auth_type="shopify_oauth",
-│   │                   details={"shop_domain": shop_domain}
+│   │                   details={"domain": domain}
 │   │               )
 │   │           except InfrastructureError as e:
 │   │               # Token Service unavailable
 │   │               self.logger.error(
 │   │                   f"Token Service error: {e}",
-│   │                   extra={"shop_domain": shop_domain}
+│   │                   extra={"domain": domain}
 │   │               )
 │   │               raise
 │   │
@@ -152,7 +152,7 @@ src/
 │   │           self,
 │   │           merchant_id: str,
 │   │           platform_shop_id: str,
-│   │           shop_domain: str,
+│   │           domain: str,
 │   │           sync_id: str,
 │   │           correlation_id: str
 │   │       ) -> AsyncIterator[Dict[str, Any]]:
@@ -160,18 +160,18 @@ src/
 │   │
 │   │           # Get access token from Token Service
 │   │           token = await self.authenticate({
-│   │               "shop_domain": shop_domain,
+│   │               "domain": domain,
 │   │               "correlation_id": correlation_id
 │   │           })
 │   │
 │   │           if not token:
 │   │               raise UnauthorizedError(
-│   │                   f"Failed to get Shopify token for {shop_domain}",
+│   │                   f"Failed to get Shopify token for {domain}",
 │   │                   auth_type="shopify_oauth"
 │   │               )
 │   │
 │   │           self.logger.info(
-│   │               f"Starting Shopify product fetch for {shop_domain}",
+│   │               f"Starting Shopify product fetch for {domain}",
 │   │               extra={
 │   │                   "correlation_id": correlation_id,
 │   │                   "sync_id": sync_id,
@@ -191,7 +191,7 @@ src/
 │   │                       # Execute GraphQL query
 │   │                       response_data = await self._execute_graphql(
 │   │                           session,
-│   │                           shop_domain,
+│   │                           domain,
 │   │                           token,
 │   │                           self.PRODUCTS_QUERY,
 │   │                           {"cursor": cursor}
@@ -209,7 +209,7 @@ src/
 │   │                               transformed = self.transform_product({
 │   │                                   "product": product,
 │   │                                   "variant": variant,
-│   │                                   "shop_domain": shop_domain,
+│   │                                   "domain": domain,
 │   │                                   "platform_shop_id": platform_shop_id
 │   │                               })
 │   │
@@ -226,7 +226,7 @@ src/
 │   │                           "sync_id": sync_id,
 │   │                           "platform_name": "shopify",
 │   │                           "platform_shop_id": platform_shop_id,
-│   │                           "shop_domain": shop_domain,
+│   │                           "domain": domain,
 │   │                           "products": products_batch,
 │   │                           "batch_num": batch_num,
 │   │                           "has_more": has_more
@@ -246,7 +246,7 @@ src/
 │   │                   except UnauthorizedError:
 │   │                       # Token might be expired or revoked
 │   │                       self.logger.error(
-│   │                           f"Shopify authentication failed for {shop_domain}",
+│   │                           f"Shopify authentication failed for {domain}",
 │   │                           extra={
 │   │                               "correlation_id": correlation_id,
 │   │                               "sync_id": sync_id
@@ -281,14 +281,14 @@ src/
 │   │       async def _execute_graphql(
 │   │           self,
 │   │           session: aiohttp.ClientSession,
-│   │           shop_domain: str,
+│   │           domain: str,
 │   │           token: str,
 │   │           query: str,
 │   │           variables: Dict[str, Any]
 │   │       ) -> Dict[str, Any]:
 │   │           """Execute GraphQL query against Shopify Admin API"""
 │   │
-│   │           url = f"https://{shop_domain}/admin/api/2024-01/graphql.json"
+│   │           url = f"https://{domain}/admin/api/2024-01/graphql.json"
 │   │           headers = {
 │   │               "X-Shopify-Access-Token": token,
 │   │               "Content-Type": "application/json"
@@ -339,7 +339,7 @@ src/
 │   │           return {
 │   │               "platform_name": "shopify",
 │   │               "platform_shop_id": raw_data["platform_shop_id"],
-│   │               "shop_domain": raw_data["shop_domain"],
+│   │               "domain": raw_data["domain"],
 │   │               "product_id": self.extract_id(product["id"]),
 │   │               "variant_id": self.extract_id(variant["id"]),
 │   │               "product_title": product["title"],
@@ -415,7 +415,7 @@ src/
 │               self,
 │               merchant_id: str,
 │               platform_shop_id: str,
-│               shop_domain: str,
+│               domain: str,
 │               sync_id: str,
 │               correlation_id: str
 │           ) -> AsyncIterator[Dict[str, Any]]:
@@ -423,12 +423,12 @@ src/
 │
 │               # Get auth headers from Token Service
 │               headers = await self.authenticate({
-│                   "domain": shop_domain,
+│                   "domain": domain,
 │                   "correlation_id": correlation_id
 │               })
 │
 │               self.logger.info(
-│                   f"Starting WooCommerce product fetch for {shop_domain}",
+│                   f"Starting WooCommerce product fetch for {domain}",
 │                   extra={
 │                       "correlation_id": correlation_id,
 │                       "sync_id": sync_id,
@@ -446,7 +446,7 @@ src/
 │                       batch_num += 1
 │
 │                       # Fetch products page
-│                       url = f"https://{shop_domain}/wp-json/wc/v3/products"
+│                       url = f"https://{domain}/wp-json/wc/v3/products"
 │                       params = {
 │                           "page": page,
 │                           "per_page": per_page,
@@ -462,7 +462,7 @@ src/
 │                           ) as response:
 │                               if response.status == 401:
 │                                   raise UnauthorizedError(
-│                                       f"Invalid WooCommerce credentials for {shop_domain}",
+│                                       f"Invalid WooCommerce credentials for {domain}",
 │                                       auth_type="woocommerce_api"
 │                                   )
 │
@@ -476,12 +476,12 @@ src/
 │                                   if product.get("variations"):
 │                                       for var_id in product["variations"]:
 │                                           variation = await self._fetch_variation(
-│                                               session, shop_domain, product["id"], var_id, headers
+│                                               session, domain, product["id"], var_id, headers
 │                                           )
 │                                           transformed = self.transform_product({
 │                                               "product": product,
 │                                               "variation": variation,
-│                                               "shop_domain": shop_domain,
+│                                               "domain": domain,
 │                                               "platform_shop_id": platform_shop_id
 │                                           })
 │                                           products_batch.append(transformed)
@@ -490,7 +490,7 @@ src/
 │                                       transformed = self.transform_product({
 │                                           "product": product,
 │                                           "variation": None,
-│                                           "shop_domain": shop_domain,
+│                                           "domain": domain,
 │                                           "platform_shop_id": platform_shop_id
 │                                       })
 │                                       products_batch.append(transformed)
@@ -507,7 +507,7 @@ src/
 │                                   "sync_id": sync_id,
 │                                   "platform_name": "woocommerce",
 │                                   "platform_shop_id": platform_shop_id,
-│                                   "shop_domain": shop_domain,
+│                                   "domain": domain,
 │                                   "products": products_batch,
 │                                   "batch_num": batch_num,
 │                                   "has_more": has_more
@@ -578,7 +578,7 @@ src/
 │               return {
 │                   "platform_name": "woocommerce",
 │                   "platform_shop_id": raw_data["platform_shop_id"],
-│                   "shop_domain": raw_data["shop_domain"],
+│                   "domain": raw_data["domain"],
 │                   "product_id": str(product["id"]),
 │                   "variant_id": variant_id,
 │                   "product_title": product["name"],
@@ -654,7 +654,7 @@ src/
 │   │                   merchant_id=payload.merchant_id,
 │   │                   platform_name=payload.platform_name,
 │   │                   platform_shop_id=payload.platform_shop_id,
-│   │                   shop_domain=payload.shop_domain,
+│   │                   domain=payload.domain,
 │   │                   sync_id=payload.sync_id,
 │   │                   correlation_id=correlation_id or "unknown"
 │   │               )
@@ -773,7 +773,7 @@ src/
 │   │       merchant_id: str
 │   │       platform_name: str
 │   │       platform_shop_id: str
-│   │       shop_domain: str
+│   │       domain: str
 │   │       sync_id: str
 │   │       sync_type: str = "full"
 │   │   ```
@@ -790,7 +790,7 @@ src/
 │           """Internal platform product format"""
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           product_id: str
 │           variant_id: str
 │           product_title: str
@@ -809,7 +809,7 @@ src/
 │           sync_id: str
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           products: List[Dict[str, Any]]
 │           batch_num: int
 │           has_more: bool
@@ -862,7 +862,7 @@ src/
 │   │           merchant_id: str,
 │   │           platform_name: str,
 │   │           platform_shop_id: str,
-│   │           shop_domain: str,
+│   │           domain: str,
 │   │           sync_id: str,
 │   │           correlation_id: str
 │   │       ) -> None:
@@ -875,7 +875,7 @@ src/
 │   │                   "sync_id": sync_id,
 │   │                   "merchant_id": merchant_id,
 │   │                   "platform": platform_name,
-│   │                   "domain": shop_domain
+│   │                   "domain": domain
 │   │               }
 │   │           )
 │   │
@@ -902,7 +902,7 @@ src/
 │   │               async for batch in adapter.fetch_products(
 │   │                   merchant_id=merchant_id,
 │   │                   platform_shop_id=platform_shop_id,
-│   │                   shop_domain=shop_domain,
+│   │                   domain=domain,
 │   │                   sync_id=sync_id,
 │   │                   correlation_id=correlation_id
 │   │               ):
@@ -950,7 +950,7 @@ src/
 │   │                   extra={
 │   │                       "correlation_id": correlation_id,
 │   │                       "sync_id": sync_id,
-│   │                       "domain": shop_domain
+│   │                       "domain": domain
 │   │                   }
 │   │               )
 │   │
@@ -1027,12 +1027,12 @@ src/
 │
 │           async def get_shopify_token(
 │               self,
-│               shop_domain: str,
+│               domain: str,
 │               correlation_id: str
 │           ) -> str:
 │               """Get Shopify access token from Token Service"""
 │
-│               url = f"{self.base_url}/api/v1/tokens/shopify/{shop_domain}"
+│               url = f"{self.base_url}/api/v1/tokens/shopify/{domain}"
 │               headers = add_correlation_header({
 │                   "Content-Type": "application/json"
 │               })
@@ -1046,9 +1046,9 @@ src/
 │                       ) as response:
 │                           if response.status == 404:
 │                               raise NotFoundError(
-│                                   f"Shopify token not found for shop: {shop_domain}",
+│                                   f"Shopify token not found for shop: {domain}",
 │                                   resource="shopify_token",
-│                                   resource_id=shop_domain
+│                                   resource_id=domain
 │                               )
 │
 │                           if response.status == 401:
@@ -1068,10 +1068,10 @@ src/
 │                               )
 │
 │                           self.logger.debug(
-│                               f"Retrieved Shopify token for {shop_domain}",
+│                               f"Retrieved Shopify token for {domain}",
 │                               extra={
 │                                   "correlation_id": correlation_id,
-│                                   "shop_domain": shop_domain
+│                                   "domain": domain
 │                               }
 │                           )
 │

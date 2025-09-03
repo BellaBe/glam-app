@@ -55,12 +55,12 @@ src/
 │   │           """
 │   │
 │   │           # Validate domain matches JWT
-│   │           if body.shop_domain != auth.shop:
+│   │           if body.domain != auth.shop:
 │   │               raise UnauthorizedError(
 │   │                   "Domain mismatch",
 │   │                   details={
 │   │                       "jwt_domain": auth.shop,
-│   │                       "request_domain": body.shop_domain
+│   │                       "request_domain": body.domain
 │   │                   }
 │   │               )
 │   │
@@ -206,7 +206,7 @@ src/
 │                   },
 │                   update={
 │                       "platform_shop_id": data["platform_shop_id"],
-│                       "shop_domain": data["shop_domain"],
+│                       "domain": data["domain"],
 │                       "encrypted_token": data["encrypted_token"],
 │                       "encryption_key_id": data["encryption_key_id"],
 │                       "token_type": data["token_type"],
@@ -312,7 +312,7 @@ src/
 │           merchant_id: str = Field(..., description="Internal merchant ID")
 │           platform_name: str = Field(..., description="Platform name (shopify, woocommerce, etc)")
 │           platform_shop_id: str = Field(..., description="Shop ID in the platform")
-│           shop_domain: str = Field(..., description="Full domain")
+│           domain: str = Field(..., description="Full domain")
 │           token_data: Dict[str, Any] = Field(..., description="Token data to encrypt")
 │           token_type: str = Field(..., description="Token type (oauth, api_key, etc)")
 │           expires_at: Optional[datetime] = Field(None, description="Token expiration")
@@ -324,7 +324,7 @@ src/
 │                       "merchant_id": "uuid-merchant-id",
 │                       "platform_name": "shopify",
 │                       "platform_shop_id": "12345678",
-│                       "shop_domain": "example.myshopify.com",
+│                       "domain": "example.myshopify.com",
 │                       "token_data": {
 │                           "access_token": "shpat_xxx",
 │                           "scope": "read_products,write_orders"
@@ -341,7 +341,7 @@ src/
 │           """Decrypted token data"""
 │           platform_name: str
 │           platform_shop_id: str
-│           shop_domain: str
+│           domain: str
 │           token_data: Dict[str, Any]
 │           token_type: str
 │           expires_at: Optional[datetime]
@@ -485,7 +485,7 @@ src/
 │                   "merchant_id": request.merchant_id,
 │                   "platform_name": request.platform_name,
 │                   "platform_shop_id": request.platform_shop_id,
-│                   "shop_domain": request.shop_domain,
+│                   "domain": request.domain,
 │                   "encrypted_token": encrypted,
 │                   "encryption_key_id": self.encryption.key_id,
 │                   "token_type": request.token_type,
@@ -496,7 +496,7 @@ src/
 │               # Log access
 │               await self.repository.log_access(
 │                   token_id=token.id,
-│                   accessed_by=request.shop_domain,  # Store requester
+│                   accessed_by=request.domain,  # Store requester
 │                   access_type="write",
 │                   success=True,
 │                   correlation_id=correlation_id
@@ -577,7 +577,7 @@ src/
 │                   result.append(TokenData(
 │                       platform_name=token.platform_name,
 │                       platform_shop_id=token.platform_shop_id,
-│                       shop_domain=token.shop_domain,
+│                       domain=token.domain,
 │                       token_data=token_data,
 │                       token_type=token.token_type,
 │                       expires_at=token.expires_at,
@@ -620,7 +620,7 @@ src/
 │                   # Log deletion
 │                   await self.repository.log_access(
 │                       token_id=deleted.id,
-│                       accessed_by=deleted.shop_domain,
+│                       accessed_by=deleted.domain,
 │                       access_type="delete",
 │                       success=True,
 │                       correlation_id=correlation_id

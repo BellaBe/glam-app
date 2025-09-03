@@ -47,7 +47,7 @@ async def get_credits(
     # Get balance - service raises NotFoundError if missing
     balance = await svc.get_balance(
         merchant_id=UUID(auth.shop),
-        shop_domain=platform.domain,
+        domain=platform.domain,
         correlation_id=ctx.correlation_id,
     )
 

@@ -94,7 +94,7 @@ repos:
       # Check Prisma schemas are valid
       - id: prisma-validate
         name: Validate Prisma schemas
-        entry: bash scripts/validate-prisma.sh
+        entry: bash -c '.pre-commit-scripts/validate-prisma.sh'
         language: system
         files: \.prisma$
 
