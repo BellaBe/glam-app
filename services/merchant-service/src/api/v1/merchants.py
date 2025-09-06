@@ -5,10 +5,8 @@ from shared.api import ApiResponse, success_response
 from shared.api.dependencies import (
     ClientAuthDep,
     LoggerDep,
-    PlatformContextDep,
     RequestContextDep,
 )
-from shared.api.validation import validate_shop_context
 
 from ...dependencies import MerchantServiceDep
 from ...exceptions import MerchantNotFoundError
@@ -29,22 +27,23 @@ async def sync_merchant(
     service: MerchantServiceDep,
     ctx: RequestContextDep,
     client_auth: ClientAuthDep,
-    platform_ctx: PlatformContextDep,
     logger: LoggerDep,
 ):
     """Sync merchant after OAuth completion."""
-    validate_shop_context(
-        client_auth=client_auth,
-        platform_ctx=platform_ctx,
-        logger=logger,
-        body_platform=body.platform_name,
-        body_domain=body.domain,
-    )
+
+    if client_auth.domain != body.domain:
+        logger.warning(
+            "Domain mismatch",
+            extra={"client_auth_domain": client_auth.domain, "body_domain": body.domain},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "DOMAIN_MISMATCH", "message": "Domain mismatch"},
+        )
 
     logger.set_request_context(
-        platform=platform_ctx.platform,
-        domain=platform_ctx.domain,
-        platform_shop_id=body.platform_shop_id,
+        platform=ctx.platform,
+        domain=ctx.domain,
     )
 
     logger.info("Starting merchant sync")
@@ -81,36 +80,21 @@ async def get_current_merchant(
     service: MerchantServiceDep,
     ctx: RequestContextDep,
     client_auth: ClientAuthDep,
-    platform_ctx: PlatformContextDep,
     logger: LoggerDep,
 ):
     """Get current merchant using platform context from headers."""
+    logger.set_request_context(
+        platform=ctx.platform,
+        domain=ctx.domain,
+    )
 
-    # Security validation
-    if client_auth.shop != platform_ctx.domain:
-        logger.warning(
-            "Shop domain mismatch between JWT and headers",
-            extra={"jwt_shop": client_auth.shop, "header_domain": platform_ctx.domain},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "domain_MISMATCH",
-                "message": "Shop domain mismatch between JWT and headers",
-                "details": {
-                    "jwt_shop": client_auth.shop,
-                    "header_domain": platform_ctx.domain,
-                },
-            },
-        )
-
-    logger.set_request_context(platform=platform_ctx.platform, domain=platform_ctx.domain)
+    # TODO: verify client_auth
 
     logger.info("Getting current merchant")
 
     try:
         merchant = await service.get_merchant_by_domain(
-            domain=platform_ctx.domain,
+            domain=ctx.domain,
         )
 
         logger.info(
@@ -129,8 +113,8 @@ async def get_current_merchant(
                 "code": "MERCHANT_NOT_FOUND",
                 "message": "Merchant not found for current shop",
                 "details": {
-                    "platform": platform_ctx.platform,
-                    "domain": platform_ctx.domain,
+                    "platform": ctx.platform,
+                    "domain": ctx.domain,
                 },
             },
-        ) from MerchantNotFoundError(f"Merchant not found for domain {platform_ctx.domain}")
+        ) from MerchantNotFoundError(f"Merchant not found for domain {ctx.domain}")

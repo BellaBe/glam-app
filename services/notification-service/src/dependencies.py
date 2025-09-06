@@ -3,23 +3,9 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from shared.api.dependencies import ClientAuthDep, LoggerDep, PaginationDep, PlatformContextDep, RequestContextDep
-
 from .config import ServiceConfig
 from .lifecycle import ServiceLifecycle
 from .services.notification_service import NotificationService
-
-# Re-export shared dependencies
-__all__ = [
-    "ClientAuthDep",
-    "ConfigDep",
-    "LifecycleDep",
-    "LoggerDep",
-    "NotificationServiceDep",
-    "PaginationDep",
-    "PlatformContextDep",
-    "RequestContextDep",
-]
 
 
 # Core dependencies

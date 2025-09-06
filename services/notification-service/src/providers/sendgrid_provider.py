@@ -1,4 +1,5 @@
 # services/notification-service/src/providers/sendgrid_provider.py
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -30,7 +31,7 @@ class SendGridProvider(EmailProvider):
     def name(self) -> str:
         return "sendgrid"
 
-    async def send(self, message: EmailMessage) -> str:
+    async def send(self, message: EmailMessage) -> dict:  # ✅ Return dict
         """Send email via SendGrid API"""
         async with httpx.AsyncClient() as client:
             payload = {
@@ -79,10 +80,16 @@ class SendGridProvider(EmailProvider):
                     },
                 )
 
-            return message_id
+            # ✅ Return dict instead of string
+            return {
+                "message_id": message_id,
+                "provider": self.name,
+                "status": "accepted",
+                "status_code": response.status_code,
+                "sandbox_mode": self.sandbox_mode,
+                "timestamp": datetime.now().isoformat(),
+            }
 
     async def get_status(self, message_id: str) -> dict[str, Any]:
         """Get message status from SendGrid"""
-        # Implementation would query SendGrid's Activity API
-        # For MVP, return basic status
         return {"message_id": message_id, "status": "sent", "provider": self.name}

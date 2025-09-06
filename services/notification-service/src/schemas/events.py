@@ -4,16 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
-
-# Base event payload
-class BaseEventPayload(BaseModel):
-    """Base class for all event payloads"""
-
-    merchant_id: UUID
-    platform_name: str
-    platform_shop_id: str
-    domain: str
-    correlation_id: str | None = None
+from shared.messaging.events.base import BaseEventPayload
 
 
 # Merchant events
@@ -36,6 +27,12 @@ class CatalogSyncCompletedPayload(BaseEventPayload):
     has_changes: bool
     added_count: int = 0
     updated_count: int = 0
+
+
+class BillingFreeTrialStartedPayload(BaseEventPayload):
+    """Payload for billing.free_trial.started event"""
+
+    trial_id: UUID
 
 
 # Billing events
@@ -69,16 +66,13 @@ class CreditBalanceDepletedPayload(BaseEventPayload):
 
 
 # Published events
-class EmailSentPayload(BaseModel):
+class NotificationSentPayload(BaseEventPayload):
     """Payload for notification.email.sent event"""
 
     notification_id: UUID
-    merchant_id: UUID
-    platform_name: str
-    platform_shop_id: str
-    domain: str
     template_type: str
-    sent_at: datetime
+    delivered_at: datetime
+    provider: str | None = None
 
 
 class EmailFailedPayload(BaseModel):

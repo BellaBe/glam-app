@@ -12,3 +12,10 @@ class MerchantCreatedPayload(BaseEventPayload):
     platform_version: str
     scopes: str
     status: str
+
+
+class MerchantStatusChangedPayload(BaseEventPayload):
+    """Payload for merchant.status.changed.v1 event."""
+
+    old_status: str
+    new_status: str

@@ -75,22 +75,15 @@ class TokenService:
     async def get_tokens(
         self,
         merchant_id: str,
-        platform: str | None,
+        platform: str,
         requesting_service: str,
         correlation_id: str,
-        ip_address: str | None = None,
+        ip_address: str,
     ) -> list[TokenData]:
         """Retrieve and decrypt tokens for a merchant"""
 
-        # Validate platform if specified
-        if platform and platform not in SUPPORTED_PLATFORMS:
-            raise ValidationError(f"Invalid platform: {platform}", field="platform", value=platform)
-
         # Retrieve tokens
-        if platform:
-            tokens = await self.repository.find_by_merchant_platform(merchant_id, platform)
-        else:
-            tokens = await self.repository.find_by_merchant(merchant_id)
+        tokens = await self.repository.find_by_merchant_platform(merchant_id, platform)
 
         # Process each token
         result = []

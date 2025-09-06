@@ -1,8 +1,10 @@
 # services/notification-service/src/events/publishers.py
-from shared.api.correlation import get_correlation_context
+from uuid import UUID
+
+from shared.messaging.events.base import MerchantIdentifiers
 from shared.messaging.publisher import Publisher
 
-from ..schemas.events import EmailFailedPayload, EmailSentPayload
+from ..schemas.events import EmailFailedPayload, NotificationSentPayload
 from ..schemas.notification import NotificationOut
 
 
@@ -13,31 +15,31 @@ class NotificationEventPublisher(Publisher):
     def service_name(self) -> str:
         return "notification-service"
 
-    async def email_sent(self, notification: NotificationOut) -> str:
+    async def email_sent(self, notification: NotificationOut, ctx) -> str:
         """Publish email sent event"""
-        payload = EmailSentPayload(
-            notification_id=notification.id,
-            merchant_id=notification.merchant_id,
+
+        identifiers = MerchantIdentifiers(
+            merchant_id=UUID(notification.merchant_id),
             platform_name=notification.platform_name,
             platform_shop_id=notification.platform_shop_id,
-            template_type=notification.template_type,
-            sent_at=notification.created_at,
+            domain=notification.domain,
         )
 
-        # Get correlation ID from context (set by listener)
-        correlation_id = get_correlation_context() or "unknown"
+        payload = NotificationSentPayload(
+            identifiers=identifiers,
+            notification_id=notification.id,
+            template_type=notification.template_type,
+            delivered_at=notification.delivered_at,
+            provider=notification.provider_message.get("provider") if notification.provider_message else None,
+        )
 
         return await self.publish_event(
             subject="evt.notification.email.sent.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
-            metadata={
-                "recipient_email": notification.recipient_email,
-                "provider": notification.provider,
-            },
+            payload=payload,
+            correlation_id=ctx.correlation_id,
         )
 
-    async def email_failed(self, notification: NotificationOut, error: str) -> str:
+    async def email_failed(self, notification: NotificationOut, error: str, ctx) -> str:
         """Publish email failed event"""
         payload = EmailFailedPayload(
             notification_id=notification.id,
@@ -50,16 +52,8 @@ class NotificationEventPublisher(Publisher):
             failed_at=notification.failed_at or notification.created_at,
         )
 
-        # Get correlation ID from context
-        correlation_id = get_correlation_context() or "unknown"
-
         return await self.publish_event(
             subject="evt.notification.email.failed.v1",
             data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
-            metadata={
-                "recipient_email": notification.recipient_email,
-                "retry_count": notification.retry_count,
-                "trigger_event": notification.trigger_event,
-            },
+            correlation_id=ctx.correlation_id,
         )

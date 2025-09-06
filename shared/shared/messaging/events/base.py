@@ -2,17 +2,14 @@
 """Standardized event models for GLAM messaging system."""
 
 from datetime import UTC, datetime
-from typing import Any, Generic, TypeVar
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Type variable for payload data
-T = TypeVar("T", bound=BaseModel)
 
-
-class PlatformContext(BaseModel):
-    """Platform identification context - REQUIRED for all events."""
+class MerchantIdentifiers(BaseModel):
+    """Complete merchant identification context."""
 
     merchant_id: UUID = Field(..., description="Internal merchant identifier")
     platform_name: str = Field(..., description="Platform type: shopify, woocommerce, etc")
@@ -35,10 +32,10 @@ class BaseEventPayload(BaseModel):
     """
 
     model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
-    platform: PlatformContext = Field(..., description="Complete platform identification")
+    identifiers: MerchantIdentifiers = Field(..., description="Complete merchant identification")
 
 
-class EventEnvelope(BaseModel, Generic[T]):
+class EventEnvelope(BaseModel):
     """
     Standard envelope for all events in GLAM_EVENTS stream.
     Source service is encoded in the event_type subject.
@@ -47,14 +44,14 @@ class EventEnvelope(BaseModel, Generic[T]):
     model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
 
     # Required envelope fields
-    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    event_id: str = Field(..., description="Unique event identifier", default_factory=lambda: str(uuid4()))
     event_type: str = Field(..., description="Subject: evt.{service}.{action}.v1")
     correlation_id: str = Field(..., description="Request correlation ID")
     source_service: str = Field(..., description="Service name (redundant with subject)")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="When published to stream")
 
-    # Typed payload with platform context
-    data: T = Field(..., description="Event payload extending BaseEventPayload")
+    # Event payload
+    data: dict[str, Any] = Field(..., description="Event-specific payload")
 
     def to_bytes(self) -> bytes:
         """Serialize to JSON bytes for NATS."""

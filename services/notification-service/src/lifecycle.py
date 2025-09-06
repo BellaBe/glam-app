@@ -7,12 +7,7 @@ from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
 
 from .config import ServiceConfig
-from .events.listeners import (
-    CatalogSyncCompletedListener,
-    CreditBalanceDepletedListener,
-    CreditBalanceLowListener,
-    MerchantCreatedListener,
-)
+from .events.listeners import BillingEventsListener, CatalogEventsListener, CreditEventsListener, MerchantEventsListener
 from .events.publishers import NotificationEventPublisher
 from .providers.mailhog_provider import MailhogProvider
 from .providers.sendgrid_provider import SendGridProvider
@@ -157,13 +152,12 @@ class ServiceLifecycle:
 
         # Initialize notification service
         if self._db_connected:
-            repository = NotificationRepository(self.prisma)
+            notification_repository = NotificationRepository(self.prisma)
             self.notification_service = NotificationService(
-                repository=repository,
+                repository=notification_repository,
                 template_service=self.template_service,
                 email_service=self.email_service,
                 logger=self.logger,
-                max_retries=self.config.max_retries,
             )
 
         self.logger.info("Services initialized")
@@ -176,18 +170,10 @@ class ServiceLifecycle:
 
         # Create listeners for ALL event types
         listeners = [
-            MerchantCreatedListener(
-                self.messaging_client, self.notification_service, self.event_publisher, self.logger
-            ),
-            CatalogSyncCompletedListener(
-                self.messaging_client, self.notification_service, self.event_publisher, self.logger
-            ),
-            CreditBalanceLowListener(
-                self.messaging_client, self.notification_service, self.event_publisher, self.logger
-            ),
-            CreditBalanceDepletedListener(
-                self.messaging_client, self.notification_service, self.event_publisher, self.logger
-            ),
+            MerchantEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+            CatalogEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+            CreditEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+            BillingEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
         ]
 
         # Start all listeners

@@ -15,6 +15,10 @@ if TYPE_CHECKING:
     from shared.utils.logger import ServiceLogger
 
 
+def _lc(s: str | None) -> str:
+    return (s or "").strip().lower()
+
+
 # Pagination
 class PaginationParams(BaseModel):
     """Standard pagination parameters."""
@@ -57,7 +61,15 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def get_content_type(request: Request) -> str | None:
+def get_platform(request: Request) -> str:
+    return request.headers.get("X-Shop-Platform")
+
+
+def get_domain(request: Request) -> str:
+    return request.headers.get("X-Shop-Domain")
+
+
+def get_content_type(request: Request) -> str:
     return request.headers.get("Content-Type")
 
 
@@ -67,8 +79,14 @@ class RequestContext(BaseModel):
     correlation_id: str
     method: str
     path: str
-    content_type: str | None = None
-    ip_client: str | None = None
+    content_type: str
+    ip_client: str
+    platform: str
+    domain: str
+
+    @property
+    def is_shopify(self) -> bool:
+        return _lc(self.platform) == "shopify"
 
     @classmethod
     def from_request(cls, request: Request) -> "RequestContext":
@@ -78,6 +96,8 @@ class RequestContext(BaseModel):
             path=str(request.url.path),
             ip_client=get_client_ip(request),
             content_type=get_content_type(request),
+            platform=get_platform(request),
+            domain=get_domain(request),
         )
 
 
@@ -119,48 +139,82 @@ def _get_bearer_token(request: Request) -> str:
     return auth.split(" ", 1)[1].strip()
 
 
-def require_client_auth(request: Request) -> ClientAuthContext:
+REQUIRED_CLIENT_SCOPE = os.getenv("REQUIRED_CLIENT_SCOPE", "bff:api:access")
+REQUIRED_PLATFORM = "shopify"
+
+
+def require_client_auth(request: Request, ctx: RequestContextDep) -> ClientAuthContext:
     token = _get_bearer_token(request)
     secret = os.getenv("CLIENT_JWT_SECRET", "")
     if not secret:
         raise RuntimeError("CLIENT_JWT_SECRET not configured")
 
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(token, secret, algorithms=[os.getenv("JWT_ALGORITHM", "HS256")])
     except jwt.PyJWTError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWT: {e!s}") from e
 
-    return ClientAuthContext(
-        shop=payload.get("sub", ""),
-        scope=payload.get("scope", ""),
-        token=token,
-    )
+    jwt_shop = _lc(payload.get("sub", ""))
+    jwt_scope = _lc(payload.get("scope", ""))
 
+    # Critical MVP checks live HERE (no extra validator):
+    # 1) Platform must be shopify
+    if not ctx.is_shopify:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_PLATFORM", "message": f"Only '{REQUIRED_PLATFORM}' platform is supported"},
+        )
 
-def require_internal_auth(request: Request) -> InternalAuthContext:
-    token = _get_bearer_token(request)
-    raw = os.getenv("INTERNAL_JWT_SECRET", "")
-    if not raw:
-        raise RuntimeError("INTERNAL_JWT_SECRET not configured")
+    # 2) Header domain must exist and match JWT shop
+    if not ctx.domain or jwt_shop != ctx.domain:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "DOMAIN_MISMATCH", "message": "JWT shop does not match X-Shop-Domain"},
+        )
 
-    allowed = {}
-    for entry in raw.split(","):
-        entry = entry.strip()
-        if not entry:
-            continue
-        if ":" in entry:
-            service, key = entry.split(":", 1)
-            allowed[key.strip()] = service.strip()
-        else:
-            allowed[entry] = "unknown"
+    # 3) Scope must match required scope
+    if jwt_scope != _lc(REQUIRED_CLIENT_SCOPE):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "INVALID_SCOPE", "message": f"Required scope '{REQUIRED_CLIENT_SCOPE}'"},
+        )
 
-    if token not in allowed:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
-
-    return InternalAuthContext(service=allowed[token], token=token)
+    return ClientAuthContext(shop=jwt_shop, scope=jwt_scope, token=token)
 
 
 ClientAuthDep = Annotated[ClientAuthContext, Depends(require_client_auth)]
+
+
+def require_internal_auth(request: Request, ctx: RequestContextDep) -> InternalAuthContext:
+    token = _get_bearer_token(request)
+
+    secret = os.getenv("INTERNAL_JWT_SECRET", "")
+    if not secret:
+        raise RuntimeError("INTERNAL_JWT_SECRET not configured")
+
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=[os.getenv("JWT_ALGORITHM", "HS256")],
+            options={"require": ["sub"]},  # minimal: require service identity
+        )
+    except jwt.PyJWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid internal JWT: {e!s}",
+        ) from e
+
+    service = str(payload.get("sub", "")).strip().lower()
+    if not service:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal JWT: missing subject",
+        )
+
+    return InternalAuthContext(service=service, token=token)
+
+
 InternalAuthDep = Annotated[InternalAuthContext, Depends(require_internal_auth)]
 
 

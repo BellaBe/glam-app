@@ -1,16 +1,15 @@
 # services/token-service/src/api/v1/tokens.py
 
 
-from fastapi import APIRouter, Body, Query, status
+from fastapi import APIRouter, Body, status
 
 from shared.api import ApiResponse, success_response
-from shared.api.dependencies import ClientAuthDep, ClientIpDep, InternalAuthDep, RequestContextDep
-from shared.api.validation import validate_service_context
+from shared.api.dependencies import ClientAuthDep, InternalAuthDep, RequestContextDep
+from shared.api.validation import ensure_allowed_service
 from shared.utils.exceptions import UnauthorizedError
 
 from ...dependencies import LoggerDep, TokenServiceDep
 from ...schemas.token import DeleteTokenResponse, StoreTokenRequest, StoreTokenResponse, TokenListResponse
-from ...utils.constants import ALLOWED_READER_SERVICES
 
 router = APIRouter(prefix="/api/v1/tokens", tags=["Tokens"])
 
@@ -35,6 +34,10 @@ async def store_token(
 
     # Validate domain matches JWT
     if body.domain != auth.shop:
+        logger.warning(
+            "Domain mismatch",
+            extra={"jwt_domain": auth.shop, "request_domain": body.domain},
+        )
         raise UnauthorizedError("Domain mismatch", details={"jwt_domain": auth.shop, "request_domain": body.domain})
 
     # Store token
@@ -54,8 +57,6 @@ async def get_tokens(
     ctx: RequestContextDep,
     auth: InternalAuthDep,
     logger: LoggerDep,
-    ip: ClientIpDep,
-    platform: str | None = Query(None, description="Filter by platform"),
 ):
     """
     Retrieve tokens for a merchant (requires internal auth).
@@ -63,17 +64,15 @@ async def get_tokens(
     """
 
     # Validate service is allowed to retrieve tokens
-    validate_service_context(
-        internal_auth=auth, logger=logger, allowed_services=ALLOWED_READER_SERVICES, operation="retrieve_tokens"
-    )
+    ensure_allowed_service(auth, ["billing-svc", "catalog-svc"], operation="get-token", logger=logger)
 
     # Get tokens
     tokens = await svc.get_tokens(
         merchant_id=merchant_id,
-        platform=platform,
+        platform=ctx.platform,
         requesting_service=auth.service,
         correlation_id=ctx.correlation_id,
-        ip_address=ip,
+        ip_address=ctx.ip_client,
     )
 
     return success_response(

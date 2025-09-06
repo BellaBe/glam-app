@@ -1,53 +1,46 @@
 # services/notification-service/src/schemas/notification.py
+
 from datetime import datetime
+from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from .enums import AttemptStatus, NotificationStatus
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-# Output DTOs
+class NotificationStatus(str, Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
 class NotificationOut(BaseModel):
     """DTO for notification response"""
 
     id: UUID
-    merchant_id: UUID
+    merchant_id: str  # String representation of UUID
     platform_name: str
     platform_shop_id: str
+    domain: str
     recipient_email: str
     template_type: str
-    status: NotificationStatus
-    provider_message_id: str | None = None
-    trigger_event: str
-    idempotency_key: str
     template_variables: dict  # JSON field
-    created_at: datetime
-    updated_at: datetime
+    status: NotificationStatus | str  # Accept both enum and string
+    attempt_count: int
+    first_attempt_at: datetime | None
+    last_attempt_at: datetime | None
+    delivered_at: datetime | None = None
+    provider_message_id: str | None = None
+    provider_message: dict | None = None  # JSON field
+    idempotency_key: str
+
+    @field_validator("status", mode="before")
+    def validate_status(cls, v):
+        """Convert string to enum if necessary"""
+        if isinstance(v, str):
+            return NotificationStatus(v)
+        return v
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class NotificationAttemptOut(BaseModel):
-    """DTO for notification attempt"""
-
-    id: UUID
-    notification_id: UUID
-    attempt_number: int
-    provider: str
-    status: AttemptStatus
-    error_message: str | None = None
-    provider_response: dict | None = None
-    attempted_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class NotificationWithAttemptsOut(BaseModel):
-    """DTO for notification with attempts"""
-
-    notification: NotificationOut
-    attempts: list[NotificationAttemptOut] = Field(default_factory=list)
 
 
 class NotificationStats(BaseModel):

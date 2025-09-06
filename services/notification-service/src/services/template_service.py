@@ -45,7 +45,6 @@ class TemplateService:
     def template_exists(self, template_type: str) -> bool:
         return (self.template_path / template_type).is_dir()
 
-    # ⬇️ no caching
     def load_subject(self, template_type: str) -> str:
         path = self.get_template_path(template_type, "subject.txt")
         if not path.exists():

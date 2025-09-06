@@ -13,12 +13,12 @@ class Subjects(str, Enum):
     NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed.v1"
 
     # Billing subjects
-    BILLING_TRIAL_STARTED = "evt.billing.trial.started.v1"
-    BILLING_TRIAL_EXPIRED = "evt.billing.trial.expired.v1"
-    BILLING_CREDITS_PURCHASED = "evt.billing.credits.purchased.v1"
+    BILLING_TRIAL_ACTIVATED = "evt.billing.trial.activated.v1"
+    BILLING_PURCHASE_COMPLETED = "evt.billing.purchase.completed.v1"
 
     # Merchant subjects
     MERCHANT_CREATED = "evt.merchant.created.v1"
+    MERCHANT_STATUS_CHANGED = "evt.merchant.status.changed.v1"
 
     # Catalog subjects
     CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"
@@ -28,8 +28,7 @@ class Subjects(str, Enum):
     # Credit events
     CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
     CREDIT_BALANCE_DEPLETED = "evt.credit.balance.depleted.v1"
-    CREDITS_CONSUMED = "evt.credits.consumed.v1"
-    CREDITS_RESET = "evt.credits.reset.v1"
+    CREDIT_TRIAL_EXHAUSTED = "evt.credit.trial.exhausted.v1"
 
     # Analytics events
     ANALYTICS_EVENT_TRACKED = "evt.analytics.tracked.v1"

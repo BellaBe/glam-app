@@ -2,15 +2,12 @@
 """Enhanced publisher with standardized envelope and auto-correlation."""
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import Any
 
-from shared.api.correlation import get_correlation_context
 from shared.utils.logger import ServiceLogger
 
-from .events.base import BaseEventPayload, EventEnvelope
+from .events.base import EventEnvelope
 from .jetstream_client import JetStreamClient
-
-T = TypeVar("T", bound=BaseEventPayload)
 
 
 class Publisher(ABC):
@@ -43,9 +40,8 @@ class Publisher(ABC):
     async def publish_event(
         self,
         subject: str,
-        payload: T,
-        correlation_id: str | None = None,
-        metadata: dict | None = None,
+        payload: dict[str, Any],
+        correlation_id: str,
     ) -> str:
         """
         Publish an event with automatic envelope wrapping.
@@ -59,26 +55,15 @@ class Publisher(ABC):
         Returns:
             event_id of the published event
         """
-        # Validate subject pattern
+
         if not (subject.startswith("evt.") or subject.startswith("cmd.") or subject.startswith("dlq.")):
             raise ValueError(f"Invalid subject pattern: {subject}. Must start with evt., cmd., or dlq.")
 
-        # Auto-detect correlation ID from context if not provided
-        if not correlation_id:
-            correlation_id = get_correlation_context()
-            if not correlation_id:
-                # Generate new one if no context
-                from uuid import uuid4
-
-                correlation_id = f"corr_{uuid4().hex[:12]}"
-
-        # Create envelope with typed payload
-        envelope = EventEnvelope[type(payload)](
+        envelope = EventEnvelope(
             event_type=subject,
             correlation_id=correlation_id,
             source_service=self.service_name,
-            data=payload,
-            metadata=metadata or {},
+            data=payload.model_dump(mode="json"),
         )
 
         self.logger.info(
@@ -92,10 +77,7 @@ class Publisher(ABC):
         )
 
         try:
-            # Ensure stream exists
             await self._ensure_stream()
-
-            # Publish with envelope
             ack = await self.js_client.js.publish(subject, envelope.to_bytes())
 
             self.logger.info(

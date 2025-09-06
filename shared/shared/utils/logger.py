@@ -8,13 +8,23 @@ from typing import Any
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_record = {
-            "timestamp": self.formatTime(record, self.datefmt),
+            "timestamp": self.formatTime(record),
             "level": record.levelname,
-            "logger": record.name,
             "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
         }
-        # Add all custom fields set in `extra`
-        log_record.update({k: v for k, v in record.__dict__.items() if k not in logging.LogRecord.__dict__})
+
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+
+        if hasattr(record, "extra"):
+            for key, value in record.extra.items():
+                if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                    log_record[key] = str(value)
+                else:
+                    log_record[key] = value
+
         return json.dumps(log_record)
 
 

@@ -6,8 +6,6 @@ from typing import Any
 
 @dataclass
 class EmailMessage:
-    """Email message structure"""
-
     to: str
     subject: str
     html: str
@@ -27,16 +25,11 @@ class EmailProvider(ABC):
         pass
 
     @abstractmethod
-    async def send(self, message: EmailMessage) -> str:
-        """
-        Send email and return provider message ID
-
-        Raises:
-            Exception: On send failure
-        """
+    async def send(self, message: EmailMessage) -> dict[str, Any]:  # ✅ Must return dict
+        """Send email and return response dict with at least 'message_id' key"""
         pass
 
     @abstractmethod
     async def get_status(self, message_id: str) -> dict[str, Any]:
-        """Get message status from provider"""
+        """Get message status"""
         pass

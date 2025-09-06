@@ -31,15 +31,20 @@ class EmailService:
         message = EmailMessage(to=to, subject=subject, html=html, text=text, metadata=metadata)
 
         try:
-            message_id = await self.provider.send(message)
+            response = await self.provider.send(message)
 
             if self.logger:
                 self.logger.info(
                     "Email sent successfully",
-                    extra={"provider": self.provider_name, "to": to, "subject": subject, "message_id": message_id},
+                    extra={
+                        "provider": self.provider_name,
+                        "to": to,
+                        "subject": subject,
+                        "message_id": response.get("message_id"),
+                    },
                 )
 
-            return message_id
+            return response
 
         except Exception as e:
             if self.logger:

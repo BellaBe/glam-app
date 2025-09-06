@@ -1,6 +1,7 @@
 # services/notification-service/src/providers/mailhog_provider.py
 import smtplib
 import uuid
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -27,7 +28,7 @@ class MailhogProvider(EmailProvider):
     def name(self) -> str:
         return "mailhog"
 
-    async def send(self, message: EmailMessage) -> str:
+    async def send(self, message: EmailMessage) -> dict:  # ✅ Return dict
         """Send email via Mailhog SMTP"""
         # Create message
         msg = MIMEMultipart("alternative")
@@ -61,7 +62,13 @@ class MailhogProvider(EmailProvider):
                     },
                 )
 
-            return message_id
+            # ✅ Return dict instead of string
+            return {
+                "message_id": message_id,
+                "provider": self.name,
+                "status": "accepted",
+                "timestamp": datetime.now().isoformat(),
+            }
 
         except Exception as e:
             raise Exception(f"Mailhog SMTP error: {e!s}") from e

@@ -1,6 +1,7 @@
 # services/merchant-service/src/services/merchant_service.py
 from prisma.enums import MerchantStatus
 
+from shared.messaging.events.base import MerchantIdentifiers
 from shared.messaging.events.merchant import MerchantCreatedPayload
 from shared.utils.logger import ServiceLogger
 
@@ -59,10 +60,12 @@ class MerchantService:
             )
 
             payload = MerchantCreatedPayload(
-                merchant_id=merchant.id,
-                platform_name=merchant.platform_name,
-                platform_shop_id=merchant.platform_shop_id,
-                domain=merchant.domain,
+                identifiers=MerchantIdentifiers(
+                    merchant_id=merchant.id,
+                    platform_name=merchant.platform_name,
+                    platform_shop_id=merchant.platform_shop_id,
+                    domain=merchant.domain,
+                ),
                 shop_name=merchant.name,
                 email=merchant.email,
                 country=merchant.country,
