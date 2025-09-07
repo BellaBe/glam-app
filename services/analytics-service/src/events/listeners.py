@@ -68,10 +68,10 @@ class SelfieAnalysisCompletedListener(Listener):
             )
 
         except ValidationError as e:
-            self.logger.error(f"Invalid selfie analysis event: {e}")
+            self.logger.exception(f"Invalid selfie analysis event: {e}")
             return  # ACK invalid messages
         except Exception as e:
-            self.logger.error(f"Failed to process selfie analysis: {e}")
+            self.logger.exception(f"Failed to process selfie analysis: {e}")
             raise  # NACK for retry
 
 
@@ -136,10 +136,10 @@ class RecommendationMatchCompletedListener(Listener):
             )
 
         except ValidationError as e:
-            self.logger.error(f"Invalid match event: {e}")
+            self.logger.exception(f"Invalid match event: {e}")
             return
         except Exception as e:
-            self.logger.error(f"Failed to process match: {e}")
+            self.logger.exception(f"Failed to process match: {e}")
             raise
 
 
@@ -189,7 +189,7 @@ class CreditsConsumedListener(Listener):
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to process credit consumption: {e}")
+            self.logger.exception(f"Failed to process credit consumption: {e}")
             raise
 
 
@@ -239,5 +239,5 @@ class CatalogSyncCompletedListener(Listener):
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to process catalog sync: {e}")
+            self.logger.exception(f"Failed to process catalog sync: {e}")
             raise

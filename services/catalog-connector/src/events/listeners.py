@@ -57,11 +57,11 @@ class CatalogSyncRequestedListener(Listener):
             )
 
         except ValidationError as e:
-            self.logger.error(f"Invalid sync request: {e}")
+            self.logger.exception(f"Invalid sync request: {e}")
             return  # ACK invalid messages
 
         except Exception as e:
-            self.logger.error(f"Sync request processing failed: {e}", exc_info=True)
+            self.logger.exception(f"Sync request processing failed: {e}", exc_info=True)
             # Check if should retry
             if hasattr(e, "retryable") and e.retryable:
                 raise  # NACK for retry
@@ -82,5 +82,5 @@ class CatalogSyncRequestedListener(Listener):
                 return False  # NACK for retry
 
         # Max retries exceeded or non-retryable
-        self.logger.error(f"Sync request failed permanently: {error}", extra={"data": data})
+        self.logger.exception(f"Sync request failed permanently: {error}", extra={"data": data})
         return True  # ACK to prevent further retries

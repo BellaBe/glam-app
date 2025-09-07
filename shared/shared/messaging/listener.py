@@ -105,11 +105,23 @@ class Listener(ABC):
         try:
             # Parse into EventEnvelope (without typed data)
             envelope = EventEnvelope.model_validate_json(msg.data)
+            
+            # Set logging context for this message
+            self.logger.set_request_context(
+                event_id=envelope.event_id,
+                event_type=envelope.event_type,
+                correlation_id=envelope.correlation_id,
+                source_service=envelope.source_service,
+                service=self.service_name,
+                entry_point="event_listener"
+            )
 
             # Process message
             try:
+                self.logger.info("Processing event")
                 await self.on_message(envelope)
                 await msg.ack()
+                self.logger.info("Event processed successfully")
 
             except Exception as e:
                 # Get delivery count
@@ -118,29 +130,30 @@ class Listener(ABC):
                     delivery_count = getattr(msg.metadata, "num_delivered", 1)
 
                 if delivery_count >= self.max_deliver:
-                    self.logger.error(
-                        f"Max retries for {envelope.event_id}",
+                    self.logger.exception(
+                        f"Max retries for event",
                         extra={
                             "error": str(e),
-                            "event_type": envelope.event_type,
-                            "correlation_id": envelope.correlation_id,
+                            "delivery_count": delivery_count
                         },
                     )
                     await msg.ack()  # Don't retry anymore
                 else:
-                    self.logger.error(
-                        f"Error processing {envelope.event_id} (attempt {delivery_count})",
+                    self.logger.exception(
+                        f"Error processing event (attempt {delivery_count})",
                         extra={
                             "error": str(e),
-                            "event_type": envelope.event_type,
-                            "correlation_id": envelope.correlation_id,
+                            "delivery_count": delivery_count
                         },
                     )
                     await msg.nak()  # Retry
 
         except json.JSONDecodeError:
-            self.logger.error("Invalid JSON message")
+            self.logger.exception("Invalid JSON message")
             await msg.ack()
         except Exception as e:
-            self.logger.error(f"Invalid envelope structure: {e}")
+            self.logger.exception(f"Invalid envelope structure: {e}")
             await msg.ack()
+        finally:
+            # Clear context after handling message
+            self.logger.clear_request_context()

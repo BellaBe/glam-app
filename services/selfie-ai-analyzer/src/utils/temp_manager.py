@@ -29,7 +29,7 @@ class TempManager:
                 shutil.rmtree(work_dir)
                 self.logger.debug(f"Cleaned up {work_dir}")
         except Exception as e:
-            self.logger.error(f"Failed to cleanup {work_dir}: {e}")
+            self.logger.exception(f"Failed to cleanup {work_dir}: {e}")
     
     async def cleanup_all(self):
         """Clean up all temp directories"""
@@ -38,4 +38,4 @@ class TempManager:
                 shutil.rmtree(self.base_dir)
                 self.logger.info("Cleaned up all temp files")
         except Exception as e:
-            self.logger.error(f"Failed to cleanup temp directory: {e}")
+            self.logger.exception(f"Failed to cleanup temp directory: {e}")

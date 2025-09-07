@@ -55,7 +55,7 @@ class AggregationService:
             )
             
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Hourly aggregation failed: {e}",
                 exc_info=True
             )
@@ -96,7 +96,7 @@ class AggregationService:
                 )
             
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Daily aggregation failed: {e}",
                 exc_info=True
             )
@@ -135,7 +135,7 @@ class AggregationService:
                 )
             
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Cleanup job failed: {e}",
                 exc_info=True
             )

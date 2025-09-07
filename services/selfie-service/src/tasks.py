@@ -18,7 +18,7 @@ async def cleanup_stale_analyses(lifecycle, logger: ServiceLogger):
                 logger.info(f"Marked {count} stale analyses as FAILED")
 
         except Exception as e:
-            logger.error(f"Cleanup sweeper error: {e}")
+            logger.exception(f"Cleanup sweeper error: {e}")
 
         # Sleep before next sweep
         await asyncio.sleep(lifecycle.config.sweeper_interval_seconds)

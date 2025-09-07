@@ -64,14 +64,14 @@ class ServiceLifecycle:
             try:
                 await listener.stop()
             except Exception:
-                self.logger.error("Listener stop failed", exc_info=True)
+                self.logger.exception("Listener stop failed", exc_info=True)
         
         # Close messaging
         if self.messaging_client:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.error("Messaging close failed", exc_info=True)
+                self.logger.exception("Messaging close failed", exc_info=True)
         
         self.logger.info("Platform connector shutdown complete")
     

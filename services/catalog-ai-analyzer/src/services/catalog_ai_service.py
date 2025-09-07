@@ -129,7 +129,7 @@ class CatalogAIService:
             )
             
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Item analysis failed: {e}",
                 extra={
                     "item_id": str(item.item_id),
@@ -163,7 +163,7 @@ class CatalogAIService:
         try:
             return await self.mediapipe.extract_colors(image_bytes)
         except Exception as e:
-            self.logger.error(f"Color extraction failed: {e}")
+            self.logger.exception(f"Color extraction failed: {e}")
             return None
     
     async def _analyze_attributes_safe(self, image_bytes: bytes) -> Optional[Dict]:
@@ -171,7 +171,7 @@ class CatalogAIService:
         try:
             return await self.openai.analyze_attributes(image_bytes)
         except Exception as e:
-            self.logger.error(f"OpenAI analysis failed: {e}")
+            self.logger.exception(f"OpenAI analysis failed: {e}")
             return None
     
     async def close(self):

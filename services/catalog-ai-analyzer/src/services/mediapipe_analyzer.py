@@ -25,7 +25,7 @@ class MediaPipeAnalyzer:
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if image is None:
-                self.logger.error("Failed to decode image")
+                self.logger.exception("Failed to decode image")
                 return None
             
             # Perform apparel segmentation (from legacy code)
@@ -55,7 +55,7 @@ class MediaPipeAnalyzer:
             )
             
         except Exception as e:
-            self.logger.error(f"MediaPipe color extraction failed: {e}")
+            self.logger.exception(f"MediaPipe color extraction failed: {e}")
             return None
     
     def _get_segmenter(self):

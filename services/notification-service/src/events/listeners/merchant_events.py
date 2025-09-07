@@ -15,7 +15,7 @@ class MerchantEventsListener(Listener):
 
     @property
     def subject(self) -> str:
-        return "evt.merchant.>"  # All merchant events
+        return "evt.merchant.>"
 
     @property
     def queue_group(self) -> str:
@@ -45,7 +45,6 @@ class MerchantEventsListener(Listener):
         # Route by event type
         if envelope.event_type == "evt.merchant.created.v1":
             await self._handle_created(envelope)
-
         else:
             # Unknown merchant event - just log
             self.logger.debug(f"Ignoring {envelope.event_type}", extra={"event_id": envelope.event_id})
@@ -57,7 +56,7 @@ class MerchantEventsListener(Listener):
         try:
             payload = MerchantCreatedPayload.model_validate(envelope.data)
         except ValidationError as e:
-            self.logger.error(
+            self.logger.exception(
                 "Invalid merchant.created payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
             )
             return  # Don't retry bad data

@@ -47,11 +47,11 @@ class AnalysisCompletedListener(Listener):
 
         except ValidationError:
             # ACK invalid messages (don't retry)
-            self.logger.error("Invalid AI completion event", extra={"data": data})
+            self.logger.exception("Invalid AI completion event", extra={"data": data})
             return
         except Exception as e:
             # NACK for retry on other errors
-            self.logger.error(f"AI completion processing failed: {e}")
+            self.logger.exception(f"AI completion processing failed: {e}")
             raise
 
     async def on_error(self, error: Exception, data: dict) -> bool:
@@ -61,7 +61,7 @@ class AnalysisCompletedListener(Listener):
 
         # Check retry count
         if self.delivery_count >= self.max_deliver:
-            self.logger.error("Max retries reached for analysis update")
+            self.logger.exception("Max retries reached for analysis update")
             return True  # ACK to prevent further retries
 
         return False  # NACK for retry

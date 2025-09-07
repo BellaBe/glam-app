@@ -174,7 +174,7 @@ class OpenAIAnalyzer:
             }
             
         except Exception as e:
-            self.logger.error(f"Failed to parse OpenAI response: {e}")
+            self.logger.exception(f"Failed to parse OpenAI response: {e}")
             return None
     
     async def close(self):

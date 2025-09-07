@@ -106,7 +106,7 @@ class ServiceLifecycle:
             self.logger.info("Prisma connected")
         except Exception as e:
             # Be explicit; this usually means DATABASE_URL is missing/invalid or client not generated
-            self.logger.error("Prisma connect failed: %s", e, exc_info=True)
+            self.logger.exception("Prisma connect failed: %s", e, exc_info=True)
             raise
 
     def _init_repositories(self) -> None:

@@ -62,7 +62,7 @@ class ServiceLifecycle:
             try:
                 await listener.stop()
             except Exception:
-                self.logger.error("Listener stop failed", exc_info=True)
+                self.logger.exception("Listener stop failed", exc_info=True)
         
         # Close analyzers
         if self.openai_analyzer:
@@ -76,7 +76,7 @@ class ServiceLifecycle:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.error("Messaging close failed", exc_info=True)
+                self.logger.exception("Messaging close failed", exc_info=True)
         
         self.logger.info("Shutdown complete")
     

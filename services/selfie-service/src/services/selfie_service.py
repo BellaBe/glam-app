@@ -195,7 +195,7 @@ class SelfieService:
         try:
             analysis = await self.repository.find_by_id(analysis_id)
             if not analysis:
-                self.logger.error(f"Analysis {analysis_id} not found for AI processing")
+                self.logger.exception(f"Analysis {analysis_id} not found for AI processing")
                 return
 
             # Call AI analyzer
@@ -275,7 +275,7 @@ class SelfieService:
             await self.repository.mark_failed(
                 analysis_id=analysis_id, error_code="ANALYSIS_FAILED", error_message=str(e)
             )
-            self.logger.error(f"AI analysis failed for {analysis_id}: {e}", extra={"correlation_id": correlation_id})
+            self.logger.exception(f"AI analysis failed for {analysis_id}: {e}", extra={"correlation_id": correlation_id})
             if self.event_publisher:
                 await self.event_publisher.analysis_failed(
                     analysis_id=analysis_id,

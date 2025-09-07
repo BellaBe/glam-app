@@ -27,7 +27,7 @@ class FaceAnalyzer:
         try:
             return await asyncio.to_thread(self._run_face_mesh, image_path)
         except Exception as e:
-            self.logger.error(f"Face mesh extraction failed: {e}")
+            self.logger.exception(f"Face mesh extraction failed: {e}")
             return None
     
     def _run_face_mesh(self, image_path: str) -> Dict:
@@ -58,7 +58,7 @@ class FaceAnalyzer:
         try:
             return await asyncio.to_thread(self._run_segmentation, image_path)
         except Exception as e:
-            self.logger.error(f"Segmentation extraction failed: {e}")
+            self.logger.exception(f"Segmentation extraction failed: {e}")
             return None
     
     def _run_segmentation(self, image_path: str) -> Dict:
@@ -96,7 +96,7 @@ class FaceAnalyzer:
         try:
             return await asyncio.to_thread(self._run_deepface, image_path)
         except Exception as e:
-            self.logger.error(f"Demographics extraction failed: {e}")
+            self.logger.exception(f"Demographics extraction failed: {e}")
             return None
     
     def _run_deepface(self, image_path: str) -> Demographics:

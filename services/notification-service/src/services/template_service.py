@@ -2,7 +2,13 @@
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    TemplateNotFound,
+    StrictUndefined,
+    select_autoescape,
+)
 
 from shared.utils.exceptions import InternalError, NotFoundError
 from shared.utils.logger import ServiceLogger
@@ -18,9 +24,11 @@ class TemplateService:
 
         self.env = Environment(
             loader=FileSystemLoader(str(self.template_path)),
-            autoescape=True,
+            autoescape=select_autoescape(enabled_extensions=("html.j2",), default=False),
             trim_blocks=True,
             lstrip_blocks=True,
+            undefined=StrictUndefined,
+            auto_reload=True,
         )
         self.env.filters["format_currency"] = self._format_currency
         self.env.filters["format_date"] = self._format_date
@@ -45,15 +53,38 @@ class TemplateService:
     def template_exists(self, template_type: str) -> bool:
         return (self.template_path / template_type).is_dir()
 
-    def load_subject(self, template_type: str) -> str:
-        path = self.get_template_path(template_type, "subject.txt")
-        if not path.exists():
-            raise NotFoundError(
-                f"Subject template not found for {template_type}",
-                resource="template",
-                resource_id=f"{template_type}/subject.txt",
-            )
-        return path.read_text(encoding="utf-8").strip()
+    def render_subject(self, template_type: str, context: dict[str, Any]) -> str:
+        """
+        Render subject using Jinja. Supports, in order:
+        - subject.txt.j2 (preferred)
+        - subject.j2
+        - subject.txt (rendered via Jinja for backward compatibility)
+        """
+        candidates = [
+            f"{template_type}/subject.txt.j2",
+            f"{template_type}/subject.j2",
+            f"{template_type}/subject.txt",
+        ]
+        last_err: Exception | None = None
+        for template_path in candidates:
+            try:
+                template = self.env.get_template(template_path)
+                rendered = template.render(**context)
+                # subjects must be single-line, trimmed
+                subject = " ".join(rendered.splitlines()).strip()
+                if subject:
+                    return subject
+            except TemplateNotFound as e:
+                last_err = e
+                continue
+            except Exception as e:
+                raise InternalError(f"Subject rendering failed: {e!s}", error_id=template_type) from e
+
+        raise NotFoundError(
+            f"Subject template not found for {template_type}",
+            resource="template",
+            resource_id=" | ".join(candidates),
+        ) from last_err
 
     def render_template(self, template_type: str, fmt: str, context: dict[str, Any]) -> str:
         """
@@ -70,9 +101,10 @@ class TemplateService:
         try:
             template = self.env.get_template(template_path)
             if fmt == "html":
-                context = {**context}  # avoid mutating caller's dict
-                context["header"] = self._render_shared("header.html.j2", context)
-                context["footer"] = self._render_shared("footer.html.j2", context)
+                safe_context = {**context}
+                safe_context["header"] = self._render_shared("header.html.j2", context)
+                safe_context["footer"] = self._render_shared("footer.html.j2", context)
+                return template.render(**safe_context)
             return template.render(**context)
 
         except TemplateNotFound as e:
@@ -101,7 +133,7 @@ class TemplateService:
                 resource_id=template_type,
             )
 
-        subject = self.load_subject(template_type)
+        subject = self.render_subject(template_type, context)
         html_body = self.render_template(template_type, "html", context)
         text_body = self.render_template(template_type, "text", context)
         return subject, html_body, text_body

@@ -239,10 +239,10 @@ src/
 │   │               await self.service.handle_merchant_created(payload, correlation_id)
 │   │               self.logger.info(f"Credit account created for merchant {payload.merchant_id}")
 │   │           except ValidationError as e:
-│   │               self.logger.error(f"Invalid merchant event: {e}")
+│   │               self.logger.exception(f"Invalid merchant event: {e}")
 │   │               return  # ACK to drop invalid message
 │   │           except Exception as e:
-│   │               self.logger.error(f"Failed to create credit account: {e}")
+│   │               self.logger.exception(f"Failed to create credit account: {e}")
 │   │               raise  # NACK for retry
 │   │
 │   │
@@ -279,10 +279,10 @@ src/
 │   │               await self.publisher.credits_granted(result)
 │   │
 │   │           except ValidationError as e:
-│   │               self.logger.error(f"Invalid trial event: {e}")
+│   │               self.logger.exception(f"Invalid trial event: {e}")
 │   │               return  # ACK
 │   │           except Exception as e:
-│   │               self.logger.error(f"Failed to grant trial credits: {e}")
+│   │               self.logger.exception(f"Failed to grant trial credits: {e}")
 │   │               raise  # NACK
 │   │
 │   │
@@ -319,10 +319,10 @@ src/
 │   │               await self.publisher.credits_granted(result)
 │   │
 │   │           except ValidationError as e:
-│   │               self.logger.error(f"Invalid purchase event: {e}")
+│   │               self.logger.exception(f"Invalid purchase event: {e}")
 │   │               return  # ACK
 │   │           except Exception as e:
-│   │               self.logger.error(f"Failed to add purchased credits: {e}")
+│   │               self.logger.exception(f"Failed to add purchased credits: {e}")
 │   │               raise  # NACK
 │   │
 │   │
@@ -368,10 +368,10 @@ src/
 │   │                       await self.publisher.credits_exhausted(result)
 │   │
 │   │           except ValidationError as e:
-│   │               self.logger.error(f"Invalid match event: {e}")
+│   │               self.logger.exception(f"Invalid match event: {e}")
 │   │               return  # ACK
 │   │           except Exception as e:
-│   │               self.logger.error(f"Failed to consume credit: {e}")
+│   │               self.logger.exception(f"Failed to consume credit: {e}")
 │   │               raise  # NACK
 │   │   ```
 │   │
@@ -973,7 +973,7 @@ src/
 │               # Check balance before consuming
 │               account = await self.repository.find_by_merchant_id(event.merchant_id)
 │               if not account:
-│                   self.logger.error(
+│                   self.logger.exception(
 │                       "No credit account for merchant",
 │                       extra={
 │                           "correlation_id": correlation_id,
@@ -1307,21 +1307,21 @@ src/
 │               try:
 │                   await listener.stop()
 │               except Exception:
-│                   self.logger.error("Listener stop failed", exc_info=True)
+│                   self.logger.exception("Listener stop failed", exc_info=True)
 │
 │           # Close messaging
 │           if self.messaging_client:
 │               try:
 │                   await self.messaging_client.close()
 │               except Exception:
-│                   self.logger.error("Messaging close failed", exc_info=True)
+│                   self.logger.exception("Messaging close failed", exc_info=True)
 │
 │           # Disconnect database
 │           if self.prisma and self._db_connected:
 │               try:
 │                   await self.prisma.disconnect()
 │               except Exception:
-│                   self.logger.error("Prisma disconnect failed", exc_info=True)
+│                   self.logger.exception("Prisma disconnect failed", exc_info=True)
 │
 │           self.logger.info("Credit service shutdown complete")
 │
@@ -1348,7 +1348,7 @@ src/
 │               self._db_connected = True
 │               self.logger.info("Prisma connected")
 │           except Exception as e:
-│               self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
+│               self.logger.exception(f"Prisma connect failed: {e}", exc_info=True)
 │               raise
 │
 │       def _init_repositories(self) -> None:

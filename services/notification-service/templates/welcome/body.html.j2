@@ -2,44 +2,47 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Glam You Up</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Glam You Up</title>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    {{ header|safe }}
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif; line-height:1.6; color:#101828;">
+  {{ header | safe }}
 
-    <div style="padding: 20px; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #FF6B6B;">Welcome to Glam You Up!</h1>
+  {% from "shared/macros.html.j2" import divider, button with context %}
 
-        <p>Hi {{ shop_name }},</p>
+  <div style="padding:20px; max-width:600px; margin:0 auto;">
+    <h1 style="margin:0 0 12px 0; font-size:20px; line-height:1.3; color:#344054;">Welcome to Glam You Up</h1>
 
-        <p>Thank you for installing Glam You Up on your {{ platform_name|title }} store!</p>
+    <p style="margin:0 0 8px 0;">Hi {{ shop_name | default(domain) }},</p>
 
-        <p>We're excited to help you reduce returns and increase customer satisfaction with our AI-powered virtual try-on technology.</p>
+    <p style="margin:0 0 8px 0;">
+      Thanks for installing Glam You Up on your {{ platform_name | default('Shopify') | title }} store.
+      We help reduce returns and lift conversions with AI-driven fit & color recommendations.
+    </p>
 
-        <h2 style="color: #4ECDC4;">Getting Started</h2>
+    <h2 style="margin:16px 0 8px 0; font-size:16px; line-height:1.4; color:#344054;">Getting started</h2>
+    <ol style="margin:0 0 12px 20px; padding:0; color:#475467;">
+      <li><strong>Sync your catalog</strong> to enable recommendations.</li>
+      <li><strong>Configure settings</strong> (credits, alerts, display rules).</li>
+      <li><strong>Go live</strong> and track performance in your dashboard.</li>
+    </ol>
 
-        <ol>
-            <li><strong>Sync Your Catalog:</strong> Import your products to enable virtual try-on</li>
-            <li><strong>Choose Your Plan:</strong> Start with our free trial or select a plan</li>
-            <li><strong>Go Live:</strong> Your customers can start using virtual try-on immediately</li>
-        </ol>
+    {% if app_url is defined %}
+      <div style="text-align:center; margin:24px 0 0 0;">
+        {{ button(app_url ~ '/dashboard', 'Open Dashboard') }}
+      </div>
+    {% endif %}
 
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{{ app_url }}/dashboard"
-               style="background-color: #FF6B6B; color: white; padding: 12px 30px;
-                      text-decoration: none; border-radius: 5px; display: inline-block;">
-                Go to Dashboard
-            </a>
-        </div>
+    <p style="margin:20px 0 0 0;">
+      Questions? We’re here to help: <a href="mailto:{{ support_email }}" style="color:{{ brand_color | default('#BD4267') }}; text-decoration:underline;">{{ support_email }}</a>
+    </p>
 
-        <p>If you have any questions, our support team is here to help at
-           <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+    <p style="margin:12px 0 0 0;">Best regards,<br>The Glam You Up Team</p>
 
-        <p>Best regards,<br>The Glam You Up Team</p>
-    </div>
+    {{ divider() }}
+  </div>
 
-    {{ footer|safe }}
+  {{ footer | safe }}
 </body>
 </html>

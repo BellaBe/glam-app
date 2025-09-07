@@ -271,7 +271,7 @@ class Listener(ABC):
         try:
             while self._running:
                 if not self._sub:
-                    self.logger.error("Subscription not initialized, skipping poll")
+                    self.logger.exception("Subscription not initialized, skipping poll")
                     await asyncio.sleep(1)
                     continue
                 try:
@@ -302,13 +302,13 @@ class Listener(ABC):
         try:
             envelope = json.loads(msg.data.decode())
         except json.JSONDecodeError:
-            self.logger.error("Bad JSON on %s; acking (dropping)", self.subject)
+            self.logger.exception("Bad JSON on %s; acking (dropping)", self.subject)
             await msg.ack()
             return
 
         for f in ("event_id", "event_type", "data"):
             if f not in envelope:
-                self.logger.error("Missing %s; acking (dropping)", f)
+                self.logger.exception("Missing %s; acking (dropping)", f)
                 await msg.ack()
                 return
 
@@ -322,7 +322,7 @@ class Listener(ABC):
 
         md = getattr(msg, "metadata", None)
         if md and getattr(md, "num_delivered", None) is not None and md.num_delivered >= self.max_deliver:
-            self.logger.error("Final delivery hit; dropping msg on subject %s", self.subject)
+            self.logger.exception("Final delivery hit; dropping msg on subject %s", self.subject)
 
         try:
             await self.on_message(envelope["data"])
@@ -339,7 +339,7 @@ class Listener(ABC):
 
     # default hook
     async def on_error(self, error: Exception, data: dict) -> bool:
-        self.logger.error("Error on %s: %s", self.subject, error, exc_info=True)
+        self.logger.exception("Error on %s: %s", self.subject, error, exc_info=True)
         return False
 ```
 
@@ -404,7 +404,7 @@ class Publisher(ABC):
             return event_id
 
         except Exception as e:
-            self.logger.error("Failed to publish event %s: %s", subject, str(e), exc_info=True)
+            self.logger.exception("Failed to publish event %s: %s", subject, str(e), exc_info=True)
             raise
 ```
 

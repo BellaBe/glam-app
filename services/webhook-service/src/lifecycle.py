@@ -110,7 +110,7 @@ class ServiceLifecycle:
             self._db_connected = True
             self.logger.info("Prisma connected")
         except Exception as e:
-            self.logger.error("Prisma connect failed: %s", e, exc_info=True)
+            self.logger.exception("Prisma connect failed: %s", e, exc_info=True)
             raise
 
     def _init_repositories(self) -> None:

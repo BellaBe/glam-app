@@ -407,7 +407,7 @@ src/
 │   │               encrypted = self._cipher.encrypt(json_str.encode())
 │   │               return base64.urlsafe_b64encode(encrypted).decode()
 │   │           except Exception as e:
-│   │               self.logger.error(f"Encryption failed: {e}")
+│   │               self.logger.exception(f"Encryption failed: {e}")
 │   │               raise InternalError(
 │   │                   "Failed to encrypt token data",
 │   │                   details={"error": str(e)}
@@ -420,7 +420,7 @@ src/
 │   │               decrypted = self._cipher.decrypt(encrypted_bytes)
 │   │               return json.loads(decrypted.decode())
 │   │           except Exception as e:
-│   │               self.logger.error(f"Decryption failed: {e}")
+│   │               self.logger.exception(f"Decryption failed: {e}")
 │   │               raise InternalError(
 │   │                   "Failed to decrypt token data",
 │   │                   details={"error": str(e)}
@@ -875,7 +875,7 @@ src/
 │               try:
 │                   await self.prisma.disconnect()
 │               except Exception:
-│                   self.logger.error("Prisma disconnect failed", exc_info=True)
+│                   self.logger.exception("Prisma disconnect failed", exc_info=True)
 │
 │           self.logger.info(f"{self.config.service_name} shutdown complete")
 │
@@ -890,7 +890,7 @@ src/
 │               self._db_connected = True
 │               self.logger.info("Prisma connected")
 │           except Exception as e:
-│               self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
+│               self.logger.exception(f"Prisma connect failed: {e}", exc_info=True)
 │               raise
 │
 │       def _init_encryption(self) -> None:

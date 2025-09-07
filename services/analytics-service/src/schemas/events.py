@@ -59,19 +59,6 @@ class CreditsConsumedPayload(BaseModel):
     consumed_at: datetime
 
 
-class CreditsGrantedPayload(BaseModel):
-    """evt.credits.granted payload"""
-
-    merchant_id: UUID
-    platform_name: str
-    platform_shop_id: str
-    domain: str
-    credits_granted: int
-    reason: str
-    new_balance: int
-    granted_at: datetime
-
-
 class CatalogSyncCompletedPayload(BaseModel):
     """evt.catalog.sync.completed payload"""
 

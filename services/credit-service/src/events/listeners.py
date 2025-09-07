@@ -42,10 +42,10 @@ class MerchantCreatedListener(Listener):
             await self.service.handle_merchant_created(payload, correlation_id)
             self.logger.info(f"Credit account created for merchant {payload.merchant_id}")
         except ValidationError as e:
-            self.logger.error(f"Invalid merchant event: {e}")
+            self.logger.exception(f"Invalid merchant event: {e}")
             return  # ACK to drop invalid message
         except Exception as e:
-            self.logger.error(f"Failed to create credit account: {e}")
+            self.logger.exception(f"Failed to create credit account: {e}")
             raise  # NACK for retry
 
 
@@ -82,10 +82,10 @@ class TrialStartedListener(Listener):
             await self.publisher.credits_granted(result)
 
         except ValidationError as e:
-            self.logger.error(f"Invalid trial event: {e}")
+            self.logger.exception(f"Invalid trial event: {e}")
             return  # ACK
         except Exception as e:
-            self.logger.error(f"Failed to grant trial credits: {e}")
+            self.logger.exception(f"Failed to grant trial credits: {e}")
             raise  # NACK
 
 
@@ -122,10 +122,10 @@ class CreditsPurchasedListener(Listener):
             await self.publisher.credits_granted(result)
 
         except ValidationError as e:
-            self.logger.error(f"Invalid purchase event: {e}")
+            self.logger.exception(f"Invalid purchase event: {e}")
             return  # ACK
         except Exception as e:
-            self.logger.error(f"Failed to add purchased credits: {e}")
+            self.logger.exception(f"Failed to add purchased credits: {e}")
             raise  # NACK
 
 
@@ -171,8 +171,8 @@ class MatchCompletedListener(Listener):
                     await self.publisher.credits_exhausted(result)
 
         except ValidationError as e:
-            self.logger.error(f"Invalid match event: {e}")
+            self.logger.exception(f"Invalid match event: {e}")
             return  # ACK
         except Exception as e:
-            self.logger.error(f"Failed to consume credit: {e}")
+            self.logger.exception(f"Failed to consume credit: {e}")
             raise  # NACK

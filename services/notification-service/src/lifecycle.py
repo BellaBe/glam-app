@@ -1,5 +1,6 @@
 # services/notification-service/src/lifecycle.py
 import asyncio
+import time
 
 from prisma import Prisma  # type: ignore[attr-defined]
 
@@ -43,6 +44,8 @@ class ServiceLifecycle:
         """Initialize all components in correct order"""
         try:
             self.logger.info("Starting notification service components...")
+            start_time = time.time()
+
 
             # 1. Messaging
             await self._init_messaging()
@@ -56,7 +59,9 @@ class ServiceLifecycle:
             # 4. Event listeners
             await self._init_listeners()
 
-            self.logger.info("Notification service started successfully")
+            self.logger.info(f"Notification service started successfully in {time.time() - start_time:.2f}s")
+
+
 
         except Exception:
             self.logger.critical("Service startup failed", exc_info=True)
@@ -78,21 +83,21 @@ class ServiceLifecycle:
             try:
                 await listener.stop()
             except Exception:
-                self.logger.error("Listener stop failed", exc_info=True)
+                self.logger.exception("Listener stop failed", exc_info=True)
 
         # Close messaging
         if self.messaging_client:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.error("Messaging close failed", exc_info=True)
+                self.logger.exception("Messaging close failed", exc_info=True)
 
         # Disconnect database
         if self.prisma and self._db_connected:
             try:
                 await self.prisma.disconnect()
             except Exception:
-                self.logger.error("Prisma disconnect failed", exc_info=True)
+                self.logger.exception("Prisma disconnect failed", exc_info=True)
 
         self.logger.info("Notification service shutdown complete")
 
@@ -119,7 +124,7 @@ class ServiceLifecycle:
             self._db_connected = True
             self.logger.info("Database connected")
         except Exception as e:
-            self.logger.error(f"Database connection failed: {e}")
+            self.logger.exception(f"Database connection failed: {e}")
             raise
 
     def _init_services(self) -> None:

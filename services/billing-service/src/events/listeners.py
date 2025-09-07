@@ -40,7 +40,7 @@ class MerchantCreatedListener(Listener):
             payload = MerchantCreatedPayload(**data)
             await self.billing_service.create_billing_record(payload.merchant_id)
         except Exception as e:
-            self.logger.error(f"Failed to process merchant created: {e}")
+            self.logger.exception(f"Failed to process merchant created: {e}")
             raise  # Will NACK for retry
 
 
@@ -78,6 +78,6 @@ class PurchaseWebhookListener(Listener):
                 merchant_id=payload.merchant_id,
             )
         except Exception as e:
-            self.logger.error(f"Failed to process purchase webhook: {e}")
+            self.logger.exception(f"Failed to process purchase webhook: {e}")
             # Don't retry webhooks - they're usually duplicates
             return

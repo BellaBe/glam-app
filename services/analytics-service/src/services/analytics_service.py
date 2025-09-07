@@ -58,7 +58,7 @@ class AnalyticsService:
             )
         except Exception as e:
             # Log but don't fail - raw events are best effort
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to record analytics event: {e}",
                 extra={"merchant_id": str(merchant_id), "event_type": event_type},
             )
@@ -92,7 +92,7 @@ class AnalyticsService:
                 confidence=payload.confidence,
             )
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to record shopper analysis: {e}",
                 extra={"analysis_id": payload.analysis_id, "merchant_id": str(payload.merchant_id)},
             )
@@ -118,7 +118,7 @@ class AnalyticsService:
                 credits_consumed=payload.credits_consumed,
             )
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to record match metrics: {e}",
                 extra={"match_id": payload.match_id, "merchant_id": str(payload.merchant_id)},
             )
@@ -140,7 +140,7 @@ class AnalyticsService:
                 )
             except Exception as e:
                 # Log but continue with other products
-                self.logger.error(
+                self.logger.exception(
                     f"Failed to update product metrics: {e}",
                     extra={"product_id": product["product_id"], "merchant_id": str(payload.merchant_id)},
                 )
@@ -170,7 +170,7 @@ class AnalyticsService:
                 credits_increment=credits_increment,
             )
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to update hourly metrics: {e}",
                 extra={"merchant_id": str(merchant_id), "timestamp": timestamp.isoformat()},
             )
@@ -202,7 +202,7 @@ class AnalyticsService:
                 merchant_id=merchant_id, date=timestamp.date(), credits_remaining=remaining_balance
             )
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to update credit usage: {e}",
                 extra={"merchant_id": str(merchant_id), "credits_consumed": credits_consumed},
             )
@@ -226,7 +226,7 @@ class AnalyticsService:
                 analyzed_products=analyzed_products,
             )
         except Exception as e:
-            self.logger.error(
+            self.logger.exception(
                 f"Failed to update catalog metrics: {e}",
                 extra={"merchant_id": str(merchant_id), "total_products": total_products},
             )

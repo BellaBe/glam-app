@@ -71,7 +71,7 @@ class SeasonCompatibilityClient:
                     )
                     return items
                 else:
-                    self.logger.error(
+                    self.logger.exception(
                         f"Season Compatibility Service error: {response.status_code}",
                         extra={"response": response.text}
                     )

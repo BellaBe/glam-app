@@ -31,7 +31,7 @@ class AppUninstalledListener(Listener):
             uninstall_reason = data.get("uninstall_reason")
 
             if not domain:
-                self.logger.error("Missing domain in uninstall event", extra={"data": data})
+                self.logger.exception("Missing domain in uninstall event", extra={"data": data})
                 return
 
             self.logger.info(
@@ -42,5 +42,5 @@ class AppUninstalledListener(Listener):
             await self.service.handle_app_uninstalled(domain, uninstall_reason)
 
         except Exception as e:
-            self.logger.error(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})
+            self.logger.exception(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})
             raise  # NACK for retry

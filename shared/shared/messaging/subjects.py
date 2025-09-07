@@ -26,8 +26,11 @@ class Subjects(str, Enum):
     CATALOG_SYNC_FAILED = "evt.catalog.sync.failed.v1"
 
     # Credit events
+    CREDIT_BALANCE_GRANTED = "evt.credit.balance.granted.v1"
     CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
-    CREDIT_BALANCE_DEPLETED = "evt.credit.balance.depleted.v1"
+    CREDIT_BALANCE_EXHAUSTED = "evt.credit.balance.exhausted.v1"
+    CREDIT_TRIAL_GRANTED = "evt.credit.trial.granted.v1"
+    CREDIT_TRIAL_LOW = "evt.credit.trial.low.v1"
     CREDIT_TRIAL_EXHAUSTED = "evt.credit.trial.exhausted.v1"
 
     # Analytics events

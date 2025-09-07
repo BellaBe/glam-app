@@ -188,7 +188,7 @@ class CreditService:
         # Check balance before consuming
         account = await self.repository.find_by_merchant_id(event.merchant_id)
         if not account:
-            self.logger.error(
+            self.logger.exception(
                 "No credit account for merchant",
                 extra={
                     "correlation_id": correlation_id,

@@ -44,7 +44,7 @@ class WooCommerceAdapter(PlatformAdapter):
                 details={"domain": domain},
             )
         except InfrastructureError as e:
-            self.logger.error(f"Token Service error: {e}", extra={"domain": domain})
+            self.logger.exception(f"Token Service error: {e}", extra={"domain": domain})
             raise
 
     async def fetch_products(

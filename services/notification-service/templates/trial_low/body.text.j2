@@ -1,0 +1,24 @@
+Trial credits running low
+
+Hi {{ domain }},
+
+Your remaining trial credits are getting low.
+
+Trial balance: {{ balance }} credits
+1 credit = 1 fit & color recommendation.
+
+Keep momentum
+- Avoid shopper interruptions
+- Keep recommendations live on product pages
+- Continue tracking engagement and conversions
+
+{% if app_url is defined -%}
+Choose a plan: {{ app_url }}/billing/plans
+Buy credits:   {{ app_url }}/billing/credits
+Auto-recharge: {{ app_url }}/billing/auto-recharge
+{%- endif %}
+
+Questions? {{ support_email }}
+
+Best regards,
+The Glam You Up Team

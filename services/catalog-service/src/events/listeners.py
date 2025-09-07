@@ -73,11 +73,11 @@ class ProductsFetchedListener(Listener):
                 )
             
         except ValidationError as e:
-            self.logger.error(f"Invalid products batch: {e}")
+            self.logger.exception(f"Invalid products batch: {e}")
             # ACK to prevent retry of invalid messages
             return
         except Exception as e:
-            self.logger.error(f"Products processing failed: {e}", exc_info=True)
+            self.logger.exception(f"Products processing failed: {e}", exc_info=True)
             raise  # NACK for retry
 
 class AnalysisCompletedListener(Listener):
@@ -132,8 +132,8 @@ class AnalysisCompletedListener(Listener):
             )
             
         except ValidationError as e:
-            self.logger.error(f"Invalid analysis result: {e}")
+            self.logger.exception(f"Invalid analysis result: {e}")
             return  # ACK invalid messages
         except Exception as e:
-            self.logger.error(f"Analysis storage failed: {e}", exc_info=True)
+            self.logger.exception(f"Analysis storage failed: {e}", exc_info=True)
             raise  # NACK for retry

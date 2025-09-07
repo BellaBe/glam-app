@@ -62,7 +62,7 @@ async def sync_merchant(
         return success_response(result, ctx.request_id, ctx.correlation_id)
 
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Merchant sync failed",
             extra={"error_type": type(e).__name__, "error_message": str(e)},
         )

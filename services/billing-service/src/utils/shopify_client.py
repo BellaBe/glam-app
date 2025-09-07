@@ -56,5 +56,5 @@ class ShopifyClient:
                 }
 
         except httpx.RequestError as e:
-            self.logger.error(f"Shopify API error: {e}")
+            self.logger.exception(f"Shopify API error: {e}")
             raise PlatformCheckoutError("shopify", str(e)) from e

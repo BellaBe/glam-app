@@ -249,7 +249,7 @@ class AnalysisService:
             self.logger.warning(f"{name} timed out after {timeout}s")
             return None
         except Exception as e:
-            self.logger.error(f"{name} failed: {e}")
+            self.logger.exception(f"{name} failed: {e}")
             return None
     
     def _sort_seasons(self, scores: SeasonScores) -> list:

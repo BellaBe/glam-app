@@ -67,11 +67,11 @@ class CatalogAnalysisRequestedListener(Listener):
             )
             
         except ValidationError as e:
-            self.logger.error(f"Invalid analysis request: {e}")
+            self.logger.exception(f"Invalid analysis request: {e}")
             # ACK invalid messages (don't retry)
             return
         except Exception as e:
-            self.logger.error(f"Analysis request processing failed: {e}", exc_info=True)
+            self.logger.exception(f"Analysis request processing failed: {e}", exc_info=True)
             raise  # NACK for retry
     
     async def on_error(self, error: Exception, data: dict) -> bool:
@@ -81,7 +81,7 @@ class CatalogAnalysisRequestedListener(Listener):
         
         # Check retry count
         if self.delivery_count >= self.max_deliver:
-            self.logger.error(f"Max retries exceeded, dropping message")
+            self.logger.exception(f"Max retries exceeded, dropping message")
             # Could send to DLQ here
             return True
         

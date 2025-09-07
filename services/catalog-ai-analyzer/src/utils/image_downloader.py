@@ -158,7 +158,7 @@ class ImageDownloader:
                     service="image_download"
                 )
                 if self.logger:
-                    self.logger.error(f"Unexpected download error: {e}", exc_info=True)
+                    self.logger.exception(f"Unexpected download error: {e}", exc_info=True)
                 break
         
         # All retries exhausted

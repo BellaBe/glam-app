@@ -552,7 +552,7 @@ api/
 │           except Exception as exc:
 │               status_code, error_resp = self._handle_exception(exc, correlation_id)
 │   
-│               logger.error(
+│               logger.exception(
 │                   "Request failed",
 │                   extra={
 │                       "correlation_id": correlation_id,
@@ -1462,7 +1462,7 @@ messaging/
 │           Returns:
 │               True to ACK (don't retry), False to NACK (retry)
 │           """
-│           self.logger.error(
+│           self.logger.exception(
 │               "Error processing message",
 │               extra={
 │                   "subject": self.subject,
@@ -1510,7 +1510,7 @@ messaging/
 │           try:
 │               while self._running:
 │                   if not self._sub:
-│                       self.logger.error("Subscription not initialized")
+│                       self.logger.exception("Subscription not initialized")
 │                       await asyncio.sleep(1)
 │                       continue
 │   
@@ -1551,7 +1551,7 @@ messaging/
 │               try:
 │                   envelope_data = json.loads(msg.data.decode("utf-8"))
 │               except json.JSONDecodeError as e:
-│                   self.logger.error("Failed to parse message JSON", extra={"error": str(e)})
+│                   self.logger.exception("Failed to parse message JSON", extra={"error": str(e)})
 │                   await msg.ack()  # ACK corrupt messages
 │                   return
 │   
@@ -1565,7 +1565,7 @@ messaging/
 │   
 │               # Validate required fields
 │               if not all([event_id, event_type, correlation_id, source_service, timestamp_str, data]):
-│                   self.logger.error("Missing required envelope fields", extra={"envelope": envelope_data})
+│                   self.logger.exception("Missing required envelope fields", extra={"envelope": envelope_data})
 │                   await msg.ack()
 │                   return
 │   
@@ -1587,7 +1587,7 @@ messaging/
 │               try:
 │                   typed_payload = self.payload_class.model_validate(data)
 │               except Exception as e:
-│                   self.logger.error(
+│                   self.logger.exception(
 │                       "Payload validation failed", extra={"event_id": event_id, "error": str(e), "data": data}
 │                   )
 │                   await msg.ack()
@@ -1735,7 +1735,7 @@ messaging/
 │               return envelope.event_id
 │   
 │           except Exception as e:
-│               self.logger.error(
+│               self.logger.exception(
 │                   "Failed to publish event", extra={"event_id": envelope.event_id, "event_type": subject, "error": str(e)}
 │               )
 │               raise
@@ -2259,7 +2259,7 @@ utils/
     
         def error(self, msg, *args, **kwargs):
             extra = kwargs.pop("extra", None)
-            self.logger.error(msg, *args, extra=self._add_context(extra), **kwargs)
+            self.logger.exception(msg, *args, extra=self._add_context(extra), **kwargs)
     
         def warning(self, msg, *args, **kwargs):
             extra = kwargs.pop("extra", None)

@@ -36,7 +36,7 @@ class EncryptionService:
             encrypted = self._cipher.encrypt(json_str.encode())
             return base64.urlsafe_b64encode(encrypted).decode()
         except Exception as e:
-            self.logger.error(f"Encryption failed: {e}")
+            self.logger.exception(f"Encryption failed: {e}")
             raise InternalError(
                 "Failed to encrypt token data",
                 details={"error": str(e)}
@@ -49,7 +49,7 @@ class EncryptionService:
             decrypted = self._cipher.decrypt(encrypted_bytes)
             return json.loads(decrypted.decode())
         except Exception as e:
-            self.logger.error(f"Decryption failed: {e}")
+            self.logger.exception(f"Decryption failed: {e}")
             raise InternalError(
                 "Failed to decrypt token data",
                 details={"error": str(e)}

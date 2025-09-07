@@ -66,32 +66,37 @@ class Publisher(ABC):
             data=payload.model_dump(mode="json"),
         )
 
-        self.logger.info(
-            "Publishing event",
-            extra={
-                "event_id": envelope.event_id,
-                "event_type": subject,
-                "correlation_id": correlation_id,
-                "service": self.service_name,
-            },
+        # Set logging context for this publish operation
+        self.logger.set_request_context(
+            event_id=envelope.event_id,
+            event_type=subject,
+            correlation_id=correlation_id,
+            service=self.service_name,
+            entry_point="event_publisher"
         )
 
         try:
+            self.logger.info("Publishing event")
+
             await self._ensure_stream()
             ack = await self.js_client.js.publish(subject, envelope.to_bytes())
 
             self.logger.info(
                 "Event published successfully",
-                extra={"event_id": envelope.event_id, "event_type": subject, "sequence": ack.seq if ack else None},
+                extra={"sequence": ack.seq if ack else None}
             )
 
             return envelope.event_id
 
         except Exception as e:
-            self.logger.error(
-                "Failed to publish event", extra={"event_id": envelope.event_id, "event_type": subject, "error": str(e)}
+            self.logger.exception(
+                "Failed to publish event",
+                extra={"error": str(e)}
             )
             raise
+        finally:
+            # Clear context after publishing
+            self.logger.clear_request_context()
 
     async def publish_to_dlq(
         self,
@@ -121,6 +126,7 @@ class Publisher(ABC):
             original_data=error_payload,
         )
 
+        # Context will be set by publish_event
         return await self.publish_event(
             subject=dlq_subject,
             payload=error_data,

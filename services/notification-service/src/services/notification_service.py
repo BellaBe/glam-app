@@ -22,11 +22,13 @@ T = TypeVar("T", bound=BaseModel)
 class NotificationService:
     EMAIL_TEMPLATE_MAP = {
         "evt.merchant.created.v1": "welcome",
-        "evt.billing.trial.activated.v1": "trial_activated",
         "evt.billing.purchase.completed.v1": "purchase_confirmation",
-        "evt.credits.trial.exhausted.v1": "trial_exhausted",
-        "evt.credits.low_balance.v1": "credits_low",
-        "evt.credits.exhausted.v1": "credits_depleted",
+        "evt.credit.trial.granted.v1": "trial_granted",
+        "evt.credit.trial.low.v1": "trial_low",
+        "evt.credit.trial.exhausted.v1": "trial_exhausted",
+        "evt.credit.balance.granted.v1": "credit_granted",
+        "evt.credit.balance.low.v1": "credit_low",
+        "evt.credit.balance.exhausted.v1": "credit_exhausted",
         "evt.catalog.sync.started.v1": "catalog_sync_started",
         "evt.catalog.sync.completed.v1": "catalog_sync_completed",
         "evt.catalog.sync.failed.v1": "catalog_sync_failed",
@@ -82,7 +84,7 @@ class NotificationService:
                 "Retrying delivery for existing notification",
                 extra={"notification_id": str(existing.id), "attempt_count": existing.attempt_count + 1},
             )
-            await self._send_email(existing.id, correlation_id)
+            await self._send_email(existing, correlation_id)
             return await self.repository.find_by_id(existing.id)
 
         # New notification - validate and create
@@ -136,7 +138,7 @@ class NotificationService:
         await self._send_email(notification, correlation_id)
         return await self.repository.find_by_id(notification.id)
 
-    async def _send_email(self, notification: UUID, correlation_id: str) -> None:
+    async def _send_email(self, notification: dict, correlation_id: str) -> None:
         """
         Send email and update status. Raises exception for NATS retry if needed.
         """
@@ -213,7 +215,7 @@ class NotificationService:
                 },
             )
 
-            self.logger.error(
+            self.logger.exception(
                 "Notification delivery failed",
                 extra={
                     "notification_id": str(notification.id),
@@ -229,9 +231,11 @@ class NotificationService:
 
     def _prepare_template_variables(self, event_type: str, data: BaseEventPayload) -> dict:
         """Prepare template variables for email rendering."""
-        print("PREPARING VARIABLES FOR", event_type, data)
         ids = data.identifiers
         variables = {
+            "company_name": "Glam You Up",
+            "company_address": "31 Continental Dr, Suite 305, Newark, Delaware 19713, United States",
+            "brand_color": "#BD4267",   # brand-700
             "domain": ids.domain,
             "platform_name": ids.platform_name,
             "platform_shop_id": ids.platform_shop_id,
@@ -246,9 +250,8 @@ class NotificationService:
         if event_type == "evt.merchant.created.v1" and hasattr(data, "shop_name"):
             variables["shop_name"] = data.shop_name or ids.domain
 
-        if event_type == "evt.credits.low_balance.v1" and hasattr(data, "balance") and hasattr(data, "threshold"):
-            if data.threshold > 0:
-                variables["balance_percentage"] = round((data.balance / data.threshold) * 100, 1)
+        if event_type == "evt.credit.low_balance.v1" and hasattr(data, "balance"):
+            variables["balance"] = data.balance
 
         return variables
 

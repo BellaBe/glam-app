@@ -53,9 +53,9 @@ class CatalogEventsListener(Listener):
                 return
 
         except ValidationError as e:
-            self.logger.error(f"Invalid {event_type} event: {e}")
+            self.logger.exception(f"Invalid {event_type} event: {e}")
         except Exception as e:
-            self.logger.error(f"Failed to process {event_type}: {e}")
+            self.logger.exception(f"Failed to process {event_type}: {e}")
             raise
 
     async def _handle_sync_started(self, event_data: dict, correlation_id: str):

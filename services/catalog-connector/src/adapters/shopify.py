@@ -77,7 +77,7 @@ class ShopifyAdapter(PlatformAdapter):
             )
         except InfrastructureError as e:
             # Token Service unavailable
-            self.logger.error(f"Token Service error: {e}", extra={"domain": domain})
+            self.logger.exception(f"Token Service error: {e}", extra={"domain": domain})
             raise
 
     async def fetch_products(
@@ -160,7 +160,7 @@ class ShopifyAdapter(PlatformAdapter):
 
                 except UnauthorizedError:
                     # Token might be expired or revoked
-                    self.logger.error(
+                    self.logger.exception(
                         f"Shopify authentication failed for {domain}",
                         extra={"correlation_id": correlation_id, "sync_id": sync_id},
                     )

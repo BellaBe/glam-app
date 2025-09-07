@@ -76,21 +76,21 @@ class ServiceLifecycle:
             try:
                 await listener.stop()
             except Exception:
-                self.logger.error("Listener stop failed", exc_info=True)
+                self.logger.exception("Listener stop failed", exc_info=True)
 
         # Close messaging
         if self.messaging_client:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.error("Messaging close failed", exc_info=True)
+                self.logger.exception("Messaging close failed", exc_info=True)
 
         # Disconnect database
         if self.prisma and self._db_connected:
             try:
                 await self.prisma.disconnect()
             except Exception:
-                self.logger.error("Prisma disconnect failed", exc_info=True)
+                self.logger.exception("Prisma disconnect failed", exc_info=True)
 
         self.logger.info(f"{self.config.service_name} shutdown complete")
 
@@ -116,7 +116,7 @@ class ServiceLifecycle:
             self._db_connected = True
             self.logger.info("Prisma connected")
         except Exception as e:
-            self.logger.error(f"Prisma connect failed: {e}", exc_info=True)
+            self.logger.exception(f"Prisma connect failed: {e}", exc_info=True)
             raise
 
     def _init_repositories(self) -> None:

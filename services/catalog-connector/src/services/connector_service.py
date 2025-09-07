@@ -105,7 +105,7 @@ class ConnectorService:
 
         except UnauthorizedError as e:
             # Authentication/token failure
-            self.logger.error(
+            self.logger.exception(
                 f"Authentication failed for {platform_name}: {e}",
                 extra={"correlation_id": correlation_id, "sync_id": sync_id, "domain": domain},
             )
@@ -134,7 +134,7 @@ class ConnectorService:
 
         except Exception as e:
             # Unexpected error
-            self.logger.error(
+            self.logger.exception(
                 f"Unexpected error during platform fetch: {e}",
                 extra={"correlation_id": correlation_id, "sync_id": sync_id},
                 exc_info=True,

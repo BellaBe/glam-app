@@ -66,12 +66,12 @@ class AIAnalysisCompletedListener(Listener):
 
         except ValidationError as e:
             # ACK invalid messages (don't retry)
-            self.logger.error(f"Invalid AI analysis event: {e}", extra={"data": data})
+            self.logger.exception(f"Invalid AI analysis event: {e}", extra={"data": data})
             return
 
         except Exception as e:
             # NACK for retry on other errors
-            self.logger.error(f"AI analysis processing failed: {e}")
+            self.logger.exception(f"AI analysis processing failed: {e}")
             # Publish failure event
             await self.publisher.season_computation_failed(
                 item_id=data.get("item_id", "unknown"),

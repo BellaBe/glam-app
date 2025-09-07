@@ -1,21 +1,20 @@
-# services/notification-service/templates/welcome/body.text.j2
-Welcome to Glam You Up!
+Welcome to Glam You Up
 
-Hi {{ shop_name }},
+Hi {{ shop_name | default(domain) }},
 
-Thank you for installing Glam You Up on your {{ platform_name|title }} store!
+Thanks for installing Glam You Up on your {{ platform_name | default('Shopify') | title }} store.
+We help reduce returns and lift conversions with AI-driven fit & color recommendations.
 
-We're excited to help you reduce returns and increase customer satisfaction
-with our AI-powered virtual try-on technology.
+Getting started
+1) Sync your catalog to enable recommendations
+2) Configure settings (credits, alerts, display rules)
+3) Go live and track performance in your dashboard
 
-Getting Started:
-1. Sync Your Catalog: Import your products to enable virtual try-on
-2. Choose Your Plan: Start with our free trial or select a plan
-3. Go Live: Your customers can start using virtual try-on immediately
+{% if app_url is defined -%}
+Open Dashboard: {{ app_url }}/dashboard
+{%- endif %}
 
-Visit your dashboard: {{ app_url }}/dashboard
-
-If you have any questions, our support team is here to help at {{ support_email }}
+Questions? {{ support_email }}
 
 Best regards,
 The Glam You Up Team

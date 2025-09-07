@@ -142,7 +142,7 @@ src/
 │   │               )
 │   │           except InfrastructureError as e:
 │   │               # Token Service unavailable
-│   │               self.logger.error(
+│   │               self.logger.exception(
 │   │                   f"Token Service error: {e}",
 │   │                   extra={"domain": domain}
 │   │               )
@@ -245,7 +245,7 @@ src/
 │   │
 │   │                   except UnauthorizedError:
 │   │                       # Token might be expired or revoked
-│   │                       self.logger.error(
+│   │                       self.logger.exception(
 │   │                           f"Shopify authentication failed for {domain}",
 │   │                           extra={
 │   │                               "correlation_id": correlation_id,
@@ -405,7 +405,7 @@ src/
 │                       details={"domain": domain}
 │                   )
 │               except InfrastructureError as e:
-│                   self.logger.error(
+│                   self.logger.exception(
 │                       f"Token Service error: {e}",
 │                       extra={"domain": domain}
 │                   )
@@ -660,11 +660,11 @@ src/
 │   │               )
 │   │
 │   │           except ValidationError as e:
-│   │               self.logger.error(f"Invalid sync request: {e}")
+│   │               self.logger.exception(f"Invalid sync request: {e}")
 │   │               return  # ACK invalid messages
 │   │
 │   │           except Exception as e:
-│   │               self.logger.error(
+│   │               self.logger.exception(
 │   │                   f"Sync request processing failed: {e}",
 │   │                   exc_info=True
 │   │               )
@@ -689,7 +689,7 @@ src/
 │   │                   return False  # NACK for retry
 │   │
 │   │           # Max retries exceeded or non-retryable
-│   │           self.logger.error(
+│   │           self.logger.exception(
 │   │               f"Sync request failed permanently: {error}",
 │   │               extra={"data": data}
 │   │           )
@@ -945,7 +945,7 @@ src/
 │   │
 │   │           except UnauthorizedError as e:
 │   │               # Authentication/token failure
-│   │               self.logger.error(
+│   │               self.logger.exception(
 │   │                   f"Authentication failed for {platform_name}: {e}",
 │   │                   extra={
 │   │                       "correlation_id": correlation_id,
@@ -985,7 +985,7 @@ src/
 │   │
 │   │           except Exception as e:
 │   │               # Unexpected error
-│   │               self.logger.error(
+│   │               self.logger.exception(
 │   │                   f"Unexpected error during platform fetch: {e}",
 │   │                   extra={
 │   │                       "correlation_id": correlation_id,
@@ -1392,14 +1392,14 @@ src/
 │               try:
 │                   await listener.stop()
 │               except Exception:
-│                   self.logger.error("Listener stop failed", exc_info=True)
+│                   self.logger.exception("Listener stop failed", exc_info=True)
 │
 │           # Close messaging
 │           if self.messaging_client:
 │               try:
 │                   await self.messaging_client.close()
 │               except Exception:
-│                   self.logger.error("Messaging close failed", exc_info=True)
+│                   self.logger.exception("Messaging close failed", exc_info=True)
 │
 │           self.logger.info("Platform connector shutdown complete")
 │

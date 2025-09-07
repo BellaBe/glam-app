@@ -211,5 +211,5 @@ class AnalyticsRepository:
 
             return result.count
         except Exception as e:
-            self.logger.error(f"Failed to cleanup old events: {e}", extra={"retention_days": retention_days})
+            self.logger.exception(f"Failed to cleanup old events: {e}", extra={"retention_days": retention_days})
             raise

@@ -47,7 +47,7 @@ class BillingService:
             self.logger.info(f"Created billing record for merchant {merchant_id}")
 
         except Exception as e:
-            self.logger.error(f"Failed to create billing record: {e}")
+            self.logger.exception(f"Failed to create billing record: {e}")
             raise
 
     async def get_trial_status(self, merchant_id: UUID) -> TrialStatusOut:
@@ -148,4 +148,4 @@ class BillingService:
                 self.logger.info(f"Published trial expired event for merchant {record.merchant_id}")
 
             except Exception as e:
-                self.logger.error(f"Failed to process expired trial: {e}")
+                self.logger.exception(f"Failed to process expired trial: {e}")

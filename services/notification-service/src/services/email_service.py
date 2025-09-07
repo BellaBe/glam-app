@@ -48,7 +48,7 @@ class EmailService:
 
         except Exception as e:
             if self.logger:
-                self.logger.error(
+                self.logger.exception(
                     f"Email send failed: {e!s}",
                     extra={"provider": self.provider_name, "to": to, "subject": subject, "error": str(e)},
                 )

@@ -26,31 +26,48 @@ class APIMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         correlation_id = request.headers.get("X-Correlation-ID")
         logger: ServiceLogger = request.app.state.logger
+        
+        # Set logging context at request start
+        logger.set_request_context(
+            correlation_id=correlation_id,
+            method=request.method,
+            path=request.url.path,
+            service=self.service_name
+        )
 
         start_time = time.perf_counter()
 
         try:
             response = await call_next(request)
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            logger.info(
+                "Request completed",
+                extra={
+                    "status": response.status_code,
+                    "duration_ms": duration_ms,
+                }
+            )
         except Exception as exc:
             status_code, error_resp = self._handle_exception(exc, correlation_id)
-
-            logger.error(
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            logger.exception(
                 "Request failed",
                 extra={
-                    "correlation_id": correlation_id,
-                    "method": request.method,
-                    "path": request.url.path,
                     "status": status_code,
-                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                    "duration_ms": duration_ms,
                     "error_code": error_resp.error.code if error_resp.error else "UNKNOWN",
-                    "service": self.service_name,
-                },
+                    "error_type": type(exc).__name__,
+                }
             )
 
             response = JSONResponse(
                 content=error_resp.model_dump(mode="json", exclude_none=True),
                 status_code=status_code,
             )
+        
+        # Clear logging context after request completion
+        finally:
+            logger.clear_request_context()
 
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Service-Name"] = self.service_name

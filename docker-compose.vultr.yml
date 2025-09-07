@@ -184,6 +184,7 @@ services:
       DATABASE_URL: postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@postgres:5432/${ANALYTICS_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -212,6 +213,7 @@ services:
       DATABASE_URL: postgresql://${BILLING_DB_USER}:${BILLING_DB_PASSWORD}@postgres:5432/${BILLING_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -236,6 +238,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -255,6 +258,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -279,6 +283,7 @@ services:
       DATABASE_URL: postgresql://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@postgres:5432/${CATALOG_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -307,6 +312,7 @@ services:
       DATABASE_URL: postgresql://${CREDIT_DB_USER}:${CREDIT_DB_PASSWORD}@postgres:5432/${CREDIT_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -335,6 +341,7 @@ services:
       MERCHANT_DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@postgres:5432/${MERCHANT_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -367,6 +374,7 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM_ADDRESS:-noreply@glamyouup.net}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -390,6 +398,7 @@ services:
       DATABASE_URL: postgresql://${RECOMMENDATION_DB_USER}:${RECOMMENDATION_DB_PASSWORD}@postgres:5432/${RECOMMENDATION_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -419,6 +428,7 @@ services:
       DATABASE_URL: postgresql://${SEASON_COMPATIBILITY_DB_USER}:${SEASON_COMPATIBILITY_DB_PASSWORD}@postgres:5432/${SEASON_COMPATIBILITY_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -438,6 +448,7 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -461,6 +472,7 @@ services:
       DATABASE_URL: postgresql://${SELFIE_DB_USER}:${SELFIE_DB_PASSWORD}@postgres:5432/${SELFIE_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -489,6 +501,7 @@ services:
       DATABASE_URL: postgresql://${TOKEN_DB_USER}:${TOKEN_DB_PASSWORD}@postgres:5432/${TOKEN_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
@@ -517,6 +530,7 @@ services:
       DATABASE_URL: postgresql://${WEBHOOK_DB_USER}:${WEBHOOK_DB_PASSWORD}@postgres:5432/${WEBHOOK_DB_NAME}
       APP_ENV: ${APP_ENV}
       CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
     networks:
       - glam-net-${APP_ENV}
     deploy:
