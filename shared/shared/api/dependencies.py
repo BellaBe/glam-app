@@ -4,7 +4,6 @@ Clean, generic, production-ready dependencies.
 """
 
 import os
-import uuid
 from typing import TYPE_CHECKING, Annotated
 
 import jwt
@@ -49,11 +48,6 @@ def get_logger(request: Request) -> "ServiceLogger":
 LoggerDep = Annotated["ServiceLogger", Depends(get_logger)]
 
 
-# Request Context Utilities
-def get_correlation_id(request: Request) -> str:
-    return request.headers.get("X-Correlation-ID", f"corr_{uuid.uuid4().hex[:12]}")
-
-
 def get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
@@ -74,15 +68,15 @@ def get_content_type(request: Request) -> str:
 
 
 class RequestContext(BaseModel):
-    """Essential request context for logging/auditing."""
-
-    correlation_id: str
+    correlation_id: str  # set by middleware; enforced to exist
     method: str
-    path: str
-    content_type: str
+    path: str  # request.url.path (info only)
+    base_path: str  # SAFE: scope.root_path + scope.path
+    query_params: dict[str, str]  # current query params flattened
+    content_type: str | None
     ip_client: str
-    platform: str
-    domain: str
+    platform: str | None
+    domain: str | None
 
     @property
     def is_shopify(self) -> bool:
@@ -90,12 +84,17 @@ class RequestContext(BaseModel):
 
     @classmethod
     def from_request(cls, request: Request) -> "RequestContext":
+        # correlation id was validated by middleware; read from state
+        cid = request.state.correlation_id
+        scope_path = f"{request.scope.get('root_path', '')}{request.scope['path']}"
         return cls(
-            correlation_id=get_correlation_id(request),
+            correlation_id=cid,
             method=request.method,
             path=str(request.url.path),
-            ip_client=get_client_ip(request),
+            base_path=scope_path,
+            query_params=dict(request.query_params),  # flattened is fine for our filters
             content_type=get_content_type(request),
+            ip_client=get_client_ip(request),
             platform=get_platform(request),
             domain=get_domain(request),
         )

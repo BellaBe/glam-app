@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from shared.api import setup_debug_handlers, setup_debug_middleware, setup_middleware
+from shared.api import setup_middleware
+from shared.api.handlers import register_exception_handlers
 from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
 
@@ -53,16 +54,12 @@ def create_application() -> FastAPI:
         exception_handlers={},  # Use shared middleware for exception handling
     )
 
-    if config.debug:
-        logger.info("🚨 Debug mode enabled - adding debug handlers")
-        setup_debug_handlers(app)
-        setup_debug_middleware(app)
-
     # Setup middleware from shared package
     setup_middleware(
         app,
         service_name=config.service_name,
     )
+    register_exception_handlers(app)
 
     # Include routers
     app.include_router(api_router)

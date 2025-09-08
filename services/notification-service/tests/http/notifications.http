@@ -1,0 +1,156 @@
+# tests/http/notifications.http
+# Notification Service Tests - Port 8005
+# Required headers based on actual middleware and auth implementation
+
+### === TEST VARIABLES ===
+# Service is running on port 8005
+@base_url = http://localhost:8005/api/v1
+
+# Required headers for all requests (middleware enforces X-Correlation-ID)
+@correlation_id = test-corr-{{$timestamp}}
+
+# Auth headers - ClientAuthDep requires these
+@shop_domain = test-shop.myshopify.com
+@platform = shopify
+
+# Generate this token using the quick_token.py script below
+# JWT must have: sub (shop), scope: "bff:api:access", platform: "shopify"
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXNob3AubXlzaG9waWZ5LmNvbSIsInNjb3BlIjoiYmZmOmFwaTphY2Nlc3MiLCJpYXQiOjE3NTczNTI4MzcsInBsYXRmb3JtIjoic2hvcGlmeSIsImV4cCI6MTc1NzM1NjQzN30.ZCZdoJ_kADYujqfBwBgRxgf2eeBmdOHiHX-YgJksjSg
+
+### === HEALTH CHECK (No Auth Required) ===
+
+### Health Check - Requires X-Correlation-ID
+GET {{base_url}}/notifications/health
+X-Correlation-ID: {{correlation_id}}
+Accept: application/json
+
+###
+
+### === AUTHENTICATED ENDPOINTS ===
+
+### List Notifications - All Required Headers
+GET {{base_url}}/notifications?page=1&limit=10
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Get Notification Stats
+GET {{base_url}}/notifications/stats
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Get Specific Notification (replace UUID with actual)
+GET {{base_url}}/notifications/f2d23ed7-4853-453b-bfec-560eda80657f
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### List with Status Filter
+GET {{base_url}}/notifications?status=sent&page=1&limit=5
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### List with Merchant Filter (replace UUID)
+GET {{base_url}}/notifications?merchant_id=123e4567-e89b-12d3-a456-426614174000&page=1&limit=2
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### === ERROR CASES ===
+
+### Missing X-Correlation-ID (expect 400)
+GET {{base_url}}/notifications/health
+Accept: application/json
+
+###
+
+### Missing Authorization (expect 401)
+GET {{base_url}}/notifications
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Missing Platform Header (expect 400)
+GET {{base_url}}/notifications
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Wrong Platform (expect 400 - only shopify allowed)
+GET {{base_url}}/notifications
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: woocommerce
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Domain Mismatch with JWT sub (expect 401)
+GET {{base_url}}/notifications
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: wrong-shop.myshopify.com
+Accept: application/json
+
+###
+
+### Wrong Scope in JWT (expect 403 - needs bff:api:access)
+# This would need a different token with wrong scope
+GET {{base_url}}/notifications
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Invalid UUID (expect 422)
+GET {{base_url}}/notifications/not-a-uuid
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Non-existent Notification (expect 404)
+GET {{base_url}}/notifications/11111111-1111-1111-1111-111111111111
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###

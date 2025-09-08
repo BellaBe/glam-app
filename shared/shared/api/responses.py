@@ -1,11 +1,7 @@
-# -------------------------------
 # shared/api/responses.py
-# -------------------------------
-
-"""Response helper functions."""
-
-import uuid
 from typing import Any
+
+from shared.api.dependencies import RequestContext
 
 from .models import ApiResponse, ErrorDetail, Links, Meta, Pagination, T
 
@@ -13,53 +9,52 @@ from .models import ApiResponse, ErrorDetail, Links, Meta, Pagination, T
 def create_response(
     data: T | None = None,
     error: ErrorDetail | None = None,
-    request_id: str | None = None,
     correlation_id: str | None = None,
     pagination: Pagination | None = None,
     links: Links | None = None,
 ) -> ApiResponse[T]:
-    """Create a unified API response."""
-    if request_id is None:
-        request_id = f"req_{uuid.uuid4().hex[:12]}"
-
-    meta = Meta(request_id=request_id, correlation_id=correlation_id)
-
+    meta = Meta(correlation_id=correlation_id)
     return ApiResponse(data=data, error=error, meta=meta, pagination=pagination, links=links)
 
 
 def success_response(
-    data: T, request_id: str | None = None, correlation_id: str | None = None, links: Links | None = None
+    data: T,
+    correlation_id: str | None = None,
+    links: Links | None = None,
 ) -> ApiResponse[T]:
-    """Create a success response."""
-    return create_response(data=data, request_id=request_id, correlation_id=correlation_id, links=links)
+    return create_response(data=data, correlation_id=correlation_id, links=links)
 
 
 def error_response(
     code: str,
     message: str,
     details: dict[str, Any] | None = None,
-    request_id: str | None = None,
     correlation_id: str | None = None,
 ) -> ApiResponse[None]:
-    """Create an error response."""
     error = ErrorDetail(code=code, message=message, details=details)
-    return create_response(error=error, request_id=request_id, correlation_id=correlation_id)
+    return create_response(error=error, correlation_id=correlation_id)
 
 
-def paginated_response(
+def paginated_response_ctx(
     data: list[T],
     page: int,
     limit: int,
     total: int,
-    base_url: str,
-    request_id: str | None = None,
-    correlation_id: str | None = None,
-    **query_params,
+    ctx: RequestContext,
+    **extra_query_params: Any,
 ) -> ApiResponse[list[T]]:
-    """Create a paginated response."""
+    """
+    Build a paginated response using RequestContext for safe base_path and current query params.
+    - Returns RELATIVE links (path + query) only.
+    - Preserves current filters from ctx.query_params and merges any overrides in extra_query_params.
+    """
     pagination = Pagination.create(page, limit, total)
-    links = Links.create_paginated(base_url, page, limit, pagination.pages, **query_params)
 
-    return create_response(
-        data=data, request_id=request_id, correlation_id=correlation_id, pagination=pagination, links=links
-    )
+    merged_qs = {**ctx.query_params, **extra_query_params}
+    merged_qs = {k: v for k, v in merged_qs.items() if v is not None}
+
+    for k in ("page", "limit"):
+        merged_qs.pop(k, None)
+
+    links = Links.create_paginated(ctx.base_path, page, limit, pagination.pages, **merged_qs)
+    return create_response(data=data, correlation_id=ctx.correlation_id, pagination=pagination, links=links)

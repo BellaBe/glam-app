@@ -1,5 +1,5 @@
 # services/notification-service/src/repositories/notification_repository.py
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -38,7 +38,7 @@ class NotificationRepository:
         return NotificationOut.model_validate(notification)
 
     async def find_many(
-        self, filters: dict[str, Any] = None, skip: int = 0, limit: int = 50, order_by: list[tuple] = None
+        self, filters: dict[str, Any] | None = None, skip: int = 0, limit: int = 50, order_by: list[tuple] | None = None
     ) -> list[NotificationOut]:
         """Find multiple notifications with filters"""
         where = filters or {}
@@ -77,7 +77,7 @@ class NotificationRepository:
 
     async def get_stats(self) -> NotificationStats:
         """Get notification statistics"""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
         # Count by status today (using first_attempt_at for "today's notifications")
@@ -94,18 +94,14 @@ class NotificationRepository:
         )
 
         # Get counts by template type
-        template_counts = await self.prisma.query_raw(
-            """
-            SELECT template_type, COUNT(*) as count
-            FROM notifications
-            WHERE first_attempt_at >= $1 AND first_attempt_at < $2
-            GROUP BY template_type
-            """,
-            today_start,
-            today_end,
+        rows = await self.prisma.notification.group_by(
+            by=["template_type"],
+            where={"first_attempt_at": {"gte": today_start, "lt": today_end}},
+            count={"_all": True},  # row count per group
+            order={"template_type": "asc"},  # optional: deterministic ordering
         )
 
-        by_template = {row["template_type"]: row["count"] for row in template_counts}
+        by_template = {r["template_type"]: r["_count"]["_all"] for r in rows}
 
         # Get counts by status
         by_status = {"sent": sent_today, "failed": failed_today, "pending": pending_today}

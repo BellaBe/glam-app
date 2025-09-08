@@ -9,6 +9,7 @@ Consolidates all response structures into a single, consistent pattern.
 
 from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
+from urllib.parse import urlencode
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,7 +20,6 @@ T = TypeVar("T")
 class Meta(BaseModel):
     """Metadata included in all responses."""
 
-    request_id: str = Field(description="Unique request identifier")
     correlation_id: str | None = Field(None, description="Distributed tracing ID")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Response timestamp in UTC")
 
@@ -44,8 +44,6 @@ class Pagination(BaseModel):
 
 
 class Links(BaseModel):
-    """HATEOAS links for resource navigation."""
-
     self: str
     next: str | None = None
     previous: str | None = None
@@ -53,13 +51,16 @@ class Links(BaseModel):
     last: str | None = None
 
     @classmethod
-    def create_paginated(cls, base_url: str, page: int, limit: int, pages: int, **query_params) -> "Links":
-        """Create pagination links."""
+    def create_paginated(cls, base_path: str, page: int, limit: int, pages: int, **query_params) -> "Links":
+        """Create relative (path + query) pagination links with URL encoding.
+        Strips reserved pagination keys if present in query_params.
+        """
+        # strip reserved keys that we pass explicitly
+        qp = {k: v for k, v in query_params.items() if k not in {"page", "limit"} and v is not None}
 
         def build_url(page_num: int) -> str:
-            params = {**query_params, "page": page_num, "limit": limit}
-            query = "&".join(f"{k}={v}" for k, v in params.items())
-            return f"{base_url}?{query}"
+            params = {**qp, "page": page_num, "limit": limit}
+            return f"{base_path}?{urlencode(params, doseq=True)}"
 
         return cls(
             self=build_url(page),

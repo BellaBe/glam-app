@@ -9,11 +9,6 @@ This module provides a single, consistent approach to API responses
 across all services.
 """
 
-from .debug import (
-    setup_debug_handlers,
-    # Debugging utilities
-    setup_debug_middleware,
-)
 from .dependencies import (
     ClientAuthDep,
     InternalAuthDep,
@@ -27,8 +22,6 @@ from .health import (
     create_health_router,
 )
 from .middleware import (
-    # Middleware
-    APIMiddleware,
     setup_middleware,
 )
 from .models import (
@@ -43,7 +36,7 @@ from .responses import (
     # Response helpers
     create_response,
     error_response,
-    paginated_response,
+    paginated_response_ctx,
     success_response,
 )
 
@@ -63,9 +56,7 @@ __all__ = [
     "create_health_router",
     "create_response",
     "error_response",
-    "paginated_response",
-    "setup_debug_handlers",
-    "setup_debug_middleware",
+    "paginated_response_ctx",
     "setup_middleware",
     "success_response",
 ]
