@@ -1,15 +1,11 @@
 from .merchant import (
-    MerchantSelfOut,
-    MerchantStatusUpdatedPayload,
-    MerchantSyncedPayload,
+    MerchantOut,
     MerchantSyncIn,
     MerchantSyncOut,
 )
 
 __all__ = [
-    "MerchantSelfOut",
-    "MerchantStatusUpdatedPayload",
+    "MerchantOut",
     "MerchantSyncIn",
     "MerchantSyncOut",
-    "MerchantSyncedPayload",
 ]

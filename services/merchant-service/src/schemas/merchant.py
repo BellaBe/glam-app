@@ -1,36 +1,60 @@
-# services/merchant-service/src/schemas/merchant.py
-from prisma.enums import MerchantStatus
-from pydantic import BaseModel, Field
+# merchant/api/schemas.py
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+MerchantStatus = Literal["PENDING", "ACTIVE", "PAUSED", "SUSPENDED", "UNINSTALLED"]
 
 
-# ---------- INPUT DTOs ----------
 class MerchantSyncIn(BaseModel):
-    """Input DTO for syncing merchant"""
+    """
+    Body for /sync (Shopify BFF -> merchant-service).
+    NOTE: platform_name and domain come from headers via RequestContext.
+    """
 
-    platform_name: str = Field(..., description="Platform name (e.g., Shopify)")
-    platform_shop_id: str = Field(..., description="Shopify Global ID (e.g., gid://shopify/Shop/123)")
-    domain: str = Field(..., description="Shop domain (e.g., myshopify.com)")
-    shop_name: str = Field(..., description="Shop display name")
-    email: str = Field(..., description="Shop contact email")
-    primary_domain_host: str = Field(..., description="Primary domain of the shop")
-    currency: str = Field(..., description="Shop currency (e.g., USD)")
-    country: str = Field(..., description="Shop country code (e.g., US)")
-    platform_version: str = Field(..., description="Shopify API version (e.g., 2025-01)")
-    scopes: str = Field(..., description="OAuth scopes granted by the shop")
+    platform_shop_id: str = Field(..., description="Platform shop ID (e.g., Shopify GID)")
+    shop_name: str = Field(..., description="Display name of the shop")
+    email: EmailStr
+    primary_domain: str | None = None
+    currency: str = Field(..., min_length=3, max_length=3, description="ISO 4217 code")
+    country: str = Field(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2")
+    platform_version: str | None = None
+    scopes: str
 
 
 class MerchantSyncOut(BaseModel):
-    """Output DTO for merchant sync result"""
+    """Minimal result for after-auth hook—client doesn't consume events."""
 
-    created: bool = Field(..., description="Indicates if the merchant was newly created")
-    merchant_id: str = Field(..., description="Unique identifier of the merchant")
+    success: bool
 
 
-class MerchantSelfOut(BaseModel):
-    """Output DTO for self merchant"""
+class MerchantOut(BaseModel):
+    """Snapshot for dashboard (/self)."""
 
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    platform_name: str
     platform_shop_id: str
     domain: str
-    shop_name: str
+
+    name: str
+    email: EmailStr
+    primary_domain: str | None
+    currency: str
+    country: str
+    platform_version: str | None
+    scopes: str
+
+    installed_at: datetime | None
+    uninstalled_at: datetime | None
+
     status: MerchantStatus
+    last_synced_at: datetime | None  # <- aligns with DB
+
+    created_at: datetime
+    updated_at: datetime

@@ -46,7 +46,6 @@ class ServiceLifecycle:
             self.logger.info("Starting notification service components...")
             start_time = time.time()
 
-
             # 1. Messaging
             await self._init_messaging()
 
@@ -60,8 +59,6 @@ class ServiceLifecycle:
             await self._init_listeners()
 
             self.logger.info(f"Notification service started successfully in {time.time() - start_time:.2f}s")
-
-
 
         except Exception:
             self.logger.critical("Service startup failed", exc_info=True)
@@ -102,23 +99,26 @@ class ServiceLifecycle:
         self.logger.info("Notification service shutdown complete")
 
     async def _init_messaging(self) -> None:
-        """Initialize NATS/JetStream"""
+        """Initialize JetStream client and publisher"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
+        # await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>", "dlq.>"])
 
         # Initialize publisher
         self.event_publisher = NotificationEventPublisher(self.messaging_client, self.logger)
 
-        self.logger.info("Messaging initialized")
+        self.logger.info("Messaging and publisher initialized")
 
     async def _init_database(self) -> None:
-        """Initialize Prisma client"""
+        """Initialize Prisma client if database is enabled."""
         if not self.config.database_enabled:
-            self.logger.info("Database disabled")
+            self.logger.info("Database disabled; skipping Prisma initialization")
             return
 
         self.prisma = Prisma()
+        if not self.prisma:
+            raise RuntimeError("Prisma client not initialized")
+
         try:
             await self.prisma.connect()
             self._db_connected = True

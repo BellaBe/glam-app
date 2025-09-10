@@ -2,21 +2,9 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
-from shared.api.dependencies import CorrelationIdDep, PaginationDep, RequestContextDep, RequestIdDep
-
 from .config import ServiceConfig
 from .lifecycle import ServiceLifecycle
 from .services import MerchantService
-
-__all__ = [
-    "ConfigDep",
-    "CorrelationIdDep",
-    "LifecycleDep",
-    "MerchantServiceDep",
-    "PaginationDep",
-    "RequestContextDep",
-    "RequestIdDep",
-]
 
 
 # Core dependencies

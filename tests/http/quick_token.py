@@ -26,7 +26,7 @@ def sign_jwt(shop):
     payload = {"sub": shop, "scope": "bff:api:access", "iat": int(time.time()), "platform": "shopify"}
 
     # Get configuration from environment
-    secret = ""
+    secret = "DLNN6MDM_4X5ez7VY9IdJ7cpl-v20uID4Ff2E9rvR6xb_faOS2GwX6dCehof30CL"
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
     expire_seconds = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_SECONDS", "3600"))
 
@@ -45,7 +45,7 @@ def main():
     """Generate tokens for testing."""
 
     # Default test shop or get from command line
-    shop = sys.argv[1] if len(sys.argv) > 1 else "test-shop.myshopify.com"
+    shop = sys.argv[1] if len(sys.argv) > 1 else "test-shop_2.myshopify.com"
 
     print("=" * 60)
     print("JWT Token Generator for Notification Service")

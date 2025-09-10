@@ -9,68 +9,87 @@ from ..schemas.merchant import MerchantSyncIn
 
 
 class MerchantRepository:
-    """Repository for Merchant operations using Prisma"""
+    """Repository for Merchant operations using Prisma."""
 
     def __init__(self, prisma: Prisma):
         self.prisma = prisma
 
-    async def find_by_platform_shop_identity(
-        self, platform_name: str, domain: str, platform_shop_id: str | None = None
+    async def find_by_platform_identity(
+        self, *, platform_name: str, domain: str, platform_shop_id: str | None
     ) -> Merchant | None:
-        """Find merchant by platform identity"""
-        conditions = [{"platform_name": platform_name, "domain": domain.lower()}]
+        """
+        Resolve merchant by identity with deterministic precedence:
+        1) platform_shop_id (unique per platform)
+        2) domain (unique per platform)
+        """
         if platform_shop_id:
-            conditions.append({"platform_name": platform_name, "platform_shop_id": platform_shop_id})
+            m = await self.prisma.merchant.find_first(
+                where={"platform_name": platform_name, "platform_shop_id": platform_shop_id}
+            )
+            if m:
+                return m
 
-        return await self.prisma.merchant.find_first(where={"OR": conditions})
+        return await self.prisma.merchant.find_first(where={"platform_name": platform_name, "domain": domain.lower()})
 
-    async def find_by_domain(self, domain: str) -> Merchant | None:
-        """Find merchant by platform domain"""
-        return await self.prisma.merchant.find_first(where={"domain": domain.lower()})
-
-    async def create(self, data: MerchantSyncIn) -> Merchant:
-        """Create new merchant"""
+    async def create(self, *, platform_name: str, domain: str, data: MerchantSyncIn) -> Merchant:
+        """Create new merchant on first sync."""
+        now = datetime.now(UTC)
         return await self.prisma.merchant.create(
             data={
-                "platform_name": data.platform_name.lower(),
+                "platform_name": platform_name,
                 "platform_shop_id": data.platform_shop_id,
-                "domain": data.domain.lower(),  # myshopify domain
+                "domain": domain.lower(),
                 "name": data.shop_name,
                 "email": data.email,
-                "primary_domain": data.primary_domain_host,  # could be custom domain
+                "primary_domain": data.primary_domain,  # <- fixed name
                 "currency": data.currency,
                 "country": data.country,
                 "platform_version": data.platform_version,
                 "scopes": data.scopes,
                 "status": MerchantStatus.PENDING,
-                "installed_at": datetime.now(UTC),
-                "last_sync_at": datetime.now(UTC),
+                "installed_at": now,
+                "last_synced_at": now,
             }
         )
 
-    async def update_for_sync(self, merchant_id: str, data: MerchantSyncIn) -> Merchant:
-        """Update merchant on sync (reinstall or resync)"""
+    async def update_for_sync(self, *, merchant_id: str, data: MerchantSyncIn) -> Merchant:
+        """
+        Update merchant on recurring sync (or reinstall after status update).
+        NOTE: we DO NOT clear `uninstalled_at`; we keep the history.
+        """
         return await self.prisma.merchant.update(
             where={"id": merchant_id},
             data={
                 "name": data.shop_name,
                 "email": data.email,
-                "primary_domain": data.primary_domain_host,
+                "primary_domain": data.primary_domain,  # <- fixed name
                 "currency": data.currency,
                 "country": data.country,
                 "platform_version": data.platform_version,
                 "scopes": data.scopes,
-                "last_sync_at": datetime.utcnow(),
-                "uninstalled_at": None,  # Clear if reinstalling
+                "last_synced_at": datetime.now(UTC),
             },
         )
 
-    async def update_status(self, merchant_id: str, new_status: MerchantStatus) -> Merchant:
-        """Update merchant status"""
-        update_data = {"status": new_status, "status_changed_at": datetime.utcnow()}
+    async def mark_reinstalled(self, *, merchant_id: str) -> Merchant:
+        """Transition UNINSTALLED -> PENDING and stamp installed_at (keep uninstalled_at as history)."""
+        return await self.prisma.merchant.update(
+            where={"id": merchant_id},
+            data={
+                "status": MerchantStatus.PENDING,
+                "installed_at": datetime.now(UTC),
+                # uninstalled_at: keep as-is (historical)
+            },
+        )
 
-        # Set uninstalled_at if uninstalling
-        if new_status == MerchantStatus.UNINSTALLED:
-            update_data["uninstalled_at"] = datetime.utcnow()
+    async def mark_uninstalled(self, *, merchant_id: str) -> Merchant:
+        """Mark merchant as uninstalled and stamp uninstalled_at."""
+        now = datetime.now(UTC)
+        return await self.prisma.merchant.update(
+            where={"id": merchant_id},
+            data={"status": MerchantStatus.UNINSTALLED, "uninstalled_at": now},
+        )
 
-        return await self.prisma.merchant.update(where={"id": merchant_id}, data=update_data)
+    async def update_status(self, *, merchant_id: str, new_status: MerchantStatus) -> Merchant:
+        """Generic status update for internal transitions."""
+        return await self.prisma.merchant.update(where={"id": merchant_id}, data={"status": new_status})

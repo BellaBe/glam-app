@@ -21,59 +21,29 @@ const shopify = shopifyApp({
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
 
-  // Fixed afterAuth hook in shopify.server.js
   hooks: {
-    afterAuth: async ({ admin, session, request }) => {
+    afterAuth: async ({ admin, session }) => {
       try {
-        // Sync the shop with the external API after authentication
-
-        // Execute GraphQL query using the admin client
         const shopInfoResponse = await admin.graphql(GET_SHOP_INFO);
         const shopData = await shopInfoResponse.json();
 
-        // Build sync payload with correct field names
         const syncData = {
           platform_name: "shopify",
           platform_shop_id: shopData.data.shop.id,
-          domain: shopData.data.shop.myshopifyDomain, // ✅ This will be used correctly
+          domain: shopData.data.shop.myshopifyDomain,
           shop_name: shopData.data.shop.name,
           email: shopData.data.shop.contactEmail,
           primary_domain_host: shopData.data.shop.primaryDomain.host,
           currency: shopData.data.shop.currencyCode,
           country: shopData.data.shop.billingAddress.countryCodeV2,
-          platform_version: "2025-01", // API version
+          platform_version: "2025-01",
           scopes: session.scope,
         };
 
-        // 1. Call sync API
-        const syncResponse = await apiClient.syncShop(syncData);
-
-        // 2. Verify the merchant was created/updated with retry
-        let merchant = null;
-        let attempts = 0;
-        const maxAttempts = 3;
-
-        while (!merchant && attempts < maxAttempts) {
-          attempts++;
-          try {
-            // Use simple domain-based lookup
-            merchant = await apiClient.getMerchant(syncData.domain);
-            break;
-          } catch (error) {
-            if (error.status === 404 && attempts < maxAttempts) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            } else {
-              throw error; // Re-throw if it's not a 404 or we've exhausted attempts
-            }
-          }
-        }
-
-        if (!merchant) {
-          return null; // Don't fail auth, but log the issue
-        }
-        return { syncResponse, merchant };
-      } catch (error) {
-        return null;
+        // Fire and forget: merchant service handles idempotency + emits events
+        await apiClient.syncShop(syncData);
+      } catch (err) {
+        console.error("Merchant sync failed:", err);
       }
     },
   },

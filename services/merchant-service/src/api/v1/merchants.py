@@ -1,16 +1,12 @@
 # services/merchant-service/src/api/v1/merchants.py
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from shared.api import ApiResponse, success_response
-from shared.api.dependencies import (
-    ClientAuthDep,
-    LoggerDep,
-    RequestContextDep,
-)
+from shared.api.dependencies import ClientAuthDep, RequestContextDep
+from shared.utils.exceptions import ForbiddenError
 
 from ...dependencies import MerchantServiceDep
-from ...exceptions import MerchantNotFoundError
-from ...schemas import MerchantSelfOut, MerchantSyncIn, MerchantSyncOut
+from ...schemas import MerchantOut, MerchantSyncIn, MerchantSyncOut
 
 merchants_router = APIRouter(prefix="/merchants")
 
@@ -23,55 +19,26 @@ merchants_router = APIRouter(prefix="/merchants")
     description="Create or update merchant after OAuth completion. Used in afterAuth hooks.",
 )
 async def sync_merchant(
-    body: MerchantSyncIn,
+    data: MerchantSyncIn,
     service: MerchantServiceDep,
     ctx: RequestContextDep,
-    client_auth: ClientAuthDep,
-    logger: LoggerDep,
+    auth: ClientAuthDep,
 ):
     """Sync merchant after OAuth completion."""
 
-    if client_auth.domain != body.domain:
-        logger.warning(
-            "Domain mismatch",
-            extra={"client_auth_domain": client_auth.domain, "body_domain": body.domain},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "DOMAIN_MISMATCH", "message": "Domain mismatch"},
-        )
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
 
-    logger.set_request_context(
-        platform=ctx.platform,
-        domain=ctx.domain,
-    )
+    platform_name = ctx.platform
+    domain = ctx.domain
 
-    logger.info("Starting merchant sync")
-
-    try:
-        result = await service.sync_merchant(body, ctx)
-
-        logger.info(
-            "Merchant synced successfully",
-            extra={
-                "merchant_id": result.merchant_id,
-                "operation": "create" if result.created else "update",
-            },
-        )
-
-        return success_response(result, ctx.request_id, ctx.correlation_id)
-
-    except Exception as e:
-        logger.exception(
-            "Merchant sync failed",
-            extra={"error_type": type(e).__name__, "error_message": str(e)},
-        )
-        raise
+    result = await service.sync_merchant(data, platform_name, domain, ctx)
+    return success_response(result, ctx.correlation_id)
 
 
 @merchants_router.get(
     "/self",
-    response_model=ApiResponse[MerchantSelfOut],
+    response_model=ApiResponse[MerchantOut],
     status_code=status.HTTP_200_OK,
     summary="Get current merchant",
     description="Get current merchant using platform context from headers",
@@ -79,42 +46,16 @@ async def sync_merchant(
 async def get_current_merchant(
     service: MerchantServiceDep,
     ctx: RequestContextDep,
-    client_auth: ClientAuthDep,
-    logger: LoggerDep,
+    auth: ClientAuthDep,
 ):
     """Get current merchant using platform context from headers."""
-    logger.set_request_context(
-        platform=ctx.platform,
+
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot read merchant", required_permission="bff:api:access")
+
+    merchant = await service.get_merchant(
         domain=ctx.domain,
+        platform_name=ctx.platform,
     )
 
-    # TODO: verify client_auth
-
-    logger.info("Getting current merchant")
-
-    try:
-        merchant = await service.get_merchant_by_domain(
-            domain=ctx.domain,
-        )
-
-        logger.info(
-            "Current merchant retrieved successfully",
-            extra={"merchant_id": merchant.id},
-        )
-
-        return success_response(merchant, ctx.request_id, ctx.correlation_id)
-
-    except MerchantNotFoundError:
-        logger.warning("Current merchant not found")
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "MERCHANT_NOT_FOUND",
-                "message": "Merchant not found for current shop",
-                "details": {
-                    "platform": ctx.platform,
-                    "domain": ctx.domain,
-                },
-            },
-        ) from MerchantNotFoundError(f"Merchant not found for domain {ctx.domain}")
+    return success_response(merchant, ctx.correlation_id)

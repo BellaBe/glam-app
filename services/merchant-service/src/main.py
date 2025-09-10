@@ -19,17 +19,7 @@ lifecycle = ServiceLifecycle(config, logger)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan adapter"""
-    logger.info(
-        f"Starting {config.service_name}",
-        extra={
-            "service_name": config.service_name,
-            "version": config.service_version,
-            "environment": config.environment,
-            "api_host": config.api_host,
-            "api_port": config.api_port,
-        },
-    )
+    """Lifespan management for startup/shutdown"""
 
     app.state.lifecycle = lifecycle
     app.state.config = config
@@ -47,18 +37,15 @@ def create_application() -> FastAPI:
     app = FastAPI(
         title=config.service_name,
         version=config.service_version,
-        lifespan=lifespan,
         description=config.service_description,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        exception_handlers={},  # Use shared middleware for exception handling
+        lifespan=lifespan,
     )
 
     setup_middleware(app, service_name=config.service_name)
     register_exception_handlers(app)
 
     # Include routers
-    app.include_router(create_health_router(config.service_name))
+    app.include_router(create_health_router(config.service_name, prefix="/api/v1/merchants"))
     app.include_router(api_router)
 
     return app

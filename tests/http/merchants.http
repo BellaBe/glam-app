@@ -1,0 +1,267 @@
+################################################################################
+# FILE: tests/http/merchants.http
+################################################################################
+# Merchant Service Tests - Port 8001
+# Required headers based on actual middleware and auth implementation
+
+### === TEST VARIABLES ===
+# Service is running on port 8001
+@base_url = http://localhost:8004/api/v1
+
+# Required headers for all requests (middleware enforces X-Correlation-ID)
+@correlation_id = test-corr-{{$timestamp}}
+
+# Auth headers - ClientAuthDep requires these
+@shop_domain = test-shop_2.myshopify.com
+@platform = shopify
+
+# Generate this token using the quick_token.py script below
+# JWT must have: sub (shop), scope: "bff:api:access", platform: "shopify"
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXNob3BfMi5teXNob3BpZnkuY29tIiwic2NvcGUiOiJiZmY6YXBpOmFjY2VzcyIsImlhdCI6MTc1NzQ4ODQ3OSwicGxhdGZvcm0iOiJzaG9waWZ5IiwiZXhwIjoxNzU3NDkyMDc5fQ.6FEOXu3tu5kxAINDqiCAo8ovc_fgG5h8ZNUQ5KAhGMc
+
+### === HEALTH CHECK (No Auth Required) ===
+
+### Health Check - Requires X-Correlation-ID
+GET {{base_url}}/merchants/health
+X-Correlation-ID: {{correlation_id}}
+Accept: application/json
+
+###
+
+### === AUTHENTICATED ENDPOINTS ===
+
+### Sync Merchant - Create or Update
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/{{$randomInt 1000123 9999999}}",
+  "shop_name": "Test Shop 2 {{$timestamp}}",
+  "email": "test-{{$timestamp}}@example.com",
+  "primary_domain": "test-shop_2.myshopify.com",
+  "currency": "USD",
+  "country": "US",
+  "platform_version": "2024.01",
+  "scopes": "read_products,write_orders,read_customers"
+}
+
+###
+
+### Sync Merchant - Minimal Fields
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/987654",
+  "shop_name": "Minimal Shop",
+  "email": "minimal@example.com",
+  "currency": "EUR",
+  "country": "DE",
+  "scopes": "read_products"
+}
+
+###
+
+### Get Current Merchant
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### === ERROR CASES ===
+
+### Missing X-Correlation-ID (expect 400)
+GET {{base_url}}/health
+Accept: application/json
+
+###
+
+### Missing Authorization (expect 401)
+GET {{base_url}}/merchants/self
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Invalid JWT Token (expect 401)
+GET {{base_url}}/merchants/self
+Authorization: Bearer invalid.jwt.token
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Missing Platform Header (expect 400)
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Missing Domain Header (expect 400)
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+Accept: application/json
+
+###
+
+### Wrong Platform (expect 400 - only shopify allowed)
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: woocommerce
+X-Shop-Domain: {{shop_domain}}
+Accept: application/json
+
+###
+
+### Domain Mismatch with JWT sub (expect 401)
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: wrong-shop.myshopify.com
+Accept: application/json
+
+###
+
+### Wrong Scope in JWT (expect 403 - needs bff:api:access)
+# This would need a different token with wrong scope
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/123",
+  "shop_name": "Test",
+  "email": "test@example.com",
+  "currency": "USD",
+  "country": "US",
+  "scopes": "read_products"
+}
+
+###
+
+### Invalid Email Format (expect 422)
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/123",
+  "shop_name": "Test Shop",
+  "email": "not-an-email",
+  "currency": "USD",
+  "country": "US",
+  "scopes": "read_products"
+}
+
+###
+
+### Invalid Currency Code (expect 422 - must be 3 chars)
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/123",
+  "shop_name": "Test Shop",
+  "email": "test@example.com",
+  "currency": "INVALID",
+  "country": "US",
+  "scopes": "read_products"
+}
+
+###
+
+### Invalid Country Code (expect 422 - must be 2 chars)
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/123",
+  "shop_name": "Test Shop",
+  "email": "test@example.com",
+  "currency": "USD",
+  "country": "USA",
+  "scopes": "read_products"
+}
+
+###
+
+### Missing Required Fields (expect 422)
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "platform_shop_id": "gid://shopify/Shop/123"
+}
+
+###
+
+### Empty Request Body (expect 422)
+POST {{base_url}}/merchants/sync
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: {{platform}}
+X-Shop-Domain: {{shop_domain}}
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+###
+
+### Non-existent Merchant (expect 404)
+GET {{base_url}}/merchants/self
+Authorization: Bearer {{auth_token}}
+X-Correlation-ID: {{correlation_id}}
+X-Shop-Platform: shopify
+X-Shop-Domain: non-existent-shop.myshopify.com
+Accept: application/json
+
+###

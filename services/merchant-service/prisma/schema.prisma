@@ -10,48 +10,47 @@ generator client {
 }
 
 enum MerchantStatus {
-  PENDING      // Installed but never activated (no trial, no credits)
-  ACTIVE       // Has trial OR credits (can use all features)
-  PAUSED       // No trial, no credits (dormant but installed)
-  SUSPENDED    // Temporarily disabled (abuse, violation, etc.)
-  UNINSTALLED  // App removed
+  PENDING      // Installed but not activated
+  ACTIVE       // Has trial or credits
+  PAUSED       // No credits/trial (but installed)
+  SUSPENDED    // Disabled for violations
+  UNINSTALLED  // App uninstalled
 }
 
 model Merchant {
-  id                String   @id @default(uuid()) @db.Uuid
+  id                 String   @id @default(uuid()) @db.Uuid
 
-  // Platform Identity (immutable after creation)
-  platform_name          String              // 'shopify', 'woocommerce', etc.
-  platform_shop_id       String              // gid://shopify/Shop/123
-  domain   String              // bb-staging-test.myshopify.com (PERMANENT)
+  // Platform identity
+  platform_name      String
+  platform_shop_id   String
+  domain             String
 
-  // Basic Info
-  name              String              // Shop/Store name
-  email             String              // Contact email
-  primary_domain    String?             // Current primary domain (could be custom)
-  currency          String             // Shop currency (USD, CAD, etc)
-  country           String
+  // Basic info (synced from platform)
+  name               String
+  email              String
+  primary_domain     String?
+  currency           String
+  country            String
+  platform_version   String?
+  scopes             String
 
-  // Platform Details
-  platform_version  String?              // API version (2024-01, etc.)
-  scopes            String              // What permissions were granted
+  // Ops state
+  status             MerchantStatus @default(PENDING)
 
-  // Lifecycle
-  status            MerchantStatus @default(PENDING)
-  status_changed_at DateTime?           // When status last changed
+  // Lifecycle timestamps
+  installed_at       DateTime? @db.Timestamptz(3)   // set on install/reinstall
+  uninstalled_at     DateTime? @db.Timestamptz(3)   // set on uninstall webhook
+  last_synced_at     DateTime? @db.Timestamptz(3)   // set on platform sync
 
-  installed_at      DateTime @default(now())
-  uninstalled_at    DateTime?
-  last_sync_at      DateTime?           // When we last synced with platform
-
-  // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamptz(3)
-  updated_at        DateTime @updatedAt @db.Timestamptz(3)
+  // Audit
+  created_at         DateTime @default(now()) @db.Timestamptz(3)
+  updated_at         DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([platform_name, platform_shop_id])
   @@unique([platform_name, domain])
   @@index([platform_shop_id, domain])
   @@index([domain])
   @@index([status])
+  @@index([last_synced_at])
   @@map("merchants")
 }

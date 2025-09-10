@@ -18,7 +18,10 @@ class Subjects(str, Enum):
 
     # Merchant subjects
     MERCHANT_CREATED = "evt.merchant.created.v1"
+    MERCHANT_SYNCED = "evt.merchant.synced.v1"
     MERCHANT_STATUS_CHANGED = "evt.merchant.status.changed.v1"
+    MERCHANT_REINSTALLED = "evt.merchant.reinstalled.v1"
+    MERCHANT_UNINSTALLED = "evt.merchant.uninstalled.v1"
 
     # Catalog subjects
     CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"

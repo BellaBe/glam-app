@@ -1,7 +1,8 @@
-# shared/messaging/publisher.py
-"""Enhanced publisher with standardized envelope and auto-correlation."""
+# shared/shared/messaging/publisher.py
+"""Enhanced publisher with automatic enum handling and validation."""
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any
 
 from shared.utils.logger import ServiceLogger
@@ -13,7 +14,8 @@ from .jetstream_client import JetStreamClient
 class Publisher(ABC):
     """Base publisher with standardized event publishing."""
 
-    stream_name: str = "GLAM_EVENTS"  # Single stream for all events
+    stream_name: str = "GLAM_EVENTS"
+    _stream_initialized: bool = False
 
     @property
     @abstractmethod
@@ -24,112 +26,108 @@ class Publisher(ABC):
     def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
         self.js_client = jetstream_client
         self.logger = logger
-        self._ensure_stream_created = False
-
-    async def _ensure_stream(self) -> None:
-        """Ensure GLAM_EVENTS stream exists (called once)."""
-        if self._ensure_stream_created:
-            return
-
-        await self.js_client.ensure_stream(
-            self.stream_name,
-            subjects=["evt.>", "cmd.>", "dlq.>"],  # Prepared for DLQ
-        )
-        self._ensure_stream_created = True
 
     async def publish_event(
         self,
-        subject: str,
-        payload: dict[str, Any],
+        subject: str | Enum,
+        payload: Any,  # Should be a Pydantic model
         correlation_id: str,
     ) -> str:
         """
         Publish an event with automatic envelope wrapping.
 
         Args:
-            subject: NATS subject (evt.* or cmd.*)
-            payload: Typed event payload extending BaseEventPayload
-            correlation_id: Optional - will use context if not provided
-            metadata: Additional metadata
+            subject: NATS subject (string or Enum with value)
+            payload: Pydantic model that extends BaseEventPayload
+            correlation_id: Request correlation ID
 
         Returns:
             event_id of the published event
         """
+        # Handle Enum subjects automatically
+        if isinstance(subject, Enum):
+            subject = subject.value
 
-        if not (subject.startswith("evt.") or subject.startswith("cmd.") or subject.startswith("dlq.")):
-            raise ValueError(f"Invalid subject pattern: {subject}. Must start with evt., cmd., or dlq.")
+        # Validate subject pattern
+        if not any(subject.startswith(prefix) for prefix in ["evt.", "cmd.", "dlq."]):
+            raise ValueError(f"Invalid subject '{subject}'. Must start with evt., cmd., or dlq.")
 
+        # Convert Pydantic model to dict
+        if hasattr(payload, "model_dump"):
+            payload_dict = payload.model_dump(mode="json")
+        else:
+            payload_dict = payload
+
+        # Create envelope
         envelope = EventEnvelope(
             event_type=subject,
             correlation_id=correlation_id,
             source_service=self.service_name,
-            data=payload.model_dump(mode="json"),
+            data=payload_dict,
         )
 
-        # Set logging context for this publish operation
+        # Set logging context
         self.logger.set_request_context(
             event_id=envelope.event_id,
             event_type=subject,
             correlation_id=correlation_id,
             service=self.service_name,
-            entry_point="event_publisher"
+            entry_point="event_publisher",
         )
 
         try:
-            self.logger.info("Publishing event")
+            # Ensure stream exists once per publisher instance
+            if not Publisher._stream_initialized:
+                await self.js_client.ensure_stream(
+                    self.stream_name,
+                    subjects=["evt.>", "cmd.>", "dlq.>"],
+                )
+                Publisher._stream_initialized = True
 
-            await self._ensure_stream()
-            ack = await self.js_client.js.publish(subject, envelope.to_bytes())
+            # Publish with timeout
+            ack = await self.js_client.js.publish(subject, envelope.to_bytes(), timeout=5.0)
 
             self.logger.info(
-                "Event published successfully",
-                extra={"sequence": ack.seq if ack else None}
+                f"Event published: {subject}",
+                extra={"sequence": ack.seq if ack else None, "event_id": envelope.event_id},
             )
 
             return envelope.event_id
 
         except Exception as e:
             self.logger.exception(
-                "Failed to publish event",
-                extra={"error": str(e)}
+                f"Failed to publish event to {subject}", extra={"error": str(e), "event_id": envelope.event_id}
             )
             raise
         finally:
-            # Clear context after publishing
             self.logger.clear_request_context()
 
     async def publish_to_dlq(
         self,
-        original_subject: str,
-        error_payload: dict,
+        original_event: EventEnvelope,
+        error: str,
         correlation_id: str,
-        error: Exception,
     ) -> str:
         """
-        Publish failed event to dead letter queue.
+        Publish an event to the Dead Letter Queue (DLQ).
 
         Args:
-            original_subject: Original event subject that failed
-            error_payload: Original payload that failed processing
-            correlation_id: Original correlation ID
-            error: The exception that occurred
+            original_event: The original event envelope that failed processing
+            error: Description of the error that occurred
+            correlation_id: Request correlation ID
+
+        Returns:
+            event_id of the DLQ event
         """
-        # Convert subject to DLQ pattern: evt.order.created -> dlq.order.created
-        dlq_subject = original_subject.replace("evt.", "dlq.").replace("cmd.", "dlq.")
+        dlq_subject = f"dlq.{original_event.event_type}"
 
-        from .events.models import ErrorPayload
+        dlq_payload = {
+            "original_event": original_event.model_dump(mode="json"),
+            "error": error,
+        }
 
-        error_data = ErrorPayload(
-            error_code=type(error).__name__,
-            error_message=str(error),
-            failed_operation=original_subject,
-            original_data=error_payload,
-        )
-
-        # Context will be set by publish_event
         return await self.publish_event(
             subject=dlq_subject,
-            payload=error_data,
+            payload=dlq_payload,
             correlation_id=correlation_id,
-            metadata={"original_subject": original_subject},
         )

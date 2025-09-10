@@ -20,10 +20,9 @@ lifecycle = ServiceLifecycle(config, logger)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan management for startup/shutdown"""
-    # Store in app state for dependencies
     app.state.lifecycle = lifecycle
     app.state.config = config
-    app.state.logger = logger  # REQUIRED for middleware
+    app.state.logger = logger
 
     try:
         await lifecycle.startup()
@@ -46,7 +45,7 @@ def create_application() -> FastAPI:
     register_exception_handlers(app)
 
     # Add health check from shared package
-    app.include_router(create_health_router(config.service_name), prefix="/api/v1/notifications")
+    app.include_router(create_health_router(config.service_name, prefix="/api/v1/notifications"))
     app.include_router(api_router)
 
     return app
@@ -57,4 +56,4 @@ app = create_application()
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug)
+    uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug, workers=1)

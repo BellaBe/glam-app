@@ -3,6 +3,7 @@ from uuid import UUID
 
 from shared.messaging.events.base import MerchantIdentifiers
 from shared.messaging.publisher import Publisher
+from shared.messaging.subjects import Subjects
 
 from ..schemas.events import EmailFailedPayload, NotificationSentPayload
 from ..schemas.notification import NotificationOut
@@ -34,7 +35,7 @@ class NotificationEventPublisher(Publisher):
         )
 
         return await self.publish_event(
-            subject="evt.notification.email.sent.v1",
+            subject=Subjects.NOTIFICATION_EMAIL_SENT,
             payload=payload,
             correlation_id=ctx.correlation_id,
         )
@@ -53,7 +54,7 @@ class NotificationEventPublisher(Publisher):
         )
 
         return await self.publish_event(
-            subject="evt.notification.email.failed.v1",
-            data=payload.model_dump(mode="json"),
+            subject=Subjects.NOTIFICATION_EMAIL_FAILED,
+            payload=payload,
             correlation_id=ctx.correlation_id,
         )
