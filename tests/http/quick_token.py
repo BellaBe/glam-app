@@ -45,7 +45,7 @@ def main():
     """Generate tokens for testing."""
 
     # Default test shop or get from command line
-    shop = sys.argv[1] if len(sys.argv) > 1 else "test-shop_2.myshopify.com"
+    shop = sys.argv[1] if len(sys.argv) > 1 else "test-shop.myshopify.com"
 
     print("=" * 60)
     print("JWT Token Generator for Notification Service")

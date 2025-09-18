@@ -40,8 +40,20 @@ class MerchantCreatedPayload(BaseEventPayload):
     scopes: str
 
 
-class MerchantSyncedPayload(_MerchantSnapshotMixin):
+class MerchantSyncedPayload(BaseEventPayload):
     """Emitted on each sync (create or update)."""
+
+    name: str
+    email: str
+    primary_domain: str | None
+    currency: str
+    country: str
+    platform_version: str | None
+    scopes: str
+
+    # State + watermarks
+    status: MerchantStatus
+    last_synced_at: datetime | None
 
 
 class MerchantReinstalledPayload(_MerchantSnapshotMixin):

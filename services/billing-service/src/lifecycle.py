@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from prisma import Prisma  # type: ignore[attr-defined]
 
@@ -26,7 +27,6 @@ class ServiceLifecycle:
         # External connections
         self.messaging_client: JetStreamClient | None = None
         self.prisma: Prisma | None = None
-        # self.redis: redis.Redis | None = None
         self._db_connected: bool = False
 
         # Publishers / listeners
@@ -45,6 +45,9 @@ class ServiceLifecycle:
         self.pack_manager: CreditPackManager | None = None
         self.shopify_client: ShopifyClient | None = None
 
+        # Listeners
+        self._listeners: list = []
+
         # Tasks
         self._tasks: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
@@ -52,17 +55,28 @@ class ServiceLifecycle:
     async def startup(self) -> None:
         """Initialize all components"""
         try:
-            self.logger.info("Starting service components...")
+            self.logger.info("Starting billing service components...")
+            start_time = time.time()
 
+            # 1. Messaging
             await self._init_messaging()
+
+            # 2. Database
             await self._init_database()
-            # await self._init_redis()
+
+            # 3. Utils
             self._init_utils()
+
+            # 4. Repositories
             self._init_repositories()
-            self._init_local_services()
+
+            # 5. Services
+            self._init_services()
+
+            # 6. Listeners
             await self._init_listeners()
 
-            self.logger.info("%s started successfully", self.config.service_name)
+            self.logger.info(f"Billing service started successfully in {time.time() - start_time:.2f}s")
 
         except Exception:
             self.logger.critical("Service failed to start", exc_info=True)
@@ -74,8 +88,8 @@ class ServiceLifecycle:
         self.logger.info("Shutting down %s", self.config.service_name)
 
         # Cancel tasks
-        for t in self._tasks:
-            t.cancel()
+        for task in self._tasks:
+            task.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
@@ -85,15 +99,6 @@ class ServiceLifecycle:
                 await lst.stop()
             except Exception:
                 self.logger.critical("Listener stop failed", exc_info=True)
-
-        # # Close connections
-        # if self.redis:
-        #     try:
-        #         await self.redis.close()
-        #         if hasattr(self.redis, "wait_closed"):
-        #             await self.redis.wait_closed()
-        #     except Exception:
-        #         self.logger.critical("Redis close failed", exc_info=True)
 
         if self.messaging_client:
             try:
@@ -113,14 +118,9 @@ class ServiceLifecycle:
         """Initialize messaging client"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher
-        self.event_publisher = BillingEventPublisher(
-            jetstream_client=self.messaging_client,
-            logger=self.logger,
-        )
-
+        self.event_publisher = BillingEventPublisher(self.messaging_client, self.logger)
         self.logger.info("Messaging client and publisher initialized")
 
     async def _init_database(self) -> None:
@@ -141,17 +141,11 @@ class ServiceLifecycle:
             self.logger.exception("Prisma connect failed: %s", e, exc_info=True)
             raise
 
-    # async def _init_redis(self) -> None:
-    #     """Initialize Redis client"""
-    #     self.redis = redis.from_url(self.config.redis_url)
-    #     await self.redis.ping()
-    #     self.logger.info("Redis connected")
-
     def _init_utils(self) -> None:
         """Initialize utility classes"""
         self.pack_manager = CreditPackManager(self.config)
         self.shopify_client = ShopifyClient(self.config, self.logger)
-        self.logger.info("Utilities initialized")
+        self.logger.info("Credit pack manager and Shopify client initialized")
 
     def _init_repositories(self) -> None:
         """Initialize repositories"""
@@ -166,17 +160,13 @@ class ServiceLifecycle:
             self.billing_repo = None
             self.purchase_repo = None
 
-    def _init_local_services(self) -> None:
+    def _init_services(self) -> None:
         """Initialize services"""
         if not self.billing_repo or not self.purchase_repo:
             raise RuntimeError("Repositories not initialized")
 
         if not self.event_publisher:
             raise RuntimeError("Event publisher not initialized")
-
-        # # Add checks for required dependencies
-        # if not self.redis:
-        #     raise RuntimeError("Redis client not initialized")
 
         if not self.pack_manager:
             raise RuntimeError("Credit pack manager not initialized")
@@ -191,6 +181,7 @@ class ServiceLifecycle:
             publisher=self.event_publisher,
             logger=self.logger,
         )
+        self.logger.info("Billing Service initialized")
 
         self.purchase_service = PurchaseService(
             config=self.config,
@@ -202,39 +193,19 @@ class ServiceLifecycle:
             logger=self.logger,
         )
 
-        self.logger.info("Services initialized")
+        self.logger.info("Purchase Service initialized")
 
     async def _init_listeners(self) -> None:
         """Initialize event listeners"""
         if not self.messaging_client or not self.billing_service or not self.purchase_service:
             raise RuntimeError("Required components not ready for listeners")
 
-        # Merchant created listener
-        merchant_listener = MerchantCreatedListener(
-            js_client=self.messaging_client, billing_service=self.billing_service, logger=self.logger
-        )
-        await merchant_listener.start()
-        self._listeners.append(merchant_listener)
+        listeners = [
+            MerchantCreatedListener(self.messaging_client, self.billing_service, self.publisher, self.logger),
+            PurchaseWebhookListener(self.messaging_client, self.purchase_service, self.publisher, self.logger),
+        ]
 
-        # Purchase webhook listener
-        webhook_listener = PurchaseWebhookListener(
-            js_client=self.messaging_client, purchase_service=self.purchase_service, logger=self.logger
-        )
-        await webhook_listener.start()
-        self._listeners.append(webhook_listener)
-
-        self.logger.info("Event listeners started")
-
-    def add_task(self, coro) -> asyncio.Task:
-        """Add a background task"""
-        t = asyncio.create_task(coro)
-        self._tasks.append(t)
-        return t
-
-    async def wait_for_shutdown(self) -> None:
-        """Wait for shutdown signal"""
-        await self._shutdown_event.wait()
-
-    def signal_shutdown(self) -> None:
-        """Signal shutdown"""
-        self._shutdown_event.set()
+        for listener in listeners:
+            await listener.start()
+            self._listeners.append(listener)
+            self.logger.info("Listener started: %s", listener.subject)

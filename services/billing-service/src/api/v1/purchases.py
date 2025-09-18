@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Path, status
 
 from shared.api import ApiResponse, success_response
-from shared.api.dependencies import ClientAuthDep, PlatformContextDep, RequestContextDep
+from shared.api.dependencies import ClientAuthDep, RequestContextDep
 
 from ...dependencies import PurchaseServiceDep
 from ...schemas.billing import PurchaseCreatedOut, PurchaseCreateIn, PurchaseOut
@@ -21,7 +21,6 @@ async def create_purchase(
     purchase_service: PurchaseServiceDep,
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    platform: PlatformContextDep,
     body: PurchaseCreateIn = Body(...),
 ):
     """Create credit pack purchase"""
@@ -37,7 +36,6 @@ async def list_purchases(
     purchase_service: PurchaseServiceDep,
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    platform: PlatformContextDep,
 ):
     """List purchases for merchant"""
     merchant_id = UUID(auth.shop)

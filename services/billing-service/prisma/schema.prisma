@@ -12,11 +12,13 @@ datasource db {
 model BillingRecord {
   id                String   @id @default(uuid()) @db.Uuid
   merchant_id       String   @unique @db.Uuid
+  platform_name    String?  // shopify
+  platform_shop_id String?  // shopify shop id
+
 
   // Trial management
   trial_available   Boolean  @default(true)
   trial_started_at  DateTime? @db.Timestamptz(3)
-  trial_ends_at     DateTime? @db.Timestamptz(3)
 
   // Purchase tracking
   total_credits_purchased Int @default(0)
@@ -27,8 +29,6 @@ model BillingRecord {
 
   // Relations
   purchases         CreditPurchase[]
-
-  @@index([trial_ends_at])
   @@map("billing_records")
 }
 

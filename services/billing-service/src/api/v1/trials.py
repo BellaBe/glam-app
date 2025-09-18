@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, status
 
 from shared.api import ApiResponse, success_response
-from shared.api.dependencies import ClientAuthDep, PlatformContextDep, RequestContextDep
+from shared.api.dependencies import ClientAuthDep, RequestContextDep
 
 from ...dependencies import BillingServiceDep
 from ...schemas.billing import TrialActivatedOut, TrialActivateIn, TrialStatusOut
@@ -21,7 +21,6 @@ async def activate_trial(
     billing_service: BillingServiceDep,
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    platform: PlatformContextDep,
     body: TrialActivateIn = Body(None),
 ):
     """Activate trial for merchant"""
@@ -40,7 +39,6 @@ async def get_trial_status(
     billing_service: BillingServiceDep,
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    platform: PlatformContextDep,
 ):
     """Get trial status for merchant"""
     merchant_id = UUID(auth.shop)

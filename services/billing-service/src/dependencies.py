@@ -3,8 +3,6 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from shared.api.dependencies import CorrelationIdDep, PaginationDep, RequestContextDep, RequestIdDep
-
 from .config import ServiceConfig
 from .events.publishers import BillingEventPublisher
 from .lifecycle import ServiceLifecycle
@@ -15,13 +13,9 @@ from .services.purchase_service import PurchaseService
 __all__ = [
     "BillingServiceDep",
     "ConfigDep",
-    "CorrelationIdDep",
     "LifecycleDep",
-    "PaginationDep",
     "PublisherDep",
     "PurchaseServiceDep",
-    "RequestContextDep",
-    "RequestIdDep",
 ]
 
 

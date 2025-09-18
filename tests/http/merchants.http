@@ -12,12 +12,15 @@
 @correlation_id = test-corr-{{$timestamp}}
 
 # Auth headers - ClientAuthDep requires these
-@shop_domain = test-shop_2.myshopify.com
+@shop_domain = test-shop.myshopify.com
 @platform = shopify
 
 # Generate this token using the quick_token.py script below
 # JWT must have: sub (shop), scope: "bff:api:access", platform: "shopify"
-@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXNob3BfMi5teXNob3BpZnkuY29tIiwic2NvcGUiOiJiZmY6YXBpOmFjY2VzcyIsImlhdCI6MTc1NzQ4ODQ3OSwicGxhdGZvcm0iOiJzaG9waWZ5IiwiZXhwIjoxNzU3NDkyMDc5fQ.6FEOXu3tu5kxAINDqiCAo8ovc_fgG5h8ZNUQ5KAhGMc
+@auth_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXNob3AubXlzaG9waWZ5LmNvbSIsInNjb3BlIjoiYmZmOmFwaTphY2Nlc3MiLCJpYXQiOjE3NTc0OTEzMTQsInBsYXRmb3JtIjoic2hvcGlmeSIsImV4cCI6MTc1NzQ5NDkxNH0.nMwU56EQRn42o0Nf8ODlPi_09nOaRYOOtVa0zfWeY4I
+
+
+
 
 ### === HEALTH CHECK (No Auth Required) ===
 
@@ -41,33 +44,13 @@ Accept: application/json
 
 {
   "platform_shop_id": "gid://shopify/Shop/{{$randomInt 1000123 9999999}}",
-  "shop_name": "Test Shop 2 {{$timestamp}}",
+  "shop_name": "Test Shop {{$timestamp}}",
   "email": "test-{{$timestamp}}@example.com",
-  "primary_domain": "test-shop_2.myshopify.com",
+  "primary_domain": "test-shop.myshopify.com",
   "currency": "USD",
   "country": "US",
   "platform_version": "2024.01",
   "scopes": "read_products,write_orders,read_customers"
-}
-
-###
-
-### Sync Merchant - Minimal Fields
-POST {{base_url}}/merchants/sync
-Authorization: Bearer {{auth_token}}
-X-Correlation-ID: {{correlation_id}}
-X-Shop-Platform: {{platform}}
-X-Shop-Domain: {{shop_domain}}
-Content-Type: application/json
-Accept: application/json
-
-{
-  "platform_shop_id": "gid://shopify/Shop/987654",
-  "shop_name": "Minimal Shop",
-  "email": "minimal@example.com",
-  "currency": "EUR",
-  "country": "DE",
-  "scopes": "read_products"
 }
 
 ###
@@ -85,7 +68,7 @@ Accept: application/json
 ### === ERROR CASES ===
 
 ### Missing X-Correlation-ID (expect 400)
-GET {{base_url}}/health
+GET {{base_url}}/merchants/health
 Accept: application/json
 
 ###

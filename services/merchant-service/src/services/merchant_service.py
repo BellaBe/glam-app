@@ -131,7 +131,7 @@ class MerchantService:
             raise MerchantNotFoundError(domain=domain, platform=platform_name)
 
         # Map ORM -> API schema
-        return MerchantOut(  # your MerchantOut/MerchantSelfOut schema
+        return MerchantOut(
             id=m.id,
             platform_name=m.platform_name,
             platform_shop_id=m.platform_shop_id,
@@ -147,4 +147,6 @@ class MerchantService:
             last_synced_at=m.last_synced_at,
             created_at=m.created_at,
             updated_at=m.updated_at,
+            installed_at=m.installed_at,
+            uninstalled_at=m.uninstalled_at,
         )

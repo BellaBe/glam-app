@@ -73,6 +73,8 @@ class MerchantEventPublisher(Publisher):
             country=merchant.country,
             platform_version=merchant.platform_version,
             scopes=merchant.scopes,
+            status=merchant.status,
+            last_synced_at=merchant.last_synced_at,
         )
 
         return await self.publish_event(
