@@ -41,7 +41,6 @@ class MerchantService:
 
         if not m:
             m = await self.repository.create(platform_name=platform_name, domain=domain, data=data)
-            print("MERCHANT CREATED:=======", m)
             identifiers = MerchantIdentifiers(
                 merchant_id=m.id, platform_name=m.platform_name, platform_shop_id=m.platform_shop_id, domain=m.domain
             )
