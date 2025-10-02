@@ -1,0 +1,23 @@
+Credits exhausted
+
+Hi {{ domain }},
+
+Your credits have been fully exhausted{% if exhausted_at is defined %} as of {{ exhausted_at | format_date }}{% endif %}.
+
+Service status
+- Fit & color recommendations are DISABLED until you add credits.
+
+Impact
+- Recommendation widgets are hidden
+- Shoppers can’t get suggestions
+- Analytics won’t update until you recharge
+
+{% if app_url is defined -%}
+Purchase credits: {{ app_url }}/billing/credits
+Auto-recharge:    {{ app_url }}/billing/auto-recharge
+{%- endif %}
+
+Questions? {{ support_email }}
+
+Best regards,
+The Glam You Up Team

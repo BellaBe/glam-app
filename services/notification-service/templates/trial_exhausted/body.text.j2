@@ -1,0 +1,25 @@
+Your trial has ended
+
+Hi {{ domain }},
+
+Your trial credits{% if exhausted_at is defined %} were exhausted on {{ exhausted_at | format_date }}{% endif %}.
+Fit & color recommendations are currently PAUSED.
+
+What this means
+- Recommendation widgets are hidden
+- Shoppers can’t get suggestions
+- Analytics won’t update until you add credits
+
+{% if app_url is defined -%}
+Choose a plan: {{ app_url }}/billing/plans
+Buy credits:   {{ app_url }}/billing/credits
+{%- endif %}
+
+{% if discount_code is defined -%}
+Special offer: Get {{ discount_pct | default('20%') }} off your first month. Code: {{ discount_code }}
+{%- endif %}
+
+Questions? {{ support_email }}
+
+Best regards,
+The Glam You Up Team

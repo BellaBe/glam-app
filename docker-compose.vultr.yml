@@ -1,0 +1,554 @@
+
+# Docker Compose for Glam Application on Vultr
+# This configuration sets up all necessary services including
+# PostgreSQL, NATS, and various microservices.
+
+networks:
+  glam-net-${APP_ENV}:
+    driver: bridge
+    internal: true
+  public-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  nats-data:
+
+services:
+  # ----------------- Public Facing -----------------
+  nginx:
+    image: nginx:alpine
+    container_name: glam-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - public-network
+    depends_on:
+      - shopify-app
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------- Single PostgreSQL Instance -----------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: glam-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      # Pass all service passwords for init script
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      BILLING_DB_PASSWORD: ${BILLING_DB_PASSWORD}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      CREDIT_DB_PASSWORD: ${CREDIT_DB_PASSWORD}
+      MERCHANT_DB_PASSWORD: ${MERCHANT_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      SEASON_COMPATIBILITY_DB_PASSWORD: ${SEASON_COMPATIBILITY_DB_PASSWORD}
+      SELFIE_DB_PASSWORD: ${SELFIE_DB_PASSWORD}
+      RECOMMENDATION_DB_PASSWORD: ${RECOMMENDATION_DB_PASSWORD}
+      TOKEN_DB_PASSWORD: ${TOKEN_DB_PASSWORD}
+      WEBHOOK_DB_PASSWORD: ${WEBHOOK_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/configs/init-databases.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - glam-net-${APP_ENV}
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "effective_cache_size=4GB"
+      - "-c"
+      - "maintenance_work_mem=256MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "max_connections=300"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_duration=off"
+      - "-c"
+      - "max_wal_size=2GB"
+      - "-c"
+      - "min_wal_size=1GB"
+    deploy:
+      resources:
+        limits:
+          memory: 5500M
+        reservations:
+          memory: 4000M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ----------------- NATS -----------------
+  nats:
+    image: nats:2.10.7-alpine
+    container_name: glam-nats
+    restart: unless-stopped
+    command: ["nats-server", "-m", "8222", "-js", "--store_dir", "/data"]
+    volumes:
+      - nats-data:/data
+    networks:
+      - glam-net-${APP_ENV}
+    healthcheck:
+      test: ["CMD", "nats-server", "--help"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  # ----------------- Shopify App -----------------
+  shopify-app:
+    build:
+      context: .
+      dockerfile: apps/shopify-app/Dockerfile
+    container_name: shopify-app-bff
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${APP_ENV}
+      PORT: 3000
+      SHOPIFY_APP_URL: ${SHOPIFY_APP_URL}
+      SHOPIFY_API_KEY: ${SHOPIFY_API_KEY}
+      SHOPIFY_API_SECRET: ${SHOPIFY_API_SECRET}
+      SHOPIFY_SCOPES: ${SHOPIFY_SCOPES}
+      DATABASE_URL: postgresql://${SHOPIFY_SESSION_DB_USER}:${SHOPIFY_SESSION_DB_PASSWORD}@postgres:5432/${SHOPIFY_SESSION_DB_NAME}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      # Internal Service URLs (no external access)
+      ANALYTICS_SERVICE_URL: http://analytics-service:8000
+      BILLING_SERVICE_URL: http://billing-service:8000
+      CATALOG_SERVICE_URL: http://catalog-service:8000
+      CREDIT_SERVICE_URL: http://credit-service:8000
+      MERCHANT_SERVICE_URL: http://merchant-service:8000
+      RECOMMENDATION_SERVICE_URL: http://recommendation-service:8000
+      SELFIE_SERVICE_URL: http://selfie-service:8000
+      TOKEN_SERVICE_URL: http://token-service:8000
+      WEBHOOK_SERVICE_URL: http://webhook-service:8000
+    deploy:
+      resources:
+        limits:
+          memory: 1200M
+        reservations:
+          memory: 800M
+    networks:
+      - glam-net-${APP_ENV}
+      - public-network
+
+  # ----------------- Services -----------------
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: analytics-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@postgres:5432/${ANALYTICS_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Billing Service
+  billing-service:
+    build:
+      context: .
+      dockerfile: services/billing-service/Dockerfile
+    container_name: billing-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${BILLING_DB_USER}:${BILLING_DB_PASSWORD}@postgres:5432/${BILLING_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Catalog AI Analyzer
+  catalog-ai-analyzer:
+    build:
+      context: .
+      dockerfile: services/catalog-ai-analyzer/Dockerfile
+    container_name: catalog-ai-analyzer
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+
+  # Catalog Connector
+  catalog-connector:
+    build:
+      context: .
+      dockerfile: services/catalog-connector/Dockerfile
+    container_name: catalog-connector
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+
+
+  # Catalog Service
+  catalog-service:
+    build:
+      context: .
+      dockerfile: services/catalog-service/Dockerfile
+    container_name: catalog-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@postgres:5432/${CATALOG_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Credit Service
+  credit-service:
+    build:
+      context: .
+      dockerfile: services/credit-service/Dockerfile
+    container_name: credit-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CREDIT_DB_USER}:${CREDIT_DB_PASSWORD}@postgres:5432/${CREDIT_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Merchant Service
+  merchant-service:
+    build:
+      context: .
+      dockerfile: services/merchant-service/Dockerfile
+    container_name: merchant-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      MERCHANT_DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@postgres:5432/${MERCHANT_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: notification-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${NOTIFICATION_DB_USER}:${NOTIFICATION_DB_PASSWORD}@postgres:5432/${NOTIFICATION_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-mailhog}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM_ADDRESS:-noreply@glamyouup.net}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+
+  # Recommendation Service
+  recommendation-service:
+    build:
+      context: .
+      dockerfile: services/recommendation-service/Dockerfile
+    container_name: recommendation-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${RECOMMENDATION_DB_USER}:${RECOMMENDATION_DB_PASSWORD}@postgres:5432/${RECOMMENDATION_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+  # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Season Compatibility Service
+  season-compatibility-service:
+    build:
+      context: .
+      dockerfile: services/season-compatibility-service/Dockerfile
+    container_name: season-compatibility-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${SEASON_COMPATIBILITY_DB_USER}:${SEASON_COMPATIBILITY_DB_PASSWORD}@postgres:5432/${SEASON_COMPATIBILITY_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+
+  # Selfie AI Analyzer
+  selfie-ai-analyzer:
+    build:
+      context: .
+      dockerfile: services/selfie-ai-analyzer/Dockerfile
+    container_name: selfie-ai-analyzer
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+
+  # Selfie Service
+  selfie-service:
+    build:
+      context: .
+      dockerfile: services/selfie-service/Dockerfile
+    container_name: selfie-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${SELFIE_DB_USER}:${SELFIE_DB_PASSWORD}@postgres:5432/${SELFIE_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Token Service
+  token-service:
+    build:
+      context: .
+      dockerfile: services/token-service/Dockerfile
+    container_name: token-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${TOKEN_DB_USER}:${TOKEN_DB_PASSWORD}@postgres:5432/${TOKEN_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 350M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Webhook Service
+  webhook-service:
+    build:
+      context: .
+      dockerfile: services/webhook-service/Dockerfile
+    container_name: webhook-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${WEBHOOK_DB_USER}:${WEBHOOK_DB_PASSWORD}@postgres:5432/${WEBHOOK_DB_NAME}
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      JSON_LOGS: true
+    networks:
+      - glam-net-${APP_ENV}
+    deploy:
+      resources:
+        limits:
+          memory: 450M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # For local testing, include mailhog
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: glam-mailhog
+    profiles: ["dev"]  # Only starts with --profile dev
+    ports:
+      - "8025:8025"
+    networks:
+      - glam-net-${APP_ENV}

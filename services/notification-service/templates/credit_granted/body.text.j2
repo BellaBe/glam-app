@@ -1,0 +1,19 @@
+Credits Added
+=============
+
+Hi {{ domain }},
+
+{{ amount }} credits have been added to your account.
+Your new balance is {{ new_balance }} credits.
+
+1 credit = 1 recommendation.
+
+What’s next
+- Shoppers can continue generating recommendations
+- Track usage and remaining credits in your dashboard
+- Set alerts to avoid running out
+
+{% if app_url is defined -%}
+Open Dashboard: {{ app_url }}/dashboard
+Auto-recharge:  {{ app_url }}/billing/auto-recharge
+{%- endif %}

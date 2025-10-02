@@ -1,0 +1,1104 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/token-service
+================================================================================
+
+token-service/
+prisma/
+└── schema.prisma
+src/
+├── api/
+│   ├── v1/
+│   │   ├── __init__.py
+│   │   └── tokens.py
+│   │
+│   │       ```py
+│   │       # services/token-service/src/api/v1/tokens.py
+│   │
+│   │       from typing import Optional
+│   │       from fastapi import APIRouter, Body, Query, status, Request
+│   │       from shared.api import ApiResponse, success_response
+│   │       from shared.api.dependencies import (
+│   │           RequestContextDep,
+│   │           ClientAuthDep,
+│   │           InternalAuthDep,
+│   │           ClientIpDep
+│   │       )
+│   │       from shared.api.validation import validate_shop_context, validate_service_context
+│   │       from shared.utils.exceptions import UnauthorizedError, ValidationError
+│   │       from ...dependencies import TokenServiceDep, LoggerDep
+│   │       from ...schemas.token import (
+│   │           StoreTokenRequest,
+│   │           TokenListResponse,
+│   │           StoreTokenResponse,
+│   │           DeleteTokenResponse
+│   │       )
+│   │       from ...utils.constants import ALLOWED_READER_SERVICES
+│   │
+│   │       router = APIRouter(prefix="/api/v1/tokens", tags=["Tokens"])
+│   │
+│   │       @router.post(
+│   │           "",
+│   │           response_model=ApiResponse[StoreTokenResponse],
+│   │           status_code=status.HTTP_201_CREATED,
+│   │           summary="Store or update token"
+│   │       )
+│   │       async def store_token(
+│   │           svc: TokenServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           logger: LoggerDep,
+│   │           body: StoreTokenRequest = Body(...)
+│   │       ):
+│   │           """
+│   │           Store or update platform token (requires client auth).
+│   │           Used by BFF after OAuth callback.
+│   │           """
+│   │
+│   │           # Validate domain matches JWT
+│   │           if body.domain != auth.shop:
+│   │               raise UnauthorizedError(
+│   │                   "Domain mismatch",
+│   │                   details={
+│   │                       "jwt_domain": auth.shop,
+│   │                       "request_domain": body.domain
+│   │                   }
+│   │               )
+│   │
+│   │           # Store token
+│   │           token_id = await svc.store_token(
+│   │               request=body,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           return success_response(
+│   │               data=StoreTokenResponse(
+│   │                   token_id=token_id,
+│   │                   status="stored"
+│   │               ),
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │       @router.get(
+│   │           "/{merchant_id}",
+│   │           response_model=ApiResponse[TokenListResponse],
+│   │           summary="Get tokens for merchant"
+│   │       )
+│   │       async def get_tokens(
+│   │           merchant_id: str,
+│   │           svc: TokenServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: InternalAuthDep,
+│   │           logger: LoggerDep,
+│   │           ip: ClientIpDep,
+│   │           platform: Optional[str] = Query(None, description="Filter by platform")
+│   │       ):
+│   │           """
+│   │           Retrieve tokens for a merchant (requires internal auth).
+│   │           Used by Platform Connector and other internal services.
+│   │           """
+│   │
+│   │           # Validate service is allowed to retrieve tokens
+│   │           validate_service_context(
+│   │               internal_auth=auth,
+│   │               logger=logger,
+│   │               allowed_services=ALLOWED_READER_SERVICES,
+│   │               operation="retrieve_tokens"
+│   │           )
+│   │
+│   │           # Get tokens
+│   │           tokens = await svc.get_tokens(
+│   │               merchant_id=merchant_id,
+│   │               platform=platform,
+│   │               requesting_service=auth.service,
+│   │               correlation_id=ctx.correlation_id,
+│   │               ip_address=ip
+│   │           )
+│   │
+│   │           return success_response(
+│   │               data=TokenListResponse(tokens=tokens),
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │       @router.delete(
+│   │           "/{merchant_id}/{platform}",
+│   │           response_model=ApiResponse[DeleteTokenResponse],
+│   │           summary="Delete specific token"
+│   │       )
+│   │       async def delete_token(
+│   │           merchant_id: str,
+│   │           platform: str,
+│   │           svc: TokenServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           logger: LoggerDep
+│   │       ):
+│   │           """
+│   │           Delete a specific token (requires client auth).
+│   │           Used when merchant disconnects a platform.
+│   │           """
+│   │
+│   │           # In production, verify merchant ownership
+│   │           # For now, just ensure JWT is valid
+│   │           if not auth.shop:
+│   │               raise UnauthorizedError("Invalid authentication")
+│   │
+│   │           # Delete token
+│   │           deleted = await svc.delete_token(
+│   │               merchant_id=merchant_id,
+│   │               platform=platform,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           if not deleted:
+│   │               logger.warning(
+│   │                   f"Token not found for deletion",
+│   │                   extra={
+│   │                       "merchant_id": merchant_id,
+│   │                       "platform": platform
+│   │                   }
+│   │               )
+│   │
+│   │           return success_response(
+│   │               data=DeleteTokenResponse(status="deleted"),
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │       ```
+│   │
+│   └── __init__.py
+├── events/
+│   ├── __init__.py
+│   ├── listeners.py
+│   └── publishers.py
+├── external/
+│   └── __init__.py
+├── repositories/
+│   ├── __init__.py
+│   └── token_repository.py
+│
+│       ```py
+│       # services/token-service/src/repositories/token_repository.py
+│
+│       from typing import Optional, List, Dict, Any
+│       from datetime import datetime
+│       from uuid import UUID
+│       from prisma import Prisma
+│       from prisma.models import PlatformToken, TokenAccessLog
+│       from shared.utils.logger import ServiceLogger
+│
+│       class TokenRepository:
+│           """Repository for token operations"""
+│
+│           def __init__(self, prisma: Prisma, logger: ServiceLogger):
+│               self.prisma = prisma
+│               self.logger = logger
+│
+│           async def upsert(self, data: Dict[str, Any]) -> PlatformToken:
+│               """Create or update token"""
+│               return await self.prisma.platformtoken.upsert(
+│                   where={
+│                       "merchant_id_platform_name": {
+│                           "merchant_id": data["merchant_id"],
+│                           "platform_name": data["platform_name"]
+│                       }
+│                   },
+│                   update={
+│                       "platform_shop_id": data["platform_shop_id"],
+│                       "domain": data["domain"],
+│                       "encrypted_token": data["encrypted_token"],
+│                       "encryption_key_id": data["encryption_key_id"],
+│                       "token_type": data["token_type"],
+│                       "expires_at": data.get("expires_at"),
+│                       "scopes": data.get("scopes"),
+│                       "updated_at": datetime.utcnow()
+│                   },
+│                   create=data
+│               )
+│
+│           async def find_by_merchant(self, merchant_id: str) -> List[PlatformToken]:
+│               """Find all tokens for a merchant"""
+│               return await self.prisma.platformtoken.find_many(
+│                   where={"merchant_id": merchant_id}
+│               )
+│
+│           async def find_by_merchant_platform(
+│               self,
+│               merchant_id: str,
+│               platform_name: str
+│           ) -> List[PlatformToken]:
+│               """Find tokens for merchant and platform"""
+│               return await self.prisma.platformtoken.find_many(
+│                   where={
+│                       "merchant_id": merchant_id,
+│                       "platform_name": platform_name
+│                   }
+│               )
+│
+│           async def update_access(
+│               self,
+│               token_id: str,
+│               accessed_by: str
+│           ) -> None:
+│               """Update access tracking"""
+│               await self.prisma.platformtoken.update(
+│                   where={"id": token_id},
+│                   data={
+│                       "last_accessed_by": accessed_by,
+│                       "last_accessed_at": datetime.utcnow(),
+│                       "access_count": {"increment": 1}
+│                   }
+│               )
+│
+│           async def delete(
+│               self,
+│               merchant_id: str,
+│               platform_name: str
+│           ) -> Optional[PlatformToken]:
+│               """Delete a token"""
+│               try:
+│                   return await self.prisma.platformtoken.delete(
+│                       where={
+│                           "merchant_id_platform_name": {
+│                               "merchant_id": merchant_id,
+│                               "platform_name": platform_name
+│                           }
+│                       }
+│                   )
+│               except Exception:
+│                   return None
+│
+│           async def log_access(
+│               self,
+│               token_id: str,
+│               accessed_by: str,
+│               access_type: str,
+│               success: bool,
+│               correlation_id: Optional[str] = None,
+│               ip_address: Optional[str] = None,
+│               error_message: Optional[str] = None
+│           ) -> TokenAccessLog:
+│               """Log token access"""
+│               return await self.prisma.tokenaccesslog.create(
+│                   data={
+│                       "token_id": token_id,
+│                       "accessed_by": accessed_by,
+│                       "access_type": access_type,
+│                       "success": success,
+│                       "correlation_id": correlation_id,
+│                       "ip_address": ip_address,
+│                       "error_message": error_message
+│                   }
+│               )
+│       ```
+│
+├── schemas/
+│   ├── __init__.py
+│   ├── events.py
+│   └── token.py
+│
+│       ```py
+│       # services/token-service/src/schemas/token.py
+│
+│       from uuid import UUID
+│       from datetime import datetime
+│       from pydantic import BaseModel, Field, ConfigDict
+│       from typing import Optional, Dict, Any, List
+│
+│       # Input DTOs
+│       class StoreTokenRequest(BaseModel):
+│           """Request to store a token"""
+│           merchant_id: str = Field(..., description="Internal merchant ID")
+│           platform_name: str = Field(..., description="Platform name (shopify, woocommerce, etc)")
+│           platform_shop_id: str = Field(..., description="Shop ID in the platform")
+│           domain: str = Field(..., description="Full domain")
+│           token_data: Dict[str, Any] = Field(..., description="Token data to encrypt")
+│           token_type: str = Field(..., description="Token type (oauth, api_key, etc)")
+│           expires_at: Optional[datetime] = Field(None, description="Token expiration")
+│           scopes: Optional[str] = Field(None, description="OAuth scopes")
+│
+│           model_config = ConfigDict(
+│               json_schema_extra={
+│                   "example": {
+│                       "merchant_id": "uuid-merchant-id",
+│                       "platform_name": "shopify",
+│                       "platform_shop_id": "12345678",
+│                       "domain": "example.myshopify.com",
+│                       "token_data": {
+│                           "access_token": "shpat_xxx",
+│                           "scope": "read_products,write_orders"
+│                       },
+│                       "token_type": "oauth",
+│                       "expires_at": "2024-12-31T23:59:59Z",
+│                       "scopes": "read_products,write_orders"
+│                   }
+│               }
+│           )
+│
+│       # Output DTOs
+│       class TokenData(BaseModel):
+│           """Decrypted token data"""
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           token_data: Dict[str, Any]
+│           token_type: str
+│           expires_at: Optional[datetime]
+│           is_expired: bool
+│           scopes: Optional[str]
+│
+│           model_config = ConfigDict(from_attributes=True)
+│
+│       class TokenListResponse(BaseModel):
+│           """Response with list of tokens"""
+│           tokens: List[TokenData]
+│
+│       class StoreTokenResponse(BaseModel):
+│           """Response after storing token"""
+│           token_id: str
+│           status: str
+│
+│       class DeleteTokenResponse(BaseModel):
+│           """Response after deleting token"""
+│           status: str
+│       ```
+│
+├── services/
+│   ├── __init__.py
+│   ├── encryption_service.py
+│   │
+│   │   ```py
+│   │   # services/token-service/src/services/encryption_service.py
+│   │
+│   │   import json
+│   │   import base64
+│   │   from typing import Dict, Any
+│   │   from cryptography.fernet import Fernet
+│   │   from cryptography.hazmat.primitives import hashes
+│   │   from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+│   │   from shared.utils.logger import ServiceLogger
+│   │   from shared.utils.exceptions import InternalError
+│   │
+│   │   class EncryptionService:
+│   │       """Handles token encryption and decryption"""
+│   │
+│   │       def __init__(self, encryption_key: str, key_id: str, logger: ServiceLogger):
+│   │           self.key_id = key_id
+│   │           self.logger = logger
+│   │           self._cipher = self._create_cipher(encryption_key)
+│   │
+│   │       def _create_cipher(self, key: str) -> Fernet:
+│   │           """Create Fernet cipher from key"""
+│   │           # Use PBKDF2 to derive a proper key from the string
+│   │           kdf = PBKDF2(
+│   │               algorithm=hashes.SHA256(),
+│   │               length=32,
+│   │               salt=b'token-service-salt',  # In production, use unique salt per key
+│   │               iterations=100000,
+│   │           )
+│   │           key_bytes = base64.urlsafe_b64encode(kdf.derive(key.encode()))
+│   │           return Fernet(key_bytes)
+│   │
+│   │       def encrypt(self, data: Dict[str, Any]) -> str:
+│   │           """Encrypt token data"""
+│   │           try:
+│   │               json_str = json.dumps(data)
+│   │               encrypted = self._cipher.encrypt(json_str.encode())
+│   │               return base64.urlsafe_b64encode(encrypted).decode()
+│   │           except Exception as e:
+│   │               self.logger.exception(f"Encryption failed: {e}")
+│   │               raise InternalError(
+│   │                   "Failed to encrypt token data",
+│   │                   details={"error": str(e)}
+│   │               )
+│   │
+│   │       def decrypt(self, encrypted_data: str) -> Dict[str, Any]:
+│   │           """Decrypt token data"""
+│   │           try:
+│   │               encrypted_bytes = base64.urlsafe_b64decode(encrypted_data.encode())
+│   │               decrypted = self._cipher.decrypt(encrypted_bytes)
+│   │               return json.loads(decrypted.decode())
+│   │           except Exception as e:
+│   │               self.logger.exception(f"Decryption failed: {e}")
+│   │               raise InternalError(
+│   │                   "Failed to decrypt token data",
+│   │                   details={"error": str(e)}
+│   │               )
+│   │   ```
+│   │
+│   └── token_service.py
+│
+│       ```py
+│       # services/token-service/src/services/token_service.py
+│
+│       from typing import List, Optional, Dict, Any
+│       from datetime import datetime
+│       from shared.utils.logger import ServiceLogger
+│       from shared.utils.exceptions import NotFoundError, ValidationError
+│       from ..repositories.token_repository import TokenRepository
+│       from ..services.encryption_service import EncryptionService
+│       from ..schemas.token import StoreTokenRequest, TokenData
+│       from ..utils.constants import SUPPORTED_PLATFORMS, TOKEN_TYPES
+│
+│       class TokenService:
+│           """Business logic for token operations"""
+│
+│           def __init__(
+│               self,
+│               repository: TokenRepository,
+│               encryption: EncryptionService,
+│               logger: ServiceLogger
+│           ):
+│               self.repository = repository
+│               self.encryption = encryption
+│               self.logger = logger
+│
+│           async def store_token(
+│               self,
+│               request: StoreTokenRequest,
+│               correlation_id: str
+│           ) -> str:
+│               """Store or update a token"""
+│
+│               # Validate platform
+│               if request.platform_name not in SUPPORTED_PLATFORMS:
+│                   raise ValidationError(
+│                       f"Unsupported platform: {request.platform_name}",
+│                       field="platform_name",
+│                       value=request.platform_name
+│                   )
+│
+│               # Validate token type
+│               if request.token_type not in TOKEN_TYPES:
+│                   raise ValidationError(
+│                       f"Invalid token type: {request.token_type}",
+│                       field="token_type",
+│                       value=request.token_type
+│                   )
+│
+│               # Encrypt token data
+│               encrypted = self.encryption.encrypt(request.token_data)
+│
+│               # Store in database
+│               token = await self.repository.upsert({
+│                   "merchant_id": request.merchant_id,
+│                   "platform_name": request.platform_name,
+│                   "platform_shop_id": request.platform_shop_id,
+│                   "domain": request.domain,
+│                   "encrypted_token": encrypted,
+│                   "encryption_key_id": self.encryption.key_id,
+│                   "token_type": request.token_type,
+│                   "expires_at": request.expires_at,
+│                   "scopes": request.scopes
+│               })
+│
+│               # Log access
+│               await self.repository.log_access(
+│                   token_id=token.id,
+│                   accessed_by=request.domain,  # Store requester
+│                   access_type="write",
+│                   success=True,
+│                   correlation_id=correlation_id
+│               )
+│
+│               self.logger.info(
+│                   f"Token stored for merchant {request.merchant_id}",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "merchant_id": request.merchant_id,
+│                       "platform": request.platform_name
+│                   }
+│               )
+│
+│               return token.id
+│
+│           async def get_tokens(
+│               self,
+│               merchant_id: str,
+│               platform: Optional[str],
+│               requesting_service: str,
+│               correlation_id: str,
+│               ip_address: Optional[str] = None
+│           ) -> List[TokenData]:
+│               """Retrieve and decrypt tokens for a merchant"""
+│
+│               # Validate platform if specified
+│               if platform and platform not in SUPPORTED_PLATFORMS:
+│                   raise ValidationError(
+│                       f"Invalid platform: {platform}",
+│                       field="platform",
+│                       value=platform
+│                   )
+│
+│               # Retrieve tokens
+│               if platform:
+│                   tokens = await self.repository.find_by_merchant_platform(
+│                       merchant_id, platform
+│                   )
+│               else:
+│                   tokens = await self.repository.find_by_merchant(merchant_id)
+│
+│               # Process each token
+│               result = []
+│               for token in tokens:
+│                   # Decrypt token data
+│                   try:
+│                       token_data = self.encryption.decrypt(token.encrypted_token)
+│                   except Exception as e:
+│                       # Log decryption failure but continue
+│                       await self.repository.log_access(
+│                           token_id=token.id,
+│                           accessed_by=requesting_service,
+│                           access_type="read",
+│                           success=False,
+│                           correlation_id=correlation_id,
+│                           ip_address=ip_address,
+│                           error_message=f"Decryption failed: {str(e)}"
+│                       )
+│                       continue
+│
+│                   # Update access tracking
+│                   await self.repository.update_access(token.id, requesting_service)
+│
+│                   # Log successful access
+│                   await self.repository.log_access(
+│                       token_id=token.id,
+│                       accessed_by=requesting_service,
+│                       access_type="read",
+│                       success=True,
+│                       correlation_id=correlation_id,
+│                       ip_address=ip_address
+│                   )
+│
+│                   # Check expiry
+│                   is_expired = token.expires_at and token.expires_at < datetime.utcnow()
+│
+│                   result.append(TokenData(
+│                       platform_name=token.platform_name,
+│                       platform_shop_id=token.platform_shop_id,
+│                       domain=token.domain,
+│                       token_data=token_data,
+│                       token_type=token.token_type,
+│                       expires_at=token.expires_at,
+│                       is_expired=is_expired,
+│                       scopes=token.scopes
+│                   ))
+│
+│               self.logger.info(
+│                   f"Retrieved {len(result)} tokens for merchant {merchant_id}",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "merchant_id": merchant_id,
+│                       "requesting_service": requesting_service,
+│                       "token_count": len(result)
+│                   }
+│               )
+│
+│               return result
+│
+│           async def delete_token(
+│               self,
+│               merchant_id: str,
+│               platform: str,
+│               correlation_id: str
+│           ) -> bool:
+│               """Delete a specific token"""
+│
+│               # Validate platform
+│               if platform not in SUPPORTED_PLATFORMS:
+│                   raise ValidationError(
+│                       f"Invalid platform: {platform}",
+│                       field="platform",
+│                       value=platform
+│                   )
+│
+│               # Delete token
+│               deleted = await self.repository.delete(merchant_id, platform)
+│
+│               if deleted:
+│                   # Log deletion
+│                   await self.repository.log_access(
+│                       token_id=deleted.id,
+│                       accessed_by=deleted.domain,
+│                       access_type="delete",
+│                       success=True,
+│                       correlation_id=correlation_id
+│                   )
+│
+│                   self.logger.info(
+│                       f"Token deleted for merchant {merchant_id} platform {platform}",
+│                       extra={
+│                           "correlation_id": correlation_id,
+│                           "merchant_id": merchant_id,
+│                           "platform": platform
+│                       }
+│                   )
+│                   return True
+│
+│               return False
+│       ```
+│
+├── utils/
+│   ├── __init__.py
+│   └── constants.py
+│
+│       ```py
+│       # services/token-service/src/utils/constants.py
+│
+│       SUPPORTED_PLATFORMS = {
+│           "shopify",
+│           "woocommerce",
+│           "bigcommerce",
+│           "magento",
+│           "squarespace",
+│           "custom"
+│       }
+│
+│       TOKEN_TYPES = {
+│           "oauth",
+│           "api_key",
+│           "basic_auth",
+│           "bearer"
+│       }
+│
+│       # Services allowed to retrieve tokens
+│       ALLOWED_READER_SERVICES = [
+│           "platform-connector",
+│           "webhook-service",
+│           "merchant-service",
+│           "catalog-service",
+│           "analytics-service"
+│       ]
+│       ```
+│
+├── __init__.py
+├── config.py
+│
+│   ```py
+│   # services/token-service/src/config.py
+│
+│   import os
+│   from functools import lru_cache
+│   from pydantic import BaseModel, Field, ConfigDict, model_validator
+│   from shared.utils import load_root_env, ConfigurationError
+│
+│   class ServiceConfig(BaseModel):
+│       """Token Service configuration"""
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           case_sensitive=False
+│       )
+│
+│       # Service identification
+│       service_name: str = "token-service"
+│       service_version: str = "1.0.0"
+│       service_description: str = "Secure token storage and retrieval service"
+│
+│       # Environment
+│       environment: str = Field(..., alias="APP_ENV")
+│       debug: bool = Field(default=False, alias="DEBUG")
+│
+│       # API configuration
+│       api_host: str = "0.0.0.0"
+│       api_external_port: int = Field(default=8007, alias="TOKEN_API_EXTERNAL_PORT")
+│
+│       # Database
+│       database_url: str = Field(..., alias="DATABASE_URL")
+│       database_enabled: bool = Field(default=True, alias="TOKEN_DB_ENABLED")
+│
+│       # Security
+│       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+│       internal_api_keys: str = Field(..., alias="INTERNAL_JWT_SECRET")
+│       encryption_key: str = Field(..., alias="TOKEN_ENCRYPTION_KEY")
+│       encryption_key_id: str = Field(default="key_v1", alias="TOKEN_ENCRYPTION_KEY_ID")
+│
+│       # Logging
+│       logging_level: str = Field(default="INFO", alias="LOGGING_LEVEL")
+│
+│       @property
+│       def api_port(self) -> int:
+│           """Port based on environment"""
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│
+│       @model_validator(mode="after")
+│       def validate_config(self):
+│           if not self.database_url:
+│               raise ValueError("DATABASE_URL is required")
+│           if not self.encryption_key:
+│               raise ValueError("TOKEN_ENCRYPTION_KEY is required")
+│           if len(self.encryption_key) < 32:
+│               raise ValueError("TOKEN_ENCRYPTION_KEY must be at least 32 characters")
+│           return self
+│
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load configuration once"""
+│       try:
+│           load_root_env()
+│           return ServiceConfig(**os.environ)
+│       except Exception as e:
+│           raise ConfigurationError(
+│               f"Failed to load config: {e}",
+│               config_key="token-service"
+│           )
+│   ```
+│
+├── dependencies.py
+│
+│   ```py
+│   # services/token-service/src/dependencies.py
+│
+│   from typing import Annotated
+│   from fastapi import Depends, Request, HTTPException
+│   from shared.api.dependencies import (
+│       RequestContextDep,
+│       ClientAuthDep,
+│       InternalAuthDep,
+│       LoggerDep,
+│       ClientIpDep
+│   )
+│   from .lifecycle import ServiceLifecycle
+│   from .services.token_service import TokenService
+│   from .config import ServiceConfig
+│
+│   # Re-export shared dependencies
+│   __all__ = [
+│       "RequestContextDep",
+│       "ClientAuthDep",
+│       "InternalAuthDep",
+│       "LoggerDep",
+│       "ClientIpDep",
+│       "LifecycleDep",
+│       "ConfigDep",
+│       "TokenServiceDep"
+│   ]
+│
+│   def get_lifecycle(request: Request) -> ServiceLifecycle:
+│       """Get service lifecycle from app state"""
+│       return request.app.state.lifecycle
+│
+│   def get_config(request: Request) -> ServiceConfig:
+│       """Get service config from app state"""
+│       return request.app.state.config
+│
+│   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+│   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+│
+│   def get_token_service(lifecycle: LifecycleDep) -> TokenService:
+│       """Get token service"""
+│       if not lifecycle.token_service:
+│           raise HTTPException(500, "Token service not initialized")
+│       return lifecycle.token_service
+│
+│   TokenServiceDep = Annotated[TokenService, Depends(get_token_service)]
+│   ```
+│
+├── exceptions.py
+│
+│   ```py
+│   # services/token-service/src/exceptions.py
+│
+│   from shared.utils.exceptions import DomainError
+│
+│   class TokenExpiredError(DomainError):
+│       """Token has expired"""
+│       code = "TOKEN_EXPIRED"
+│       status = 401
+│
+│   class EncryptionKeyMismatchError(DomainError):
+│       """Token encrypted with different key"""
+│       code = "ENCRYPTION_KEY_MISMATCH"
+│       status = 500
+│   ```
+│
+├── lifecycle.py
+│
+│   ```py
+│   # services/token-service/src/lifecycle.py
+│
+│   from typing import Optional
+│   from prisma import Prisma
+│   from shared.utils.logger import ServiceLogger
+│   from .config import ServiceConfig
+│   from .repositories.token_repository import TokenRepository
+│   from .services.token_service import TokenService
+│   from .services.encryption_service import EncryptionService
+│
+│   class ServiceLifecycle:
+│       """Manages all service components lifecycle"""
+│
+│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│           self.config = config
+│           self.logger = logger
+│
+│           # Connections
+│           self.prisma: Optional[Prisma] = None
+│           self._db_connected = False
+│
+│           # Components
+│           self.token_repo: Optional[TokenRepository] = None
+│           self.encryption_service: Optional[EncryptionService] = None
+│           self.token_service: Optional[TokenService] = None
+│
+│       async def startup(self) -> None:
+│           """Initialize all components"""
+│           try:
+│               self.logger.info("Starting Token Service components...")
+│
+│               # 1. Database
+│               await self._init_database()
+│
+│               # 2. Encryption
+│               self._init_encryption()
+│
+│               # 3. Repositories
+│               self._init_repositories()
+│
+│               # 4. Services
+│               self._init_services()
+│
+│               self.logger.info(f"{self.config.service_name} started successfully")
+│
+│           except Exception as e:
+│               self.logger.critical("Service startup failed", exc_info=True)
+│               await self.shutdown()
+│               raise
+│
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown"""
+│           self.logger.info(f"Shutting down {self.config.service_name}")
+│
+│           # Disconnect database
+│           if self.prisma and self._db_connected:
+│               try:
+│                   await self.prisma.disconnect()
+│               except Exception:
+│                   self.logger.exception("Prisma disconnect failed", exc_info=True)
+│
+│           self.logger.info(f"{self.config.service_name} shutdown complete")
+│
+│       async def _init_database(self) -> None:
+│           """Initialize Prisma client"""
+│           if not self.config.database_enabled:
+│               raise RuntimeError("Database is required for Token Service")
+│
+│           self.prisma = Prisma()
+│           try:
+│               await self.prisma.connect()
+│               self._db_connected = True
+│               self.logger.info("Prisma connected")
+│           except Exception as e:
+│               self.logger.exception(f"Prisma connect failed: {e}", exc_info=True)
+│               raise
+│
+│       def _init_encryption(self) -> None:
+│           """Initialize encryption service"""
+│           self.encryption_service = EncryptionService(
+│               encryption_key=self.config.encryption_key,
+│               key_id=self.config.encryption_key_id,
+│               logger=self.logger
+│           )
+│           self.logger.info("Encryption service initialized")
+│
+│       def _init_repositories(self) -> None:
+│           """Initialize repositories"""
+│           if not self._db_connected:
+│               raise RuntimeError("Database not connected")
+│
+│           self.token_repo = TokenRepository(self.prisma, self.logger)
+│           self.logger.info("Token repository initialized")
+│
+│       def _init_services(self) -> None:
+│           """Initialize business services"""
+│           if not self.token_repo or not self.encryption_service:
+│               raise RuntimeError("Dependencies not initialized")
+│
+│           self.token_service = TokenService(
+│               repository=self.token_repo,
+│               encryption=self.encryption_service,
+│               logger=self.logger
+│           )
+│           self.logger.info("Token service initialized")
+│   ```
+│
+└── main.py
+
+    ```py
+    # services/token-service/src/main.py
+
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+    from shared.api import setup_middleware, create_health_router
+    from shared.utils import create_logger
+    from .config import get_service_config
+    from .lifecycle import ServiceLifecycle
+
+    # Create singletons
+    config = get_service_config()
+    logger = create_logger(config.service_name)
+    lifecycle = ServiceLifecycle(config, logger)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan management"""
+        # Store in app state for dependencies
+        app.state.lifecycle = lifecycle
+        app.state.config = config
+        app.state.logger = logger  # Required for middleware
+
+        try:
+            await lifecycle.startup()
+            yield
+        finally:
+            await lifecycle.shutdown()
+
+    def create_application() -> FastAPI:
+        """Create FastAPI app"""
+        app = FastAPI(
+            title=config.service_name,
+            version=config.service_version,
+            description=config.service_description,
+            lifespan=lifespan
+        )
+
+        # Setup shared middleware (handles ALL errors)
+        setup_middleware(app, service_name=config.service_name)
+
+        # Add health check
+        app.include_router(create_health_router(config.service_name))
+
+        # Add API routes
+        from .api.v1 import tokens
+        app.include_router(tokens.router)
+
+        return app
+
+    app = create_application()
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(
+            "src.main:app",
+            host=config.api_host,
+            port=config.api_port,
+            reload=config.debug
+        )
+    ```
+
+tests/
+├── integration/
+│   ├── __init__.py
+│   └── test_api.py
+├── unit/
+│   ├── __init__.py
+│   └── test_service.py
+├── __init__.py
+└── conftest.py
+Dockerfile
+
+```
+# ──────────────────────────────────────────────────────────────
+# 🛠  Stage 1  ─ Builder
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+# Base toolchain
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        curl ca-certificates build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry==1.7.1
+ENV POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_NO_INTERACTION=1
+
+WORKDIR /app
+
+# ---- 1️⃣  Copy shared lib -----------------------------------------------------
+COPY shared /shared
+RUN pip install --no-cache-dir -e /shared
+
+# Make shared importable
+ENV PYTHONPATH="/shared:/app"
+
+# ---- 2️⃣  Service deps --------------------------------------------------------
+COPY services/notification-service/pyproject.toml \
+     services/notification-service/poetry.lock* /app/
+RUN poetry install --no-root --no-ansi \
+    && rm -rf ~/.cache/pypoetry ~/.cache/pip
+
+# ---- 3️⃣  Copy service source -------------------------------------------------
+COPY services/notification-service /app
+
+# ---- 4️⃣  Copy config -----------------------------------------------------
+
+COPY config /app/config
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Copy everything from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app       /app
+COPY --from=builder /shared    /shared
+
+ENV PYTHONPATH="/shared:/app"
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Run with optimal settings for notification service
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+```
+
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+[tool.poetry]
+name = "token-service"
+version = "0.1.0"
+description = "token-service microservice for GLAM platform"
+authors = ["GLAM Team"]
+readme = "README.md"
+package-mode = false
+
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109"
+uvicorn = {extras = ["standard"], version = "^0.35.0"}
+pydantic = "^2.11.7"
+prisma = "^0.15.0"
+cryptography = "^45.0.6"
+shared = {path = "../../shared", develop = true}
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+ruff = "^0.12.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

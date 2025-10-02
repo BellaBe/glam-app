@@ -1,0 +1,29 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WebhookEntry {
+  id                  String    @id @default(uuid()) @db.Uuid
+  platform            String    @db.VarChar(50)
+  webhook_id          String    @unique @db.VarChar(255)  // Idempotency key
+  topic               String    @db.VarChar(255)  // Original: "orders/create"
+  domain         String    @db.VarChar(255)
+  payload             Json      // The actual webhook payload
+  status              String    @default("RECEIVED") @db.VarChar(20)
+  processing_attempts Int       @default(0)
+  error_message       String?   @db.Text
+  processed_at        DateTime? @db.Timestamptz(3)
+  created_at          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updated_at          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([domain, topic])
+  @@index([status, processing_attempts])
+  @@map("webhook_entries")
+}

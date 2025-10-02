@@ -1,0 +1,20 @@
+Welcome to Glam You Up
+
+Hi {{ shop_name | default(domain) }},
+
+Thanks for installing Glam You Up on your {{ platform_name | default('Shopify') | title }} store.
+We help reduce returns and lift conversions with AI-driven fit & color recommendations.
+
+Getting started
+1) Sync your catalog to enable recommendations
+2) Configure settings (credits, alerts, display rules)
+3) Go live and track performance in your dashboard
+
+{% if app_url is defined -%}
+Open Dashboard: {{ app_url }}/dashboard
+{%- endif %}
+
+Questions? {{ support_email }}
+
+Best regards,
+The Glam You Up Team

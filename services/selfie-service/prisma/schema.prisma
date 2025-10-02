@@ -1,0 +1,76 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AnalysisStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Analysis {
+  id                String         @id @default(uuid()) @db.Uuid
+  merchant_id       String         @db.Uuid
+
+  // Platform info
+  platform_name     String         @db.VarChar(50)
+  platform_shop_id  String         @db.VarChar(255)
+  domain   String         @db.VarChar(255)
+
+  // Identity (one required)
+  customer_id       String?        @db.VarChar(255)
+  anonymous_id      String?        @db.VarChar(255)
+
+  // Image deduplication
+  image_hash        String         @db.VarChar(64)
+  image_width       Int
+  image_height      Int
+
+  // Processing status
+  status            AnalysisStatus @default(PROCESSING)
+  progress          Int            @default(0)
+
+  // Quality metrics
+  blur_score        Float?
+  exposure_score    Float?
+  face_area_ratio   Float?
+
+  // AI Analysis results
+  primary_season    String?        @db.VarChar(50)
+  secondary_season  String?        @db.VarChar(50)
+  confidence        Float?
+  attributes        Json?          @db.JsonB
+  model_version     String?        @db.VarChar(20)
+  processing_time   Int?           // milliseconds
+
+  // Error tracking
+  error_code        String?        @db.VarChar(50)
+  error_message     String?        @db.Text
+
+  // Metadata
+  source            String?        @db.VarChar(50)  // widget, api, admin
+  device_type       String?        @db.VarChar(50)  // mobile, desktop
+
+  // Timestamps
+  created_at        DateTime       @default(now()) @db.Timestamptz(3)
+  updated_at        DateTime       @updatedAt @db.Timestamptz(3)
+  completed_at      DateTime?      @db.Timestamptz(3)
+  claimed_at        DateTime?      @db.Timestamptz(3)
+
+  // Indexes for performance
+  @@unique([merchant_id, image_hash])
+  @@index([merchant_id, status])
+  @@index([merchant_id, customer_id])
+  @@index([merchant_id, anonymous_id])
+  @@index([created_at])
+  @@index([status, created_at])
+
+  @@map("analyses")
+}

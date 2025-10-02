@@ -1,0 +1,54 @@
+// services/notification-service/prisma/schema.prisma
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// Define enum in Prisma schema
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+model Notification {
+  id                  String    @id @default(uuid()) @db.Uuid
+
+  // Merchant identification
+  merchant_id         String    @db.Uuid
+  platform_name       String    @db.VarChar(255)
+  platform_shop_id    String    @db.VarChar(255)
+  domain              String    @db.VarChar(255)
+
+  // Essential notification data
+  recipient_email     String    @db.VarChar(255)
+  template_type       String    @db.VarChar(100)
+  template_variables  Json      @db.Json
+
+  // Delivery tracking
+  status              NotificationStatus @default(pending)
+  attempt_count       Int       @default(0)
+
+  // ✅ Attempt timestamps (first_attempt_at serves as "created_at")
+  first_attempt_at    DateTime? @db.Timestamptz(3)  // When record created & first try
+  last_attempt_at     DateTime? @db.Timestamptz(3)  // When we last tried
+  delivered_at        DateTime? @db.Timestamptz(3)  // When succeeded
+
+  // Provider info
+  provider_message_id String?   @db.VarChar(255)
+  provider_message    Json?     @db.Json
+
+  // Idempotency
+  idempotency_key     String    @unique @db.VarChar(255)
+
+  // Indexes
+  @@index([merchant_id, first_attempt_at])  // Changed from created_at
+  @@index([status, last_attempt_at])
+  @@index([provider_message_id])
+  @@map("notifications")
+}

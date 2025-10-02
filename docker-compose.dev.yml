@@ -1,0 +1,433 @@
+services:
+  # ----------------- Infrastructure Services -----------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: glam-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - glam-net-dev
+    logging:
+      driver: 'none'
+
+  nats:
+    image: nats:2.10.7-alpine
+    container_name: glam-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["nats-server", "-m", "8222", "-js", "--store_dir", "/data"]
+    volumes:
+      - nats-data:/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD", "nats-server", "-v"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  # ----------------- Billing Service -----------------
+  billing-db:
+    image: postgres:15-alpine
+    container_name: billing-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BILLING_DB_USER}
+      POSTGRES_PASSWORD: ${BILLING_DB_PASSWORD}
+      POSTGRES_DB: ${BILLING_DB_NAME}
+    ports:
+      - "${BILLING_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - billing-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  billing-service:
+    build:
+      context: .
+      dockerfile: services/billing-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: billing-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      billing-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${BILLING_DB_USER}:${BILLING_DB_PASSWORD}@billing-db:5432/${BILLING_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${BILLING_DB_ENABLED}
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    ports:
+      - "${BILLING_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Catalog AI Analyzer Service -----------------
+  catalog-ai-analyzer:
+    build:
+      context: .
+      dockerfile: services/catalog-ai-analyzer/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: catalog-ai-analyzer
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      NATS_URL: nats://nats:4222
+    ports:
+      - "${CATALOG_AI_ANALYZER_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Catalog Connector Service -----------------
+  catalog-connector:
+    build:
+      context: .
+      dockerfile: services/catalog-connector/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: catalog-connector
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      NATS_URL: nats://nats:4222
+    ports:
+      - "${CATALOG_CONNECTOR_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Catalog Service -----------------
+  catalog-db:
+    image: postgres:15-alpine
+    container_name: catalog-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${CATALOG_DB_USER}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD}
+      POSTGRES_DB: ${CATALOG_DB_NAME}
+    ports:
+      - "${CATALOG_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - catalog-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER}"]
+      interval: 10s
+      retries: 5
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: services/catalog-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: catalog-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      catalog-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CATALOG_DB_USER}:${CATALOG_DB_PASSWORD}@catalog-db:5432/${CATALOG_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${CATALOG_DB_ENABLED}
+    ports:
+      - "${CATALOG_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Credit Service -----------------
+  credit-db:
+    image: postgres:15-alpine
+    container_name: credit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${CREDIT_DB_USER}
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD}
+      POSTGRES_DB: ${CREDIT_DB_NAME}
+    ports:
+      - "${CREDIT_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - credit-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER}"]
+      interval: 10s
+      retries: 5
+
+  credit-service:
+    build:
+      context: .
+      dockerfile: services/credit-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: credit-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      credit-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${CREDIT_DB_USER}:${CREDIT_DB_PASSWORD}@credit-db:5432/${CREDIT_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${CREDIT_DB_ENABLED}
+    ports:
+      - "${CREDIT_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Merchant Service -----------------
+  merchant-db:
+    image: postgres:15-alpine
+    container_name: merchant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${MERCHANT_DB_USER}
+      POSTGRES_PASSWORD: ${MERCHANT_DB_PASSWORD}
+      POSTGRES_DB: ${MERCHANT_DB_NAME}
+    ports:
+      - "${MERCHANT_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - merchant-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MERCHANT_DB_USER}"]
+      interval: 10s
+      retries: 5
+
+  merchant-service:
+    build:
+      context: .
+      dockerfile: services/merchant-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: merchant-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      merchant-db:
+        condition: service_healthy
+    environment:
+      MERCHANT_DATABASE_URL: postgresql://${MERCHANT_DB_USER}:${MERCHANT_DB_PASSWORD}@merchant-db:5432/${MERCHANT_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      MERCHANT_DB_ENABLED: ${MERCHANT_DB_ENABLED}
+    ports:
+      - "${MERCHANT_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Notification Service -----------------
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+    ports:
+      - "${NOTIFICATION_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: notification-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${NOTIFICATION_DB_USER}:${NOTIFICATION_DB_PASSWORD}@notification-db:5432/${NOTIFICATION_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${NOTIFICATION_DB_ENABLED}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM_ADDRESS:-noreply@glamyouup.com}
+    ports:
+      - "${NOTIFICATION_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Season Compatibility Service -----------------
+  season-compatibility-db:
+    image: postgres:15-alpine
+    container_name: season-compatibility-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SEASON_COMPATIBILITY_DB_USER}
+      POSTGRES_PASSWORD: ${SEASON_COMPATIBILITY_DB_PASSWORD}
+      POSTGRES_DB: ${SEASON_COMPATIBILITY_DB_NAME}
+    ports:
+      - "${SEASON_COMPATIBILITY_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - season-compatibility-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SEASON_COMPATIBILITY_DB_USER}"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
+  season-compatibility-service:
+    build:
+      context: .
+      dockerfile: services/season-compatibility-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: season-compatibility-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      season-compatibility-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${SEASON_COMPATIBILITY_DB_USER}:${SEASON_COMPATIBILITY_DB_PASSWORD}@season-compatibility-db:5432/${SEASON_COMPATIBILITY_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${SEASON_COMPATIBILITY_DB_ENABLED}
+    ports:
+      - "${SEASON_COMPATIBILITY_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+  # ----------------- Token Service -----------------
+  token-db:
+    image: postgres:15-alpine
+    container_name: token-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TOKEN_DB_USER}
+      POSTGRES_PASSWORD: ${TOKEN_DB_PASSWORD}
+      POSTGRES_DB: ${TOKEN_DB_NAME}
+    ports:
+      - "${TOKEN_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - token-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TOKEN_DB_USER}"]
+      interval: 10s
+      retries: 5
+
+  token-service:
+    build:
+      context: .
+      dockerfile: services/token-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: token-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      token-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${TOKEN_DB_USER}:${TOKEN_DB_PASSWORD}@token-db:5432/${TOKEN_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      DB_ENABLED: ${TOKEN_DB_ENABLED}
+    ports:
+      - "${TOKEN_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+
+  # ----------------- Webhook Service -----------------
+  webhook-db:
+    image: postgres:15-alpine
+    container_name: webhook-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${WEBHOOK_DB_USER}
+      POSTGRES_PASSWORD: ${WEBHOOK_DB_PASSWORD}
+      POSTGRES_DB: ${WEBHOOK_DB_NAME}
+    ports:
+      - "${WEBHOOK_DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - webhook-db-data:/var/lib/postgresql/data
+    networks:
+      - glam-net-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WEBHOOK_DB_USER}"]
+      interval: 10s
+      retries: 5
+
+  webhook-service:
+    build:
+      context: .
+      dockerfile: services/webhook-service/Dockerfile
+      args:
+        CACHE_BUSTER: ${CACHE_BUSTER:-1}
+    container_name: webhook-service
+    depends_on:
+      nats:
+        condition: service_healthy
+      webhook-db:
+        condition: service_healthy
+    environment:
+      WEBHOOK_DATABASE_URL: postgresql://${WEBHOOK_DB_USER}:${WEBHOOK_DB_PASSWORD}@webhook-db:5432/${WEBHOOK_DB_NAME}
+      APP_ENV: ${APP_ENV:-development}
+      CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
+      WEBHOOK_DB_ENABLED: ${WEBHOOK_DB_ENABLED}
+    ports:
+      - "${WEBHOOK_API_EXTERNAL_PORT}:8000"
+    networks:
+      - glam-net-dev
+    restart: unless-stopped
+
+networks:
+  glam-net-dev:
+    driver: bridge
+
+volumes:
+  nats-data:
+  billing-db-data:
+  catalog-db-data:
+  credit-db-data:
+  merchant-db-data:
+  notification-db-data:
+  webhook-db-data:

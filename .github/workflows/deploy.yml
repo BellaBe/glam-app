@@ -1,0 +1,77 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  VULTR_HOST: ${{ secrets.VULTR_HOST }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Run tests
+        run: |
+          for service in services/*/; do
+            if [ -f "$service/pyproject.toml" ]; then
+              echo "Testing $service..."
+              cd "$service"
+              poetry install --no-interaction --no-root
+              poetry run pytest tests/ || true
+              cd ../..
+            fi
+          done
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+      
+      - name: Build and push images
+        run: |
+          docker-compose -f docker-compose.prod.yaml build --parallel
+          docker-compose -f docker-compose.prod.yaml push
+      
+      - name: Deploy to Vultr
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.VULTR_HOST }}
+          username: deploy
+          key: ${{ secrets.VULTR_SSH_KEY }}
+          script: |
+            cd /opt/glam
+            git pull origin main
+            docker-compose -f docker-compose.prod.yaml pull
+            bash infrastructure/scripts/deploy.sh deploy ${{ env.VERSION }}

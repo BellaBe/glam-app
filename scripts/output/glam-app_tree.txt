@@ -1,0 +1,874 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app
+================================================================================
+
+glam-app/
+.githooks/
+└── pre-commit
+.pre-commit-scripts/
+├── check-debug-code.sh
+├── check-imports.sh
+├── check_env_vars.py
+├── run_mypy.py
+└── validate-prisma.sh
+apps/
+└── shopify-app/
+    ├── .shopify/
+    │   ├── dev-bundle/
+    │   │   └── 8f5b2d85-f702-f0ed-04cd-1ff48e851e60acc53fbd/
+    │   │       ├── assets/
+    │   │       │   ├── common-color.png
+    │   │       │   ├── GYU-modified.png
+    │   │       │   ├── GYU.png
+    │   │       │   ├── jquery-3.7.1.min.js
+    │   │       │   ├── sample.png
+    │   │       │   ├── script.js
+    │   │       │   ├── search.png
+    │   │       │   ├── style.css
+    │   │       │   └── thumbs-up.png
+    │   │       ├── blocks/
+    │   │       │   ├── GYU-recommend.liquid
+    │   │       │   ├── GYU-register.liquid
+    │   │       │   └── GYU-sort.liquid
+    │   │       ├── locales/
+    │   │       │   └── en.default.json
+    │   │       └── snippets/
+    │   │           ├── icon-camera.liquid
+    │   │           ├── icon-folder.liquid
+    │   │           ├── icon-green-star-empty.liquid
+    │   │           ├── icon-green-star-full.liquid
+    │   │           ├── icon-star-empty.liquid
+    │   │           ├── icon-star-full.liquid
+    │   │           ├── icon-star-half.liquid
+    │   │           └── stars.liquid
+    │   ├── .gitignore
+    │   └── project.json
+    ├── app/
+    │   ├── assets/
+    │   │   └── help-hero.png
+    │   ├── components/
+    │   │   ├── BillingPlans.jsx
+    │   │   ├── CatalogSync.jsx
+    │   │   ├── CreditUsage.jsx
+    │   │   ├── DashboardStats.jsx
+    │   │   ├── LoadingState.jsx
+    │   │   └── SubscriptionStatus.jsx
+    │   ├── lib/
+    │   │   └── apiClient.js
+    │   ├── routes/
+    │   │   ├── _index/
+    │   │   │   ├── route.jsx
+    │   │   │   └── styles.module.css
+    │   │   ├── auth.login/
+    │   │   │   ├── error.server.jsx
+    │   │   │   └── route.jsx
+    │   │   ├── app._index.jsx
+    │   │   ├── app.analytics.jsx
+    │   │   ├── app.billing.jsx
+    │   │   ├── app.catalog.jsx
+    │   │   ├── app.help.jsx
+    │   │   ├── app.jsx
+    │   │   ├── auth.$.jsx
+    │   │   ├── match.analysis.jsx
+    │   │   ├── selfie.register.jsx
+    │   │   ├── selfie.remove.jsx
+    │   │   ├── sort.analysis.jsx
+    │   │   └── webhooks.relay.jsx
+    │   ├── db.server.js
+    │   ├── entry.server.jsx
+    │   ├── query.js
+    │   ├── root.jsx
+    │   ├── routes.js
+    │   └── shopify.server.js
+    ├── extensions/
+    │   ├── glam-you-up/
+    │   │   ├── assets/
+    │   │   │   ├── common-color.png
+    │   │   │   ├── GYU-modified.png
+    │   │   │   ├── GYU.png
+    │   │   │   ├── jquery-3.7.1.min.js
+    │   │   │   ├── sample.png
+    │   │   │   ├── script.js
+    │   │   │   ├── search.png
+    │   │   │   ├── style.css
+    │   │   │   └── thumbs-up.png
+    │   │   ├── blocks/
+    │   │   │   ├── GYU-recommend.liquid
+    │   │   │   ├── GYU-register.liquid
+    │   │   │   └── GYU-sort.liquid
+    │   │   ├── locales/
+    │   │   │   └── en.default.json
+    │   │   ├── snippets/
+    │   │   │   ├── icon-camera.liquid
+    │   │   │   ├── icon-folder.liquid
+    │   │   │   ├── icon-green-star-empty.liquid
+    │   │   │   ├── icon-green-star-full.liquid
+    │   │   │   ├── icon-star-empty.liquid
+    │   │   │   ├── icon-star-full.liquid
+    │   │   │   ├── icon-star-half.liquid
+    │   │   │   └── stars.liquid
+    │   │   └── shopify.extension.toml
+    │   └── .gitkeep
+    ├── prisma/
+    │   ├── migrations/
+    │   │   └── 20240530213853_create_session_table/
+    │   │       └── migration.sql
+    │   ├── dev.sqlite
+    │   └── schema.prisma
+    ├── public/
+    │   └── favicon.ico
+    ├── scripts/
+    │   ├── output/
+    │   │   └── app_tree_with_code.txt
+    │   └── code-flattener.js
+    ├── .editorconfig
+    ├── .eslintignore
+    ├── .eslintrc.cjs
+    ├── .gitignore
+    ├── .graphqlrc.js
+    ├── .npmrc
+    ├── .prettierignore
+    ├── .prettierrc
+    ├── Dockerfile
+    ├── package-lock.json
+    ├── package.json
+    ├── README.md
+    ├── remix.config.js
+    ├── shopify.app.staging-gyu-app.toml
+    ├── shopify.app.toml
+    ├── shopify.web.toml
+    ├── tsconfig.json
+    └── vite.config.js
+makefiles/
+├── common.mk
+├── database.mk
+├── dev.mk
+├── local.mk
+├── precommit.mk
+├── prod.mk
+└── services.mk
+scripts/
+├── output/
+│   ├── app_tree_with_code.txt
+│   ├── billing-service_tree_with_code.txt
+│   ├── catalog-ai-analyzer_tree_with_code.txt
+│   ├── catalog-connector_tree_with_code.txt
+│   ├── catalog-service_tree_with_code.txt
+│   ├── credit-service_tree_with_code.txt
+│   ├── glam-app_tree.txt
+│   ├── makefiles_tree_with_code.txt
+│   ├── merchant-service_tree_with_code.txt
+│   ├── notification-service_tree_with_code.txt
+│   ├── season-compatibility-service_tree_with_code.txt
+│   ├── shared_tree_with_code.txt
+│   ├── token-service_tree_with_code.txt
+│   └── webhook-service_tree_with_code.txt
+├── tmp/
+│   ├── .gitkeep
+│   ├── billing_artifact.txt
+│   ├── catalog_artifact.txt
+│   ├── credit_artifact.txt
+│   ├── merchant_artifact.txt
+│   └── webhook_artifact.txt
+├── clean_up_stream.py
+├── code_flattener.py
+├── distribute-artifact.sh
+├── get-db-url.sh
+├── helth-check.sh
+├── scaffold-service.sh
+├── test_nats_connection.py
+└── wait-for-db.sh
+services/
+├── analytics-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── credits.py
+│   │   │   │   ├── products.py
+│   │   │   │   ├── seasons.py
+│   │   │   │   ├── shoppers.py
+│   │   │   │   └── summary.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   └── listeners.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── jobs/
+│   │   │   └── aggregation_jobs,py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_repository.py
+│   │   │   ├── analytics_repository.py
+│   │   │   └── metrics_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── responses.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_service.py
+│   │   │   └── analytics_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── billing-service/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   │   ├── 20250819044228_code/
+│   │   │   │   └── migration.sql
+│   │   │   └── migration_lock.toml
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── billing.py
+│   │   │   │   ├── purchases.py
+│   │   │   │   └── trials.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_repository.py
+│   │   │   └── purchase_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── billing.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_service.py
+│   │   │   └── purchase_service.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── credit_packs.py
+│   │   │   └── shopify_client.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-ai-analyzer/
+│   ├── src/
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── base_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog_ai_service.py
+│   │   │   ├── mediapipe_analyzer.py
+│   │   │   └── openai_analyzer.py
+│   │   ├── utils/
+│   │   │   └── image_downloader.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-connector/
+│   ├── logs/
+│   ├── src/
+│   │   ├── adapters/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── shopify.py
+│   │   │   └── woocommerce.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── platform.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── connector_service.py
+│   │   │   └── token_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-service/
+│   ├── .ruff_cache/
+│   │   ├── 0.1.9/
+│   │   │   └── 10057073865506685867
+│   │   ├── .gitignore
+│   │   └── CACHEDIR.TAG
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── sync.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog_repository.py
+│   │   │   └── sync_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog.py
+│   │   │   ├── events.py
+│   │   │   └── sync.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── catalog_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── credit-service/
+│   ├── .ruff_cache/
+│   │   ├── 0.1.9/
+│   │   │   ├── 10538977516910357227
+│   │   │   ├── 10639304823462590335
+│   │   │   ├── 301340098857820437
+│   │   │   ├── 6219543602255698162
+│   │   │   ├── 7892117512583068703
+│   │   │   └── 923419679920791648
+│   │   ├── .gitignore
+│   │   └── CACHEDIR.TAG
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   │   ├── 20250816151707_desktop_pgt_1_cqb/
+│   │   │   │   └── migration.sql
+│   │   │   └── migration_lock.toml
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       └── credits.py
+│   │   ├── events/
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   └── credit_repository.py
+│   │   ├── schemas/
+│   │   │   ├── credit.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   └── credit_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── merchant-service/
+│   ├── .ruff_cache/
+│   │   ├── 0.1.9/
+│   │   │   └── 608319233369684344
+│   │   ├── .gitignore
+│   │   └── CACHEDIR.TAG
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   │   ├── 20250814041744_desktop_pgt_1_cqb/
+│   │   │   │   └── migration.sql
+│   │   │   └── migration_lock.toml
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── merchants.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── notification-service/
+│   ├── .ruff_cache/
+│   │   ├── 0.1.9/
+│   │   │   ├── 12925870412564400397
+│   │   │   └── 16880118436713266958
+│   │   ├── .gitignore
+│   │   └── CACHEDIR.TAG
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   │   ├── 20250818083358_desktop_pgt_1_cqb/
+│   │   │   │   └── migration.sql
+│   │   │   └── migration_lock.toml
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── notifications.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── providers/
+│   │   │   ├── base.py
+│   │   │   ├── mailhog_provider.py
+│   │   │   └── sendgrid_provider.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── notification_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── notification.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── email_service.py
+│   │   │   ├── notification_service.py
+│   │   │   └── template_service.py
+│   │   ├── templates/
+│   │   │   ├── welcome/
+│   │   │   │   ├── body.html
+│   │   │   │   ├── body.text.j2
+│   │   │   │   └── subject.txt
+│   │   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .python-version
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── recommendation-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── recommendations.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   ├── __init__.py
+│   │   │   └── season_compatibility_client.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── match_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── recommendation.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── recommendation_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_recommendation_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── season-compatibility-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── compatibility.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── compatibility_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── compatibility.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── compatibility_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── season_palettes.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-ai-analyzer/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyze.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── base_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis_service.py
+│   │   │   ├── color_extractor.py
+│   │   │   ├── face_analyzer.py
+│   │   │   └── season_calculator.py
+│   │   ├── utils/
+│   │   │   └── temp_manager.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyses.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── analysis_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── image_processor.py
+│   │   │   └── selfie_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── tasks.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── token-service/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── tokens.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── token_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── token.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── encryption_service.py
+│   │   │   └── token_service.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   └── constants.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── Dockerfile
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+└── webhook-service/
+    ├── logs/
+    ├── prisma/
+    │   ├── migrations/
+    │   │   ├── 20250814041638_desktop_pgt_1_cqb/
+    │   │   │   └── migration.sql
+    │   │   └── migration_lock.toml
+    │   └── schema.prisma
+    ├── scripts/
+    │   ├── __init__.py
+    │   ├── test_webhook.py
+    │   └── validate_event_context.py
+    ├── src/
+    │   ├── api/
+    │   │   ├── v1/
+    │   │   │   ├── __init__.py
+    │   │   │   └── webhooks.py
+    │   │   └── __init__.py
+    │   ├── events/
+    │   │   ├── __init__.py
+    │   │   └── publishers.py
+    │   ├── models/
+    │   │   ├── __init__.py
+    │   │   └── enums.py
+    │   ├── repositories/
+    │   │   ├── __init__.py
+    │   │   └── webhook_repository.py
+    │   ├── schemas/
+    │   │   ├── __init__.py
+    │   │   └── webhooks.py
+    │   ├── services/
+    │   │   ├── __init__.py
+    │   │   └── webhook_service.py
+    │   ├── __init__.py
+    │   ├── config.py
+    │   ├── dependencies.py
+    │   ├── exceptions.py
+    │   ├── lifecycle.py
+    │   └── main.py
+    ├── tests/
+    │   └── __init__.py
+    ├── .python-version
+    ├── Dockerfile
+    ├── poetry.lock
+    ├── poetry.toml
+    ├── pyproject.toml
+    └── README.md
+shared/
+├── .ruff_cache/
+│   ├── 0.1.9/
+│   │   └── 17774126697928094529
+│   ├── .gitignore
+│   └── CACHEDIR.TAG
+├── shared/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── correlation.py
+│   │   ├── debug.py
+│   │   ├── dependencies.py
+│   │   ├── health.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   ├── responses.py
+│   │   └── validation.py
+│   ├── messaging/
+│   │   ├── __init__.py
+│   │   ├── jetstream_client.py
+│   │   ├── listener.py
+│   │   ├── publisher.py
+│   │   └── subjects.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config_loader.py
+│   │   ├── exceptions.py
+│   │   ├── idempotency_key.py
+│   │   └── logger.py
+│   └── __init__.py
+├── tests/
+│   └── __init__.py
+├── .python-version
+├── poetry.lock
+├── pyproject.toml
+└── README.md
+.env.example
+.gitignore
+.pre-commit-config.yaml
+docker-compose.dev.yml
+docker-compose.local.yml
+docker-compose.prod.yml
+Makefile
+pyproject.toml
+README.md
+test.http
+
+================================================================================
+Output shows tree structure only (use --code to include file contents)
+================================================================================

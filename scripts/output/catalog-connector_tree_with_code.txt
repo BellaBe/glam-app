@@ -1,0 +1,1607 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/catalog-connector
+================================================================================
+
+catalog-connector/
+logs/
+src/
+├── adapters/
+│   ├── __init__.py
+│   ├── base.py
+│   │
+│   │   ```py
+│   │   # services/platform-connector/src/adapters/base.py
+│   │   from abc import ABC, abstractmethod
+│   │   from typing import AsyncIterator, Dict, Any, Optional
+│   │   from shared.utils.logger import ServiceLogger
+│   │
+│   │   class PlatformAdapter(ABC):
+│   │       """Base class for platform adapters"""
+│   │
+│   │       def __init__(self, logger: ServiceLogger, config: dict):
+│   │           self.logger = logger
+│   │           self.config = config
+│   │
+│   │       @abstractmethod
+│   │       async def authenticate(self, credentials: Dict[str, Any]) -> Any:
+│   │           """Authenticate with the platform"""
+│   │           pass
+│   │
+│   │       @abstractmethod
+│   │       async def fetch_products(
+│   │           self,
+│   │           merchant_id: str,
+│   │           platform_shop_id: str,
+│   │           domain: str,
+│   │           sync_id: str,
+│   │           correlation_id: str
+│   │       ) -> AsyncIterator[Dict[str, Any]]:
+│   │           """
+│   │           Fetch products from platform.
+│   │           Yields batches of products.
+│   │           """
+│   │           pass
+│   │
+│   │       @abstractmethod
+│   │       def transform_product(self, raw_product: Dict[str, Any]) -> Dict[str, Any]:
+│   │           """Transform platform product to internal format"""
+│   │           pass
+│   │
+│   │       def extract_id(self, gid: str) -> str:
+│   │           """Extract numeric ID from platform GID"""
+│   │           # e.g., "gid://shopify/Product/123456" -> "123456"
+│   │           if "/" in gid:
+│   │               return gid.split("/")[-1]
+│   │           return gid
+│   │   ```
+│   │
+│   ├── shopify.py
+│   │
+│   │   ```py
+│   │   # services/platform-connector/src/adapters/shopify.py (updated)
+│   │   import asyncio
+│   │   import aiohttp
+│   │   from typing import AsyncIterator, Dict, Any, Optional
+│   │   from datetime import datetime
+│   │
+│   │   from shared.utils.exceptions import (
+│   │       InfrastructureError,
+│   │       UnauthorizedError,
+│   │       RequestTimeoutError
+│   │   )
+│   │
+│   │   from .base import PlatformAdapter
+│   │   from ..services.token_service import TokenServiceClient
+│   │
+│   │   class ShopifyAdapter(PlatformAdapter):
+│   │       """Shopify platform adapter using GraphQL API with Token Service"""
+│   │
+│   │       def __init__(self, logger, config, token_client: TokenServiceClient):
+│   │           super().__init__(logger, config)
+│   │           self.token_client = token_client
+│   │
+│   │       PRODUCTS_QUERY = """
+│   │       query getProducts($cursor: String) {
+│   │           products(first: 250, after: $cursor) {
+│   │               edges {
+│   │                   node {
+│   │                       id
+│   │                       title
+│   │                       createdAt
+│   │                       updatedAt
+│   │                       variants(first: 100) {
+│   │                           edges {
+│   │                               node {
+│   │                                   id
+│   │                                   title
+│   │                                   sku
+│   │                                   price
+│   │                                   inventoryQuantity
+│   │                                   image {
+│   │                                       url
+│   │                                   }
+│   │                               }
+│   │                           }
+│   │                       }
+│   │                       featuredImage {
+│   │                           url
+│   │                       }
+│   │                   }
+│   │                   cursor
+│   │               }
+│   │               pageInfo {
+│   │                   hasNextPage
+│   │               }
+│   │           }
+│   │       }
+│   │       """
+│   │
+│   │       async def authenticate(self, credentials: Dict[str, Any]) -> str:
+│   │           """Get access token from Token Service"""
+│   │           domain = credentials.get("domain")
+│   │           correlation_id = credentials.get("correlation_id", "unknown")
+│   │
+│   │           if not domain:
+│   │               raise ValueError("domain required for Shopify authentication")
+│   │
+│   │           try:
+│   │               # Get token from Token Service
+│   │               token = await self.token_client.get_shopify_token(
+│   │                   domain=domain,
+│   │                   correlation_id=correlation_id
+│   │               )
+│   │
+│   │               return token
+│   │
+│   │           except NotFoundError:
+│   │               # Token not found in Token Service
+│   │               raise UnauthorizedError(
+│   │                   f"No Shopify access token found for shop: {domain}",
+│   │                   auth_type="shopify_oauth",
+│   │                   details={"domain": domain}
+│   │               )
+│   │           except InfrastructureError as e:
+│   │               # Token Service unavailable
+│   │               self.logger.exception(
+│   │                   f"Token Service error: {e}",
+│   │                   extra={"domain": domain}
+│   │               )
+│   │               raise
+│   │
+│   │       async def fetch_products(
+│   │           self,
+│   │           merchant_id: str,
+│   │           platform_shop_id: str,
+│   │           domain: str,
+│   │           sync_id: str,
+│   │           correlation_id: str
+│   │       ) -> AsyncIterator[Dict[str, Any]]:
+│   │           """Fetch products from Shopify in batches"""
+│   │
+│   │           # Get access token from Token Service
+│   │           token = await self.authenticate({
+│   │               "domain": domain,
+│   │               "correlation_id": correlation_id
+│   │           })
+│   │
+│   │           if not token:
+│   │               raise UnauthorizedError(
+│   │                   f"Failed to get Shopify token for {domain}",
+│   │                   auth_type="shopify_oauth"
+│   │               )
+│   │
+│   │           self.logger.info(
+│   │               f"Starting Shopify product fetch for {domain}",
+│   │               extra={
+│   │                   "correlation_id": correlation_id,
+│   │                   "sync_id": sync_id,
+│   │                   "merchant_id": merchant_id
+│   │               }
+│   │           )
+│   │
+│   │           batch_num = 0
+│   │           cursor = None
+│   │           total_products = 0
+│   │
+│   │           async with aiohttp.ClientSession() as session:
+│   │               while True:
+│   │                   batch_num += 1
+│   │
+│   │                   try:
+│   │                       # Execute GraphQL query
+│   │                       response_data = await self._execute_graphql(
+│   │                           session,
+│   │                           domain,
+│   │                           token,
+│   │                           self.PRODUCTS_QUERY,
+│   │                           {"cursor": cursor}
+│   │                       )
+│   │
+│   │                       # Transform products
+│   │                       products_batch = []
+│   │                       for edge in response_data["data"]["products"]["edges"]:
+│   │                           product = edge["node"]
+│   │
+│   │                           # Process each variant
+│   │                           for variant_edge in product.get("variants", {}).get("edges", []):
+│   │                               variant = variant_edge["node"]
+│   │
+│   │                               transformed = self.transform_product({
+│   │                                   "product": product,
+│   │                                   "variant": variant,
+│   │                                   "domain": domain,
+│   │                                   "platform_shop_id": platform_shop_id
+│   │                               })
+│   │
+│   │                               products_batch.append(transformed)
+│   │
+│   │                       total_products += len(products_batch)
+│   │
+│   │                       # Check if there are more pages
+│   │                       has_more = response_data["data"]["products"]["pageInfo"]["hasNextPage"]
+│   │
+│   │                       # Yield this batch
+│   │                       yield {
+│   │                           "merchant_id": merchant_id,
+│   │                           "sync_id": sync_id,
+│   │                           "platform_name": "shopify",
+│   │                           "platform_shop_id": platform_shop_id,
+│   │                           "domain": domain,
+│   │                           "products": products_batch,
+│   │                           "batch_num": batch_num,
+│   │                           "has_more": has_more
+│   │                       }
+│   │
+│   │                       if not has_more:
+│   │                           break
+│   │
+│   │                       # Get cursor for next page
+│   │                       edges = response_data["data"]["products"]["edges"]
+│   │                       if edges:
+│   │                           cursor = edges[-1]["cursor"]
+│   │
+│   │                       # Rate limit protection
+│   │                       await asyncio.sleep(self.config.get("shopify_rate_limit_delay", 0.5))
+│   │
+│   │                   except UnauthorizedError:
+│   │                       # Token might be expired or revoked
+│   │                       self.logger.exception(
+│   │                           f"Shopify authentication failed for {domain}",
+│   │                           extra={
+│   │                               "correlation_id": correlation_id,
+│   │                               "sync_id": sync_id
+│   │                           }
+│   │                       )
+│   │                       raise
+│   │
+│   │                   except aiohttp.ClientError as e:
+│   │                       raise InfrastructureError(
+│   │                           f"Failed to fetch products from Shopify: {e}",
+│   │                           service="shopify_api",
+│   │                           retryable=True
+│   │                       )
+│   │
+│   │                   except asyncio.TimeoutError:
+│   │                       raise RequestTimeoutError(
+│   │                           "Shopify API request timed out",
+│   │                           timeout_seconds=30,
+│   │                           operation="fetch_products"
+│   │                       )
+│   │
+│   │           self.logger.info(
+│   │               f"Completed Shopify product fetch",
+│   │               extra={
+│   │                   "correlation_id": correlation_id,
+│   │                   "sync_id": sync_id,
+│   │                   "total_products": total_products,
+│   │                   "batches": batch_num
+│   │               }
+│   │           )
+│   │
+│   │       async def _execute_graphql(
+│   │           self,
+│   │           session: aiohttp.ClientSession,
+│   │           domain: str,
+│   │           token: str,
+│   │           query: str,
+│   │           variables: Dict[str, Any]
+│   │       ) -> Dict[str, Any]:
+│   │           """Execute GraphQL query against Shopify Admin API"""
+│   │
+│   │           url = f"https://{domain}/admin/api/2024-01/graphql.json"
+│   │           headers = {
+│   │               "X-Shopify-Access-Token": token,
+│   │               "Content-Type": "application/json"
+│   │           }
+│   │
+│   │           payload = {
+│   │               "query": query,
+│   │               "variables": variables
+│   │           }
+│   │
+│   │           async with session.post(
+│   │               url,
+│   │               json=payload,
+│   │               headers=headers,
+│   │               timeout=aiohttp.ClientTimeout(total=30)
+│   │           ) as response:
+│   │               if response.status == 401:
+│   │                   raise UnauthorizedError(
+│   │                       "Invalid Shopify access token",
+│   │                       auth_type="shopify_oauth"
+│   │                   )
+│   │
+│   │               if response.status == 429:
+│   │                   # Rate limited
+│   │                   retry_after = response.headers.get("Retry-After", "5")
+│   │                   raise InfrastructureError(
+│   │                       f"Shopify rate limit exceeded",
+│   │                       service="shopify_api",
+│   │                       retryable=True,
+│   │                       details={"retry_after": retry_after}
+│   │                   )
+│   │
+│   │               response.raise_for_status()
+│   │               return await response.json()
+│   │
+│   │       def transform_product(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+│   │           """Transform Shopify product to internal format"""
+│   │           product = raw_data["product"]
+│   │           variant = raw_data["variant"]
+│   │
+│   │           # Get image URL (variant image or product featured image)
+│   │           image_url = None
+│   │           if variant.get("image", {}).get("url"):
+│   │               image_url = variant["image"]["url"]
+│   │           elif product.get("featuredImage", {}).get("url"):
+│   │               image_url = product["featuredImage"]["url"]
+│   │
+│   │           return {
+│   │               "platform_name": "shopify",
+│   │               "platform_shop_id": raw_data["platform_shop_id"],
+│   │               "domain": raw_data["domain"],
+│   │               "product_id": self.extract_id(product["id"]),
+│   │               "variant_id": self.extract_id(variant["id"]),
+│   │               "product_title": product["title"],
+│   │               "variant_title": variant.get("title") or product["title"],
+│   │               "sku": variant.get("sku"),
+│   │               "price": float(variant.get("price", 0)),
+│   │               "currency": "USD",  # Shopify default
+│   │               "inventory": variant.get("inventoryQuantity", 0),
+│   │               "image_url": image_url,
+│   │               "created_at": product.get("createdAt"),
+│   │               "updated_at": product.get("updatedAt")
+│   │           }
+│   │   ```
+│   │
+│   └── woocommerce.py
+│
+│       ```py
+│       # services/platform-connector/src/adapters/woocommerce.py (updated)
+│       import asyncio
+│       import aiohttp
+│       from typing import AsyncIterator, Dict, Any
+│       from base64 import b64encode
+│
+│       from shared.utils.exceptions import InfrastructureError, UnauthorizedError, NotFoundError
+│
+│       from .base import PlatformAdapter
+│       from ..services.token_service import TokenServiceClient
+│
+│       class WooCommerceAdapter(PlatformAdapter):
+│           """WooCommerce platform adapter with Token Service integration"""
+│
+│           def __init__(self, logger, config, token_client: TokenServiceClient):
+│               super().__init__(logger, config)
+│               self.token_client = token_client
+│
+│           async def authenticate(self, credentials: Dict[str, Any]) -> Dict[str, str]:
+│               """Get authentication headers from Token Service"""
+│               domain = credentials.get("domain")
+│               correlation_id = credentials.get("correlation_id", "unknown")
+│
+│               if not domain:
+│                   raise ValueError("domain required for WooCommerce authentication")
+│
+│               try:
+│                   # Get credentials from Token Service
+│                   creds = await self.token_client.get_woocommerce_credentials(
+│                       domain=domain,
+│                       correlation_id=correlation_id
+│                   )
+│
+│                   # Create Basic auth header
+│                   auth_string = f"{creds['consumer_key']}:{creds['consumer_secret']}"
+│                   encoded = b64encode(auth_string.encode()).decode()
+│
+│                   return {
+│                       "Authorization": f"Basic {encoded}"
+│                   }
+│
+│               except NotFoundError:
+│                   raise UnauthorizedError(
+│                       f"No WooCommerce credentials found for: {domain}",
+│                       auth_type="woocommerce_api",
+│                       details={"domain": domain}
+│                   )
+│               except InfrastructureError as e:
+│                   self.logger.exception(
+│                       f"Token Service error: {e}",
+│                       extra={"domain": domain}
+│                   )
+│                   raise
+│
+│           async def fetch_products(
+│               self,
+│               merchant_id: str,
+│               platform_shop_id: str,
+│               domain: str,
+│               sync_id: str,
+│               correlation_id: str
+│           ) -> AsyncIterator[Dict[str, Any]]:
+│               """Fetch products from WooCommerce in batches"""
+│
+│               # Get auth headers from Token Service
+│               headers = await self.authenticate({
+│                   "domain": domain,
+│                   "correlation_id": correlation_id
+│               })
+│
+│               self.logger.info(
+│                   f"Starting WooCommerce product fetch for {domain}",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "sync_id": sync_id,
+│                       "merchant_id": merchant_id
+│                   }
+│               )
+│
+│               batch_num = 0
+│               page = 1
+│               total_products = 0
+│               per_page = self.config.get("woocommerce_batch_size", 100)
+│
+│               async with aiohttp.ClientSession() as session:
+│                   while True:
+│                       batch_num += 1
+│
+│                       # Fetch products page
+│                       url = f"https://{domain}/wp-json/wc/v3/products"
+│                       params = {
+│                           "page": page,
+│                           "per_page": per_page,
+│                           "status": "publish"
+│                       }
+│
+│                       try:
+│                           async with session.get(
+│                               url,
+│                               params=params,
+│                               headers=headers,
+│                               timeout=aiohttp.ClientTimeout(total=30)
+│                           ) as response:
+│                               if response.status == 401:
+│                                   raise UnauthorizedError(
+│                                       f"Invalid WooCommerce credentials for {domain}",
+│                                       auth_type="woocommerce_api"
+│                                   )
+│
+│                               response.raise_for_status()
+│                               products = await response.json()
+│
+│                               # Transform products
+│                               products_batch = []
+│                               for product in products:
+│                                   # Handle variations
+│                                   if product.get("variations"):
+│                                       for var_id in product["variations"]:
+│                                           variation = await self._fetch_variation(
+│                                               session, domain, product["id"], var_id, headers
+│                                           )
+│                                           transformed = self.transform_product({
+│                                               "product": product,
+│                                               "variation": variation,
+│                                               "domain": domain,
+│                                               "platform_shop_id": platform_shop_id
+│                                           })
+│                                           products_batch.append(transformed)
+│                                   else:
+│                                       # Simple product
+│                                       transformed = self.transform_product({
+│                                           "product": product,
+│                                           "variation": None,
+│                                           "domain": domain,
+│                                           "platform_shop_id": platform_shop_id
+│                                       })
+│                                       products_batch.append(transformed)
+│
+│                               total_products += len(products_batch)
+│
+│                               # Check if more pages
+│                               total_pages = int(response.headers.get("X-WP-TotalPages", 1))
+│                               has_more = page < total_pages
+│
+│                               # Yield batch
+│                               yield {
+│                                   "merchant_id": merchant_id,
+│                                   "sync_id": sync_id,
+│                                   "platform_name": "woocommerce",
+│                                   "platform_shop_id": platform_shop_id,
+│                                   "domain": domain,
+│                                   "products": products_batch,
+│                                   "batch_num": batch_num,
+│                                   "has_more": has_more
+│                               }
+│
+│                               if not has_more:
+│                                   break
+│
+│                               page += 1
+│
+│                               # Rate limit protection
+│                               await asyncio.sleep(0.2)
+│
+│                       except aiohttp.ClientError as e:
+│                           raise InfrastructureError(
+│                               f"Failed to fetch products from WooCommerce: {e}",
+│                               service="woocommerce_api",
+│                               retryable=True
+│                           )
+│
+│               self.logger.info(
+│                   f"Completed WooCommerce product fetch",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "sync_id": sync_id,
+│                       "total_products": total_products,
+│                       "batches": batch_num
+│                   }
+│               )
+│
+│           async def _fetch_variation(
+│               self,
+│               session: aiohttp.ClientSession,
+│               domain: str,
+│               product_id: int,
+│               variation_id: int,
+│               headers: Dict[str, str]
+│           ) -> Dict[str, Any]:
+│               """Fetch single variation details"""
+│               url = f"https://{domain}/wp-json/wc/v3/products/{product_id}/variations/{variation_id}"
+│
+│               async with session.get(url, headers=headers) as response:
+│                   response.raise_for_status()
+│                   return await response.json()
+│
+│           def transform_product(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+│               """Transform WooCommerce product to internal format"""
+│               product = raw_data["product"]
+│               variation = raw_data.get("variation")
+│
+│               if variation:
+│                   # Use variation data
+│                   variant_id = str(variation["id"])
+│                   variant_title = variation.get("name") or product["name"]
+│                   sku = variation.get("sku") or product.get("sku")
+│                   price = float(variation.get("price", 0))
+│                   stock = variation.get("stock_quantity", 0)
+│                   image_url = variation["image"]["src"] if variation.get("image") else None
+│               else:
+│                   # Simple product
+│                   variant_id = f"{product['id']}_default"
+│                   variant_title = product["name"]
+│                   sku = product.get("sku")
+│                   price = float(product.get("price", 0))
+│                   stock = product.get("stock_quantity", 0)
+│                   image_url = product["images"][0]["src"] if product.get("images") else None
+│
+│               return {
+│                   "platform_name": "woocommerce",
+│                   "platform_shop_id": raw_data["platform_shop_id"],
+│                   "domain": raw_data["domain"],
+│                   "product_id": str(product["id"]),
+│                   "variant_id": variant_id,
+│                   "product_title": product["name"],
+│                   "variant_title": variant_title,
+│                   "sku": sku,
+│                   "price": price,
+│                   "currency": "USD",
+│                   "inventory": stock,
+│                   "image_url": image_url,
+│                   "created_at": product.get("date_created"),
+│                   "updated_at": product.get("date_modified")
+│               }
+│       ```
+│
+├── events/
+│   ├── __init__.py
+│   │
+│   │   ```py
+│   │
+│   │   ```
+│   │
+│   ├── listeners.py
+│   │
+│   │   ```py
+│   │   # services/platform-connector/src/events/listeners.py
+│   │   from typing import Dict, Any
+│   │   from shared.messaging import Listener
+│   │   from shared.utils.exceptions import ValidationError
+│   │   from shared.api.correlation import set_correlation_context
+│   │
+│   │   from ..schemas.events import CatalogSyncRequestedPayload
+│   │
+│   │   class CatalogSyncRequestedListener(Listener):
+│   │       """Listen for catalog sync requests"""
+│   │
+│   │       @property
+│   │       def subject(self) -> str:
+│   │           return "evt.catalog.sync.requested"
+│   │
+│   │       @property
+│   │       def queue_group(self) -> str:
+│   │           return "platform-connector-sync-handler"
+│   │
+│   │       @property
+│   │       def service_name(self) -> str:
+│   │           return "platform-connector"
+│   │
+│   │       def __init__(self, js_client, connector_service, logger):
+│   │           super().__init__(js_client, logger)
+│   │           self.connector_service = connector_service
+│   │
+│   │       async def on_message(self, data: Dict[str, Any]) -> None:
+│   │           """Process catalog sync request"""
+│   │           try:
+│   │               # Validate payload
+│   │               payload = CatalogSyncRequestedPayload(**data)
+│   │
+│   │               # Set correlation context from event
+│   │               if correlation_id := data.get("correlation_id"):
+│   │                   set_correlation_context(correlation_id)
+│   │
+│   │               self.logger.info(
+│   │                   f"Received sync request for {payload.platform_name}",
+│   │                   extra={
+│   │                       "correlation_id": correlation_id,
+│   │                       "sync_id": payload.sync_id,
+│   │                       "merchant_id": payload.merchant_id
+│   │                   }
+│   │               )
+│   │
+│   │               # Process sync request
+│   │               await self.connector_service.process_sync_request(
+│   │                   merchant_id=payload.merchant_id,
+│   │                   platform_name=payload.platform_name,
+│   │                   platform_shop_id=payload.platform_shop_id,
+│   │                   domain=payload.domain,
+│   │                   sync_id=payload.sync_id,
+│   │                   correlation_id=correlation_id or "unknown"
+│   │               )
+│   │
+│   │           except ValidationError as e:
+│   │               self.logger.exception(f"Invalid sync request: {e}")
+│   │               return  # ACK invalid messages
+│   │
+│   │           except Exception as e:
+│   │               self.logger.exception(
+│   │                   f"Sync request processing failed: {e}",
+│   │                   exc_info=True
+│   │               )
+│   │               # Check if should retry
+│   │               if hasattr(e, 'retryable') and e.retryable:
+│   │                   raise  # NACK for retry
+│   │               return  # ACK non-retryable errors
+│   │
+│   │       async def on_error(self, error: Exception, data: dict) -> bool:
+│   │           """Error handling with retry logic"""
+│   │           if isinstance(error, ValidationError):
+│   │               return True  # ACK - don't retry validation errors
+│   │
+│   │           # Check if retryable
+│   │           if hasattr(error, 'retryable') and error.retryable:
+│   │               # Check delivery count
+│   │               if self.delivery_count < self.max_deliver:
+│   │                   self.logger.warning(
+│   │                       f"Retrying sync request (attempt {self.delivery_count})",
+│   │                       extra={"error": str(error)}
+│   │                   )
+│   │                   return False  # NACK for retry
+│   │
+│   │           # Max retries exceeded or non-retryable
+│   │           self.logger.exception(
+│   │               f"Sync request failed permanently: {error}",
+│   │               extra={"data": data}
+│   │           )
+│   │           return True  # ACK to prevent further retries
+│   │   ```
+│   │
+│   └── publishers.py
+│
+│       ```py
+│       # services/platform-connector/src/events/publishers.py
+│       from shared.messaging import Publisher
+│       from typing import Dict, Any
+│
+│       class PlatformEventPublisher(Publisher):
+│           """Publish platform connector events"""
+│
+│           @property
+│           def service_name(self) -> str:
+│               return "platform-connector"
+│
+│           async def platform_products_fetched(
+│               self,
+│               batch_data: Dict[str, Any],
+│               correlation_id: str
+│           ) -> str:
+│               """Publish products batch fetched from platform"""
+│               return await self.publish_event(
+│                   subject="evt.platform.products.fetched",
+│                   data=batch_data,
+│                   correlation_id=correlation_id
+│               )
+│
+│           async def platform_fetch_completed(
+│               self,
+│               merchant_id: str,
+│               sync_id: str,
+│               total_products: int,
+│               correlation_id: str
+│           ) -> str:
+│               """Publish platform fetch completed"""
+│               return await self.publish_event(
+│                   subject="evt.platform.fetch.completed",
+│                   data={
+│                       "merchant_id": merchant_id,
+│                       "sync_id": sync_id,
+│                       "total_products": total_products
+│                   },
+│                   correlation_id=correlation_id
+│               )
+│
+│           async def platform_fetch_failed(
+│               self,
+│               merchant_id: str,
+│               sync_id: str,
+│               error: str,
+│               correlation_id: str
+│           ) -> str:
+│               """Publish platform fetch failure"""
+│               return await self.publish_event(
+│                   subject="evt.platform.fetch.failed",
+│                   data={
+│                       "merchant_id": merchant_id,
+│                       "sync_id": sync_id,
+│                       "error": error
+│                   },
+│                   correlation_id=correlation_id
+│               )
+│       ```
+│
+├── schemas/
+│   ├── __init__.py
+│   ├── events.py
+│   │
+│   │   ```py
+│   │   # services/platform-connector/src/schemas/events.py
+│   │   from typing import Optional
+│   │   from pydantic import BaseModel
+│   │
+│   │   class CatalogSyncRequestedPayload(BaseModel):
+│   │       """Payload for catalog.sync.requested event"""
+│   │       merchant_id: str
+│   │       platform_name: str
+│   │       platform_shop_id: str
+│   │       domain: str
+│   │       sync_id: str
+│   │       sync_type: str = "full"
+│   │   ```
+│   │
+│   └── platform.py
+│
+│       ```py
+│       # services/platform-connector/src/schemas/platform.py
+│       from typing import Optional, List, Dict, Any
+│       from datetime import datetime
+│       from pydantic import BaseModel
+│
+│       class PlatformProduct(BaseModel):
+│           """Internal platform product format"""
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           product_id: str
+│           variant_id: str
+│           product_title: str
+│           variant_title: str
+│           sku: Optional[str]
+│           price: float
+│           currency: str
+│           inventory: int
+│           image_url: Optional[str]
+│           created_at: Optional[datetime]
+│           updated_at: Optional[datetime]
+│
+│       class ProductBatch(BaseModel):
+│           """Batch of products from platform"""
+│           merchant_id: str
+│           sync_id: str
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           products: List[Dict[str, Any]]
+│           batch_num: int
+│           has_more: bool
+│       ```
+│
+├── services/
+│   ├── __init__.py
+│   ├── connector_service.py
+│   │
+│   │   ```py
+│   │   # services/platform-connector/src/services/connector_service.py (updated)
+│   │   from typing import Dict, Any, Optional
+│   │   import asyncio
+│   │
+│   │   from shared.utils.logger import ServiceLogger
+│   │   from shared.utils.exceptions import (
+│   │       NotFoundError,
+│   │       InfrastructureError,
+│   │       UnauthorizedError
+│   │   )
+│   │
+│   │   from ..adapters.shopify import ShopifyAdapter
+│   │   from ..adapters.woocommerce import WooCommerceAdapter
+│   │   from .token_service import TokenServiceClient
+│   │
+│   │   class ConnectorService:
+│   │       """Orchestrates platform connections with Token Service integration"""
+│   │
+│   │       def __init__(
+│   │           self,
+│   │           event_publisher,
+│   │           logger: ServiceLogger,
+│   │           config: dict
+│   │       ):
+│   │           self.event_publisher = event_publisher
+│   │           self.logger = logger
+│   │           self.config = config
+│   │
+│   │           # Initialize Token Service client
+│   │           self.token_client = TokenServiceClient(logger, config)
+│   │
+│   │           # Initialize adapters with token client
+│   │           self.adapters = {
+│   │               "shopify": ShopifyAdapter(logger, config, self.token_client),
+│   │               "woocommerce": WooCommerceAdapter(logger, config, self.token_client)
+│   │           }
+│   │
+│   │       async def process_sync_request(
+│   │           self,
+│   │           merchant_id: str,
+│   │           platform_name: str,
+│   │           platform_shop_id: str,
+│   │           domain: str,
+│   │           sync_id: str,
+│   │           correlation_id: str
+│   │       ) -> None:
+│   │           """Process catalog sync request with token retrieval"""
+│   │
+│   │           self.logger.info(
+│   │               f"Processing sync request for {platform_name}",
+│   │               extra={
+│   │                   "correlation_id": correlation_id,
+│   │                   "sync_id": sync_id,
+│   │                   "merchant_id": merchant_id,
+│   │                   "platform": platform_name,
+│   │                   "domain": domain
+│   │               }
+│   │           )
+│   │
+│   │           # Get appropriate adapter
+│   │           adapter = self.adapters.get(platform_name)
+│   │           if not adapter:
+│   │               await self.event_publisher.platform_fetch_failed(
+│   │                   merchant_id=merchant_id,
+│   │                   sync_id=sync_id,
+│   │                   error=f"Platform {platform_name} not supported",
+│   │                   correlation_id=correlation_id
+│   │               )
+│   │               raise NotFoundError(
+│   │                   f"Platform adapter not found: {platform_name}",
+│   │                   resource="platform_adapter",
+│   │                   resource_id=platform_name
+│   │               )
+│   │
+│   │           try:
+│   │               # Fetch products in batches (adapter will get token from Token Service)
+│   │               total_products = 0
+│   │               batch_count = 0
+│   │
+│   │               async for batch in adapter.fetch_products(
+│   │                   merchant_id=merchant_id,
+│   │                   platform_shop_id=platform_shop_id,
+│   │                   domain=domain,
+│   │                   sync_id=sync_id,
+│   │                   correlation_id=correlation_id
+│   │               ):
+│   │                   batch_count += 1
+│   │                   total_products += len(batch["products"])
+│   │
+│   │                   # Publish batch to Catalog Service
+│   │                   await self.event_publisher.platform_products_fetched(
+│   │                       batch_data=batch,
+│   │                       correlation_id=correlation_id
+│   │                   )
+│   │
+│   │                   self.logger.info(
+│   │                       f"Published batch {batch_count} with {len(batch['products'])} products",
+│   │                       extra={
+│   │                           "correlation_id": correlation_id,
+│   │                           "sync_id": sync_id,
+│   │                           "batch_num": batch_count,
+│   │                           "has_more": batch["has_more"]
+│   │                       }
+│   │                   )
+│   │
+│   │               # Publish completion event
+│   │               await self.event_publisher.platform_fetch_completed(
+│   │                   merchant_id=merchant_id,
+│   │                   sync_id=sync_id,
+│   │                   total_products=total_products,
+│   │                   correlation_id=correlation_id
+│   │               )
+│   │
+│   │               self.logger.info(
+│   │                   f"Completed platform fetch for {platform_name}",
+│   │                   extra={
+│   │                       "correlation_id": correlation_id,
+│   │                       "sync_id": sync_id,
+│   │                       "total_products": total_products,
+│   │                       "total_batches": batch_count
+│   │                   }
+│   │               )
+│   │
+│   │           except UnauthorizedError as e:
+│   │               # Authentication/token failure
+│   │               self.logger.exception(
+│   │                   f"Authentication failed for {platform_name}: {e}",
+│   │                   extra={
+│   │                       "correlation_id": correlation_id,
+│   │                       "sync_id": sync_id,
+│   │                       "domain": domain
+│   │                   }
+│   │               )
+│   │
+│   │               await self.event_publisher.platform_fetch_failed(
+│   │                   merchant_id=merchant_id,
+│   │                   sync_id=sync_id,
+│   │                   error=f"Authentication failed: {str(e)}",
+│   │                   correlation_id=correlation_id
+│   │               )
+│   │               raise
+│   │
+│   │           except InfrastructureError as e:
+│   │               # Platform API or Token Service error
+│   │               if e.retryable:
+│   │                   self.logger.warning(
+│   │                       f"Retryable error: {e}",
+│   │                       extra={
+│   │                           "correlation_id": correlation_id,
+│   │                           "sync_id": sync_id,
+│   │                           "error": str(e)
+│   │                       }
+│   │                   )
+│   │                   raise  # Let listener handle retry
+│   │               else:
+│   │                   await self.event_publisher.platform_fetch_failed(
+│   │                       merchant_id=merchant_id,
+│   │                       sync_id=sync_id,
+│   │                       error=str(e),
+│   │                       correlation_id=correlation_id
+│   │                   )
+│   │                   raise
+│   │
+│   │           except Exception as e:
+│   │               # Unexpected error
+│   │               self.logger.exception(
+│   │                   f"Unexpected error during platform fetch: {e}",
+│   │                   extra={
+│   │                       "correlation_id": correlation_id,
+│   │                       "sync_id": sync_id
+│   │                   },
+│   │                   exc_info=True
+│   │               )
+│   │
+│   │               await self.event_publisher.platform_fetch_failed(
+│   │                   merchant_id=merchant_id,
+│   │                   sync_id=sync_id,
+│   │                   error=str(e),
+│   │                   correlation_id=correlation_id
+│   │               )
+│   │               raise
+│   │   ```
+│   │
+│   └── token_service.py
+│
+│       ```py
+│       # services/platform-connector/src/services/token_service.py
+│       import aiohttp
+│       from typing import Optional, Dict, Any
+│       from shared.utils.logger import ServiceLogger
+│       from shared.utils.exceptions import (
+│           InfrastructureError,
+│           NotFoundError,
+│           UnauthorizedError
+│       )
+│       from shared.api.correlation import add_correlation_header
+│
+│       class TokenServiceClient:
+│           """Client for interacting with Token Service"""
+│
+│           def __init__(self, logger: ServiceLogger, config: dict):
+│               self.logger = logger
+│               self.base_url = config.get("token_service_url", "http://token-service:8000")
+│               self.timeout = config.get("token_service_timeout", 10)
+│
+│           async def get_shopify_token(
+│               self,
+│               domain: str,
+│               correlation_id: str
+│           ) -> str:
+│               """Get Shopify access token from Token Service"""
+│
+│               url = f"{self.base_url}/api/v1/tokens/shopify/{domain}"
+│               headers = add_correlation_header({
+│                   "Content-Type": "application/json"
+│               })
+│
+│               try:
+│                   async with aiohttp.ClientSession() as session:
+│                       async with session.get(
+│                           url,
+│                           headers=headers,
+│                           timeout=aiohttp.ClientTimeout(total=self.timeout)
+│                       ) as response:
+│                           if response.status == 404:
+│                               raise NotFoundError(
+│                                   f"Shopify token not found for shop: {domain}",
+│                                   resource="shopify_token",
+│                                   resource_id=domain
+│                               )
+│
+│                           if response.status == 401:
+│                               raise UnauthorizedError(
+│                                   "Unauthorized to access Token Service"
+│                               )
+│
+│                           response.raise_for_status()
+│                           data = await response.json()
+│
+│                           # Extract token from response
+│                           token = data.get("data", {}).get("access_token")
+│                           if not token:
+│                               raise InfrastructureError(
+│                                   "Token Service returned empty token",
+│                                   service="token-service"
+│                               )
+│
+│                           self.logger.debug(
+│                               f"Retrieved Shopify token for {domain}",
+│                               extra={
+│                                   "correlation_id": correlation_id,
+│                                   "domain": domain
+│                               }
+│                           )
+│
+│                           return token
+│
+│               except aiohttp.ClientError as e:
+│                   raise InfrastructureError(
+│                       f"Failed to connect to Token Service: {e}",
+│                       service="token-service",
+│                       retryable=True
+│                   )
+│
+│           async def get_woocommerce_credentials(
+│               self,
+│               domain: str,
+│               correlation_id: str
+│           ) -> Dict[str, str]:
+│               """Get WooCommerce API credentials from Token Service"""
+│
+│               url = f"{self.base_url}/api/v1/tokens/woocommerce/{domain}"
+│               headers = add_correlation_header({
+│                   "Content-Type": "application/json"
+│               })
+│
+│               try:
+│                   async with aiohttp.ClientSession() as session:
+│                       async with session.get(
+│                           url,
+│                           headers=headers,
+│                           timeout=aiohttp.ClientTimeout(total=self.timeout)
+│                       ) as response:
+│                           if response.status == 404:
+│                               raise NotFoundError(
+│                                   f"WooCommerce credentials not found for: {domain}",
+│                                   resource="woocommerce_credentials",
+│                                   resource_id=domain
+│                               )
+│
+│                           response.raise_for_status()
+│                           data = await response.json()
+│
+│                           # Extract credentials
+│                           creds = data.get("data", {})
+│                           if not creds.get("consumer_key") or not creds.get("consumer_secret"):
+│                               raise InfrastructureError(
+│                                   "Token Service returned incomplete credentials",
+│                                   service="token-service"
+│                               )
+│
+│                           return {
+│                               "consumer_key": creds["consumer_key"],
+│                               "consumer_secret": creds["consumer_secret"]
+│                           }
+│
+│               except aiohttp.ClientError as e:
+│                   raise InfrastructureError(
+│                       f"Failed to connect to Token Service: {e}",
+│                       service="token-service",
+│                       retryable=True
+│                   )
+│
+│       ```
+│
+├── __init__.py
+│
+│   ```py
+│   # File: services/connector-service/src/__init__.py
+│
+│   """Connector Service for GLAM platform."""
+│
+│   __version__ = "0.1.0"
+│   ```
+│
+├── config.py
+│
+│   ```py
+│   # services/platform-connector/src/config.py
+│   import os
+│   from functools import lru_cache
+│   from pydantic import BaseModel, Field, ConfigDict, model_validator
+│   from shared.utils import load_root_env, ConfigurationError
+│
+│   class ServiceConfig(BaseModel):
+│       """Platform Connector configuration"""
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           populate_by_name=True,
+│       )
+│
+│       # Service identification
+│       service_name: str = "platform-connector"
+│       service_version: str = "1.0.0"
+│       service_description: str = "E-commerce platform product data connector"
+│       debug: bool = Field(default=False, alias="DEBUG")
+│
+│       # Required environment variables
+│       environment: str = Field(..., alias="APP_ENV")
+│       api_external_port: int = Field(default=8011, alias="CONNECTOR_API_EXTERNAL_PORT")
+│
+│       # No database for this stateless service
+│       database_enabled: bool = False
+│
+│       # Required secrets
+│       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+│       internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
+│
+│       # Platform API configuration
+│       shopify_rate_limit_delay: float = Field(default=0.5, alias="SHOPIFY_RATE_LIMIT_DELAY")
+│       shopify_batch_size: int = Field(default=250, alias="SHOPIFY_BATCH_SIZE")
+│       shopify_max_retries: int = Field(default=3, alias="SHOPIFY_MAX_RETRIES")
+│
+│       # WooCommerce settings
+│       woocommerce_batch_size: int = Field(default=100, alias="WOOCOMMERCE_BATCH_SIZE")
+│
+│       # API configuration
+│       api_host: str = "0.0.0.0"
+│
+│       # Logging
+│       logging_level: str = "INFO"
+│       logging_format: str = "json"
+│
+│       # Retry configuration
+│       max_retry_attempts: int = Field(default=3, alias="CONNECTOR_MAX_RETRIES")
+│       retry_delay_seconds: float = Field(default=1.0, alias="CONNECTOR_RETRY_DELAY")
+│
+│       # Token service config
+│       token_service_url: str = Field(..., alias="TOKEN_SERVICE_URL")
+│       token_service_timeout: int = Field(default=5, alias="TOKEN_SERVICE_TIMEOUT")
+│       token_service_retry_count: int = Field(default=3, alias="TOKEN_SERVICE_RETRY_COUNT")
+│
+│       @property
+│       def nats_url(self) -> str:
+│           """NATS URL for event system"""
+│           in_container = os.path.exists("/.dockerenv")
+│           if in_container or self.environment in ["development", "production"]:
+│               return "nats://nats:4222"
+│           return "nats://localhost:4222"
+│
+│       @property
+│       def api_port(self) -> int:
+│           """Port based on environment"""
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│
+│       @model_validator(mode="after")
+│       def validate_config(self):
+│           # Stateless service doesn't need database
+│           if self.database_enabled:
+│               raise ValueError("Platform Connector should be stateless (database_enabled=false)")
+│           return self
+│
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load configuration once"""
+│       try:
+│           load_root_env()
+│           return ServiceConfig(**os.environ)
+│       except Exception as e:
+│           raise ConfigurationError(
+│               f"Failed to load config: {e}",
+│               config_key="platform-connector"
+│           )
+│   ```
+│
+├── dependencies.py
+│
+│   ```py
+│   # services/platform-connector/src/dependencies.py
+│   from typing import Annotated
+│   from fastapi import Depends, Request, HTTPException
+│
+│   # Re-export shared dependencies
+│   from shared.api.dependencies import (
+│       RequestContextDep,
+│       LoggerDep
+│   )
+│
+│   from .lifecycle import ServiceLifecycle
+│   from .services.connector_service import ConnectorService
+│   from .events.publishers import PlatformEventPublisher
+│
+│   __all__ = [
+│       "RequestContextDep",
+│       "LoggerDep",
+│       "LifecycleDep",
+│       "ConnectorServiceDep",
+│       "EventPublisherDep"
+│   ]
+│
+│   # Core dependencies
+│   def get_lifecycle(request: Request) -> ServiceLifecycle:
+│       """Get service lifecycle from app state"""
+│       return request.app.state.lifecycle
+│
+│   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+│
+│   def get_connector_service(lifecycle: LifecycleDep = Depends(get_lifecycle)) -> ConnectorService:
+│       """Get connector service"""
+│       if not lifecycle.connector_service:
+│           raise HTTPException(500, "Connector service not initialized")
+│       return lifecycle.connector_service
+│
+│   def get_event_publisher(lifecycle: LifecycleDep = Depends(get_lifecycle)) -> PlatformEventPublisher:
+│       """Get event publisher"""
+│       if not lifecycle.event_publisher:
+│           raise HTTPException(500, "Event publisher not initialized")
+│       return lifecycle.event_publisher
+│
+│   # Type aliases
+│
+│   ConnectorServiceDep = Annotated[ConnectorService, Depends(get_connector_service)]
+│   EventPublisherDep = Annotated[PlatformEventPublisher, Depends(get_event_publisher)]
+│   ```
+│
+├── exceptions.py
+│
+│   ```py
+│   # src/exceptions.py
+│   from shared.errors import DomainError, ExternalServiceError, ValidationError
+│
+│
+│   class ConnectorError(DomainError):
+│       """Base connector service error"""
+│
+│       pass
+│
+│
+│   class ShopifyAPIError(ExternalServiceError):
+│       """Shopify API error"""
+│
+│       pass
+│
+│
+│   class BulkOperationError(ConnectorError):
+│       """Bulk operation error"""
+│
+│       pass
+│
+│
+│   class BulkOperationTimeoutError(BulkOperationError):
+│       """Bulk operation timed out"""
+│
+│       pass
+│
+│
+│   class InvalidSyncRequestError(ValidationError):
+│       """Invalid sync request"""
+│
+│       pass
+│   ```
+│
+├── lifecycle.py
+│
+│   ```py
+│   # services/platform-connector/src/lifecycle.py
+│   from typing import Optional, List
+│   import asyncio
+│
+│   from shared.messaging import JetStreamClient
+│   from shared.utils.logger import ServiceLogger
+│
+│   from .config import ServiceConfig
+│   from .services.connector_service import ConnectorService
+│   from .events.publishers import PlatformEventPublisher
+│   from .events.listeners import CatalogSyncRequestedListener
+│
+│   class ServiceLifecycle:
+│       """Manages all service components lifecycle"""
+│
+│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│           self.config = config
+│           self.logger = logger
+│
+│           # Connections
+│           self.messaging_client: Optional[JetStreamClient] = None
+│
+│           # Components
+│           self.event_publisher: Optional[PlatformEventPublisher] = None
+│           self.connector_service: Optional[ConnectorService] = None
+│
+│           # Listeners
+│           self._listeners: List = []
+│           self._tasks: List[asyncio.Task] = []
+│
+│       async def startup(self) -> None:
+│           """Initialize all components"""
+│           try:
+│               self.logger.info("Starting platform connector components...")
+│
+│               # 1. Messaging (for events)
+│               await self._init_messaging()
+│
+│               # 2. Services
+│               self._init_services()
+│
+│               # 3. Event listeners
+│               await self._init_listeners()
+│
+│               self.logger.info("Platform connector started successfully")
+│
+│           except Exception as e:
+│               self.logger.critical("Service startup failed", exc_info=True)
+│               await self.shutdown()
+│               raise
+│
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown"""
+│           self.logger.info("Shutting down platform connector")
+│
+│           # Cancel tasks
+│           for task in self._tasks:
+│               task.cancel()
+│           if self._tasks:
+│               await asyncio.gather(*self._tasks, return_exceptions=True)
+│
+│           # Stop listeners
+│           for listener in self._listeners:
+│               try:
+│                   await listener.stop()
+│               except Exception:
+│                   self.logger.exception("Listener stop failed", exc_info=True)
+│
+│           # Close messaging
+│           if self.messaging_client:
+│               try:
+│                   await self.messaging_client.close()
+│               except Exception:
+│                   self.logger.exception("Messaging close failed", exc_info=True)
+│
+│           self.logger.info("Platform connector shutdown complete")
+│
+│       async def _init_messaging(self) -> None:
+│           """Initialize NATS/JetStream"""
+│           self.messaging_client = JetStreamClient(self.logger)
+│           await self.messaging_client.connect([self.config.nats_url])
+│           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+│
+│           # Initialize publisher
+│           self.event_publisher = PlatformEventPublisher(
+│               jetstream_client=self.messaging_client,
+│               logger=self.logger
+│           )
+│
+│           self.logger.info("Messaging initialized")
+│
+│       def _init_services(self) -> None:
+│           """Initialize business services"""
+│           self.connector_service = ConnectorService(
+│               event_publisher=self.event_publisher,
+│               logger=self.logger,
+│               config=vars(self.config)
+│           )
+│
+│           self.logger.info("Connector service initialized")
+│
+│       async def _init_listeners(self) -> None:
+│           """Initialize event listeners"""
+│           if not self.messaging_client or not self.connector_service:
+│               raise RuntimeError("Messaging or service not ready")
+│
+│           # Catalog sync requested listener
+│           sync_listener = CatalogSyncRequestedListener(
+│               js_client=self.messaging_client,
+│               connector_service=self.connector_service,
+│               logger=self.logger
+│           )
+│           await sync_listener.start()
+│           self._listeners.append(sync_listener)
+│
+│           self.logger.info("Event listeners started")
+│   ```
+│
+└── main.py
+
+    ```py
+    # services/platform-connector/src/main.py
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+    from shared.api import setup_middleware, create_health_router
+    from shared.utils import create_logger
+
+    from .config import get_service_config
+    from .lifecycle import ServiceLifecycle
+
+    # CRITICAL: Create these at module level (singletons)
+    config = get_service_config()
+    logger = create_logger(config.service_name)
+    lifecycle = ServiceLifecycle(config, logger)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan management for startup/shutdown"""
+        # Store in app state for dependencies
+        app.state.lifecycle = lifecycle
+        app.state.config = config
+        app.state.logger = logger  # REQUIRED for middleware
+
+        try:
+            await lifecycle.startup()
+            yield
+        finally:
+            await lifecycle.shutdown()
+
+    def create_application() -> FastAPI:
+        """Create FastAPI app with shared package integration"""
+        app = FastAPI(
+            title=config.service_name,
+            version=config.service_version,
+            description=config.service_description,
+            lifespan=lifespan,
+        )
+
+        # CRITICAL: Setup shared middleware (handles ALL errors)
+        setup_middleware(
+            app,
+            service_name=config.service_name
+        )
+
+        # Add health check from shared package
+        app.include_router(create_health_router(config.service_name))
+
+        # No API endpoints for this service - event-driven only
+
+        return app
+
+    app = create_application()
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(
+            "src.main:app",
+            host=config.api_host,
+            port=config.api_port,
+            reload=config.debug
+        )
+    ```
+
+tests/
+└── __init__.py
+.python-version
+Dockerfile
+
+```
+# services/catalog-connector/Dockerfile
+# -------------------
+# 🛠 Stage 1: Builder
+# -------------------
+FROM python:3.11-slim AS builder
+
+RUN pip install --no-cache-dir poetry==1.7.1
+
+ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_NO_INTERACTION=1
+
+WORKDIR /app
+
+ARG CACHE_BUSTER=1
+
+# Install shared package
+COPY shared /shared
+RUN pip install --no-cache-dir -e /shared
+
+ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
+
+# Install service dependencies
+COPY services/catalog-connector/pyproject.toml services/catalog-connector/poetry.lock /app/
+
+RUN poetry install --no-root --no-ansi && rm -rf ~/.cache/pypoetry ~/.cache/pip
+
+# Copy service code
+COPY services/catalog-connector /app
+
+# -------------------
+# 📦 Stage 2: Runtime
+# -------------------
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir poetry==1.7.1
+
+ENV POETRY_VIRTUALENVS_CREATE=false
+ENV POETRY_NO_INTERACTION=1
+
+WORKDIR /app
+
+ENV PYTHONPATH="/shared:/app:${PYTHONPATH}"
+
+# Copy from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+COPY --from=builder /shared /shared
+
+# Start the worker
+CMD ["poetry", "run", "python", "-m", "src.main"]
+```
+
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+# pyproject.toml
+[tool.poetry]
+name = "platform-connector"
+version = "1.0.0"
+description = "Platform connector service for fetching products from e-commerce platforms"
+authors = ["GlamYouUp Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^2.5.0"
+nats-py = "^2.6.0"
+shared = { path = "../../shared", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

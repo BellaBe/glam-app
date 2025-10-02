@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trial Credits Low</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif;line-height:1.6;color:#101828;">
+  {{ header | safe }}
+
+  {% from "shared/macros.html.j2" import divider, button with context %}
+
+  <div style="padding:20px;max-width:600px;margin:0 auto;">
+    <h1 style="margin:0 0 12px 0;font-size:20px;line-height:1.3;color:#344054;">Trial credits running low</h1>
+
+    <p style="margin:0 0 8px 0;">Hi {{ domain }},</p>
+
+    <p style="margin:0 0 8px 0;">
+      Your trial is going well, but your remaining credits are getting low.
+    </p>
+
+    <div style="background:#FFF;border:1px solid #E4E7EC;border-radius:8px;padding:16px;margin:12px 0;">
+      <p style="margin:0;font-size:18px;color:#344054;">
+        Trial balance: <strong>{{ balance }}</strong> credits
+      </p>
+      <p style="margin:8px 0 0 0;color:#667085;font-size:14px;">1 credit = 1 fit &amp; color recommendation.</p>
+    </div>
+
+    {{ divider() }}
+
+    <h2 style="margin:12px 0 6px 0;font-size:16px;line-height:1.4;color:#344054;">Keep momentum</h2>
+    <ul style="margin:0 0 12px 18px;padding:0;color:#475467;">
+      <li>Avoid interruptions for shoppers</li>
+      <li>Keep recommendations live on product pages</li>
+      <li>Continue tracking engagement and conversions</li>
+    </ul>
+
+    {% if app_url is defined %}
+      <div style="text-align:center;margin:20px 0 0 0;">
+        {{ button(app_url ~ '/billing/plans', 'Choose a plan') }}
+      </div>
+      <p style="margin:12px 0 0 0;text-align:center;">
+        <a href="{{ app_url }}/billing/credits" style="color:{{ brand_color | default('#BD4267') }};text-decoration:underline;">
+          Or buy credits as you go →
+        </a>
+      </p>
+      <div style="background:#F9FAFB;border:1px solid #E4E7EC;border-radius:8px;padding:12px 14px;margin:12px 0 0 0;font-size:14px;color:#475467;">
+        Prefer hands-off? <a href="{{ app_url }}/billing/auto-recharge" style="color:{{ brand_color | default('#BD4267') }};text-decoration:underline;">Enable auto-recharge</a>.
+      </div>
+    {% endif %}
+
+    {{ divider() }}
+  </div>
+
+  {{ footer | safe }}
+</body>
+</html>

@@ -1,0 +1,2017 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/notification-service/src
+================================================================================
+
+src/
+api/
+├── v1/
+│   ├── __init__.py
+│   └── notifications.py
+│       
+│       ```py
+│       # services/notification-service/src/api/v1/notifications.py
+│       from uuid import UUID
+│       
+│       from fastapi import APIRouter, Query, Request
+│       
+│       from shared.api import ApiResponse, paginated_response, success_response
+│       from shared.api.dependencies import ClientAuthDep, PaginationDep, RequestContextDep
+│       from shared.utils.exceptions import ForbiddenError
+│       
+│       from ...dependencies import NotificationServiceDep
+│       from ...schemas.notification import NotificationOut, NotificationStats
+│       
+│       router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
+│       
+│       
+│       @router.get("", response_model=ApiResponse[list[NotificationOut]], summary="List sent notifications")
+│       async def list_notifications(
+│           svc: NotificationServiceDep,
+│           ctx: RequestContextDep,
+│           auth: ClientAuthDep,
+│           pagination: PaginationDep,
+│           request: Request,
+│           status: str | None = Query(None, description="Filter by status"),
+│           merchant_id: UUID | None = Query(None, description="Filter by merchant"),
+│       ):
+│           """List notifications with optional filters"""
+│           # Permission check
+│           if auth.scope not in ["notifications:read", "notifications:write"]:
+│               raise ForbiddenError(message="Cannot read notifications", required_permission="notifications:read")
+│       
+│           # Get notifications
+│           total, notifications = await svc.list_notifications(
+│               skip=pagination.offset, limit=pagination.limit, status=status, merchant_id=merchant_id
+│           )
+│       
+│           # Return paginated response
+│           return paginated_response(
+│               data=notifications,
+│               page=pagination.page,
+│               limit=pagination.limit,
+│               total=total,
+│               base_url=str(request.url.path),
+│               request_id=ctx.request_id,
+│               correlation_id=ctx.correlation_id,
+│           )
+│       
+│       
+│       @router.get("/stats", response_model=ApiResponse[NotificationStats], summary="Get notification statistics")
+│       async def get_stats(svc: NotificationServiceDep, ctx: RequestContextDep, auth: ClientAuthDep):
+│           """Get daily notification statistics"""
+│           # Permission check
+│           if auth.scope not in ["notifications:read", "notifications:write"]:
+│               raise ForbiddenError(message="Cannot read notification stats", required_permission="notifications:read")
+│       
+│           stats = await svc.get_stats()
+│       
+│           return success_response(data=stats, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
+│       
+│       
+│       @router.get("/{notification_id}", response_model=ApiResponse[NotificationOut], summary="Get notification details")
+│       async def get_notification(
+│           notification_id: UUID, svc: NotificationServiceDep, ctx: RequestContextDep, auth: ClientAuthDep
+│       ):
+│           """Get notification by ID"""
+│           # Permission check
+│           if auth.scope not in ["notifications:read", "notifications:write"]:
+│               raise ForbiddenError(message="Cannot read notifications", required_permission="notifications:read")
+│       
+│           # Get notification - service raises NotFoundError if missing
+│           notification = await svc.get_notification(notification_id)
+│       
+│           return success_response(data=notification, request_id=ctx.request_id, correlation_id=ctx.correlation_id)
+│       ```
+│       
+└── __init__.py
+events/
+├── __init__.py
+├── listeners.py
+│   
+│   ```py
+│   # services/notification-service/src/events/listeners.py
+│   
+│   from shared.messaging.events.base import EventEnvelope
+│   from shared.messaging.events.catalog import CatalogSyncCompletedPayload, CatalogSyncStartedPayload
+│   from shared.messaging.events.credit import CreditBalanceDepletedPayload, CreditBalanceLowPayload
+│   from shared.messaging.events.merchant import MerchantCreatedPayload
+│   from shared.messaging.listener import Listener
+│   from shared.messaging.subjects import Subjects
+│   
+│   
+│   class MerchantCreatedListener(Listener[MerchantCreatedPayload]):
+│       """Listen for merchant created events"""
+│   
+│       @property
+│       def service_name(self) -> str:
+│           return "notification-service"
+│   
+│       @property
+│       def subject(self) -> str:
+│           return Subjects.MERCHANT_CREATED.value
+│   
+│       @property
+│       def queue_group(self) -> str:
+│           return "notification-merchant-created"
+│   
+│       @property
+│       def payload_class(self) -> type[MerchantCreatedPayload]:
+│           return MerchantCreatedPayload
+│   
+│       def __init__(self, js_client, notification_service, event_publisher, logger, delivery_service):
+│           super().__init__(js_client, logger)
+│           self.notification_service = notification_service
+│           self.event_publisher = event_publisher
+│           self._delivery_service = delivery_service
+│   
+│       async def on_message(
+│           self, payload: MerchantCreatedPayload, envelope: EventEnvelope[MerchantCreatedPayload]
+│       ) -> None:
+│           """Process merchant created event"""
+│           try:
+│               self.logger.info(
+│                   "Processing merchant created",
+│                   extra={
+│                       "merchant_id": str(payload.platform.merchant_id),
+│                       "domain": payload.platform.domain,
+│                       "correlation_id": envelope.correlation_id,
+│                       "event_id": envelope.event_id,
+│                   },
+│               )
+│   
+│               # Process notification
+│               notification = await self.notification_service.process_event(
+│                   event_type="evt.merchant.created.v1",  # Use the subject
+│                   data=payload,
+│                   event_id=envelope.event_id,
+│                   correlation_id=envelope.correlation_id,
+│               )
+│   
+│               # Publish result event
+│               if notification:
+│                   if notification.status == "sent":
+│                       await self.event_publisher.email_sent(notification)
+│                   else:
+│                       await self.event_publisher.email_failed(
+│                           notification,
+│                           error=notification.error_message or "Unknown error",
+│                       )
+│   
+│           except Exception as e:
+│               self.logger.exception(f"Failed to process merchant created: {e}")
+│               raise  # NACK for retry
+│   
+│   
+│   class CatalogSyncStartedListener(Listener[CatalogSyncStartedPayload]):
+│       """Listen for catalog sync started events"""
+│   
+│       @property
+│       def service_name(self) -> str:
+│           return "notification-service"
+│   
+│       @property
+│       def subject(self) -> str:
+│           return Subjects.CATALOG_SYNC_STARTED.value
+│   
+│       @property
+│       def queue_group(self) -> str:
+│           return "notification-catalog-sync-started"
+│   
+│       @property
+│       def payload_class(self) -> type[CatalogSyncStartedPayload]:
+│           return CatalogSyncStartedPayload
+│   
+│       def __init__(
+│           self,
+│           js_client,
+│           notification_service,
+│           delivery_service,
+│           event_publisher,
+│           logger,
+│       ):
+│           super().__init__(js_client, logger)
+│           self.notification_service = notification_service
+│           self.event_publisher = event_publisher
+│           self.delivery_service = delivery_service
+│   
+│       async def on_message(
+│           self, payload: CatalogSyncStartedPayload, envelope: EventEnvelope[CatalogSyncStartedPayload]
+│       ) -> None:
+│           """Process catalog sync started - typically no email for this"""
+│           self.logger.info(
+│               "Catalog sync started",
+│               extra={
+│                   "merchant_id": str(payload.platform.merchant_id),
+│                   "sync_id": str(payload.sync_id),
+│                   "total_items": payload.total_items,
+│                   "correlation_id": envelope.correlation_id,
+│               },
+│           )
+│   
+│   
+│   class CatalogSyncCompletedListener(Listener[CatalogSyncCompletedPayload]):
+│       """Listen for catalog sync completed events"""
+│   
+│       @property
+│       def service_name(self) -> str:
+│           return "notification-service"
+│   
+│       @property
+│       def subject(self) -> str:
+│           return Subjects.CATALOG_SYNC_COMPLETED.value
+│   
+│       @property
+│       def queue_group(self) -> str:
+│           return "notification-catalog-sync-completed"
+│   
+│       @property
+│       def payload_class(self) -> type[CatalogSyncCompletedPayload]:
+│           return CatalogSyncCompletedPayload
+│   
+│       def __init__(self, js_client, notification_service, event_publisher, logger):
+│           super().__init__(js_client, logger)
+│           self.notification_service = notification_service
+│           self.event_publisher = event_publisher
+│   
+│       async def on_message(
+│           self, payload: CatalogSyncCompletedPayload, envelope: EventEnvelope[CatalogSyncCompletedPayload]
+│       ) -> None:
+│           """Process catalog sync completed event"""
+│           try:
+│               self.logger.info(
+│                   "Processing catalog sync completed",
+│                   extra={
+│                       "merchant_id": str(payload.platform.merchant_id),
+│                       "sync_id": str(payload.sync_id),
+│                       "first_sync": payload.first_sync,
+│                       "has_changes": payload.has_changes,
+│                       "correlation_id": envelope.correlation_id,
+│                   },
+│               )
+│   
+│               # Only send notification for first sync or significant changes
+│               if payload.first_sync or payload.has_changes:
+│                   notification = await self.notification_service.process_event(
+│                       event_type=envelope.event_type,
+│                       data=payload,
+│                       event_id=envelope.event_id,
+│                       correlation_id=envelope.correlation_id,
+│                   )
+│   
+│                   if notification:
+│                       if notification.status == "sent":
+│                           await self.event_publisher.email_sent(notification)
+│                       else:
+│                           await self.event_publisher.email_failed(
+│                               notification,
+│                               error=notification.error_message or "Unknown error",
+│                           )
+│   
+│           except Exception as e:
+│               self.logger.exception(f"Failed to process catalog sync completed: {e}")
+│               raise  # NACK for retry
+│   
+│   
+│   class CreditBalanceLowListener(Listener[CreditBalanceLowPayload]):
+│       """Listen for credit balance low events"""
+│   
+│       @property
+│       def service_name(self) -> str:
+│           return "notification-service"
+│   
+│       @property
+│       def subject(self) -> str:
+│           return Subjects.CREDIT_BALANCE_LOW.value
+│   
+│       @property
+│       def queue_group(self) -> str:
+│           return "notification-credit-balance-low"
+│   
+│       @property
+│       def payload_class(self) -> type[CreditBalanceLowPayload]:
+│           return CreditBalanceLowPayload
+│   
+│       def __init__(self, js_client, notification_service, event_publisher, logger):
+│           super().__init__(js_client, logger)
+│           self.notification_service = notification_service
+│           self.event_publisher = event_publisher
+│   
+│       async def on_message(
+│           self, payload: CreditBalanceLowPayload, envelope: EventEnvelope[CreditBalanceLowPayload]
+│       ) -> None:
+│           """Process credit balance low event"""
+│           try:
+│               self.logger.info(
+│                   "Processing credit balance low",
+│                   extra={
+│                       "merchant_id": str(payload.platform.merchant_id),
+│                       "balance": payload.balance,
+│                       "threshold": payload.threshold,
+│                       "correlation_id": envelope.correlation_id,
+│                   },
+│               )
+│   
+│               notification = await self.notification_service.process_event(
+│                   event_type=envelope.event_type,
+│                   data=payload,
+│                   event_id=envelope.event_id,
+│                   correlation_id=envelope.correlation_id,
+│               )
+│   
+│               if notification:
+│                   if notification.status == "sent":
+│                       await self.event_publisher.email_sent(notification)
+│                   else:
+│                       await self.event_publisher.email_failed(
+│                           notification,
+│                           error=notification.error_message or "Unknown error",
+│                       )
+│   
+│           except Exception as e:
+│               self.logger.exception(f"Failed to process credit balance low: {e}")
+│               raise  # NACK for retry
+│   
+│   
+│   class CreditBalanceDepletedListener(Listener[CreditBalanceDepletedPayload]):
+│       """Listen for credit balance depleted events"""
+│   
+│       @property
+│       def service_name(self) -> str:
+│           return "notification-service"
+│   
+│       @property
+│       def subject(self) -> str:
+│           return Subjects.CREDIT_BALANCE_DEPLETED.value
+│   
+│       @property
+│       def queue_group(self) -> str:
+│           return "notification-credit-balance-depleted"
+│   
+│       @property
+│       def payload_class(self) -> type[CreditBalanceDepletedPayload]:
+│           return CreditBalanceDepletedPayload
+│   
+│       def __init__(self, js_client, notification_service, event_publisher, logger):
+│           super().__init__(js_client, logger)
+│           self.notification_service = notification_service
+│           self.event_publisher = event_publisher
+│   
+│       async def on_message(
+│           self, payload: CreditBalanceDepletedPayload, envelope: EventEnvelope[CreditBalanceDepletedPayload]
+│       ) -> None:
+│           """Process credit balance depleted event"""
+│           try:
+│               self.logger.info(
+│                   "Processing credit balance depleted",
+│                   extra={
+│                       "merchant_id": str(payload.platform.merchant_id),
+│                       "depleted_at": payload.depleted_at.isoformat(),
+│                       "correlation_id": envelope.correlation_id,
+│                   },
+│               )
+│   
+│               notification = await self.notification_service.process_event(
+│                   event_type=envelope.event_type,
+│                   data=payload,
+│                   event_id=envelope.event_id,
+│                   correlation_id=envelope.correlation_id,
+│               )
+│   
+│               if notification:
+│                   if notification.status == "sent":
+│                       await self.event_publisher.email_sent(notification)
+│                   else:
+│                       await self.event_publisher.email_failed(
+│                           notification,
+│                           error=notification.error_message or "Unknown error",
+│                       )
+│   
+│           except Exception as e:
+│               self.logger.exception(f"Failed to process credit balance depleted: {e}")
+│               raise  # NACK for retry
+│   ```
+│   
+└── publishers.py
+    
+    ```py
+    # services/notification-service/src/events/publishers.py
+    from shared.api.correlation import get_correlation_context
+    from shared.messaging.publisher import Publisher
+    
+    from ..schemas.events import EmailFailedPayload, EmailSentPayload
+    from ..schemas.notification import NotificationOut
+    
+    
+    class NotificationEventPublisher(Publisher):
+        """Publisher for notification events"""
+    
+        @property
+        def service_name(self) -> str:
+            return "notification-service"
+    
+        async def email_sent(self, notification: NotificationOut) -> str:
+            """Publish email sent event"""
+            payload = EmailSentPayload(
+                notification_id=notification.id,
+                merchant_id=notification.merchant_id,
+                platform_name=notification.platform_name,
+                platform_shop_id=notification.platform_shop_id,
+                template_type=notification.template_type,
+                sent_at=notification.created_at,
+            )
+    
+            # Get correlation ID from context (set by listener)
+            correlation_id = get_correlation_context() or "unknown"
+    
+            return await self.publish_event(
+                subject="evt.notification.email.sent.v1",
+                data=payload.model_dump(mode="json"),
+                correlation_id=correlation_id,
+                metadata={
+                    "recipient_email": notification.recipient_email,
+                    "provider": notification.provider,
+                },
+            )
+    
+        async def email_failed(self, notification: NotificationOut, error: str) -> str:
+            """Publish email failed event"""
+            payload = EmailFailedPayload(
+                notification_id=notification.id,
+                merchant_id=notification.merchant_id,
+                platform_name=notification.platform_name,
+                platform_shop_id=notification.platform_shop_id,
+                domain=notification.domain,
+                template_type=notification.template_type,
+                error=error,
+                failed_at=notification.failed_at or notification.created_at,
+            )
+    
+            # Get correlation ID from context
+            correlation_id = get_correlation_context() or "unknown"
+    
+            return await self.publish_event(
+                subject="evt.notification.email.failed.v1",
+                data=payload.model_dump(mode="json"),
+                correlation_id=correlation_id,
+                metadata={
+                    "recipient_email": notification.recipient_email,
+                    "retry_count": notification.retry_count,
+                    "trigger_event": notification.trigger_event,
+                },
+            )
+    ```
+    
+providers/
+├── base.py
+│   
+│   ```py
+│   # services/notification-service/src/providers/base.py
+│   from abc import ABC, abstractmethod
+│   from dataclasses import dataclass
+│   from typing import Any
+│   
+│   
+│   @dataclass
+│   class EmailMessage:
+│       """Email message structure"""
+│   
+│       to: str
+│       subject: str
+│       html: str
+│       text: str
+│       from_email: str | None = None
+│       from_name: str | None = None
+│       metadata: dict[str, Any] | None = None
+│   
+│   
+│   class EmailProvider(ABC):
+│       """Base email provider interface"""
+│   
+│       @property
+│       @abstractmethod
+│       def name(self) -> str:
+│           """Provider name"""
+│           pass
+│   
+│       @abstractmethod
+│       async def send(self, message: EmailMessage) -> str:
+│           """
+│           Send email and return provider message ID
+│   
+│           Raises:
+│               Exception: On send failure
+│           """
+│           pass
+│   
+│       @abstractmethod
+│       async def get_status(self, message_id: str) -> dict[str, Any]:
+│           """Get message status from provider"""
+│           pass
+│   ```
+│   
+├── mailhog_provider.py
+│   
+│   ```py
+│   # services/notification-service/src/providers/mailhog_provider.py
+│   import smtplib
+│   import uuid
+│   from email.mime.multipart import MIMEMultipart
+│   from email.mime.text import MIMEText
+│   from typing import Any
+│   
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from .base import EmailMessage, EmailProvider
+│   
+│   
+│   class MailhogProvider(EmailProvider):
+│       """Mailhog SMTP provider for local testing"""
+│   
+│       def __init__(
+│           self,
+│           smtp_host: str = "localhost",
+│           smtp_port: int = 1025,
+│           logger: ServiceLogger = None,
+│       ):
+│           self.smtp_host = smtp_host
+│           self.smtp_port = smtp_port
+│           self.logger = logger
+│   
+│       @property
+│       def name(self) -> str:
+│           return "mailhog"
+│   
+│       async def send(self, message: EmailMessage) -> str:
+│           """Send email via Mailhog SMTP"""
+│           # Create message
+│           msg = MIMEMultipart("alternative")
+│           msg["Subject"] = message.subject
+│           msg["From"] = message.from_email or "noreply@glamyouup.com"
+│           msg["To"] = message.to
+│   
+│           # Generate a message ID
+│           message_id = f"mailhog-{uuid.uuid4().hex[:12]}"
+│           msg["Message-ID"] = f"<{message_id}@glamyouup.com>"
+│   
+│           # Add text and HTML parts
+│           text_part = MIMEText(message.text, "plain")
+│           html_part = MIMEText(message.html, "html")
+│           msg.attach(text_part)
+│           msg.attach(html_part)
+│   
+│           # Send via SMTP
+│           try:
+│               with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+│                   server.send_message(msg)
+│   
+│               if self.logger:
+│                   self.logger.info(
+│                       "Email sent via Mailhog",
+│                       extra={
+│                           "to": message.to,
+│                           "message_id": message_id,
+│                           "host": self.smtp_host,
+│                           "port": self.smtp_port,
+│                       },
+│                   )
+│   
+│               return message_id
+│   
+│           except Exception as e:
+│               raise Exception(f"Mailhog SMTP error: {e!s}") from e
+│   
+│       async def get_status(self, message_id: str) -> dict[str, Any]:
+│           """Get message status (always sent for Mailhog)"""
+│           return {"message_id": message_id, "status": "sent", "provider": self.name}
+│   ```
+│   
+└── sendgrid_provider.py
+    
+    ```py
+    # services/notification-service/src/providers/sendgrid_provider.py
+    from typing import Any
+    
+    import httpx
+    
+    from shared.utils.logger import ServiceLogger
+    
+    from .base import EmailMessage, EmailProvider
+    
+    
+    class SendGridProvider(EmailProvider):
+        """SendGrid email provider"""
+    
+        def __init__(
+            self,
+            api_key: str,
+            from_email: str,
+            from_name: str,
+            sandbox_mode: bool = False,
+            logger: ServiceLogger = None,
+        ):
+            self.api_key = api_key
+            self.from_email = from_email
+            self.from_name = from_name
+            self.sandbox_mode = sandbox_mode
+            self.logger = logger
+            self.base_url = "https://api.sendgrid.com/v3"
+    
+        @property
+        def name(self) -> str:
+            return "sendgrid"
+    
+        async def send(self, message: EmailMessage) -> str:
+            """Send email via SendGrid API"""
+            async with httpx.AsyncClient() as client:
+                payload = {
+                    "personalizations": [{"to": [{"email": message.to}], "subject": message.subject}],
+                    "from": {
+                        "email": message.from_email or self.from_email,
+                        "name": message.from_name or self.from_name,
+                    },
+                    "content": [
+                        {"type": "text/plain", "value": message.text},
+                        {"type": "text/html", "value": message.html},
+                    ],
+                }
+    
+                # Add sandbox mode for testing
+                if self.sandbox_mode:
+                    payload["mail_settings"] = {"sandbox_mode": {"enable": True}}
+    
+                # Add custom metadata if provided
+                if message.metadata:
+                    payload["custom_args"] = message.metadata
+    
+                response = await client.post(
+                    f"{self.base_url}/mail/send",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+    
+                if response.status_code not in (200, 202):
+                    error_data = response.json() if response.content else {}
+                    raise Exception(f"SendGrid API error: {response.status_code} - {error_data}")
+    
+                # Extract message ID from headers
+                message_id = response.headers.get("X-Message-Id", "")
+    
+                if self.logger:
+                    self.logger.info(
+                        "Email sent via SendGrid",
+                        extra={
+                            "to": message.to,
+                            "message_id": message_id,
+                            "sandbox": self.sandbox_mode,
+                        },
+                    )
+    
+                return message_id
+    
+        async def get_status(self, message_id: str) -> dict[str, Any]:
+            """Get message status from SendGrid"""
+            # Implementation would query SendGrid's Activity API
+            # For MVP, return basic status
+            return {"message_id": message_id, "status": "sent", "provider": self.name}
+    ```
+    
+repositories/
+├── __init__.py
+└── notification_repository.py
+    
+    ```py
+    # services/notification-service/src/repositories/notification_repository.py
+    from datetime import datetime, timedelta
+    from typing import Any
+    from uuid import UUID
+    
+    from prisma import Prisma
+    
+    from ..schemas.notification import NotificationAttemptOut, NotificationOut, NotificationStats, NotificationStatus
+    
+    
+    class NotificationRepository:
+        """Repository for notification data access"""
+    
+        def __init__(self, prisma: Prisma):
+            self.prisma = prisma
+    
+        # Notification methods
+        async def create(self, data: dict[str, Any]) -> NotificationOut:
+            """Create a new notification record"""
+            notification = await self.prisma.notification.create(data=data)
+            return NotificationOut.model_validate(notification)
+    
+        async def find_by_id(self, notification_id: UUID) -> NotificationOut | None:
+            """Find notification by ID"""
+            notification = await self.prisma.notification.find_unique(where={"id": str(notification_id)})
+            return NotificationOut.model_validate(notification) if notification else None
+    
+        async def find_by_idempotency_key(self, idempotency_key: str) -> NotificationOut | None:
+            """Find notification by idempotency key"""
+            notification = await self.prisma.notification.find_unique(where={"idempotency_key": idempotency_key})
+            return NotificationOut.model_validate(notification) if notification else None
+    
+        async def update(self, notification_id: UUID, data: dict[str, Any]) -> NotificationOut:
+            """Update notification"""
+            notification = await self.prisma.notification.update(where={"id": str(notification_id)}, data=data)
+            return NotificationOut.model_validate(notification)
+    
+        async def find_many(
+            self, filters: dict[str, Any] = None, skip: int = 0, limit: int = 50, order_by: list[tuple] = None
+        ) -> list[NotificationOut]:
+            """Find multiple notifications with filters"""
+            where = filters or {}
+            order = {}
+    
+            if order_by:
+                for field, direction in order_by:
+                    order[field] = direction
+            else:
+                order = {"created_at": "desc"}
+    
+            notifications = await self.prisma.notification.find_many(where=where, skip=skip, take=limit, order=order)
+    
+            return [NotificationOut.model_validate(n) for n in notifications]
+    
+        async def count(self, filters: dict[str, Any] | None = None) -> int:
+            """Count notifications with filters"""
+            where = filters or {}
+            return await self.prisma.notification.count(where=where)
+    
+        # Attempt methods
+        async def create_attempt(self, data: dict[str, Any]) -> NotificationAttemptOut:
+            """Create a new notification attempt record"""
+            attempt = await self.prisma.notificationattempt.create(data=data)
+            return NotificationAttemptOut.model_validate(attempt)
+    
+        async def get_attempt_count(self, notification_id: UUID) -> int:
+            """Get count of attempts for a notification"""
+            return await self.prisma.notificationattempt.count(where={"notification_id": str(notification_id)})
+    
+        async def get_attempts(self, notification_id: UUID) -> list[NotificationAttemptOut]:
+            """Get all attempts for a notification"""
+            attempts = await self.prisma.notificationattempt.find_many(
+                where={"notification_id": str(notification_id)}, order={"attempt_number": "asc"}
+            )
+            return [NotificationAttemptOut.model_validate(a) for a in attempts]
+    
+        # Special queries
+        async def find_retriable_notifications(self, max_attempts: int) -> list[NotificationOut]:
+            """Find failed notifications with fewer than max attempts"""
+            # Raw query to find failed notifications with attempt count
+            results = await self.prisma.query_raw(
+                """
+                SELECT n.*
+                FROM notifications n
+                LEFT JOIN (
+                    SELECT notification_id, COUNT(*) as attempt_count
+                    FROM notification_attempts
+                    GROUP BY notification_id
+                ) a ON n.id = a.notification_id
+                WHERE n.status = 'failed'
+                AND (a.attempt_count IS NULL OR a.attempt_count < $1)
+                ORDER BY n.created_at DESC
+                LIMIT 100
+                """,
+                max_attempts,
+            )
+    
+            return [NotificationOut.model_validate(r) for r in results]
+    
+        async def get_stats(self) -> NotificationStats:
+            """Get notification statistics"""
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = today_start + timedelta(days=1)
+    
+            # Count by status today
+            sent_today = await self.prisma.notification.count(
+                where={"status": NotificationStatus.SENT, "created_at": {"gte": today_start, "lt": today_end}}
+            )
+    
+            failed_today = await self.prisma.notification.count(
+                where={"status": NotificationStatus.FAILED, "created_at": {"gte": today_start, "lt": today_end}}
+            )
+    
+            pending_today = await self.prisma.notification.count(
+                where={"status": NotificationStatus.PENDING, "created_at": {"gte": today_start, "lt": today_end}}
+            )
+    
+            # Get counts by template type
+            template_counts = await self.prisma.query_raw(
+                """
+                SELECT template_type, COUNT(*) as count
+                FROM notifications
+                WHERE created_at >= $1 AND created_at < $2
+                GROUP BY template_type
+                """,
+                today_start,
+                today_end,
+            )
+    
+            by_template = {row["template_type"]: row["count"] for row in template_counts}
+    
+            # Get counts by status
+            by_status = {"sent": sent_today, "failed": failed_today, "pending": pending_today}
+    
+            return NotificationStats(
+                sent_today=sent_today,
+                failed_today=failed_today,
+                pending_today=pending_today,
+                by_template=by_template,
+                by_status=by_status,
+            )
+    ```
+    
+schemas/
+├── __init__.py
+│   
+│   ```py
+│   # services/notification-service/src/schemas/__init__.py
+│   from .notification import NotificationOut, NotificationStats
+│   
+│   __all__ = ["NotificationOut", "NotificationStats"]
+│   ```
+│   
+├── enums.py
+│   
+│   ```py
+│   from enum import Enum
+│   
+│   
+│   class NotificationStatus(str, Enum):
+│       PENDING = "pending"
+│       SENT = "sent"
+│       FAILED = "failed"
+│   
+│   
+│   class AttemptStatus(str, Enum):
+│       SUCCESS = "success"
+│       FAILED = "failed"
+│       TIMEOUT = "timeout"
+│   ```
+│   
+├── events.py
+│   
+│   ```py
+│   # services/notification-service/src/schemas/events.py
+│   from datetime import datetime
+│   from uuid import UUID
+│   
+│   from pydantic import BaseModel, EmailStr
+│   
+│   
+│   # Base event payload
+│   class BaseEventPayload(BaseModel):
+│       """Base class for all event payloads"""
+│   
+│       merchant_id: UUID
+│       platform_name: str
+│       platform_shop_id: str
+│       domain: str
+│       correlation_id: str | None = None
+│   
+│   
+│   # Merchant events
+│   class MerchantCreatedPayload(BaseEventPayload):
+│       """Payload for merchant.created event"""
+│   
+│       email: EmailStr
+│       shop_name: str
+│       installed_at: datetime
+│   
+│   
+│   # Catalog events
+│   class CatalogSyncCompletedPayload(BaseEventPayload):
+│       """Payload for catalog.sync.completed event"""
+│   
+│       sync_id: UUID
+│       total_items: int
+│       status: str
+│       first_sync: bool
+│       has_changes: bool
+│       added_count: int = 0
+│       updated_count: int = 0
+│   
+│   
+│   # Billing events
+│   class BillingSubscriptionExpiredPayload(BaseEventPayload):
+│       """Payload for billing.subscription.expired event"""
+│   
+│       plan_name: str
+│       expired_at: datetime
+│   
+│   
+│   class BillingSubscriptionChangedPayload(BaseEventPayload):
+│       """Payload for billing.subscription.changed event"""
+│   
+│       old_plan: str | None
+│       new_plan: str
+│       changed_at: datetime
+│   
+│   
+│   # Credit events
+│   class CreditBalanceLowPayload(BaseEventPayload):
+│       """Payload for credit.balance.low event"""
+│   
+│       balance: int
+│       threshold: int
+│   
+│   
+│   class CreditBalanceDepletedPayload(BaseEventPayload):
+│       """Payload for credit.balance.depleted event"""
+│   
+│       depleted_at: datetime
+│   
+│   
+│   # Published events
+│   class EmailSentPayload(BaseModel):
+│       """Payload for notification.email.sent event"""
+│   
+│       notification_id: UUID
+│       merchant_id: UUID
+│       platform_name: str
+│       platform_shop_id: str
+│       domain: str
+│       template_type: str
+│       sent_at: datetime
+│   
+│   
+│   class EmailFailedPayload(BaseModel):
+│       """Payload for notification.email.failed event"""
+│   
+│       notification_id: UUID
+│       merchant_id: UUID
+│       platform_name: str
+│       platform_shop_id: str
+│       domain: str
+│       template_type: str
+│       error: str
+│       failed_at: datetime
+│   ```
+│   
+└── notification.py
+    
+    ```py
+    # services/notification-service/src/schemas/notification.py
+    from datetime import datetime
+    from uuid import UUID
+    
+    from pydantic import BaseModel, ConfigDict, Field
+    
+    from .enums import AttemptStatus, NotificationStatus
+    
+    
+    # Output DTOs
+    class NotificationOut(BaseModel):
+        """DTO for notification response"""
+    
+        id: UUID
+        merchant_id: UUID
+        platform_name: str
+        platform_shop_id: str
+        recipient_email: str
+        template_type: str
+        status: NotificationStatus
+        provider_message_id: str | None = None
+        trigger_event: str
+        idempotency_key: str
+        template_variables: dict  # JSON field
+        created_at: datetime
+        updated_at: datetime
+    
+        model_config = ConfigDict(from_attributes=True)
+    
+    
+    class NotificationAttemptOut(BaseModel):
+        """DTO for notification attempt"""
+    
+        id: UUID
+        notification_id: UUID
+        attempt_number: int
+        provider: str
+        status: AttemptStatus
+        error_message: str | None = None
+        provider_response: dict | None = None
+        attempted_at: datetime
+    
+        model_config = ConfigDict(from_attributes=True)
+    
+    
+    class NotificationWithAttemptsOut(BaseModel):
+        """DTO for notification with attempts"""
+    
+        notification: NotificationOut
+        attempts: list[NotificationAttemptOut] = Field(default_factory=list)
+    
+    
+    class NotificationStats(BaseModel):
+        """DTO for notification statistics"""
+    
+        sent_today: int = 0
+        failed_today: int = 0
+        pending_today: int = 0
+        by_template: dict[str, int] = Field(default_factory=dict)
+        by_status: dict[str, int] = Field(default_factory=dict)
+    ```
+    
+services/
+├── __init__.py
+├── email_service.py
+│   
+│   ```py
+│   # services/notification-service/src/services/email_service.py
+│   from typing import Any
+│   
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from ..providers.base import EmailMessage, EmailProvider
+│   
+│   
+│   class EmailService:
+│       """Service for sending emails through providers"""
+│   
+│       def __init__(self, provider: EmailProvider, logger: ServiceLogger = None):
+│           self.provider = provider
+│           self.logger = logger
+│   
+│       @property
+│       def provider_name(self) -> str:
+│           """Get current provider name"""
+│           return self.provider.name
+│   
+│       async def send(self, to: str, subject: str, html: str, text: str, metadata: dict[str, Any] | None = None) -> str:
+│           """
+│           Send email through configured provider
+│   
+│           Returns:
+│               Provider message ID
+│   
+│           Raises:
+│               Exception: On send failure
+│           """
+│           message = EmailMessage(to=to, subject=subject, html=html, text=text, metadata=metadata)
+│   
+│           try:
+│               message_id = await self.provider.send(message)
+│   
+│               if self.logger:
+│                   self.logger.info(
+│                       "Email sent successfully",
+│                       extra={"provider": self.provider_name, "to": to, "subject": subject, "message_id": message_id},
+│                   )
+│   
+│               return message_id
+│   
+│           except Exception as e:
+│               if self.logger:
+│                   self.logger.exception(
+│                       f"Email send failed: {e!s}",
+│                       extra={"provider": self.provider_name, "to": to, "subject": subject, "error": str(e)},
+│                   )
+│               raise
+│   
+│       async def get_status(self, message_id: str) -> dict[str, Any]:
+│           """Get message status from provider"""
+│           return await self.provider.get_status(message_id)
+│   ```
+│   
+├── notification_delivery_service.py
+│   
+│   ```py
+│   # services/notification-service/src/services/notification_delivery_service.py
+│   from uuid import UUID
+│   
+│   from shared.utils.exceptions import NotFoundError
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from ..repositories.notification_repository import NotificationRepository
+│   from ..schemas.notification import AttemptStatus, NotificationStatus
+│   from .email_service import EmailService
+│   from .template_service import TemplateService
+│   
+│   
+│   class NotificationDeliveryService:
+│       """
+│       Handles the actual delivery of notifications.
+│       Single responsibility: Send emails and track delivery attempts.
+│       """
+│   
+│       def __init__(
+│           self,
+│           repository: NotificationRepository,
+│           template_service: TemplateService,
+│           email_service: EmailService,
+│           logger: ServiceLogger,
+│       ):
+│           self.repository = repository
+│           self.template_service = template_service
+│           self.email_service = email_service
+│           self.logger = logger
+│   
+│       async def deliver_notification(self, notification_id: UUID) -> bool:
+│           """
+│           Deliver a notification and record the attempt.
+│           Returns True if successful, False otherwise.
+│           """
+│           notification = await self.repository.find_by_id(notification_id)
+│           if not notification:
+│               raise NotFoundError(
+│                   f"Notification {notification_id} not found", resource="notification", resource_id=str(notification_id)
+│               )
+│   
+│           # Don't re-send already sent notifications
+│           if notification.status == NotificationStatus.SENT:
+│               self.logger.warning("Notification already sent", extra={"notification_id": str(notification_id)})
+│               return True
+│   
+│           # Get attempt number
+│           attempt_number = await self.repository.get_attempt_count(notification_id) + 1
+│   
+│           try:
+│               # Render template
+│               subject, html_body, text_body = self.template_service.render_email(
+│                   notification.template_type, notification.template_variables
+│               )
+│   
+│               # Send email
+│               provider_message_id = await self.email_service.send(
+│                   to=notification.recipient_email,
+│                   subject=subject,
+│                   html=html_body,
+│                   text=text_body,
+│                   metadata={
+│                       "notification_id": str(notification.id),
+│                       "merchant_id": notification.merchant_id,
+│                       "attempt": attempt_number,
+│                   },
+│               )
+│   
+│               # Record successful attempt
+│               await self.repository.create_attempt(
+│                   {
+│                       "notification_id": str(notification_id),
+│                       "attempt_number": attempt_number,
+│                       "provider": self.email_service.provider_name,
+│                       "status": AttemptStatus.SUCCESS,
+│                       "provider_response": {"message_id": provider_message_id},
+│                   }
+│               )
+│   
+│               # Update notification status
+│               await self.repository.update(
+│                   notification_id,
+│                   {
+│                       "status": NotificationStatus.SENT,
+│                       "provider_message_id": provider_message_id,
+│                   },
+│               )
+│   
+│               self.logger.info(
+│                   "Notification delivered successfully",
+│                   extra={
+│                       "notification_id": str(notification_id),
+│                       "provider_message_id": provider_message_id,
+│                       "attempt": attempt_number,
+│                   },
+│               )
+│   
+│               return True
+│   
+│           except Exception as e:
+│               # Record failed attempt
+│               await self.repository.create_attempt(
+│                   {
+│                       "notification_id": str(notification_id),
+│                       "attempt_number": attempt_number,
+│                       "provider": self.email_service.provider_name,
+│                       "status": AttemptStatus.FAILED,
+│                       "error_message": str(e),
+│                   }
+│               )
+│   
+│               # Update notification status
+│               await self.repository.update(notification_id, {"status": NotificationStatus.FAILED})
+│   
+│               self.logger.exception(
+│                   f"Notification delivery failed: {e}",
+│                   extra={"notification_id": str(notification_id), "attempt": attempt_number},
+│               )
+│   
+│               return False
+│   
+│       async def retry_failed_notifications(self, max_attempts: int = 3) -> int:
+│           """
+│           Retry failed notifications that haven't exceeded max attempts.
+│           Returns count of retried notifications.
+│           """
+│           failed_notifications = await self.repository.find_retriable_notifications(max_attempts)
+│           retry_count = 0
+│   
+│           for notification in failed_notifications:
+│               success = await self.deliver_notification(notification.id)
+│               if success:
+│                   retry_count += 1
+│   
+│           return retry_count
+│   ```
+│   
+├── notification_service.py
+│   
+│   ```py
+│   # services/notification-service/src/services/notification_service.py
+│   from datetime import datetime
+│   from typing import ClassVar
+│   from uuid import UUID
+│   
+│   from shared.messaging.events.base import BaseEventPayload
+│   from shared.utils import generate_idempotency_key
+│   from shared.utils.exceptions import NotFoundError
+│   from shared.utils.logger import ServiceLogger
+│   
+│   from ..repositories.notification_repository import NotificationRepository
+│   from ..schemas.notification import NotificationOut, NotificationStats, NotificationStatus
+│   
+│   
+│   class NotificationService:
+│       """
+│       Core notification service - handles notification creation and tracking.
+│       Single responsibility: Record and manage notification state.
+│       """
+│   
+│       # Event to template mapping
+│       EVENT_TEMPLATE_MAP: ClassVar[dict[str, str]] = {
+│           "evt.merchant.created.v1": "welcome",
+│           "evt.credit.balance.low.v1": "credit_warning",
+│           "evt.credit.balance.depleted.v1": "zero_balance",
+│           "evt.catalog.sync.started.v1": "catalog_sync_started",
+│           "evt.catalog.sync.completed.v1": "catalog_sync_completed",
+│       }
+│   
+│       def __init__(
+│           self,
+│           repository: NotificationRepository,
+│           logger: ServiceLogger,
+│       ):
+│           self.repository = repository
+│           self.logger = logger
+│   
+│       def _determine_template_type(self, event_type: str, data: BaseEventPayload) -> str | None:
+│           """Determine template type based on event"""
+│           if event_type == "evt.catalog.sync.completed.v1":
+│               if hasattr(data, "first_sync") and data.first_sync:
+│                   return "registration_complete"
+│               elif hasattr(data, "has_changes") and data.has_changes:
+│                   return "registration_update"
+│               return None
+│   
+│           return self.EVENT_TEMPLATE_MAP.get(event_type)
+│   
+│       def _extract_recipient_email(self, data: BaseEventPayload) -> str | None:
+│           """Extract recipient email from event data"""
+│           if hasattr(data, "email"):
+│               return data.email
+│           # Future: Implement merchant service lookup
+│           return None
+│   
+│       def _prepare_template_variables(self, event_type: str, data: BaseEventPayload) -> dict:
+│           """Prepare template variables for storage"""
+│           platform_ctx = data.platform
+│   
+│           # Base context
+│           variables = {
+│               # Platform context (includes domain)
+│               "domain": platform_ctx.domain,
+│               "platform_name": platform_ctx.platform_name,
+│               "platform_shop_id": platform_ctx.platform_shop_id,
+│               # Global template variables
+│               "current_year": datetime.now().year,
+│               "support_email": "support@glamyouup.com",
+│               "app_url": "https://app.glamyouup.com",
+│           }
+│   
+│           # Add event-specific data (excluding platform)
+│           event_data = data.model_dump(exclude={"platform"})
+│           variables.update(event_data)
+│   
+│           # Event-specific enrichment
+│           if event_type == "evt.merchant.created.v1" and hasattr(data, "shop_name"):
+│               variables["shop_name"] = data.shop_name or platform_ctx.domain
+│   
+│           if event_type == "evt.credit.balance.low.v1" and hasattr(data, "balance"):
+│               variables["balance_percentage"] = round((data.balance / data.threshold) * 100, 1)
+│   
+│           return variables
+│   
+│       async def process_event(
+│           self,
+│           event_type: str,
+│           data: BaseEventPayload,
+│           event_id: str,
+│           correlation_id: str,
+│           delivery_service: "NotificationDeliveryService" = None,
+│       ) -> NotificationOut | None:
+│           """
+│           Process an event and create notification record.
+│           Optionally trigger immediate delivery via delivery service.
+│           """
+│           platform_ctx = data.platform
+│   
+│           # Generate idempotency key
+│           idempotency_key = generate_idempotency_key(platform_ctx.platform_name, "notification", event_id)
+│   
+│           # Check idempotency
+│           existing = await self.repository.find_by_idempotency_key(idempotency_key)
+│           if existing:
+│               self.logger.info(
+│                   "Notification already processed",
+│                   extra={
+│                       "idempotency_key": idempotency_key,
+│                       "notification_id": str(existing.id),
+│                   },
+│               )
+│               return existing
+│   
+│           # Determine template
+│           template_type = self._determine_template_type(event_type, data)
+│           if not template_type:
+│               self.logger.info("No template for event", extra={"event_type": event_type})
+│               return None
+│   
+│           # Extract recipient
+│           recipient_email = self._extract_recipient_email(data)
+│           if not recipient_email:
+│               self.logger.warning(
+│                   "No recipient email found",
+│                   extra={"event_type": event_type, "merchant_id": str(platform_ctx.merchant_id)},
+│               )
+│               return None
+│   
+│           # Prepare template variables
+│           template_variables = self._prepare_template_variables(event_type, data)
+│   
+│           # Create notification record
+│           notification = await self.repository.create(
+│               {
+│                   "merchant_id": str(platform_ctx.merchant_id),
+│                   "platform_name": platform_ctx.platform_name,
+│                   "platform_shop_id": platform_ctx.platform_shop_id,
+│                   "recipient_email": recipient_email,
+│                   "template_type": template_type,
+│                   "status": NotificationStatus.PENDING,
+│                   "trigger_event": event_type,
+│                   "idempotency_key": idempotency_key,
+│                   "template_variables": template_variables,  # Includes domain
+│               }
+│           )
+│   
+│           self.logger.info(
+│               "Notification created",
+│               extra={
+│                   "notification_id": str(notification.id),
+│                   "template_type": template_type,
+│               },
+│           )
+│   
+│           # Trigger delivery if service provided
+│           if delivery_service:
+│               await delivery_service.deliver_notification(notification.id)
+│               # Refresh to get updated status
+│               notification = await self.repository.find_by_id(notification.id)
+│   
+│           return notification
+│   
+│       async def get_notification(self, notification_id: UUID) -> NotificationOut:
+│           """Get notification by ID"""
+│           notification = await self.repository.find_by_id(notification_id)
+│           if not notification:
+│               raise NotFoundError(
+│                   f"Notification {notification_id} not found", resource="notification", resource_id=str(notification_id)
+│               )
+│           return notification
+│   
+│       async def list_notifications(
+│           self,
+│           skip: int = 0,
+│           limit: int = 50,
+│           status: str | None = None,
+│           merchant_id: UUID | None = None,
+│       ) -> tuple[int, list[NotificationOut]]:
+│           """List notifications with filtering"""
+│           filters = {}
+│           if status:
+│               filters["status"] = status
+│           if merchant_id:
+│               filters["merchant_id"] = str(merchant_id)
+│   
+│           total = await self.repository.count(filters)
+│           notifications = await self.repository.find_many(
+│               filters=filters, skip=skip, limit=limit, order_by=[("created_at", "desc")]
+│           )
+│   
+│           return total, notifications
+│   
+│       async def get_stats(self) -> NotificationStats:
+│           """Get notification statistics"""
+│           return await self.repository.get_stats()
+│   ```
+│   
+└── template_service.py
+    
+    ```py
+    # services/notification-service/src/services/template_service.py
+    from pathlib import Path
+    from typing import Any
+    
+    from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+    
+    from shared.utils.exceptions import InternalError, NotFoundError
+    from shared.utils.logger import ServiceLogger
+    
+    
+    class TemplateService:
+        """Service for managing and rendering email templates"""
+    
+        def __init__(self, template_path: str, cache_ttl: int = 300, logger: ServiceLogger | None = None):
+            self.template_path = Path(template_path)
+            self.cache_ttl = cache_ttl  # kept for compatibility; unused without caching
+            self.logger = logger
+    
+            self.env = Environment(
+                loader=FileSystemLoader(str(self.template_path)),
+                autoescape=True,
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+            self.env.filters["format_currency"] = self._format_currency
+            self.env.filters["format_date"] = self._format_date
+    
+        @staticmethod
+        def _format_currency(value: float) -> str:
+            return f"${value:,.2f}"
+    
+        @staticmethod
+        def _format_date(value: Any) -> str:
+            from datetime import datetime
+    
+            if isinstance(value, str):
+                value = datetime.fromisoformat(value)
+            if hasattr(value, "strftime"):
+                return value.strftime("%B %d, %Y")
+            return str(value)
+    
+        def get_template_path(self, template_type: str, filename: str) -> Path:
+            return self.template_path / template_type / filename
+    
+        def template_exists(self, template_type: str) -> bool:
+            return (self.template_path / template_type).is_dir()
+    
+        # ⬇️ no caching
+        def load_subject(self, template_type: str) -> str:
+            path = self.get_template_path(template_type, "subject.txt")
+            if not path.exists():
+                raise NotFoundError(
+                    f"Subject template not found for {template_type}",
+                    resource="template",
+                    resource_id=f"{template_type}/subject.txt",
+                )
+            return path.read_text(encoding="utf-8").strip()
+    
+        def render_template(self, template_type: str, fmt: str, context: dict[str, Any]) -> str:
+            """
+            Render a template with context
+    
+            Args:
+                template_type: Template type (e.g., 'welcome')
+                fmt: 'html' or 'text'
+                context: Template variables
+            """
+            template_file = "body.html.j2" if fmt == "html" else "body.text.j2"
+            template_path = f"{template_type}/{template_file}"
+    
+            try:
+                template = self.env.get_template(template_path)
+                if fmt == "html":
+                    context = {**context}  # avoid mutating caller's dict
+                    context["header"] = self._render_shared("header.html.j2", context)
+                    context["footer"] = self._render_shared("footer.html.j2", context)
+                return template.render(**context)
+    
+            except TemplateNotFound as e:
+                raise NotFoundError(
+                    f"Template not found: {template_path}",
+                    resource="template",
+                    resource_id=template_path,
+                ) from e
+            except Exception as e:
+                raise InternalError(f"Template rendering failed: {e!s}", error_id=template_type) from e
+    
+        def _render_shared(self, template_name: str, context: dict[str, Any]) -> str:
+            try:
+                template = self.env.get_template(f"shared/{template_name}")
+                return template.render(**context)
+            except TemplateNotFound:
+                if self.logger:
+                    self.logger.warning(f"Shared template not found: {template_name}")
+                return ""
+    
+        def render_email(self, template_type: str, context: dict[str, Any]) -> tuple[str, str, str]:
+            if not self.template_exists(template_type):
+                raise NotFoundError(
+                    f"Template type not found: {template_type}",
+                    resource="template",
+                    resource_id=template_type,
+                )
+    
+            subject = self.load_subject(template_type)
+            html_body = self.render_template(template_type, "html", context)
+            text_body = self.render_template(template_type, "text", context)
+            return subject, html_body, text_body
+    ```
+    
+__init__.py
+config.py
+
+```py
+# services/notification-service/src/config.py
+import os
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from shared.utils import ConfigurationError, load_root_env
+
+
+class ServiceConfig(BaseModel):
+    """Notification service configuration"""
+
+    model_config = ConfigDict(
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    # Service identification
+    service_name: str = "notification-service"
+    service_version: str = "1.0.0"
+    service_description: str = "Event-driven email notification service"
+    debug: bool = Field(default=False, alias="DEBUG")
+
+    # Required environment variables
+    environment: str = Field(..., alias="APP_ENV")
+    api_external_port: int = Field(..., alias="NOTIFICATION_API_EXTERNAL_PORT")
+    database_enabled: bool = Field(True, alias="NOTIFICATION_DB_ENABLED")
+
+    # Required secrets
+    database_url: str = Field(..., alias="DATABASE_URL")
+    client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
+
+    # API configuration
+    api_host: str = "0.0.0.0"
+
+    # Email provider configuration
+    email_provider: Literal["sendgrid", "mailhog"] = Field("mailhog", alias="NOTIFICATION_EMAIL_PROVIDER")
+
+    # SendGrid settings
+    sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
+    sendgrid_from_email: str = Field(default="noreply@glamyouup.com", alias="SENDGRID_FROM_EMAIL")
+    sendgrid_from_name: str = Field(default="Glam You Up", alias="SENDGRID_FROM_NAME")
+    sendgrid_sandbox_mode: bool = Field(False, alias="SENDGRID_SANDBOX_MODE")
+
+    # Mailhog settings
+    mailhog_smtp_host: str = Field(default="localhost", alias="MAILHOG_SMTP_HOST")
+    mailhog_smtp_port: int = Field(default=1025, alias="MAILHOG_SMTP_PORT")
+
+    # Template settings
+    template_path: str = Field(default="/app/templates", alias="NOTIFICATION_TEMPLATE_PATH")
+    template_cache_ttl: int = Field(default=300, alias="NOTIFICATION_CACHE_TTL")
+
+    # Retry settings
+    max_retries: int = Field(default=3, alias="NOTIFICATION_MAX_RETRIES")
+    retry_delay: int = Field(default=60, alias="NOTIFICATION_RETRY_DELAY")
+
+    # Logging
+    logging_level: str = "INFO"
+    logging_format: str = "json"
+
+    @property
+    def nats_url(self) -> str:
+        """NATS URL for event system"""
+        in_container = os.path.exists("/.dockerenv")
+        if in_container or self.environment in ["development", "production"]:
+            return "nats://nats:4222"
+        return "nats://localhost:4222"
+
+    @property
+    def api_port(self) -> int:
+        """Port based on environment"""
+        in_container = os.path.exists("/.dockerenv")
+        return 8000 if in_container else self.api_external_port
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production"""
+        return self.environment == "production"
+
+    @model_validator(mode="after")
+    def validate_config(self):
+        if self.database_enabled and not self.database_url:
+            raise ValueError("DATABASE_URL required when database is enabled")
+
+        if self.email_provider == "sendgrid" and not self.sendgrid_api_key:
+            raise ValueError("SENDGRID_API_KEY required when using SendGrid provider")
+
+        # Use local template path in development
+        if not os.path.exists("/.dockerenv") and self.environment == "local":
+            import pathlib
+
+            self.template_path = str(pathlib.Path(__file__).parent.parent / "templates")
+
+        return self
+
+
+@lru_cache
+def get_service_config() -> ServiceConfig:
+    """Load configuration once"""
+    try:
+        load_root_env()  # From shared package
+        return ServiceConfig(**os.environ)  # type: ignore[arg-type]
+    except Exception as e:
+        raise ConfigurationError(f"Failed to load config: {e}", config_key="notification-service") from e
+```
+
+dependencies.py
+
+```py
+# services/notification-service/src/dependencies.py
+from typing import Annotated
+
+from fastapi import Depends, HTTPException, Request
+
+from shared.api.dependencies import ClientAuthDep, LoggerDep, PaginationDep, PlatformContextDep, RequestContextDep
+
+from .config import ServiceConfig
+from .lifecycle import ServiceLifecycle
+from .services.notification_service import NotificationService
+
+# Re-export shared dependencies
+__all__ = [
+    "ClientAuthDep",
+    "ConfigDep",
+    "LifecycleDep",
+    "LoggerDep",
+    "NotificationServiceDep",
+    "PaginationDep",
+    "PlatformContextDep",
+    "RequestContextDep",
+]
+
+
+# Core dependencies
+def get_lifecycle(request: Request) -> ServiceLifecycle:
+    """Get service lifecycle from app state"""
+    return request.app.state.lifecycle
+
+
+def get_config(request: Request) -> ServiceConfig:
+    """Get service config from app state"""
+    return request.app.state.config
+
+
+# Type aliases
+LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+
+
+# Service dependencies
+def get_notification_service(lifecycle: LifecycleDep) -> NotificationService:
+    """Get notification service"""
+    if not lifecycle.notification_service:
+        raise HTTPException(500, "Notification service not initialized")
+    return lifecycle.notification_service
+
+
+NotificationServiceDep = Annotated[NotificationService, Depends(get_notification_service)]
+```
+
+exceptions.py
+
+```py
+# File: services/notification-service/src/exceptions.py
+"""
+Notification service exceptions using shared error classes.
+
+All exceptions are re-exported from shared.errors for consistency
+across the platform.
+"""
+
+from shared.utils.exceptions import (
+    ConfigurationError,
+    ConflictError,
+    DomainError,
+    ForbiddenError,
+    GlamBaseError,
+    InfrastructureError,
+    InternalError,
+    NotFoundError,
+    RateLimitExceededError,
+    RequestTimeoutError,
+    ServiceUnavailableError,
+    UnauthorizedError,
+    ValidationError,
+)
+
+__all__ = [
+    "ConfigurationError",
+    "ConflictError",
+    "DomainError",
+    "ForbiddenError",
+    "GlamBaseError",
+    "InfrastructureError",
+    "InternalError",
+    "NotFoundError",
+    "RateLimitExceededError",
+    "RequestTimeoutError",
+    "ServiceUnavailableError",
+    "UnauthorizedError",
+    "ValidationError",
+]
+```
+
+lifecycle.py
+
+```py
+# services/notification-service/src/lifecycle.py
+import asyncio
+
+from prisma import Prisma  # type: ignore[attr-defined]
+
+from shared.messaging.jetstream_client import JetStreamClient
+from shared.utils.logger import ServiceLogger
+
+from .config import ServiceConfig
+from .events.listeners import (
+    CatalogSyncCompletedListener,
+    CreditBalanceDepletedListener,
+    CreditBalanceLowListener,
+    MerchantCreatedListener,
+)
+from .events.publishers import NotificationEventPublisher
+from .providers.mailhog_provider import MailhogProvider
+from .providers.sendgrid_provider import SendGridProvider
+from .repositories.notification_repository import NotificationRepository
+from .services.email_service import EmailService
+from .services.notification_service import NotificationService
+from .services.template_service import TemplateService
+
+
+class ServiceLifecycle:
+    """Manages all service components lifecycle"""
+
+    def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+        self.config = config
+        self.logger = logger
+
+        # Connections
+        self.messaging_client: JetStreamClient | None = None
+        self.prisma: Prisma | None = None
+        self._db_connected = False
+
+        # Services
+        self.notification_service: NotificationService | None = None
+        self.template_service: TemplateService | None = None
+        self.email_service: EmailService | None = None
+
+        # Event handling
+        self.event_publisher: NotificationEventPublisher | None = None
+        self._listeners: list = []
+        self._tasks: list[asyncio.Task] = []
+
+    async def startup(self) -> None:
+        """Initialize all components in correct order"""
+        try:
+            self.logger.info("Starting notification service components...")
+
+            # 1. Messaging
+            await self._init_messaging()
+
+            # 2. Database
+            await self._init_database()
+
+            # 3. Services
+            self._init_services()
+
+            # 4. Event listeners
+            await self._init_listeners()
+
+            self.logger.info("Notification service started successfully")
+
+        except Exception:
+            self.logger.critical("Service startup failed", exc_info=True)
+            await self.shutdown()
+            raise
+
+    async def shutdown(self) -> None:
+        """Graceful shutdown in reverse order"""
+        self.logger.info("Shutting down notification service")
+
+        # Cancel tasks
+        for task in self._tasks:
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+        # Stop listeners
+        for listener in self._listeners:
+            try:
+                await listener.stop()
+            except Exception:
+                self.logger.exception("Listener stop failed", exc_info=True)
+
+        # Close messaging
+        if self.messaging_client:
+            try:
+                await self.messaging_client.close()
+            except Exception:
+                self.logger.exception("Messaging close failed", exc_info=True)
+
+        # Disconnect database
+        if self.prisma and self._db_connected:
+            try:
+                await self.prisma.disconnect()
+            except Exception:
+                self.logger.exception("Prisma disconnect failed", exc_info=True)
+
+        self.logger.info("Notification service shutdown complete")
+
+    async def _init_messaging(self) -> None:
+        """Initialize NATS/JetStream"""
+        self.messaging_client = JetStreamClient(self.logger)
+        await self.messaging_client.connect([self.config.nats_url])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
+
+        # Initialize publisher
+        self.event_publisher = NotificationEventPublisher(self.messaging_client, self.logger)
+
+        self.logger.info("Messaging initialized")
+
+    async def _init_database(self) -> None:
+        """Initialize Prisma client"""
+        if not self.config.database_enabled:
+            self.logger.info("Database disabled")
+            return
+
+        self.prisma = Prisma()
+        try:
+            await self.prisma.connect()
+            self._db_connected = True
+            self.logger.info("Database connected")
+        except Exception as e:
+            self.logger.exception(f"Database connection failed: {e}")
+            raise
+
+    def _init_services(self) -> None:
+        """Initialize business services"""
+        # Initialize template service
+        self.template_service = TemplateService(
+            template_path=self.config.template_path,
+            cache_ttl=self.config.template_cache_ttl,
+            logger=self.logger,
+        )
+
+        # Initialize email provider
+        if self.config.email_provider == "sendgrid":
+            provider = SendGridProvider(
+                api_key=self.config.sendgrid_api_key,
+                from_email=self.config.sendgrid_from_email,
+                from_name=self.config.sendgrid_from_name,
+                sandbox_mode=self.config.sendgrid_sandbox_mode,
+                logger=self.logger,
+            )
+        else:
+            provider = MailhogProvider(
+                smtp_host=self.config.mailhog_smtp_host,
+                smtp_port=self.config.mailhog_smtp_port,
+                logger=self.logger,
+            )
+
+        # Initialize email service
+        self.email_service = EmailService(provider=provider, logger=self.logger)
+
+        # Initialize notification service
+        if self._db_connected:
+            repository = NotificationRepository(self.prisma)
+            self.notification_service = NotificationService(
+                repository=repository,
+                template_service=self.template_service,
+                email_service=self.email_service,
+                logger=self.logger,
+                max_retries=self.config.max_retries,
+            )
+
+        self.logger.info("Services initialized")
+
+    async def _init_listeners(self) -> None:
+        """Initialize event listeners"""
+        if not self.messaging_client or not self.notification_service:
+            self.logger.warning("Skipping listeners - dependencies not ready")
+            return
+
+        # Create listeners for ALL event types
+        listeners = [
+            MerchantCreatedListener(
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
+            ),
+            CatalogSyncCompletedListener(
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
+            ),
+            CreditBalanceLowListener(
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
+            ),
+            CreditBalanceDepletedListener(
+                self.messaging_client, self.notification_service, self.event_publisher, self.logger
+            ),
+        ]
+
+        # Start all listeners
+        for listener in listeners:
+            await listener.start()
+            self._listeners.append(listener)
+
+        self.logger.info(f"Started {len(listeners)} event listeners")
+```
+
+main.py
+
+```py
+# services/notification-service/src/main.py
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from shared.api import create_health_router, setup_middleware
+from shared.utils import create_logger
+
+from .config import get_service_config
+from .lifecycle import ServiceLifecycle
+
+# Create singletons at module level
+config = get_service_config()
+logger = create_logger(config.service_name)
+lifecycle = ServiceLifecycle(config, logger)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan management for startup/shutdown"""
+    # Store in app state for dependencies
+    app.state.lifecycle = lifecycle
+    app.state.config = config
+    app.state.logger = logger  # REQUIRED for middleware
+
+    try:
+        await lifecycle.startup()
+        yield
+    finally:
+        await lifecycle.shutdown()
+
+
+def create_application() -> FastAPI:
+    """Create FastAPI app with shared package integration"""
+    app = FastAPI(
+        title=config.service_name,
+        version=config.service_version,
+        description=config.service_description,
+        lifespan=lifespan,
+    )
+
+    # Setup shared middleware (handles ALL errors)
+    setup_middleware(app, service_name=config.service_name)
+
+    # Add health check from shared package
+    app.include_router(create_health_router(config.service_name))
+
+    # Add notification routes
+    from .api.v1 import notifications
+
+    app.include_router(notifications.router)
+
+    return app
+
+
+app = create_application()
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug)
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

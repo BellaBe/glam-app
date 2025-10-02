@@ -1,0 +1,4 @@
+# Build artifacts
+*.pid
+*.seed
+*.pid.lock

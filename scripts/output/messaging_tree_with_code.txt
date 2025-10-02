@@ -1,0 +1,769 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/shared/shared/messaging
+================================================================================
+
+messaging/
+events/
+├── __init__.py
+├── analytics.py
+├── base.py
+│
+│   ```py
+│   # shared/messaging/models.py
+│   """Standardized event models for GLAM messaging system."""
+│
+│   from datetime import UTC, datetime
+│   from typing import Any
+│   from uuid import UUID, uuid4
+│
+│   from pydantic import BaseModel, ConfigDict, Field, field_validator
+│
+│
+│   class MerchantIdentifiers(BaseModel):
+│       """Complete merchant identification context."""
+│
+│       merchant_id: UUID = Field(..., description="Internal merchant identifier")
+│       platform_name: str = Field(..., description="Platform type: shopify, woocommerce, etc")
+│       platform_shop_id: str = Field(..., description="Platform-specific ID (shop_gid for Shopify)")
+│       domain: str = Field(..., description="Full platform domain")
+│
+│       @field_validator("merchant_id", mode="before")
+│       @classmethod
+│       def coerce_merchant_id(cls, v):
+│           """Convert string UUID to UUID object"""
+│           if isinstance(v, str):
+│               return UUID(v)
+│           return v
+│
+│
+│   class BaseEventPayload(BaseModel):
+│       """
+│       Base class for all event payloads.
+│       Services should extend this for their specific events.
+│       """
+│
+│       model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
+│       identifiers: MerchantIdentifiers = Field(..., description="Complete merchant identification")
+│
+│
+│   class EventEnvelope(BaseModel):
+│       """
+│       Standard envelope for all events in GLAM_EVENTS stream.
+│       Source service is encoded in the event_type subject.
+│       """
+│
+│       model_config = ConfigDict(json_encoders={UUID: str, datetime: lambda v: v.isoformat()})
+│
+│       # Required envelope fields
+│       event_id: str = Field(..., description="Unique event identifier", default_factory=lambda: str(uuid4()))
+│       event_type: str = Field(..., description="Subject: evt.{service}.{action}.v1")
+│       correlation_id: str = Field(..., description="Request correlation ID")
+│       source_service: str = Field(..., description="Service name (redundant with subject)")
+│       timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="When published to stream")
+│
+│       # Event payload
+│       data: dict[str, Any] = Field(..., description="Event-specific payload")
+│
+│       def to_bytes(self) -> bytes:
+│           """Serialize to JSON bytes for NATS."""
+│           return self.model_dump_json().encode("utf-8")
+│
+│       @classmethod
+│       def from_bytes(cls, data: bytes) -> "EventEnvelope":
+│           """Deserialize from NATS message."""
+│           return cls.model_validate_json(data)
+│
+│
+│   class ErrorPayload(BaseEventPayload):
+│       """Payload for error/failure events."""
+│
+│       error_code: str
+│       error_message: str
+│       failed_operation: str
+│       retry_count: int = 0
+│       max_retries: int = 3
+│       original_data: dict[str, Any] | None = None
+│   ```
+│
+├── billing.py
+├── catalog.py
+│
+│   ```py
+│   # shared/shared/messaging/events/catalog.py
+│
+│   from uuid import UUID
+│
+│   from pydantic import Field
+│
+│   from shared.messaging.events.base import BaseEventPayload
+│
+│
+│   class CatalogSyncStartedPayload(BaseEventPayload):
+│       """Payload for catalog sync started event"""
+│
+│       sync_id: UUID = Field(..., description="Unique sync operation ID")
+│       total_items: int = Field(..., description="Total items to sync")
+│       status: str = Field(..., description="Initial sync status")
+│
+│
+│   class CatalogSyncCompletedPayload(BaseEventPayload):
+│       """Payload for catalog sync completed event"""
+│
+│       sync_id: UUID = Field(..., description="Unique sync operation ID")
+│       total_items: int = Field(..., description="Total items synced")
+│       status: str = Field(..., description="Final sync status")
+│       first_sync: bool = Field(default=False, description="Is this the first sync?")
+│       has_changes: bool = Field(default=False, description="Were there any changes?")
+│       email: str | None = Field(None, description="Merchant email if available")
+│   ```
+│
+├── credit.py
+│
+│   ```py
+│   # shared/shared/messaging/events/credit.py
+│
+│   from datetime import datetime
+│   from pydantic import Field
+│
+│   from shared.messaging.events.base import BaseEventPayload
+│
+│
+│   class CreditBalanceGrantedPayload(BaseEventPayload):
+│       """Payload for credit balance granted event"""
+│       amount: float = Field(..., description="Amount of credits added")
+│       new_balance: float = Field(..., description="New credit balance after replenishment")
+│       email: str = Field(..., description="Merchant email")
+│
+│
+│   class CreditBalanceLowPayload(BaseEventPayload):
+│       """Payload for credit balance low event"""
+│       balance: float = Field(..., description="Current credit balance")
+│       email: str = Field(..., description="Merchant email")
+│
+│
+│   class CreditBalanceExhaustedPayload(BaseEventPayload):
+│       """Payload for credit balance exhausted event"""
+│       exhausted_at: datetime = Field(..., description="When balance hit zero")
+│       email: str = Field(..., description="Merchant email")
+│
+│   class CreditTrialGrantedPayload(BaseEventPayload):
+│       """Payload for trial credits granted event"""
+│       amount: float = Field(..., description="Amount of trial credits granted")
+│       email: str = Field(..., description="Merchant email")
+│
+│   class CreditTrialLowPayload(BaseEventPayload):
+│       """Payload for trial credits low event"""
+│       balance: float = Field(..., description="Current trial credit balance")
+│       email: str = Field(..., description="Merchant email")
+│
+│   class CreditTrialExhaustedPayload(BaseEventPayload):
+│       """Payload for trial exhausted event"""
+│       exhausted_at: datetime = Field(..., description="When trial was exhausted"
+│       )
+│       email: str = Field(..., description="Merchant email")
+│   ```
+│
+├── merchant.py
+│
+│   ```py
+│   # shared/messaging/events/merchant.py
+│   from typing import Literal
+│   from datetime import datetime
+│   from pydantic import Field
+│   from shared.messaging.events.base import BaseEventPayload
+│
+│   MerchantStatus = Literal["PENDING", "ACTIVE", "PAUSED", "SUSPENDED", "UNINSTALLED"]
+│
+│
+│   class _MerchantSnapshotMixin(BaseEventPayload):
+│       # Profile (synced)
+│       name: str
+│       email: str
+│       primary_domain: str | None
+│       currency: str
+│       country: str
+│       platform_version: str | None
+│       scopes: str
+│
+│       # State + watermarks
+│       status: MerchantStatus
+│       last_synced_at: datetime | None
+│
+│       # Audit
+│       created_at: datetime
+│       updated_at: datetime
+│
+│
+│   class MerchantCreatedPayload(BaseEventPayload):
+│       """Emitted after first persistence of a merchant record."""
+│       name: str
+│       email: str
+│       primary_domain: str | None
+│       currency: str
+│       country: str
+│       platform_version: str | None
+│       scopes: str
+│
+│
+│   class MerchantSyncedPayload(_MerchantSnapshotMixin):
+│       """Emitted on each sync (create or update)."""
+│
+│
+│   class MerchantReinstalledPayload(_MerchantSnapshotMixin):
+│       """Emitted when a previously uninstalled merchant reinstalls the app."""
+│       # (status should be PENDING at this time; consumers see it directly)
+│
+│
+│   class MerchantUninstalledPayload(BaseEventPayload):
+│       """Emitted when app is uninstalled for a merchant."""
+│       # Minimal by design: identifiers + updated status is observable
+│       # Optionally include these for convenience:
+│       status: MerchantStatus = Field(default="UNINSTALLED")
+│       updated_at: datetime  # when the row was updated
+│
+│
+│   class MerchantStatusChangedPayload(_MerchantSnapshotMixin):
+│       """Emitted when merchant.status transitions due to internal logic."""
+│       from_status: MerchantStatus
+│       to_status:   MerchantStatus
+│   ```
+│
+├── notification.py
+│
+│   ```py
+│   # shared/shared/messaging/events/notification.py
+│   from uuid import UUID
+│
+│   from shared.messaging.events.base import BaseEventPayload
+│
+│
+│   class EmailSentPayload(BaseEventPayload):
+│       """Payload for email sent event"""
+│
+│       notification_id: UUID
+│       template_type: str
+│       recipient_email: str
+│       provider: str
+│       provider_message_id: str
+│
+│
+│   class EmailFailedPayload(BaseEventPayload):
+│       """Payload for email failed event"""
+│
+│       notification_id: UUID
+│       template_type: str
+│       recipient_email: str
+│       error_code: str
+│       error_message: str
+│       retry_count: int = 0
+│   ```
+│
+├── recommendation.py
+└── webhook.py
+
+    ```py
+    # shared/shared/messaging/events/webhook.py
+    from __future__ import annotations
+    from datetime import datetime
+    from pydantic import BaseModel, Field
+
+    class WebhookAppUninstalledV1(BaseModel):
+        """
+        Payload of evt.webhook.app.uninstalled.v1 (published by webhook microservice).
+        Used to locate merchant and mark UNINSTALLED.
+        """
+        platform_name: str = Field(..., description="e.g., shopify")
+        platform_shop_id: str = Field(..., description="Shop GID or platform ID")
+        domain: str | None = Field(None, description="Optional platform domain")
+        occurred_at: datetime = Field(default_factory=datetime.utcnow, description="Event occurrence time")
+    ```
+
+__init__.py
+
+```py
+# shared/messaging/__init__.py
+"""Shared messaging module for publisher, subscriber, event context, stream client, subject, and payloads."""
+
+from .jetstream_client import JetStreamClient
+from .listener import Listener
+from .publisher import Publisher
+from .subjects import Subjects
+
+__all__ = [
+    "JetStreamClient",
+    "Listener",
+    "Publisher",
+    "Subjects",
+]
+```
+
+jetstream_client.py
+
+```py
+# shared/shared/messaging/jetstream_client.py
+"""Pure JetStream client - only connection + stream management."""
+
+import os
+
+import nats
+from nats.aio.client import Client
+from nats.js import JetStreamContext
+from nats.js.api import RetentionPolicy, StorageType, StreamConfig
+from nats.js.errors import NotFoundError
+
+from shared.utils.logger import ServiceLogger
+
+
+class JetStreamClient:
+    """Pure JetStream client - only connection + stream management."""
+
+    def __init__(self, logger: ServiceLogger) -> None:  # ✔ typed
+        self._client: Client | None = None
+        self._js: JetStreamContext | None = None
+        self.logger = logger
+
+    # context-manager helpers --------------------------------------------------
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_t, exc, tb):
+        await self.close()
+
+    # public accessors ---------------------------------------------------------
+    @property
+    def client(self) -> Client:
+        if not self._client:
+            raise RuntimeError("NATS client not connected")
+        return self._client
+
+    @property
+    def js(self) -> JetStreamContext:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        return self._js
+
+    # connection ---------------------------------------------------------------
+    async def connect(self, servers: list[str]) -> None:
+        opts = {
+            "servers": servers,
+            "max_reconnect_attempts": -1,
+            "reconnect_time_wait": 2,
+        }
+        if user := os.getenv("NATS_USER"):
+            opts.update(user=user, password=os.getenv("NATS_PASSWORD", ""))
+
+        self._client = await nats.connect(**opts)
+        self._js = self._client.jetstream()
+        self.logger.info("Connected to NATS %s", servers)
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.close()
+            self.logger.info("NATS connection closed")
+
+    def is_connected(self) -> bool:
+        return bool(self._client and self._client.is_connected)
+
+    # stream helpers -----------------------------------------------------------
+    async def ensure_stream(
+        self,
+        name: str,
+        subjects: list[str],
+        **kw,
+    ) -> None:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+
+        cfg = StreamConfig(
+            name=name,
+            subjects=subjects,
+            retention=RetentionPolicy.LIMITS,
+            max_age=24 * 60 * 60,
+            max_msgs=1_000_000,
+            storage=StorageType.FILE,
+        )
+
+        try:
+            await self._js.stream_info(name)
+            self.logger.debug("Using existing stream: %s", name)
+        except NotFoundError:
+            await self._js.add_stream(cfg)
+            self.logger.info("Created new stream: %s", name)
+
+    async def delete_stream(self, name: str) -> None:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        await self._js.delete_stream(name)
+        self.logger.info("Deleted stream: %s", name)
+
+    async def get_stream_info(self, name: str) -> dict:
+        if not self._js:
+            raise RuntimeError("JetStream not initialized")
+        info = await self._js.stream_info(name)
+        return {
+            "name": info.config.name,
+            "subjects": info.config.subjects,
+            "messages": info.state.messages,
+            "bytes": info.state.bytes,
+        }
+```
+
+listener.py
+
+```py
+# shared/messaging/listener.py
+"""Simple listener using EventEnvelope directly."""
+
+import asyncio
+import contextlib
+import json
+from abc import ABC, abstractmethod
+
+from nats.errors import TimeoutError as NATSTimeoutError
+from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
+from nats.js.errors import NotFoundError
+
+from shared.utils.logger import ServiceLogger
+
+from .events.base import EventEnvelope
+from .jetstream_client import JetStreamClient
+
+
+class Listener(ABC):
+    """
+    Base listener that passes EventEnvelope to subclasses.
+    """
+
+    stream_name: str = "GLAM_EVENTS"
+    batch_size: int = 10
+    max_deliver: int = 3
+    idle_sleep_sec: float = 0.05
+    poll_window_sec: float = 2.0
+
+    @property
+    @abstractmethod
+    def service_name(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def subject(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def queue_group(self) -> str: ...
+
+    def __init__(self, js_client: JetStreamClient, logger: ServiceLogger):
+        self._js = js_client.js
+        self.logger = logger
+        self._sub = None
+        self._task = None
+        self._running = False
+
+    async def start(self) -> None:
+        """Start listening."""
+        durable = f"{self.service_name}-{self.queue_group}"
+
+        try:
+            await self._js.consumer_info(self.stream_name, durable)
+        except NotFoundError:
+            await self._js.add_consumer(
+                self.stream_name,
+                ConsumerConfig(
+                    durable_name=durable,
+                    deliver_policy=DeliverPolicy.ALL,
+                    ack_policy=AckPolicy.EXPLICIT,
+                    max_deliver=self.max_deliver,
+                    filter_subject=self.subject,
+                ),
+            )
+
+        self._sub = await self._js.pull_subscribe(self.subject, durable=durable, stream=self.stream_name)
+
+        self._running = True
+        self._task = asyncio.create_task(self._poll_loop())
+        self.logger.info(f"Started listener: {self.subject}")
+
+    async def stop(self) -> None:
+        """Stop listening."""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+        if self._sub:
+            await self._sub.unsubscribe()
+
+    @abstractmethod
+    async def on_message(self, envelope: EventEnvelope) -> None:
+        """
+        Handle message with EventEnvelope.
+        Data field is not typed yet - subclass must validate.
+        """
+        ...
+
+    async def _poll_loop(self) -> None:
+        """Polling loop."""
+        while self._running:
+            try:
+                msgs = await self._sub.fetch(batch=self.batch_size, timeout=self.poll_window_sec)
+            except (TimeoutError, NATSTimeoutError):
+                await asyncio.sleep(self.idle_sleep_sec)
+                continue
+
+            for msg in msgs:
+                await self._handle_message(msg)
+
+    async def _handle_message(self, msg) -> None:
+        """Parse envelope and handle message."""
+        try:
+            # Parse into EventEnvelope (without typed data)
+            envelope = EventEnvelope.model_validate_json(msg.data)
+
+            # Set logging context for this message
+            self.logger.set_request_context(
+                event_id=envelope.event_id,
+                event_type=envelope.event_type,
+                correlation_id=envelope.correlation_id,
+                source_service=envelope.source_service,
+                service=self.service_name,
+                entry_point="event_listener"
+            )
+
+            # Process message
+            try:
+                self.logger.info("Processing event")
+                await self.on_message(envelope)
+                await msg.ack()
+                self.logger.info("Event processed successfully")
+
+            except Exception as e:
+                # Get delivery count
+                delivery_count = 1
+                if hasattr(msg, "metadata") and msg.metadata:
+                    delivery_count = getattr(msg.metadata, "num_delivered", 1)
+
+                if delivery_count >= self.max_deliver:
+                    self.logger.exception(
+                        f"Max retries for event",
+                        extra={
+                            "error": str(e),
+                            "delivery_count": delivery_count
+                        },
+                    )
+                    await msg.ack()  # Don't retry anymore
+                else:
+                    self.logger.exception(
+                        f"Error processing event (attempt {delivery_count})",
+                        extra={
+                            "error": str(e),
+                            "delivery_count": delivery_count
+                        },
+                    )
+                    await msg.nak()  # Retry
+
+        except json.JSONDecodeError:
+            self.logger.exception("Invalid JSON message")
+            await msg.ack()
+        except Exception as e:
+            self.logger.exception(f"Invalid envelope structure: {e}")
+            await msg.ack()
+        finally:
+            # Clear context after handling message
+            self.logger.clear_request_context()
+```
+
+publisher.py
+
+```py
+# shared/messaging/publisher.py
+"""Enhanced publisher with standardized envelope and auto-correlation."""
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+from shared.utils.logger import ServiceLogger
+
+from .events.base import EventEnvelope
+from .jetstream_client import JetStreamClient
+
+
+class Publisher(ABC):
+    """Base publisher with standardized event publishing."""
+
+    stream_name: str = "GLAM_EVENTS"  # Single stream for all events
+
+    @property
+    @abstractmethod
+    def service_name(self) -> str:
+        """Service identifier for source tracking."""
+        ...
+
+    def __init__(self, jetstream_client: JetStreamClient, logger: ServiceLogger) -> None:
+        self.js_client = jetstream_client
+        self.logger = logger
+        self._ensure_stream_created = False
+
+    async def _ensure_stream(self) -> None:
+        """Ensure GLAM_EVENTS stream exists (called once)."""
+        if self._ensure_stream_created:
+            return
+
+        await self.js_client.ensure_stream(
+            self.stream_name,
+            subjects=["evt.>", "cmd.>", "dlq.>"],  # Prepared for DLQ
+        )
+        self._ensure_stream_created = True
+
+    async def publish_event(
+        self,
+        subject: str,
+        payload: dict[str, Any],
+        correlation_id: str,
+    ) -> str:
+        """
+        Publish an event with automatic envelope wrapping.
+
+        Args:
+            subject: NATS subject (evt.* or cmd.*)
+            payload: Typed event payload extending BaseEventPayload
+            correlation_id: Optional - will use context if not provided
+            metadata: Additional metadata
+
+        Returns:
+            event_id of the published event
+        """
+
+        if not (subject.startswith("evt.") or subject.startswith("cmd.") or subject.startswith("dlq.")):
+            raise ValueError(f"Invalid subject pattern: {subject}. Must start with evt., cmd., or dlq.")
+
+        envelope = EventEnvelope(
+            event_type=subject,
+            correlation_id=correlation_id,
+            source_service=self.service_name,
+            data=payload.model_dump(mode="json"),
+        )
+
+        # Set logging context for this publish operation
+        self.logger.set_request_context(
+            event_id=envelope.event_id,
+            event_type=subject,
+            correlation_id=correlation_id,
+            service=self.service_name,
+            entry_point="event_publisher"
+        )
+
+        try:
+            self.logger.info("Publishing event")
+
+            await self._ensure_stream()
+            ack = await self.js_client.js.publish(subject, envelope.to_bytes())
+
+            self.logger.info(
+                "Event published successfully",
+                extra={"sequence": ack.seq if ack else None}
+            )
+
+            return envelope.event_id
+
+        except Exception as e:
+            self.logger.exception(
+                "Failed to publish event",
+                extra={"error": str(e)}
+            )
+            raise
+        finally:
+            # Clear context after publishing
+            self.logger.clear_request_context()
+
+    async def publish_to_dlq(
+        self,
+        original_subject: str,
+        error_payload: dict,
+        correlation_id: str,
+        error: Exception,
+    ) -> str:
+        """
+        Publish failed event to dead letter queue.
+
+        Args:
+            original_subject: Original event subject that failed
+            error_payload: Original payload that failed processing
+            correlation_id: Original correlation ID
+            error: The exception that occurred
+        """
+        # Convert subject to DLQ pattern: evt.order.created -> dlq.order.created
+        dlq_subject = original_subject.replace("evt.", "dlq.").replace("cmd.", "dlq.")
+
+        from .events.models import ErrorPayload
+
+        error_data = ErrorPayload(
+            error_code=type(error).__name__,
+            error_message=str(error),
+            failed_operation=original_subject,
+            original_data=error_payload,
+        )
+
+        # Context will be set by publish_event
+        return await self.publish_event(
+            subject=dlq_subject,
+            payload=error_data,
+            correlation_id=correlation_id,
+            metadata={"original_subject": original_subject},
+        )
+```
+
+subjects.py
+
+```py
+# shared/shared/messaging/subjects.py
+"""NATS subjects for microservices."""
+
+from enum import Enum
+
+
+class Subjects(str, Enum):
+    """NATS subjects for the notification service"""
+
+    # Notification events
+    NOTIFICATION_EMAIL_REQUESTED = "cmd.notification.email.send.v1"
+    NOTIFICATION_EMAIL_SENT = "evt.notification.email.sent.v1"
+    NOTIFICATION_EMAIL_FAILED = "evt.notification.email.failed.v1"
+
+    # Billing subjects
+    BILLING_TRIAL_ACTIVATED = "evt.billing.trial.activated.v1"
+    BILLING_PURCHASE_COMPLETED = "evt.billing.purchase.completed.v1"
+
+    # Merchant subjects
+    MERCHANT_CREATED = "evt.merchant.created.v1"
+    MERCHANT_SYNCED = "evt.merchant.synced.v1"
+    MERCHANT_STATUS_CHANGED = "evt.merchant.status.changed.v1"
+    MERCHANT_REINSTALLED = "evt.merchant.reinstalled.v1"
+    MERCHANT_UNINSTALLED = "evt.merchant.uninstalled.v1"
+
+    # Catalog subjects
+    CATAlOG_SYNC_STARTED = "evt.catalog.sync.started.v1"
+    CATALOG_SYNC_COMPLETED = "evt.catalog.sync.completed.v1"
+    CATALOG_SYNC_FAILED = "evt.catalog.sync.failed.v1"
+
+    # Credit events
+    CREDIT_BALANCE_GRANTED = "evt.credit.balance.granted.v1"
+    CREDIT_BALANCE_LOW = "evt.credit.balance.low.v1"
+    CREDIT_BALANCE_EXHAUSTED = "evt.credit.balance.exhausted.v1"
+    CREDIT_TRIAL_GRANTED = "evt.credit.trial.granted.v1"
+    CREDIT_TRIAL_LOW = "evt.credit.trial.low.v1"
+    CREDIT_TRIAL_EXHAUSTED = "evt.credit.trial.exhausted.v1"
+
+    # Analytics events
+    ANALYTICS_EVENT_TRACKED = "evt.analytics.tracked.v1"
+    ANALYTICS_AGGREGATED = "evt.analytics.aggregated.v1"
+
+    # Webhook events
+    WEBHOOK_RECEIVED = "evt.webhook.received.v1"
+    WEBHOOK_PROCESSED = "evt.webhook.processed.v1"
+    WEBHOOK_FAILED = "evt.webhook.failed.v1"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

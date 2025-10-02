@@ -1,0 +1,122 @@
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--unsafe']  # Allow custom tags like !ENV
+      - id: check-json
+        name: Check JSON syntax
+        exclude: tsconfig.json  # TSConfig allows comments
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-added-large-files
+        name: Prevent large files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+        name: Detect private keys
+      - id: check-merge-conflict
+        name: Check merge conflicts
+      - id: mixed-line-ending
+        name: Check line endings
+        args: ['--fix=lf']
+      - id: check-case-conflict
+        name: Check filename case conflicts
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.9
+    hooks:
+      - id: ruff
+        name: Lint Python with Ruff
+        files: ^(services|shared)/.*\.py$
+        args: [--fix]
+      - id: ruff-format
+        name: Format Python with Ruff
+        files: ^(services|shared)/.*\.py$
+        args: [--line-length=120]
+
+  # Python: Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.17.1
+    hooks:
+      - id: mypy
+        name: mypy-shared-and-scripts
+        # Only check shared module and scripts
+        files: ^shared/
+        additional_dependencies:
+          - types-requests
+          - types-redis
+          # Add other type stubs as needed
+        args: [
+          --ignore-missing-imports,
+          --follow-imports=silent,
+          --show-error-codes,
+          --strict-optional
+        ]
+
+  # # Docker
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.12.0
+  #   hooks:
+  #     - id: hadolint-docker
+  #       name: Lint Dockerfiles
+  #       files: Dockerfile.*
+
+  # # Shell scripts
+  # - repo: https://github.com/shellcheck-py/shellcheck-py
+  #   rev: v0.11.0.1
+  #   hooks:
+  #     - id: shellcheck
+  #       name: Check shell scripts
+
+  # Local custom checks
+  - repo: local
+    hooks:
+      - id: mypy-services
+        name: mypy for services
+        entry: python .pre-commit-scripts/run_mypy.py
+        language: system
+        always_run: true
+
+      # Validate Poetry lock files
+      - id: poetry-check
+        name: Validate Poetry configuration
+        entry: bash -c 'for dir in services/*; do if [ -f "$dir/pyproject.toml" ]; then (cd "$dir" && poetry check); fi; done'
+        language: system
+        pass_filenames: false
+        files: ^services/.*/pyproject.toml$
+
+      # Check Prisma schemas are valid
+      - id: prisma-validate
+        name: Validate Prisma schemas
+        entry: bash -c '.pre-commit-scripts/validate-prisma.sh'
+        language: system
+        files: \.prisma$
+
+      # Check for debug code in production
+      - id: no-debug-code
+        name: Check for debug code
+        entry: bash -c '.pre-commit-scripts/check-debug-code.sh'
+        language: system
+        pass_filenames: false
+
+      # Validate environment variables
+      - id: check-env-vars
+        name: Check environment variables
+        entry: python .pre-commit-scripts/check_env_vars.py
+        language: system
+        pass_filenames: false
+        files: \.env\.example$
+
+      # Check Python imports
+      - id: check-imports
+        name: Check Python imports
+        entry: bash -c '.pre-commit-scripts/check-imports.sh'
+        language: system
+        pass_filenames: false
+        files: ^(services|shared)/.*\.py$

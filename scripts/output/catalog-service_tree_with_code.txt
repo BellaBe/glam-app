@@ -1,0 +1,1598 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/catalog-service
+================================================================================
+
+catalog-service/
+.ruff_cache/
+├── 0.1.9/
+│   └── 10057073865506685867
+├── .gitignore
+└── CACHEDIR.TAG
+prisma/
+└── schema.prisma
+src/
+├── api/
+│   ├── v1/
+│   │   ├── __init__.py
+│   │   └── sync.py
+│   │
+│   │       ```py
+│   │       # services/catalog-service/src/api/v1/sync.py
+│   │       from uuid import UUID
+│   │       from fastapi import APIRouter, Body, status
+│   │
+│   │       from shared.api import ApiResponse, success_response
+│   │       from shared.api.dependencies import RequestContextDep, ClientAuthDep, PlatformContextDep
+│   │       from shared.api.validation import validate_shop_context
+│   │
+│   │       from ...dependencies import CatalogServiceDep, EventPublisherDep
+│   │       from ...schemas.sync import SyncRequestBody, SyncOperationOut, SyncProgressOut
+│   │
+│   │       router = APIRouter(prefix="/api/v1/catalog", tags=["Catalog Sync"])
+│   │
+│   │       @router.post(
+│   │           "/sync",
+│   │           response_model=ApiResponse[SyncOperationOut],
+│   │           status_code=status.HTTP_201_CREATED,
+│   │           summary="Start catalog sync"
+│   │       )
+│   │       async def start_sync(
+│   │           svc: CatalogServiceDep,
+│   │           publisher: EventPublisherDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           platform: PlatformContextDep,
+│   │           body: SyncRequestBody = Body(...)
+│   │       ):
+│   │           """
+│   │           Start catalog sync operation.
+│   │           Returns sync_id for polling progress.
+│   │           """
+│   │
+│   │           # Validate shop context
+│   │           validate_shop_context(
+│   │               client_auth=auth,
+│   │               platform_ctx=platform,
+│   │               logger=svc.logger,
+│   │               expected_scope="bff:call"
+│   │           )
+│   │
+│   │           # Start sync operation
+│   │           sync = await svc.start_sync(
+│   │               merchant_id=auth.shop,  # Using shop as merchant_id
+│   │               platform_name=platform.platform,
+│   │               platform_shop_id=platform.domain,  # Using domain as platform_shop_id for now
+│   │               domain=platform.domain,
+│   │               sync_type=body.sync_type,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           # Publish sync requested event
+│   │           await publisher.catalog_sync_requested(
+│   │               merchant_id=auth.shop,
+│   │               platform_name=platform.platform,
+│   │               platform_shop_id=platform.domain,
+│   │               domain=platform.domain,
+│   │               sync_id=sync.id,
+│   │               sync_type=body.sync_type,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           return success_response(
+│   │               data=sync,
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │       @router.get(
+│   │           "/sync/{sync_id}",
+│   │           response_model=ApiResponse[SyncProgressOut],
+│   │           summary="Get sync progress"
+│   │       )
+│   │       async def get_sync_progress(
+│   │           sync_id: str,
+│   │           svc: CatalogServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           platform: PlatformContextDep
+│   │       ):
+│   │           """
+│   │           Get sync operation progress for polling.
+│   │           Frontend should poll this endpoint to track sync progress.
+│   │           """
+│   │
+│   │           # Validate shop context
+│   │           validate_shop_context(
+│   │               client_auth=auth,
+│   │               platform_ctx=platform,
+│   │               logger=svc.logger,
+│   │               expected_scope="bff:call"
+│   │           )
+│   │
+│   │           # Get progress
+│   │           progress = await svc.get_sync_progress(
+│   │               sync_id=sync_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           return success_response(
+│   │               data=progress,
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │       @router.get(
+│   │           "/status",
+│   │           response_model=ApiResponse[dict],
+│   │           summary="Get catalog status"
+│   │       )
+│   │       async def get_catalog_status(
+│   │           svc: CatalogServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           platform: PlatformContextDep
+│   │       ):
+│   │           """Get current catalog status for merchant"""
+│   │
+│   │           # Validate shop context
+│   │           validate_shop_context(
+│   │               client_auth=auth,
+│   │               platform_ctx=platform,
+│   │               logger=svc.logger,
+│   │               expected_scope="bff:call"
+│   │           )
+│   │
+│   │           # Get status
+│   │           status_data = await svc.get_catalog_status(
+│   │               merchant_id=auth.shop,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │
+│   │           return success_response(
+│   │               data=status_data,
+│   │               request_id=ctx.request_id,
+│   │               correlation_id=ctx.correlation_id
+│   │           )
+│   │       ```
+│   │
+│   └── __init__.py
+├── events/
+│   ├── __init__.py
+│   ├── listeners.py
+│   │
+│   │   ```py
+│   │   # services/catalog-service/src/events/listeners.py
+│   │   from typing import Dict, Any
+│   │   from shared.messaging import Listener
+│   │   from shared.utils.exceptions import ValidationError
+│   │   from shared.api.correlation import set_correlation_context
+│   │
+│   │   from ..schemas.events import ProductsFetchedPayload, AnalysisCompletedPayload
+│   │
+│   │   class ProductsFetchedListener(Listener):
+│   │       """Listen for products fetched from platform"""
+│   │
+│   │       @property
+│   │       def subject(self) -> str:
+│   │           return "evt.platform.products.fetched"
+│   │
+│   │       @property
+│   │       def queue_group(self) -> str:
+│   │           return "catalog-products-handler"
+│   │
+│   │       @property
+│   │       def service_name(self) -> str:
+│   │           return "catalog-service"
+│   │
+│   │       def __init__(self, js_client, publisher, service, logger):
+│   │           super().__init__(js_client, logger)
+│   │           self.publisher = publisher
+│   │           self.service = service
+│   │
+│   │       async def on_message(self, data: Dict[str, Any]) -> None:
+│   │           """Process products batch from platform"""
+│   │           try:
+│   │               # Validate payload
+│   │               payload = ProductsFetchedPayload(**data)
+│   │
+│   │               # Set correlation context from event
+│   │               if correlation_id := data.get("correlation_id"):
+│   │                   set_correlation_context(correlation_id)
+│   │
+│   │               # Process batch
+│   │               items, items_to_analyze = await self.service.process_product_batch(
+│   │                   sync_id=payload.sync_id,
+│   │                   merchant_id=payload.merchant_id,
+│   │                   products=payload.products,
+│   │                   batch_num=payload.batch_num,
+│   │                   has_more=payload.has_more,
+│   │                   correlation_id=correlation_id or "unknown"
+│   │               )
+│   │
+│   │               # Request analysis if items have images
+│   │               if items_to_analyze:
+│   │                   await self.publisher.catalog_analysis_requested(
+│   │                       merchant_id=payload.merchant_id,
+│   │                       sync_id=payload.sync_id,
+│   │                       items=items_to_analyze,
+│   │                       correlation_id=correlation_id or "unknown"
+│   │                   )
+│   │
+│   │               # If no more batches, complete sync
+│   │               if not payload.has_more:
+│   │                   await self.service.complete_sync(
+│   │                       sync_id=payload.sync_id,
+│   │                       status="completed",
+│   │                       correlation_id=correlation_id or "unknown"
+│   │                   )
+│   │
+│   │                   # Publish completion event
+│   │                   await self.publisher.catalog_sync_completed(
+│   │                       merchant_id=payload.merchant_id,
+│   │                       sync_id=payload.sync_id,
+│   │                       total_items=len(items),
+│   │                       duration_seconds=0,  # Calculate from start time
+│   │                       correlation_id=correlation_id or "unknown"
+│   │                   )
+│   │
+│   │           except ValidationError as e:
+│   │               self.logger.exception(f"Invalid products batch: {e}")
+│   │               # ACK to prevent retry of invalid messages
+│   │               return
+│   │           except Exception as e:
+│   │               self.logger.exception(f"Products processing failed: {e}", exc_info=True)
+│   │               raise  # NACK for retry
+│   │
+│   │   class AnalysisCompletedListener(Listener):
+│   │       """Listen for AI analysis results"""
+│   │
+│   │       @property
+│   │       def subject(self) -> str:
+│   │           return "evt.analysis.completed"
+│   │
+│   │       @property
+│   │       def queue_group(self) -> str:
+│   │           return "catalog-analysis-handler"
+│   │
+│   │       @property
+│   │       def service_name(self) -> str:
+│   │           return "catalog-service"
+│   │
+│   │       def __init__(self, js_client, analysis_repo, catalog_repo, logger):
+│   │           super().__init__(js_client, logger)
+│   │           self.analysis_repo = analysis_repo
+│   │           self.catalog_repo = catalog_repo
+│   │
+│   │       async def on_message(self, data: Dict[str, Any]) -> None:
+│   │           """Store AI analysis results"""
+│   │           try:
+│   │               # Validate payload
+│   │               payload = AnalysisCompletedPayload(**data)
+│   │
+│   │               # Store analysis result
+│   │               await self.analysis_repo.create({
+│   │                   "item_id": payload.item_id,
+│   │                   "model_version": payload.model_version,
+│   │                   "category": payload.category,
+│   │                   "subcategory": payload.subcategory,
+│   │                   "description": payload.description,
+│   │                   "gender": payload.gender,
+│   │                   "attributes": payload.attributes,
+│   │                   "quality_score": payload.quality_score,
+│   │                   "confidence_score": payload.confidence_score,
+│   │                   "processing_time_ms": payload.processing_time_ms
+│   │               })
+│   │
+│   │               # Update catalog item status
+│   │               await self.catalog_repo.update_analysis_status(
+│   │                   item_id=payload.item_id,
+│   │                   status="analyzed"
+│   │               )
+│   │
+│   │               self.logger.info(
+│   │                   f"Stored analysis for item {payload.item_id}",
+│   │                   extra={"item_id": payload.item_id}
+│   │               )
+│   │
+│   │           except ValidationError as e:
+│   │               self.logger.exception(f"Invalid analysis result: {e}")
+│   │               return  # ACK invalid messages
+│   │           except Exception as e:
+│   │               self.logger.exception(f"Analysis storage failed: {e}", exc_info=True)
+│   │               raise  # NACK for retry
+│   │   ```
+│   │
+│   └── publishers.py
+│
+│       ```py
+│       # services/catalog-service/src/events/publishers.py
+│       from shared.messaging import Publisher
+│       from shared.api.correlation import get_correlation_context
+│
+│       class CatalogEventPublisher(Publisher):
+│           """Publish catalog domain events"""
+│
+│           @property
+│           def service_name(self) -> str:
+│               return "catalog-service"
+│
+│           async def catalog_sync_requested(
+│               self,
+│               merchant_id: str,
+│               platform_name: str,
+│               platform_shop_id: str,
+│               domain: str,
+│               sync_id: str,
+│               sync_type: str,
+│               correlation_id: str
+│           ) -> str:
+│               """Publish catalog sync requested event"""
+│               return await self.publish_event(
+│                   subject="evt.catalog.sync.requested",
+│                   data={
+│                       "merchant_id": merchant_id,
+│                       "platform_name": platform_name,
+│                       "platform_shop_id": platform_shop_id,
+│                       "domain": domain,
+│                       "sync_id": sync_id,
+│                       "sync_type": sync_type
+│                   },
+│                   correlation_id=correlation_id
+│               )
+│
+│           async def catalog_analysis_requested(
+│               self,
+│               merchant_id: str,
+│               sync_id: str,
+│               items: list,
+│               correlation_id: str
+│           ) -> str:
+│               """Request AI analysis for catalog items"""
+│               return await self.publish_event(
+│                   subject="evt.catalog.analysis.requested",
+│                   data={
+│                       "merchant_id": merchant_id,
+│                       "sync_id": sync_id,
+│                       "items": items
+│                   },
+│                   correlation_id=correlation_id
+│               )
+│
+│           async def catalog_sync_completed(
+│               self,
+│               merchant_id: str,
+│               sync_id: str,
+│               total_items: int,
+│               duration_seconds: float,
+│               correlation_id: str
+│           ) -> str:
+│               """Publish sync completed event"""
+│               return await self.publish_event(
+│                   subject="evt.catalog.sync.completed",
+│                   data={
+│                       "merchant_id": merchant_id,
+│                       "sync_id": sync_id,
+│                       "total_items": total_items,
+│                       "duration_seconds": duration_seconds
+│                   },
+│                   correlation_id=correlation_id
+│               )
+│       ```
+│
+├── repositories/
+│   ├── __init__.py
+│   ├── catalog_repository.py
+│   │
+│   │   ```py
+│   │   # services/catalog-service/src/repositories/catalog_repository.py
+│   │   from typing import Optional, List
+│   │   from uuid import UUID
+│   │   from decimal import Decimal
+│   │   from prisma import Prisma
+│   │   from ..schemas.catalog import CatalogItemCreate, CatalogItemUpdate, CatalogItemOut
+│   │
+│   │   class CatalogRepository:
+│   │       """Repository for catalog items using Prisma client"""
+│   │
+│   │       def __init__(self, prisma: Prisma):
+│   │           self.prisma = prisma
+│   │
+│   │       async def upsert(self, dto: CatalogItemCreate) -> CatalogItemOut:
+│   │           """Upsert catalog item"""
+│   │           item = await self.prisma.catalogitem.upsert(
+│   │               where={
+│   │                   "merchant_id_platform_name_variant_id": {
+│   │                       "merchant_id": dto.merchant_id,
+│   │                       "platform_name": dto.platform_name,
+│   │                       "variant_id": dto.variant_id
+│   │                   }
+│   │               },
+│   │               update={
+│   │                   "product_title": dto.product_title,
+│   │                   "variant_title": dto.variant_title,
+│   │                   "sku": dto.sku,
+│   │                   "price": dto.price,
+│   │                   "currency": dto.currency,
+│   │                   "inventory_quantity": dto.inventory_quantity,
+│   │                   "image_url": dto.image_url,
+│   │                   "sync_status": "synced",
+│   │                   "synced_at": dto.synced_at
+│   │               },
+│   │               create={
+│   │                   "merchant_id": dto.merchant_id,
+│   │                   "platform_name": dto.platform_name,
+│   │                   "platform_shop_id": dto.platform_shop_id,
+│   │                   "domain": dto.domain,
+│   │                   "product_id": dto.product_id,
+│   │                   "variant_id": dto.variant_id,
+│   │                   "image_id": dto.image_id,
+│   │                   "product_title": dto.product_title,
+│   │                   "variant_title": dto.variant_title,
+│   │                   "sku": dto.sku,
+│   │                   "price": dto.price,
+│   │                   "currency": dto.currency,
+│   │                   "inventory_quantity": dto.inventory_quantity,
+│   │                   "image_url": dto.image_url,
+│   │                   "sync_status": "synced",
+│   │                   "platform_created_at": dto.platform_created_at,
+│   │                   "platform_updated_at": dto.platform_updated_at
+│   │               }
+│   │           )
+│   │           return CatalogItemOut.model_validate(item)
+│   │
+│   │       async def find_by_id(self, item_id: str) -> Optional[CatalogItemOut]:
+│   │           """Find catalog item by ID"""
+│   │           item = await self.prisma.catalogitem.find_unique(
+│   │               where={"id": item_id}
+│   │           )
+│   │           return CatalogItemOut.model_validate(item) if item else None
+│   │
+│   │       async def find_by_merchant(
+│   │           self,
+│   │           merchant_id: str,
+│   │           skip: int = 0,
+│   │           take: int = 100
+│   │       ) -> List[CatalogItemOut]:
+│   │           """Find catalog items by merchant"""
+│   │           items = await self.prisma.catalogitem.find_many(
+│   │               where={"merchant_id": merchant_id},
+│   │               skip=skip,
+│   │               take=take,
+│   │               order_by={"created_at": "desc"}
+│   │           )
+│   │           return [CatalogItemOut.model_validate(item) for item in items]
+│   │
+│   │       async def count_by_merchant(self, merchant_id: str) -> int:
+│   │           """Count catalog items for merchant"""
+│   │           return await self.prisma.catalogitem.count(
+│   │               where={"merchant_id": merchant_id}
+│   │           )
+│   │
+│   │       async def update_analysis_status(
+│   │           self,
+│   │           item_id: str,
+│   │           status: str
+│   │       ) -> None:
+│   │           """Update analysis status"""
+│   │           await self.prisma.catalogitem.update(
+│   │               where={"id": item_id},
+│   │               data={"analysis_status": status}
+│   │           )
+│   │   ```
+│   │
+│   └── sync_repository.py
+│
+│       ```py
+│       # services/catalog-service/src/repositories/sync_repository.py
+│       from typing import Optional
+│       from datetime import datetime
+│       from prisma import Prisma
+│       from ..schemas.sync import SyncOperationCreate, SyncOperationOut
+│
+│       class SyncRepository:
+│           """Repository for sync operations"""
+│
+│           def __init__(self, prisma: Prisma):
+│               self.prisma = prisma
+│
+│           async def create(self, dto: SyncOperationCreate) -> SyncOperationOut:
+│               """Create sync operation"""
+│               sync = await self.prisma.syncoperation.create(
+│                   data={
+│                       "merchant_id": dto.merchant_id,
+│                       "platform_name": dto.platform_name,
+│                       "platform_shop_id": dto.platform_shop_id,
+│                       "domain": dto.domain,
+│                       "sync_type": dto.sync_type,
+│                       "status": "pending"
+│                   }
+│               )
+│               return SyncOperationOut.model_validate(sync)
+│
+│           async def find_by_id(self, sync_id: str) -> Optional[SyncOperationOut]:
+│               """Find sync operation by ID"""
+│               sync = await self.prisma.syncoperation.find_unique(
+│                   where={"id": sync_id}
+│               )
+│               return SyncOperationOut.model_validate(sync) if sync else None
+│
+│           async def find_running_for_merchant(
+│               self,
+│               merchant_id: str
+│           ) -> Optional[SyncOperationOut]:
+│               """Find running sync for merchant"""
+│               sync = await self.prisma.syncoperation.find_first(
+│                   where={
+│                       "merchant_id": merchant_id,
+│                       "status": {"in": ["pending", "running"]}
+│                   }
+│               )
+│               return SyncOperationOut.model_validate(sync) if sync else None
+│
+│           async def update_progress(
+│               self,
+│               sync_id: str,
+│               processed: int,
+│               failed: int,
+│               progress_percent: int,
+│               message: str
+│           ) -> None:
+│               """Update sync progress"""
+│               await self.prisma.syncoperation.update(
+│                   where={"id": sync_id},
+│                   data={
+│                       "status": "running",
+│                       "processed_products": processed,
+│                       "failed_products": failed,
+│                       "progress_percent": progress_percent,
+│                       "progress_message": message
+│                   }
+│               )
+│
+│           async def complete(
+│               self,
+│               sync_id: str,
+│               status: str,
+│               error_message: Optional[str] = None
+│           ) -> None:
+│               """Complete sync operation"""
+│               await self.prisma.syncoperation.update(
+│                   where={"id": sync_id},
+│                   data={
+│                       "status": status,
+│                       "completed_at": datetime.utcnow(),
+│                       "error_message": error_message,
+│                       "progress_percent": 100 if status == "completed" else None
+│                   }
+│               )
+│       ```
+│
+├── schemas/
+│   ├── __init__.py
+│   ├── catalog.py
+│   │
+│   │   ```py
+│   │   # services/catalog-service/src/schemas/catalog.py
+│   │   from datetime import datetime
+│   │   from decimal import Decimal
+│   │   from typing import Optional
+│   │   from pydantic import BaseModel, Field, ConfigDict
+│   │
+│   │   # Input DTOs
+│   │   class CatalogItemCreate(BaseModel):
+│   │       """DTO for creating/updating catalog item"""
+│   │       merchant_id: str
+│   │       platform_name: str
+│   │       platform_shop_id: str
+│   │       domain: str
+│   │       product_id: str
+│   │       variant_id: str
+│   │       image_id: Optional[str] = None
+│   │       product_title: str
+│   │       variant_title: str
+│   │       sku: Optional[str] = None
+│   │       price: Decimal
+│   │       currency: str = "USD"
+│   │       inventory_quantity: int = 0
+│   │       image_url: Optional[str] = None
+│   │       platform_created_at: Optional[datetime] = None
+│   │       platform_updated_at: Optional[datetime] = None
+│   │       synced_at: datetime
+│   │
+│   │       model_config = ConfigDict(extra="forbid")
+│   │
+│   │   class CatalogItemUpdate(BaseModel):
+│   │       """DTO for partial catalog item update"""
+│   │       price: Optional[Decimal] = None
+│   │       inventory_quantity: Optional[int] = None
+│   │       sync_status: Optional[str] = None
+│   │       analysis_status: Optional[str] = None
+│   │
+│   │       model_config = ConfigDict(extra="forbid")
+│   │
+│   │   # Output DTOs
+│   │   class CatalogItemOut(BaseModel):
+│   │       """DTO for catalog item response"""
+│   │       id: str
+│   │       merchant_id: str
+│   │       platform_name: str
+│   │       platform_shop_id: str
+│   │       domain: str
+│   │       product_id: str
+│   │       variant_id: str
+│   │       image_id: Optional[str]
+│   │       product_title: str
+│   │       variant_title: str
+│   │       sku: Optional[str]
+│   │       price: Decimal
+│   │       currency: str
+│   │       inventory_quantity: int
+│   │       image_url: Optional[str]
+│   │       sync_status: str
+│   │       analysis_status: str
+│   │       synced_at: datetime
+│   │       created_at: datetime
+│   │       updated_at: datetime
+│   │
+│   │       model_config = ConfigDict(from_attributes=True)
+│   │   ```
+│   │
+│   ├── events.py
+│   │
+│   │   ```py
+│   │   # services/catalog-service/src/schemas/events.py
+│   │   from typing import List, Optional, Dict, Any
+│   │   from decimal import Decimal
+│   │   from pydantic import BaseModel
+│   │
+│   │   # Consumed event payloads
+│   │   class ProductsFetchedPayload(BaseModel):
+│   │       """Payload for platform.products.fetched event"""
+│   │       merchant_id: str
+│   │       sync_id: str
+│   │       platform_name: str
+│   │       platform_shop_id: str
+│   │       domain: str
+│   │       products: List[Dict[str, Any]]
+│   │       batch_num: int
+│   │       has_more: bool
+│   │
+│   │   class AnalysisCompletedPayload(BaseModel):
+│   │       """Payload for analysis.completed event"""
+│   │       merchant_id: str
+│   │       item_id: str
+│   │       model_version: str
+│   │       category: Optional[str]
+│   │       subcategory: Optional[str]
+│   │       description: Optional[str]
+│   │       gender: Optional[str]
+│   │       attributes: Optional[Dict[str, Any]]
+│   │       quality_score: Optional[Decimal]
+│   │       confidence_score: Optional[Decimal]
+│   │       processing_time_ms: Optional[int]
+│   │   ```
+│   │
+│   └── sync.py
+│
+│       ```py
+│       # services/catalog-service/src/schemas/sync.py
+│       from datetime import datetime
+│       from typing import Optional
+│       from pydantic import BaseModel, Field, ConfigDict
+│
+│       # Request bodies
+│       class SyncRequestBody(BaseModel):
+│           """Request body for starting sync"""
+│           sync_type: str = Field(default="full", pattern="^(full|incremental)$")
+│
+│           model_config = ConfigDict(extra="forbid")
+│
+│       # DTOs
+│       class SyncOperationCreate(BaseModel):
+│           """DTO for creating sync operation"""
+│           merchant_id: str
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           sync_type: str = "full"
+│
+│       class SyncOperationOut(BaseModel):
+│           """DTO for sync operation response"""
+│           id: str
+│           merchant_id: str
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           sync_type: str
+│           status: str
+│           total_products: int
+│           processed_products: int
+│           failed_products: int
+│           analysis_completed: int
+│           progress_percent: int
+│           progress_message: Optional[str]
+│           started_at: datetime
+│           completed_at: Optional[datetime]
+│           error_message: Optional[str]
+│
+│           model_config = ConfigDict(from_attributes=True)
+│
+│       class SyncProgressOut(BaseModel):
+│           """DTO for sync progress polling"""
+│           sync_id: str
+│           status: str
+│           progress_percent: int
+│           message: str
+│           total_products: int
+│           processed_products: int
+│           failed_products: int = 0
+│           started_at: Optional[datetime] = None
+│           completed_at: Optional[datetime] = None
+│       ```
+│
+├── services/
+│   ├── __init__.py
+│   └── catalog_service.py
+│
+│       ```py
+│       # services/catalog-service/src/services/catalog_service.py
+│       from typing import List, Optional, Tuple
+│       from datetime import datetime
+│       import redis.asyncio as redis
+│       import json
+│
+│       from shared.utils.logger import ServiceLogger
+│       from shared.utils.exceptions import NotFoundError, ValidationError, ConflictError
+│
+│       from ..repositories.catalog_repository import CatalogRepository
+│       from ..repositories.sync_repository import SyncRepository
+│       from ..schemas.catalog import CatalogItemCreate, CatalogItemOut
+│       from ..schemas.sync import SyncOperationCreate, SyncOperationOut, SyncProgressOut
+│
+│       class CatalogService:
+│           """Catalog business logic - orchestrates sync and storage"""
+│
+│           def __init__(
+│               self,
+│               catalog_repo: CatalogRepository,
+│               sync_repo: SyncRepository,
+│               redis_client: Optional[redis.Redis],
+│               logger: ServiceLogger,
+│               config: dict
+│           ):
+│               self.catalog_repo = catalog_repo
+│               self.sync_repo = sync_repo
+│               self.redis = redis_client
+│               self.logger = logger
+│               self.config = config
+│
+│           async def start_sync(
+│               self,
+│               merchant_id: str,
+│               platform_name: str,
+│               platform_shop_id: str,
+│               domain: str,
+│               sync_type: str,
+│               correlation_id: str
+│           ) -> SyncOperationOut:
+│               """Start catalog sync operation"""
+│
+│               # Check for existing running sync
+│               existing = await self.sync_repo.find_running_for_merchant(merchant_id)
+│               if existing:
+│                   raise ConflictError(
+│                       message="Sync already in progress",
+│                       conflicting_resource="sync_operation",
+│                       current_state=existing.status,
+│                       details={"sync_id": existing.id}
+│                   )
+│
+│               # Create sync operation
+│               sync_dto = SyncOperationCreate(
+│                   merchant_id=merchant_id,
+│                   platform_name=platform_name,
+│                   platform_shop_id=platform_shop_id,
+│                   domain=domain,
+│                   sync_type=sync_type
+│               )
+│
+│               sync = await self.sync_repo.create(sync_dto)
+│
+│               # Cache initial progress for polling
+│               if self.redis:
+│                   await self._cache_progress(
+│                       sync.id,
+│                       status="pending",
+│                       progress_percent=0,
+│                       message="Initializing sync...",
+│                       total_products=0,
+│                       processed_products=0
+│                   )
+│
+│               self.logger.info(
+│                   "Started catalog sync",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "sync_id": sync.id,
+│                       "merchant_id": merchant_id,
+│                       "platform": platform_name
+│                   }
+│               )
+│
+│               return sync
+│
+│           async def get_sync_progress(
+│               self,
+│               sync_id: str,
+│               correlation_id: str
+│           ) -> SyncProgressOut:
+│               """Get sync progress for polling"""
+│
+│               # Try cache first
+│               if self.redis:
+│                   cached = await self._get_cached_progress(sync_id)
+│                   if cached:
+│                       return cached
+│
+│               # Fallback to database
+│               sync = await self.sync_repo.find_by_id(sync_id)
+│               if not sync:
+│                   raise NotFoundError(
+│                       message=f"Sync operation {sync_id} not found",
+│                       resource="sync_operation",
+│                       resource_id=sync_id
+│                   )
+│
+│               return SyncProgressOut(
+│                   sync_id=sync.id,
+│                   status=sync.status,
+│                   progress_percent=sync.progress_percent,
+│                   message=sync.progress_message or "",
+│                   total_products=sync.total_products,
+│                   processed_products=sync.processed_products,
+│                   failed_products=sync.failed_products,
+│                   started_at=sync.started_at,
+│                   completed_at=sync.completed_at
+│               )
+│
+│           async def process_product_batch(
+│               self,
+│               sync_id: str,
+│               merchant_id: str,
+│               products: List[dict],
+│               batch_num: int,
+│               has_more: bool,
+│               correlation_id: str
+│           ) -> List[CatalogItemOut]:
+│               """Process batch of products from platform"""
+│
+│               items_created = []
+│               items_to_analyze = []
+│
+│               for product in products:
+│                   # Create DTO
+│                   item_dto = CatalogItemCreate(
+│                       merchant_id=merchant_id,
+│                       platform_name=product.get("platform_name", "shopify"),
+│                       platform_shop_id=product["platform_shop_id"],
+│                       domain=product["domain"],
+│                       product_id=product["product_id"],
+│                       variant_id=product["variant_id"],
+│                       image_id=product.get("image_id"),
+│                       product_title=product["product_title"],
+│                       variant_title=product.get("variant_title", ""),
+│                       sku=product.get("sku"),
+│                       price=product["price"],
+│                       currency=product.get("currency", "USD"),
+│                       inventory_quantity=product.get("inventory", 0),
+│                       image_url=product.get("image_url"),
+│                       platform_created_at=product.get("created_at"),
+│                       platform_updated_at=product.get("updated_at"),
+│                       synced_at=datetime.utcnow()
+│                   )
+│
+│                   # Upsert catalog item
+│                   item = await self.catalog_repo.upsert(item_dto)
+│                   items_created.append(item)
+│
+│                   # Queue for analysis if has image
+│                   if item.image_url:
+│                       items_to_analyze.append({
+│                           "item_id": item.id,
+│                           "image_url": item.image_url
+│                       })
+│
+│               # Update progress
+│               sync = await self.sync_repo.find_by_id(sync_id)
+│               if sync:
+│                   processed = sync.processed_products + len(products)
+│                   progress_percent = min(90, int((processed / max(sync.total_products, 1)) * 90))
+│
+│                   await self.sync_repo.update_progress(
+│                       sync_id=sync_id,
+│                       processed=processed,
+│                       failed=sync.failed_products,
+│                       progress_percent=progress_percent,
+│                       message=f"Processed batch {batch_num}, {processed} products synced"
+│                   )
+│
+│                   # Update cache
+│                   if self.redis:
+│                       await self._cache_progress(
+│                           sync_id=sync_id,
+│                           status="running",
+│                           progress_percent=progress_percent,
+│                           message=f"Processing batch {batch_num}...",
+│                           total_products=sync.total_products,
+│                           processed_products=processed
+│                       )
+│
+│               self.logger.info(
+│                   f"Processed product batch {batch_num}",
+│                   extra={
+│                       "correlation_id": correlation_id,
+│                       "sync_id": sync_id,
+│                       "batch_size": len(products),
+│                       "items_to_analyze": len(items_to_analyze)
+│                   }
+│               )
+│
+│               return items_created, items_to_analyze
+│
+│           async def get_catalog_status(
+│               self,
+│               merchant_id: str,
+│               correlation_id: str
+│           ) -> dict:
+│               """Get catalog status for merchant"""
+│
+│               # Get product count
+│               product_count = await self.catalog_repo.count_by_merchant(merchant_id)
+│
+│               # Get last sync
+│               last_sync = await self.sync_repo.find_by_id(merchant_id)  # Would need a proper query
+│
+│               return {
+│                   "product_count": product_count,
+│                   "last_sync_at": last_sync.completed_at if last_sync else None,
+│                   "sync_status": last_sync.status if last_sync else "never_synced"
+│               }
+│
+│           async def _cache_progress(
+│               self,
+│               sync_id: str,
+│               status: str,
+│               progress_percent: int,
+│               message: str,
+│               total_products: int,
+│               processed_products: int
+│           ) -> None:
+│               """Cache progress in Redis for fast polling"""
+│               if not self.redis:
+│                   return
+│
+│               data = {
+│                   "status": status,
+│                   "progress_percent": progress_percent,
+│                   "message": message,
+│                   "total_products": total_products,
+│                   "processed_products": processed_products,
+│                   "updated_at": datetime.utcnow().isoformat()
+│               }
+│
+│               await self.redis.setex(
+│                   f"sync:{sync_id}",
+│                   self.config.get("sync_progress_ttl", 3600),
+│                   json.dumps(data)
+│               )
+│
+│           async def _get_cached_progress(self, sync_id: str) -> Optional[SyncProgressOut]:
+│               """Get cached progress from Redis"""
+│               if not self.redis:
+│                   return None
+│
+│               data = await self.redis.get(f"sync:{sync_id}")
+│               if not data:
+│                   return None
+│
+│               progress = json.loads(data)
+│               return SyncProgressOut(
+│                   sync_id=sync_id,
+│                   status=progress["status"],
+│                   progress_percent=progress["progress_percent"],
+│                   message=progress["message"],
+│                   total_products=progress["total_products"],
+│                   processed_products=progress["processed_products"],
+│                   failed_products=0,
+│                   started_at=None,
+│                   completed_at=None
+│               )
+│       ```
+│
+├── __init__.py
+├── config.py
+│
+│   ```py
+│   # services/catalog-service/src/config.py
+│   import os
+│   from functools import lru_cache
+│   from pydantic import BaseModel, Field, ConfigDict, model_validator
+│   from shared.utils import load_root_env, ConfigurationError
+│
+│   class ServiceConfig(BaseModel):
+│       """Catalog service configuration with required shared package integration"""
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           populate_by_name=True,
+│       )
+│
+│       # Service identification (required by shared package)
+│       service_name: str = "catalog-service"
+│       service_version: str = "1.0.0"
+│       service_description: str = "Product catalog synchronization and AI analysis orchestration"
+│       debug: bool = Field(default=False, alias="DEBUG")
+│
+│       # Required environment variables
+│       environment: str = Field(..., alias="APP_ENV")
+│       api_external_port: int = Field(..., alias="CATALOG_API_EXTERNAL_PORT")
+│       database_enabled: bool = Field(default=True, alias="CATALOG_DB_ENABLED")
+│
+│       # Required secrets (from .env)
+│       database_url: str = Field(..., alias="DATABASE_URL")
+│       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+│       internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
+│
+│       # Redis for progress tracking
+│       redis_enabled: bool = Field(default=True, alias="CATALOG_REDIS_ENABLED")
+│       redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
+│
+│       # API configuration
+│       api_host: str = "0.0.0.0"
+│
+│       # Sync configuration
+│       sync_batch_size: int = Field(default=100, alias="CATALOG_SYNC_BATCH_SIZE")
+│       sync_progress_ttl: int = Field(default=3600, alias="CATALOG_SYNC_PROGRESS_TTL")
+│
+│       # Logging (used by shared package logger)
+│       logging_level: str = "INFO"
+│       logging_format: str = "json"
+│
+│       @property
+│       def nats_url(self) -> str:
+│           """NATS URL for event system"""
+│           in_container = os.path.exists("/.dockerenv")
+│           if in_container or self.environment in ["development", "production"]:
+│               return "nats://nats:4222"
+│           return "nats://localhost:4222"
+│
+│       @property
+│       def api_port(self) -> int:
+│           """Port based on environment"""
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│
+│       @model_validator(mode="after")
+│       def validate_config(self):
+│           if self.database_enabled and not self.database_url:
+│               raise ValueError("DATABASE_URL required when database is enabled")
+│           if self.redis_enabled and not self.redis_url:
+│               raise ValueError("REDIS_URL required when Redis is enabled")
+│           return self
+│
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load configuration once"""
+│       try:
+│           load_root_env()  # From shared package, loads root .env
+│           return ServiceConfig(**os.environ)
+│       except Exception as e:
+│           raise ConfigurationError(
+│               f"Failed to load config: {e}",
+│               config_key="catalog-service"
+│           )
+│   ```
+│
+├── dependencies.py
+│
+│   ```py
+│   # services/catalog-service/src/dependencies.py
+│   from typing import Annotated
+│   from fastapi import Depends, Request, HTTPException
+│
+│   # Re-export shared dependencies
+│   from shared.api.dependencies import (
+│       RequestContextDep,
+│       ClientAuthDep,
+│       PlatformContextDep,
+│       PaginationDep,
+│       LoggerDep
+│   )
+│
+│   from .lifecycle import ServiceLifecycle
+│   from .services.catalog_service import CatalogService
+│   from .events.publishers import CatalogEventPublisher
+│
+│   __all__ = [
+│       "RequestContextDep",
+│       "ClientAuthDep",
+│       "PlatformContextDep",
+│       "PaginationDep",
+│       "LoggerDep",
+│       "LifecycleDep",
+│       "CatalogServiceDep",
+│       "EventPublisherDep"
+│   ]
+│
+│   # Core dependencies
+│   def get_lifecycle(request: Request) -> ServiceLifecycle:
+│       """Get service lifecycle from app state"""
+│       return request.app.state.lifecycle
+│
+│   def get_catalog_service(lifecycle: LifecycleDep = Depends(get_lifecycle)) -> CatalogService:
+│       """Get catalog service"""
+│       if not lifecycle.catalog_service:
+│           raise HTTPException(500, "Catalog service not initialized")
+│       return lifecycle.catalog_service
+│
+│   def get_event_publisher(lifecycle: LifecycleDep = Depends(get_lifecycle)) -> CatalogEventPublisher:
+│       """Get event publisher"""
+│       if not lifecycle.event_publisher:
+│           raise HTTPException(500, "Event publisher not initialized")
+│       return lifecycle.event_publisher
+│
+│   # Type aliases
+│   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+│   CatalogServiceDep = Annotated[CatalogService, Depends(get_catalog_service)]
+│   EventPublisherDep = Annotated[CatalogEventPublisher, Depends(get_event_publisher)]
+│   ```
+│
+├── exceptions.py
+│
+│   ```py
+│   from shared.utils.exceptions import (
+│       ConflictError,
+│       ForbiddenError,
+│       GlamBaseError,
+│       NotFoundError,
+│       ServiceUnavailableError,
+│       ValidationError,
+│   )
+│
+│
+│   class CatalogServiceError(GlamBaseError):
+│       """Base error for catalog service"""
+│
+│       pass
+│
+│
+│   class InvalidShopDomainError(ValidationError):
+│       """Invalid shop domain format"""
+│
+│       pass
+│
+│
+│   class SyncNotAllowedError(ForbiddenError):
+│       """Sync not allowed due to settings or entitlements"""
+│
+│       pass
+│
+│
+│   class SyncNotFoundError(NotFoundError):
+│       """Sync job not found"""
+│
+│       pass
+│
+│
+│   class SyncAlreadyActiveError(ConflictError):
+│       """Active sync already exists"""
+│
+│       pass
+│
+│
+│   class InvalidSyncTypeError(ValidationError):
+│       """Invalid sync type"""
+│
+│       pass
+│
+│
+│   class SyncFailedError(ServiceUnavailableError):
+│       """Sync operation failed"""
+│
+│       pass
+│
+│
+│   class EventProcessingError(ServiceUnavailableError):
+│       """Failed to process event"""
+│
+│       pass
+│   ```
+│
+├── lifecycle.py
+│
+│   ```py
+│   # services/catalog-service/src/lifecycle.py
+│   from typing import Optional, List
+│   import asyncio
+│   import redis.asyncio as redis
+│   from prisma import Prisma
+│
+│   from shared.messaging import JetStreamClient
+│   from shared.utils.logger import ServiceLogger
+│
+│   from .config import ServiceConfig
+│   from .repositories.catalog_repository import CatalogRepository
+│   from .repositories.sync_repository import SyncRepository
+│   from .repositories.analysis_repository import AnalysisRepository
+│   from .services.catalog_service import CatalogService
+│   from .events.publishers import CatalogEventPublisher
+│   from .events.listeners import ProductsFetchedListener, AnalysisCompletedListener
+│
+│   class ServiceLifecycle:
+│       """Manages all service components lifecycle"""
+│
+│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│           self.config = config
+│           self.logger = logger
+│
+│           # Connections
+│           self.messaging_client: Optional[JetStreamClient] = None
+│           self.prisma: Optional[Prisma] = None
+│           self.redis: Optional[redis.Redis] = None
+│           self._db_connected = False
+│
+│           # Components
+│           self.event_publisher: Optional[CatalogEventPublisher] = None
+│           self.catalog_repo: Optional[CatalogRepository] = None
+│           self.sync_repo: Optional[SyncRepository] = None
+│           self.analysis_repo: Optional[AnalysisRepository] = None
+│           self.catalog_service: Optional[CatalogService] = None
+│
+│           # Listeners
+│           self._listeners: List = []
+│           self._tasks: List[asyncio.Task] = []
+│
+│       async def startup(self) -> None:
+│           """Initialize all components in correct order"""
+│           try:
+│               self.logger.info("Starting catalog service components...")
+│
+│               # 1. Messaging (for events)
+│               await self._init_messaging()
+│
+│               # 2. Database
+│               await self._init_database()
+│
+│               # 3. Redis (for progress caching)
+│               await self._init_redis()
+│
+│               # 4. Repositories (depends on Prisma)
+│               self._init_repositories()
+│
+│               # 5. Services (depends on repositories)
+│               self._init_services()
+│
+│               # 6. Event listeners (depends on services)
+│               await self._init_listeners()
+│
+│               self.logger.info("Catalog service started successfully")
+│
+│           except Exception as e:
+│               self.logger.critical("Service startup failed", exc_info=True)
+│               await self.shutdown()
+│               raise
+│
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown in reverse order"""
+│           self.logger.info("Shutting down catalog service")
+│
+│           # Cancel tasks
+│           for task in self._tasks:
+│               task.cancel()
+│           if self._tasks:
+│               await asyncio.gather(*self._tasks, return_exceptions=True)
+│
+│           # Stop listeners
+│           for listener in self._listeners:
+│               try:
+│                   await listener.stop()
+│               except Exception:
+│                   self.logger.exception("Listener stop failed", exc_info=True)
+│
+│           # Close Redis
+│           if self.redis:
+│               try:
+│                   await self.redis.close()
+│               except Exception:
+│                   self.logger.exception("Redis close failed", exc_info=True)
+│
+│           # Close messaging
+│           if self.messaging_client:
+│               try:
+│                   await self.messaging_client.close()
+│               except Exception:
+│                   self.logger.exception("Messaging close failed", exc_info=True)
+│
+│           # Disconnect database
+│           if self.prisma and self._db_connected:
+│               try:
+│                   await self.prisma.disconnect()
+│               except Exception:
+│                   self.logger.exception("Prisma disconnect failed", exc_info=True)
+│
+│           self.logger.info("Catalog service shutdown complete")
+│
+│       async def _init_messaging(self) -> None:
+│           """Initialize NATS/JetStream for events"""
+│           self.messaging_client = JetStreamClient(self.logger)
+│           await self.messaging_client.connect([self.config.nats_url])
+│           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
+│
+│           # Initialize publisher
+│           self.event_publisher = CatalogEventPublisher(
+│               jetstream_client=self.messaging_client,
+│               logger=self.logger
+│           )
+│
+│           self.logger.info("Messaging client and publisher initialized")
+│
+│       async def _init_database(self) -> None:
+│           """Initialize Prisma client"""
+│           if not self.config.database_enabled:
+│               self.logger.info("Database disabled; skipping Prisma initialization")
+│               return
+│
+│           self.prisma = Prisma()
+│           try:
+│               await self.prisma.connect()
+│               self._db_connected = True
+│               self.logger.info("Prisma connected")
+│           except Exception as e:
+│               self.logger.exception(f"Prisma connect failed: {e}", exc_info=True)
+│               raise
+│
+│       async def _init_redis(self) -> None:
+│           """Initialize Redis for progress caching"""
+│           if not self.config.redis_enabled:
+│               self.logger.info("Redis disabled; skipping initialization")
+│               return
+│
+│           try:
+│               self.redis = await redis.from_url(
+│                   self.config.redis_url,
+│                   encoding="utf-8",
+│                   decode_responses=True
+│               )
+│               await self.redis.ping()
+│               self.logger.info("Redis connected")
+│           except Exception as e:
+│               self.logger.warning(f"Redis connect failed: {e}. Continuing without cache.")
+│               self.redis = None
+│
+│       def _init_repositories(self) -> None:
+│           """Initialize repositories with Prisma client"""
+│           if not self._db_connected:
+│               self.logger.warning("Database not connected, skipping repositories")
+│               return
+│
+│           self.catalog_repo = CatalogRepository(self.prisma)
+│           self.sync_repo = SyncRepository(self.prisma)
+│           self.analysis_repo = AnalysisRepository(self.prisma)
+│
+│           self.logger.info("Repositories initialized")
+│
+│       def _init_services(self) -> None:
+│           """Initialize business services"""
+│           if not self.catalog_repo or not self.sync_repo:
+│               raise RuntimeError("Repositories not initialized")
+│
+│           self.catalog_service = CatalogService(
+│               catalog_repo=self.catalog_repo,
+│               sync_repo=self.sync_repo,
+│               redis_client=self.redis,
+│               logger=self.logger,
+│               config=vars(self.config)
+│           )
+│
+│           self.logger.info("Catalog service initialized")
+│
+│       async def _init_listeners(self) -> None:
+│           """Initialize event listeners"""
+│           if not self.messaging_client or not self.catalog_service:
+│               raise RuntimeError("Messaging or service not ready")
+│
+│           # Products fetched listener
+│           products_listener = ProductsFetchedListener(
+│               js_client=self.messaging_client,
+│               publisher=self.event_publisher,
+│               service=self.catalog_service,
+│               logger=self.logger
+│           )
+│           await products_listener.start()
+│           self._listeners.append(products_listener)
+│
+│           # Analysis completed listener
+│           analysis_listener = AnalysisCompletedListener(
+│               js_client=self.messaging_client,
+│               analysis_repo=self.analysis_repo,
+│               catalog_repo=self.catalog_repo,
+│               logger=self.logger
+│           )
+│           await analysis_listener.start()
+│           self._listeners.append(analysis_listener)
+│
+│           self.logger.info("Event listeners started")
+│   ```
+│
+└── main.py
+
+    ```py
+    # services/catalog-service/src/main.py
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+    from shared.api import setup_middleware, create_health_router
+    from shared.utils import create_logger
+
+    from .config import get_service_config
+    from .lifecycle import ServiceLifecycle
+
+    # CRITICAL: Create these at module level (singletons)
+    config = get_service_config()
+    logger = create_logger(config.service_name)  # Shared package logger
+    lifecycle = ServiceLifecycle(config, logger)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan management for startup/shutdown"""
+        # Store in app state for dependencies
+        app.state.lifecycle = lifecycle
+        app.state.config = config
+        app.state.logger = logger  # REQUIRED for middleware
+
+        try:
+            await lifecycle.startup()
+            yield
+        finally:
+            await lifecycle.shutdown()
+
+    def create_application() -> FastAPI:
+        """Create FastAPI app with shared package integration"""
+        app = FastAPI(
+            title=config.service_name,
+            version=config.service_version,
+            description=config.service_description,
+            lifespan=lifespan,
+            # Don't add exception_handlers - middleware handles everything
+        )
+
+        # CRITICAL: Setup shared middleware (handles ALL errors)
+        setup_middleware(
+            app,
+            service_name=config.service_name
+        )
+
+        # Add health check from shared package
+        app.include_router(create_health_router(config.service_name))
+
+        # Add your routers
+        from .api.v1 import catalog, sync
+        app.include_router(catalog.router)
+        app.include_router(sync.router)
+
+        return app
+
+    app = create_application()
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(
+            "src.main:app",
+            host=config.api_host,
+            port=config.api_port,
+            reload=config.debug
+        )
+    ```
+
+.python-version
+Dockerfile
+
+```
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 1 ─ Builder
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install poetry
+RUN poetry config virtualenvs.create false
+
+# ---- 1️⃣  Install shared package dependencies
+COPY shared /shared
+WORKDIR /shared
+RUN poetry install --no-dev
+
+# ---- 2️⃣  Install service dependencies
+WORKDIR /app
+COPY services/catalog-service/pyproject.toml services/catalog-service/poetry.lock* ./
+RUN poetry install --no-dev --no-interaction --no-ansi
+
+# ---- 3️⃣  Copy Prisma schema and generate client
+COPY services/catalog-service/prisma ./prisma
+RUN prisma generate
+
+# ---- 4️⃣  Copy service code
+COPY services/catalog-service /app
+
+# ---- 5️⃣  Copy config
+COPY config /app/config
+
+# ──────────────────────────────────────────────────────────────
+# 📦  Stage 2 ─ Runtime
+# ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+# Copy everything from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app /app
+COPY --from=builder /shared /shared
+
+ENV PYTHONPATH="/shared:/app"
+ENV DOCKER_CONTAINER=1
+
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Run migrations and start server
+CMD ["sh", "-c", "prisma migrate deploy && uvicorn src.main:app --host 0.0.0.0 --port 8000"]
+```
+
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+[tool.poetry]
+name = "catalog-service"
+version = "1.0.0"
+description = "Catalog synchronization service for GlamYouUp platform"
+authors = ["GlamYouUp Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.25.0"}
+pydantic = "^2.5.0"
+prisma = "^0.11.0"
+nats-py = "^2.6.0"
+shared = { path = "../../shared", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

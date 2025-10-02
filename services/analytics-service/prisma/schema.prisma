@@ -1,0 +1,244 @@
+// services/analytics/prisma/schema.prisma
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AnalyticsEvent {
+  id                String   @id @default(uuid()) @db.Uuid
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+
+  // Event data
+  event_type        String   @db.VarChar(255)
+  event_timestamp   DateTime @default(now()) @db.Timestamptz(3)
+
+  // Contextual data
+  shopper_id        String?  @db.VarChar(255)
+  anonymous_id      String?  @db.VarChar(255)
+  analysis_id       String?  @db.VarChar(255)
+  match_id          String?  @db.VarChar(255)
+
+  // Event payload
+  event_data        Json     @db.JsonB
+
+  // Indexing
+  @@index([merchant_id, event_timestamp])
+  @@index([platform_shop_id, event_timestamp])
+  @@index([event_type, event_timestamp])
+  @@map("analytics_events")
+}
+
+model ShopperAnalysis {
+  id                String   @id @default(uuid()) @db.Uuid
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+
+  // Shopper data
+  shopper_id        String?  @db.VarChar(255)
+  anonymous_id      String?  @db.VarChar(255)
+  analysis_id       String   @unique @db.VarChar(255)
+
+  // Analysis results
+  primary_season    String   @db.VarChar(50)
+  secondary_season  String?  @db.VarChar(50)
+  tertiary_season   String?  @db.VarChar(50)
+  confidence        Float
+
+  // Performance
+  processing_time_ms Int
+
+  // Timestamps
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([merchant_id, created_at])
+  @@index([platform_shop_id, created_at])
+  @@map("shopper_analyses")
+}
+
+model MatchMetrics {
+  id                String   @id @default(uuid()) @db.Uuid
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+
+  // Match data
+  match_id          String   @unique @db.VarChar(255)
+  shopper_id        String?  @db.VarChar(255)
+  anonymous_id      String?  @db.VarChar(255)
+  analysis_id       String   @db.VarChar(255)
+
+  // Results
+  total_matches     Int
+  products_matched  String[]
+  avg_match_score   Float
+  top_match_score   Float
+  primary_season    String   @db.VarChar(50)
+
+  // Credit
+  credits_consumed  Int      @default(1)
+
+  // Timestamps
+  created_at        DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([merchant_id, created_at])
+  @@index([platform_shop_id, created_at])
+  @@map("match_metrics")
+}
+
+model DailyMerchantMetrics {
+  id                String   @id @default(cuid())
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+  date              DateTime @db.Date
+
+  // Volume metrics
+  total_analyses    Int      @default(0)
+  total_matches     Int      @default(0)
+  unique_shoppers   Int      @default(0)
+  returning_shoppers Int     @default(0)
+
+  // Performance metrics
+  avg_products_matched Float  @default(0)
+  avg_confidence_score Float  @default(0)
+  avg_match_score     Float   @default(0)
+
+  // Credit metrics
+  credits_consumed  Int      @default(0)
+  credits_remaining Int      @default(0)
+
+  // Catalog metrics
+  total_products    Int      @default(0)
+  analyzed_products Int      @default(0)
+
+  // Additional metrics
+  analysis_frequency    Float    @default(0)
+  drop_off_rate        Float    @default(0)
+  zero_match_rate      Float    @default(0)
+  analysis_coverage    Float    @default(0)
+
+  // Performance
+  avg_analysis_time_ms Int      @default(0)
+  failed_analyses      Int      @default(0)
+  analysis_success_rate Float   @default(0)
+
+  // Peak usage
+  peak_hour           Int?
+  catalog_freshness   Int?
+
+  @@unique([merchant_id, date])
+  @@index([platform_shop_id, date])
+  @@map("daily_merchant_metrics")
+}
+
+model SeasonDistribution {
+  id                String   @id @default(cuid())
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+  date              DateTime @db.Date
+  season            String   @db.VarChar(50)
+
+  // Counts
+  shopper_count     Int      @default(0)
+  match_count       Int      @default(0)
+
+  // Performance
+  avg_confidence    Float    @default(0)
+  avg_products_matched Int   @default(0)
+
+  @@unique([merchant_id, date, season])
+  @@index([platform_shop_id, date])
+  @@map("season_distributions")
+}
+
+model CreditUsageMetrics {
+  id                String   @id @default(cuid())
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+  date              DateTime @db.Date
+  hour              Int
+
+  // Usage
+  credits_consumed  Int      @default(0)
+  matches_created   Int      @default(0)
+
+  @@unique([merchant_id, date, hour])
+  @@index([platform_shop_id, date])
+  @@map("credit_usage_metrics")
+}
+
+model ProductMatchMetrics {
+  id                String   @id @default(cuid())
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+  product_id        String   @db.VarChar(255)
+  variant_id        String   @db.VarChar(255)
+
+  // Metrics
+  total_matches     Int      @default(0)
+  avg_match_score   Float    @default(0)
+  first_matched_at  DateTime? @db.Timestamptz(3)
+  last_matched_at   DateTime? @db.Timestamptz(3)
+  match_velocity    Float    @default(0)
+
+  // Season association
+  primary_seasons   String[]
+
+  @@unique([merchant_id, product_id, variant_id])
+  @@index([platform_shop_id, total_matches])
+  @@map("product_match_metrics")
+}
+
+model HourlyUsageMetrics {
+  id                String   @id @default(cuid())
+
+  // Platform identification
+  merchant_id       String   @db.Uuid
+  platform_name     String   @db.VarChar(50)
+  platform_shop_id  String   @db.VarChar(255)
+  domain   String   @db.VarChar(255)
+  date              DateTime @db.Date
+  hour              Int
+
+  // Activity
+  analyses_count    Int      @default(0)
+  matches_count     Int      @default(0)
+  credits_used      Int      @default(0)
+
+  @@unique([merchant_id, date, hour])
+  @@index([platform_shop_id, date, hour])
+  @@map("hourly_usage_metrics")
+}

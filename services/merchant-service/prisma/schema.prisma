@@ -1,0 +1,56 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+enum MerchantStatus {
+  PENDING      // Installed but not activated
+  ACTIVE       // Has trial or credits
+  PAUSED       // No credits/trial (but installed)
+  SUSPENDED    // Disabled for violations
+  UNINSTALLED  // App uninstalled
+}
+
+model Merchant {
+  id                 String   @id @default(uuid()) @db.Uuid
+
+  // Platform identity
+  platform_name      String
+  platform_shop_id   String
+  domain             String
+
+  // Basic info (synced from platform)
+  name               String
+  email              String
+  primary_domain     String?
+  currency           String
+  country            String
+  platform_version   String?
+  scopes             String
+
+  // Ops state
+  status             MerchantStatus @default(PENDING)
+
+  // Lifecycle timestamps
+  installed_at       DateTime? @db.Timestamptz(3)   // set on install/reinstall
+  uninstalled_at     DateTime? @db.Timestamptz(3)   // set on uninstall webhook
+  last_synced_at     DateTime? @db.Timestamptz(3)   // set on platform sync
+
+  // Audit
+  created_at         DateTime @default(now()) @db.Timestamptz(3)
+  updated_at         DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([platform_name, platform_shop_id])
+  @@unique([platform_name, domain])
+  @@index([platform_shop_id, domain])
+  @@index([domain])
+  @@index([status])
+  @@index([last_synced_at])
+  @@map("merchants")
+}

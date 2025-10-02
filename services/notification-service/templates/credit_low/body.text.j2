@@ -1,0 +1,25 @@
+Low credit balance
+
+Hi {{ domain }},
+
+Your Glam You Up credit balance is running low.
+
+Current balance: {{ balance }} credits
+1 credit = 1 recommendation.
+
+Top up now to avoid any interruption.
+
+If you hit zero
+- Recommendations will pause for shoppers
+- Usage analytics won’t update until you recharge
+- Potential conversions may be lost
+
+{% if app_url is defined -%}
+Top up: {{ app_url }}/billing/credits
+Auto-recharge: {{ app_url }}/billing/auto-recharge
+{%- endif %}
+
+Need help choosing a pack? {{ support_email }}
+
+Best regards,
+The Glam You Up Team

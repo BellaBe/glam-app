@@ -1,0 +1,10 @@
+<div style="max-width:600px;margin:0 auto;padding:20px;color:#667085;font:400 12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,Arial,sans-serif;">
+  <hr style="border:none;border-top:1px solid #E4E7EC;margin:0 0 12px 0;">
+  <p style="margin:0 0 8px 0;">© {{ current_year }} {{ company_name | default('Glam You Up') }}.</p>
+  <p style="margin:0 0 8px 0;">
+    {{ company_address | default('31 Continental Dr, Suite 305, Newark, Delaware 19713, United States') }}
+  </p>
+  <p style="margin:0 0 8px 0;">
+    Questions? <a href="mailto:{{ support_email | default('support@glamyouup.com') }}" style="color:#667085;text-decoration:underline;">{{ support_email | default('support@glamyouup.com') }}</a>
+  </p>
+</div>

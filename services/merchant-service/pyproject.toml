@@ -1,0 +1,25 @@
+# services/merchant-service/pyproject.toml
+[tool.poetry]
+name = "merchant-service"
+version = "1.0.0"
+description = "Merchant identity management"
+authors = ["GlamYouUp Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.25.0"}
+pydantic = {extras = ["email"], version = "^2.11.7"}
+
+prisma = "^0.15.0"
+nats-py = "^2.6.0"
+shared = { path = "../../shared", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

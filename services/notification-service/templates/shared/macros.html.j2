@@ -1,0 +1,11 @@
+{% macro divider() -%}
+  <hr style="border:none;border-top:1px solid #E4E7EC;margin:20px 0;">
+{%- endmacro %}
+
+{% macro button(url, text, bg=None) -%}
+  <a href="{{ url }}" style="background: {{ (bg or brand_color or '#BD4267') }};
+     color:#fff;text-decoration:none;display:inline-block;padding:12px 20px;
+     border-radius:8px;font-weight:600;line-height:1;border:1px solid transparent;">
+    {{ text }}
+  </a>
+{%- endmacro %}
