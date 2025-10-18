@@ -1,0 +1,281 @@
+# infrastructure/docker-compose.yml
+# Purpose: Base service definitions - DO NOT RUN DIRECTLY
+# Pattern: DRY configuration with anchors for reuse across environments
+# Usage: docker compose -f docker-compose.yml -f docker-compose.{env}.yml up
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+x-healthcheck-ai: &healthcheck-ai
+  interval: 30s
+  timeout: 15s
+  retries: 3
+  start_period: 60s
+
+x-common-env: &common-env
+  NATS_URL: nats://nats:4222
+  JWT_SECRET: ${JWT_SECRET}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  APP_ENV: ${APP_ENV}
+
+x-api-service: &api-service
+  build:
+    context: ..
+    dockerfile: infrastructure/docker/service.Dockerfile
+  networks:
+    - glam
+  depends_on:
+    postgres:
+      condition: service_healthy
+    nats:
+      condition: service_healthy
+  healthcheck:
+    <<: *healthcheck-defaults
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  restart: unless-stopped
+
+x-ai-service: &ai-service
+  build:
+    context: ..
+    dockerfile: infrastructure/docker/ai-service.Dockerfile
+  networks:
+    - glam
+  environment:
+    <<: *common-env
+  depends_on:
+    nats:
+      condition: service_healthy
+  healthcheck:
+    <<: *healthcheck-ai
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - glam
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10.7-alpine
+    command: ["nats-server", "-js", "--store_dir", "/data", "--http_port", "8222"]
+    volumes:
+      - nats-data:/data
+    networks:
+      - glam
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  analytics-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: analytics-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/analytics_db
+
+  billing-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: billing-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing_db
+
+  catalog-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: catalog-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/catalog_db
+
+  catalog-connector:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: catalog-connector
+    environment:
+      <<: *common-env
+      TOKEN_SERVICE_URL: http://token-service:8000
+    depends_on:
+      nats:
+        condition: service_healthy
+      token-service:
+        condition: service_healthy
+
+  credit-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: credit-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/credit_db
+
+  merchant-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: merchant-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/merchant_db
+
+  notification-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: notification-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/notification_db
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+
+  recommendation-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: recommendation-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recommendation_db
+      SEASON_COMPATIBILITY_SERVICE_URL: http://season-compatibility-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      season-compatibility-service:
+        condition: service_healthy
+
+  season-compatibility-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: season-compatibility-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/season_compatibility_db
+
+  selfie-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: selfie-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/selfie_db
+      SELFIE_AI_ANALYZER_URL: http://selfie-ai-analyzer:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      selfie-ai-analyzer:
+        condition: service_healthy
+
+  token-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: token-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/token_db
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+
+  webhook-service:
+    <<: *api-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/service.Dockerfile
+      args:
+        SERVICE: webhook-service
+    environment:
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/webhook_db
+      SHOPIFY_WEBHOOK_SECRET: ${SHOPIFY_WEBHOOK_SECRET:-}
+
+  selfie-ai-analyzer:
+    <<: *ai-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/ai-service.Dockerfile
+      args:
+        SERVICE: selfie-ai-analyzer
+    environment:
+      <<: *common-env
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      OMP_NUM_THREADS: "2"
+      OPENCV_VIDEOIO_PRIORITY_BACKEND: "0"
+
+  catalog-ai-analyzer:
+    <<: *ai-service
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/ai-service.Dockerfile
+      args:
+        SERVICE: catalog-ai-analyzer
+    environment:
+      <<: *common-env
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OMP_NUM_THREADS: "1"
+
+networks:
+  glam:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  nats-data:

@@ -24,7 +24,7 @@ class ShopifyClient:
                     "name": name,
                     "price": str(amount),
                     "return_url": return_url,
-                    "test": self.config.environment != "production",
+                    "test": self.config.environment != "prod",
                 }
             }
 

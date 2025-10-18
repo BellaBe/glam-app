@@ -24,16 +24,11 @@ class ServiceConfig(BaseModel):
 
     # Required environment variables
     environment: str = Field(..., alias="APP_ENV")
-    api_external_port: int = Field(..., alias="NOTIFICATION_API_EXTERNAL_PORT")
     database_enabled: bool = Field(True, alias="NOTIFICATION_DB_ENABLED")
 
     # Required secrets
     database_url: str = Field(..., alias="DATABASE_URL")
     client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
-    internal_jwt_secret: str = Field(..., alias="INTERNAL_JWT_SECRET")
-
-    # API configuration
-    api_host: str = "0.0.0.0"
 
     # Email provider configuration
     email_provider: Literal["sendgrid", "mailhog"] = Field("mailhog", alias="NOTIFICATION_EMAIL_PROVIDER")
@@ -64,7 +59,7 @@ class ServiceConfig(BaseModel):
     def nats_url(self) -> str:
         """NATS URL for event system"""
         in_container = os.path.exists("/.dockerenv")
-        if in_container or self.environment in ["development", "production"]:
+        if in_container or self.environment in ["dev", "prod"]:
             return "nats://nats:4222"
         return "nats://localhost:4222"
 
@@ -77,7 +72,7 @@ class ServiceConfig(BaseModel):
     @property
     def is_production(self) -> bool:
         """Check if running in production"""
-        return self.environment == "production"
+        return self.environment == "prod"
 
     @model_validator(mode="after")
     def validate_config(self):

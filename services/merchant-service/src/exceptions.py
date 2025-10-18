@@ -14,13 +14,14 @@ class InvalidDomainError(ValidationError):
     def __init__(self, message: str = "Invalid shop domain format"):
         super().__init__(message=message, field="domain")
 
+class MerchantConflictError(ConflictError):
+    """Raised when merchant conflict occurs"""
 
-class ConsentViolationError(ConflictError):
-    """Raised when trying to violate consent rules"""
-
-    def __init__(self, message: str = "Cannot unset required consent"):
-        super().__init__(message=message, conflicting_resource="consent")
-
+    def __init__(self, message: str = "Merchant conflict"):
+        super().__init__(
+            message=message,
+            conflicting_resource="merchant"
+        )
 
 class InvalidStatusTransitionError(DomainError):
     """Raised when status transition is invalid"""

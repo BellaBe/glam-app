@@ -1,151 +1,362 @@
-from datetime import datetime
-from uuid import UUID
+from __future__ import annotations
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from uuid import UUID, uuid4
 
-from shared.utils.logger import ServiceLogger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..config import ServiceConfig
-from ..events.publishers import BillingEventPublisher
-from ..exceptions import MerchantNotFoundError, TrialAlreadyUsedError
-from ..repositories.billing_repository import BillingRepository
-from ..repositories.purchase_repository import PurchaseRepository
+from ..db.models import PaymentStatus
+from ..exceptions import (
+    MerchantNotFoundError,
+    ProductNotFoundError,
+    ProductInactiveError,
+    TrialAlreadyActivatedError,
+    PaymentNotFoundError,
+    InvalidPlatformError,
+    PlatformChargeError,
+)
+from ..repositories.billing_repository import (
+    BillingAccountRepository,
+    ProductRepository,
+    PaymentRepository,
+)
 from ..schemas.billing import (
-    BillingStatusOut,
-    TrialActivatedOut,
-    TrialExpiredPayload,
-    TrialStartedPayload,
     TrialStatusOut,
+    ProductOut,
+    CreateChargeIn,
+    CreateChargeOut,
+    PaymentOut,
 )
 
 
 class BillingService:
-    """Service for billing operations"""
+    TRIAL_CREDITS = 500
+    PAYMENT_EXPIRY_HOURS = 24
 
     def __init__(
         self,
-        config: ServiceConfig,
-        billing_repo: BillingRepository,
-        purchase_repo: PurchaseRepository,
-        publisher: BillingEventPublisher,
-        logger: ServiceLogger,
+        session_factory: async_sessionmaker[AsyncSession],
+        publisher,  # BillingEventPublisher
+        platform_adapter,  # ShopifyAdapter
+        logger,
     ):
-        self.config = config
-        self.billing_repo = billing_repo
-        self.purchase_repo = purchase_repo
+        self.session_factory = session_factory
         self.publisher = publisher
-        # self.redis = redis_client
+        self.platform_adapter = platform_adapter
         self.logger = logger
 
-    async def create_billing_record(self, merchant_id: UUID) -> None:
-        """Create billing record for new merchant"""
-        try:
-            existing = await self.billing_repo.find_by_merchant_id(merchant_id)
+    async def handle_merchant_created(
+        self,
+        merchant_id: str,
+        platform_name: str,
+        platform_id: str,
+        platform_domain: str,
+        correlation_id: str,
+    ) -> None:
+        """Handle merchant created event - create billing account"""
+        async with self.session_factory() as session:
+            repo = BillingAccountRepository(session)
+            
+            # Check idempotency
+            existing = await repo.find_by_merchant_id(merchant_id)
             if existing:
-                self.logger.info(f"Billing record already exists for merchant {merchant_id}")
+                self.logger.info(
+                    f"Billing account already exists for {merchant_id}"
+                )
                 return
-
-            await self.billing_repo.create(merchant_id)
-            self.logger.info(f"Created billing record for merchant {merchant_id}")
-
-        except Exception as e:
-            self.logger.exception(f"Failed to create billing record: {e}")
-            raise
-
-    async def get_trial_status(self, merchant_id: UUID) -> TrialStatusOut:
-        """Get trial status for merchant"""
-        record = await self.billing_repo.find_by_merchant_id(merchant_id)
-        if not record:
-            raise MerchantNotFoundError(str(merchant_id))
-
-        # Determine if trial is active
-        active = (
-            not record.trial_available
-            and record.trial_started_at is not None
-            and record.trial_ends_at is not None
-            and record.trial_ends_at > datetime.utcnow()
-        )
-
-        return TrialStatusOut(
-            available=record.trial_available,
-            active=active,
-            started_at=record.trial_started_at,
-            ends_at=record.trial_ends_at,
-        )
-
-    async def activate_trial(self, merchant_id: UUID, idempotency_key: str | None = None) -> TrialActivatedOut:
-        """Activate trial for merchant"""
-        # Check idempotency
-        # if idempotency_key:
-        #     cache_key = f"trial:{idempotency_key}"
-        #     cached = await self.redis.get(cache_key)
-        #     if cached:
-        #         import json
-
-        #         return TrialActivatedOut(**json.loads(cached))
-
-        # Get billing record
-        record = await self.billing_repo.find_by_merchant_id(merchant_id)
-        if not record:
-            raise MerchantNotFoundError(str(merchant_id))
-
-        # Check if trial already used
-        if not record.trial_available:
-            raise TrialAlreadyUsedError(str(merchant_id))
-
-        # Activate trial
-        updated = await self.billing_repo.activate_trial(merchant_id, self.config.trial_duration_days)
-
-        # Publish event
-        await self.publisher.trial_started(
-            TrialStartedPayload(
-                merchant_id=merchant_id, ends_at=updated.trial_ends_at, credits=self.config.trial_credits
+            
+            # Create account
+            await repo.create(
+                merchant_id=merchant_id,
+                platform_name=platform_name,
+                platform_shop_id=platform_id,
+                platform_domain=platform_domain,
             )
-        )
+            await session.commit()
+            
+            # Emit event
+            await self.publisher.billing_record_created(
+                merchant_id=UUID(merchant_id),
+                platform_name=platform_name,
+                platform_id=platform_id,
+                platform_domain=platform_domain,
+                correlation_id=correlation_id,
+            )
+            
+            self.logger.info(f"Billing account created for {merchant_id}")
 
-        # Create response
-        response = TrialActivatedOut(
-            success=True, ends_at=updated.trial_ends_at, credits_granted=self.config.trial_credits
-        )
+    async def get_trial_status(self, merchant_id: str) -> TrialStatusOut:
+        """Get trial status for merchant"""
+        async with self.session_factory() as session:
+            repo = BillingAccountRepository(session)
+            account = await repo.find_by_merchant_id(merchant_id)
+            
+            if not account:
+                raise MerchantNotFoundError(
+                    message=f"Merchant not found: {merchant_id}"
+                )
+            
+            return TrialStatusOut(
+                available=account.trial_available,
+                activated_at=account.trial_activated_at,
+            )
 
-        # Cache for idempotency
-        # if idempotency_key:
-        #     cache_key = f"trial:{idempotency_key}"
-        #     await self.redis.setex(
-        #         cache_key,
-        #         86400,  # 24 hours
-        #         response.model_dump_json(),
-        #     )
+    async def activate_trial(
+        self,
+        merchant_id: str,
+        correlation_id: str,
+    ) -> None:
+        """Activate trial for merchant"""
+        async with self.session_factory() as session:
+            repo = BillingAccountRepository(session)
+            account = await repo.find_by_merchant_id(merchant_id)
+            
+            if not account:
+                raise MerchantNotFoundError(
+                    message=f"Merchant not found: {merchant_id}"
+                )
+            
+            if not account.trial_available:
+                raise TrialAlreadyActivatedError(
+                    message="Trial already activated"
+                )
+            
+            # Activate
+            await repo.activate_trial(merchant_id)
+            await session.commit()
+            
+            # Emit grant event
+            await self.publisher.trial_activated(
+                merchant_id=UUID(merchant_id),
+                grant_amount=self.TRIAL_CREDITS,
+                correlation_id=correlation_id,
+            )
+            
+            self.logger.info(f"Trial activated for {merchant_id}")
 
-        return response
+    async def list_products(self) -> list[ProductOut]:
+        """List active pricing products"""
+        async with self.session_factory() as session:
+            repo = ProductRepository(session)
+            products = await repo.list_active()
+            return [ProductOut.model_validate(p) for p in products]
 
-    async def get_billing_status(self, merchant_id: UUID) -> BillingStatusOut:
-        """Get overall billing status"""
-        record = await self.billing_repo.find_by_merchant_id(merchant_id)
-        if not record:
-            raise MerchantNotFoundError(str(merchant_id))
-
-        # Get trial status
-        trial = await self.get_trial_status(merchant_id)
-
-        # Get recent purchases
-        purchases = await self.purchase_repo.find_by_merchant(merchant_id, limit=5)
-
-        return BillingStatusOut(
-            trial=trial,
-            credits_purchased=record.total_credits_purchased,
-            last_purchase_at=record.last_purchase_at,
-            recent_purchases=purchases,
-        )
-
-    async def check_expired_trials(self) -> None:
-        """Check and process expired trials (cron job)"""
-        expired_records = await self.billing_repo.find_expired_trials()
-
-        for record in expired_records:
+    async def create_charge(
+        self,
+        merchant_id: str,
+        data: CreateChargeIn,
+        correlation_id: str,
+    ) -> CreateChargeOut:
+        """Create payment charge"""
+        async with self.session_factory() as session:
+            account_repo = BillingAccountRepository(session)
+            product_repo = ProductRepository(session)
+            payment_repo = PaymentRepository(session)
+            
+            # Get account
+            account = await account_repo.find_by_merchant_id(merchant_id)
+            if not account:
+                raise MerchantNotFoundError(
+                    message=f"Merchant not found: {merchant_id}"
+                )
+            
+            # Get product
+            product = await product_repo.find_by_id(data.product_id)
+            if not product:
+                raise ProductNotFoundError(
+                    message=f"Product not found: {data.product_id}"
+                )
+            
+            if not product.active:
+                raise ProductInactiveError(
+                    message="Product not available"
+                )
+            
+            # Validate platform
+            if data.platform not in ["shopify"]:
+                raise InvalidPlatformError(
+                    message=f"Platform not supported: {data.platform}"
+                )
+            
+            # Create payment record
+            payment = await payment_repo.create(
+                merchant_id=merchant_id,
+                amount=product.price,
+                currency=product.currency,
+                description=f"{product.name.title()} Credit Pack ({product.metadata['credits']} credits)",
+                product_type=product.type,
+                product_id=product.id,
+                platform_name=data.platform,
+                metadata={
+                    "credits": product.metadata["credits"],
+                    "pack_name": product.name,
+                },
+                expires_at=datetime.now(UTC) + timedelta(hours=self.PAYMENT_EXPIRY_HOURS),
+            )
+            await session.commit()
+            
+            # Create platform charge
             try:
-                payload = TrialExpiredPayload(merchant_id=UUID(record.merchant_id), expired_at=record.trial_ends_at)
-                await self.publisher.trial_expired(payload)
-
-                self.logger.info(f"Published trial expired event for merchant {record.merchant_id}")
-
+                checkout_url = await self.platform_adapter.create_charge(
+                    account=account,
+                    payment=payment,
+                    product=product,
+                    return_url=data.return_url,
+                )
             except Exception as e:
-                self.logger.exception(f"Failed to process expired trial: {e}")
+                self.logger.error(
+                    f"Platform charge creation failed: {e}",
+                    exc_info=True
+                )
+                raise PlatformChargeError(
+                    "Failed to create platform charge"
+                ) from e
+            
+            self.logger.info(
+                f"Created charge {payment.id} for merchant {merchant_id}"
+            )
+            
+            return CreateChargeOut(
+                payment_id=UUID(payment.id),
+                checkout_url=checkout_url,
+            )
+
+    async def get_payment(self, payment_id: str) -> PaymentOut:
+        """Get payment by ID"""
+        async with self.session_factory() as session:
+            repo = PaymentRepository(session)
+            payment = await repo.find_by_id(payment_id)
+            
+            if not payment:
+                raise PaymentNotFoundError(
+                    message=f"Payment not found: {payment_id}"
+                )
+            
+            return PaymentOut.model_validate(payment)
+
+    async def list_payments(
+        self,
+        merchant_id: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[PaymentOut]:
+        """List payments for merchant"""
+        async with self.session_factory() as session:
+            repo = PaymentRepository(session)
+            payments = await repo.list_by_merchant(
+                merchant_id=merchant_id,
+                limit=limit,
+                offset=offset,
+            )
+            return [PaymentOut.model_validate(p) for p in payments]
+
+    async def handle_purchase_updated(
+        self,
+        charge_id: str,
+        status: str,
+        correlation_id: str,
+    ) -> None:
+        """Handle purchase webhook - update payment status"""
+        async with self.session_factory() as session:
+            payment_repo = PaymentRepository(session)
+            account_repo = BillingAccountRepository(session)
+            
+            # Find payment
+            payment = await payment_repo.find_by_platform_charge_id(charge_id)
+            if not payment:
+                self.logger.error(
+                    f"Payment not found for charge {charge_id}"
+                )
+                return
+            
+            # Already processed?
+            if payment.status != PaymentStatus.PENDING:
+                self.logger.info(
+                    f"Payment {payment.id} already processed"
+                )
+                return
+            
+            # Update based on status
+            if status == "accepted":
+                # Mark completed
+                await payment_repo.mark_completed(payment.id)
+                
+                # Update account spending
+                await account_repo.update_spend(
+                    merchant_id=payment.merchant_id,
+                    amount=payment.amount,
+                )
+                await session.commit()
+                
+                # Emit success event
+                await self.publisher.purchase_completed(
+                    merchant_id=UUID(payment.merchant_id),
+                    payment_id=UUID(payment.id),
+                    product_id=payment.product_id,
+                    amount=float(payment.amount),
+                    currency=payment.currency,
+                    metadata=payment.metadata or {},
+                    correlation_id=correlation_id,
+                )
+                
+                self.logger.info(
+                    f"Payment {payment.id} completed"
+                )
+            else:
+                # Mark failed
+                await payment_repo.mark_failed(payment.id)
+                await session.commit()
+                
+                # Emit failure event
+                await self.publisher.purchase_failed(
+                    merchant_id=UUID(payment.merchant_id),
+                    payment_id=UUID(payment.id),
+                    reason=status,
+                    correlation_id=correlation_id,
+                )
+                
+                self.logger.info(
+                    f"Payment {payment.id} failed: {status}"
+                )
+
+    async def handle_purchase_refunded(
+        self,
+        charge_id: str,
+        correlation_id: str,
+    ) -> None:
+        """Handle purchase refund webhook"""
+        async with self.session_factory() as session:
+            payment_repo = PaymentRepository(session)
+            
+            # Find payment
+            payment = await payment_repo.find_by_platform_charge_id(charge_id)
+            if not payment:
+                self.logger.error(
+                    f"Payment not found for charge {charge_id}"
+                )
+                return
+            
+            # Mark refunded
+            await payment_repo.mark_refunded(payment.id)
+            await session.commit()
+            
+            # Emit refund event
+            await self.publisher.purchase_refunded(
+                merchant_id=UUID(payment.merchant_id),
+                payment_id=UUID(payment.id),
+                amount=float(payment.amount),
+                metadata=payment.metadata or {},
+                correlation_id=correlation_id,
+            )
+            
+            self.logger.info(f"Payment {payment.id} refunded")
+
+    async def cleanup_expired_payments(self) -> int:
+        """Mark expired pending payments"""
+        async with self.session_factory() as session:
+            repo = PaymentRepository(session)
+            count = await repo.mark_expired_payments()
+            await session.commit()
+            
+            self.logger.info(f"Marked {count} payments as expired")
+            return count

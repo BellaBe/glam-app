@@ -1,0 +1,707 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app
+================================================================================
+
+glam-app/
+.githooks/
+└── pre-commit
+.github/
+└── workflows/
+    └── deploy.yml
+.pre-commit-scripts/
+├── check-debug-code.sh
+├── check-imports.sh
+├── check_env_vars.py
+├── run_mypy.py
+.utility-scripts/
+├── output/
+│   ├── glam-app_tree.txt
+│   ├── infrastructure_tree_with_code.txt
+│   └── merchant-service_tree_with_code.txt
+└── code_flattener.py
+checklist/
+├── performance-optimization.md
+├── production-readiness.md
+└── security-review.md
+docs/
+├── best-practices.md
+├── patterns.md
+└── troubleshooting.md
+infrastructure/
+├── caddy/
+│   ├── Caddyfile.dev
+│   └── Caddyfile.prod
+├── docker/
+│   ├── ai-service.Dockerfile
+│   └── service.Dockerfile
+├── scripts/
+│   ├── backup.sh
+│   ├── cleanup-system.sh
+│   ├── debug-container.sh
+│   ├── migrate.sh
+│   ├── postgres-init.sh
+│   ├── restore.sh
+│   └── security-scan.sh
+├── .env.dev
+├── .env.example
+├── .env.local
+├── .env.prod
+├── docker-compose.dev.yml
+├── docker-compose.local.yml
+├── docker-compose.prod.yml
+└── docker-compose.yml
+services/
+├── analytics-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── credits.py
+│   │   │   │   ├── products.py
+│   │   │   │   ├── seasons.py
+│   │   │   │   ├── shoppers.py
+│   │   │   │   └── summary.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   └── listeners.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── jobs/
+│   │   │   └── aggregation_jobs,py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_repository.py
+│   │   │   ├── analytics_repository.py
+│   │   │   └── metrics_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── responses.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── aggregation_service.py
+│   │   │   └── analytics_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── billing-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── billing.py
+│   │   │   │   ├── purchases.py
+│   │   │   │   └── trials.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_repository.py
+│   │   │   └── purchase_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── billing.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── billing_service.py
+│   │   │   └── purchase_service.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── credit_packs.py
+│   │   │   └── shopify_client.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .python-version
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-ai-analyzer/
+│   ├── src/
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── base_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog_ai_service.py
+│   │   │   ├── mediapipe_analyzer.py
+│   │   │   └── openai_analyzer.py
+│   │   ├── utils/
+│   │   │   └── image_downloader.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-connector/
+│   ├── logs/
+│   ├── src/
+│   │   ├── adapters/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── shopify.py
+│   │   │   └── woocommerce.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── platform.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── connector_service.py
+│   │   │   └── token_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .python-version
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── catalog-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── sync.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog_repository.py
+│   │   │   └── sync_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── catalog.py
+│   │   │   ├── events.py
+│   │   │   └── sync.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── catalog_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── .python-version
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── credit-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       └── credits.py
+│   │   ├── events/
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── repositories/
+│   │   │   └── credit_repository.py
+│   │   ├── schemas/
+│   │   │   ├── credit.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   └── credit_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .python-version
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── merchant-service/
+│   ├── alembic/
+│   │   ├── versions/
+│   │   ├── env.py
+│   │   ├── README.md
+│   │   └── script.py.mako
+│   ├── migrations/
+│   ├── scripts/
+│   │   └── test_db_connection.py
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── merchants.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── merchant_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   └── __init__.py
+│   ├── .python-version
+│   ├── alembic.ini
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── notification-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── notifications.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── listeners/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── billing_events.py
+│   │   │   │   ├── catalog_events.py
+│   │   │   │   ├── credit_events.py
+│   │   │   │   └── merchant_events.py
+│   │   │   ├── __init__.py
+│   │   │   └── publishers.py
+│   │   ├── providers/
+│   │   │   ├── base.py
+│   │   │   ├── mailhog_provider.py
+│   │   │   └── sendgrid_provider.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── notification_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── enums.py
+│   │   │   ├── events.py
+│   │   │   └── notification.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── email_service.py
+│   │   │   ├── notification_service.py
+│   │   │   └── template_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── templates/
+│   │   ├── credit_exhausted/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── credit_granted/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── credit_low/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── shared/
+│   │   │   ├── footer.html.j2
+│   │   │   ├── header.html.j2
+│   │   │   └── macros.html.j2
+│   │   ├── trial_exhausted/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── trial_granted/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── trial_low/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   ├── welcome/
+│   │   │   ├── body.html.j2
+│   │   │   ├── body.text.j2
+│   │   │   └── subject.txt.j2
+│   │   └── __init__.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── .python-version
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── recommendation-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── recommendations.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   ├── __init__.py
+│   │   │   └── season_compatibility_client.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── match_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── recommendation.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── recommendation_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_recommendation_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── season-compatibility-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── compatibility.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── compatibility_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── compatibility.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   └── compatibility_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── season_palettes.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-ai-analyzer/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyze.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis_service.py
+│   │   │   ├── color_extractor.py
+│   │   │   ├── face_analyzer.py
+│   │   │   └── season_calculator.py
+│   │   ├── utils/
+│   │   │   └── temp_manager.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── selfie-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── analyses.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── analysis_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── analysis.py
+│   │   │   └── events.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── image_processor.py
+│   │   │   └── selfie_service.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   ├── main.py
+│   │   └── tasks.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+├── token-service/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── tokens.py
+│   │   │   └── __init__.py
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── listeners.py
+│   │   │   └── publishers.py
+│   │   ├── external/
+│   │   │   └── __init__.py
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   └── token_repository.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── events.py
+│   │   │   └── token.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── encryption_service.py
+│   │   │   └── token_service.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   └── constants.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── dependencies.py
+│   │   ├── exceptions.py
+│   │   ├── lifecycle.py
+│   │   └── main.py
+│   ├── tests/
+│   │   ├── integration/
+│   │   │   ├── __init__.py
+│   │   │   └── test_api.py
+│   │   ├── unit/
+│   │   │   ├── __init__.py
+│   │   │   └── test_service.py
+│   │   ├── __init__.py
+│   │   └── conftest.py
+│   ├── poetry.lock
+│   ├── poetry.toml
+│   └── pyproject.toml
+└── webhook-service/
+    ├── src/
+    │   ├── api/
+    │   │   ├── v1/
+    │   │   │   ├── __init__.py
+    │   │   │   └── webhooks.py
+    │   │   └── __init__.py
+    │   ├── events/
+    │   │   ├── __init__.py
+    │   │   └── publishers.py
+    │   ├── models/
+    │   │   ├── __init__.py
+    │   │   └── enums.py
+    │   ├── repositories/
+    │   │   ├── __init__.py
+    │   │   └── webhook_repository.py
+    │   ├── schemas/
+    │   │   ├── __init__.py
+    │   │   └── webhooks.py
+    │   ├── services/
+    │   │   ├── __init__.py
+    │   │   └── webhook_service.py
+    │   ├── __init__.py
+    │   ├── config.py
+    │   ├── dependencies.py
+    │   ├── exceptions.py
+    │   ├── lifecycle.py
+    │   └── main.py
+    ├── tests/
+    │   └── __init__.py
+    ├── .python-version
+    ├── poetry.lock
+    ├── poetry.toml
+    ├── pyproject.toml
+    └── README.md
+shared/
+├── shared/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── dependencies.py
+│   │   ├── handlers.py
+│   │   ├── health.py
+│   │   ├── internal_client.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   ├── responses.py
+│   │   └── validation.py
+│   ├── messaging/
+│   │   ├── events/
+│   │   │   ├── __init__.py
+│   │   │   ├── analytics.py
+│   │   │   ├── base.py
+│   │   │   ├── billing.py
+│   │   │   ├── catalog.py
+│   │   │   ├── credit.py
+│   │   │   ├── merchant.py
+│   │   │   ├── notification.py
+│   │   │   ├── recommendation.py
+│   │   │   └── webhook.py
+│   │   ├── __init__.py
+│   │   ├── jetstream_client.py
+│   │   ├── listener.py
+│   │   ├── publisher.py
+│   │   └── subjects.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config_loader.py
+│   │   ├── exceptions.py
+│   │   ├── idempotency_key.py
+│   │   └── logger.py
+│   └── __init__.py
+├── tests/
+│   └── __init__.py
+├── .python-version
+├── poetry.lock
+├── pyproject.toml
+└── README.md
+tests/
+└── http/
+    ├── merchants.http
+    ├── notifications.http
+    └── quick_token.py
+.gitignore
+.pre-commit-config.yaml
+docker-compose-core-DL.yml
+Makefile
+pyproject.toml
+
+================================================================================
+Output shows tree structure only (use --code to include file contents)
+================================================================================

@@ -1,44 +1,93 @@
-# services/credit-service/src/schemas/credit.py
+from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
-
 from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+CreditOperation = Literal["credit", "debit"]
+CreditSource = Literal["trial", "purchase", "refund"]
 
 
-# Output DTOs
 class CreditBalanceOut(BaseModel):
-    """Credit balance response"""
+    """Public API response for credit balance"""
+    balance: int
+    trial_credits: int
+    purchased_credits: int
+    total_granted: int
+    total_consumed: int
+    platform_name: str
+    platform_domain: str
 
-    balance: int = Field(..., description="Current credit balance")
-    total_granted: int = Field(..., description="Total credits ever granted")
-    total_consumed: int = Field(..., description="Total credits ever consumed")
-    platform_name: str = Field(..., description="Platform name (shopify, etc)")
-    domain: str = Field(..., description="Platform domain")
 
+class CreditAccountOut(BaseModel):
+    """Internal representation of credit account"""
     model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    merchant_id: UUID
+    platform_name: str
+    platform_id: str
+    platform_domain: str
+    trial_credits: int
+    purchased_credits: int
+    balance: int
+    total_granted: int
+    total_consumed: int
+    trial_credits_used: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class CreditTransactionOut(BaseModel):
-    """Credit transaction history item"""
-
-    id: UUID
-    amount: int
-    operation: str  # 'credit' or 'debit'
-    balance_before: int
-    balance_after: int
-    reference_type: str
-    reference_id: str
-    description: str | None = None
-    metadata: dict | None = None
-    created_at: datetime
-
+    """Internal representation of credit transaction"""
     model_config = ConfigDict(from_attributes=True)
 
+    id: UUID
+    account_id: UUID
+    merchant_id: UUID
+    amount: int
+    operation: CreditOperation
+    source: CreditSource
+    balance_before: int
+    balance_after: int
+    trial_before: int | None
+    trial_after: int | None
+    purchased_before: int | None
+    purchased_after: int | None
+    reference_type: str
+    reference_id: str
+    metadata: dict | None
+    created_at: datetime
 
-class TransactionListOut(BaseModel):
-    """Paginated transaction list"""
 
-    transactions: list[CreditTransactionOut]
-    total: int
-    page: int
-    limit: int
+# Event payload schemas
+class BillingRecordCreatedPayload(BaseModel):
+    merchant_id: UUID
+    platform_name: str
+    platform_id: str
+    platform_domain: str
+
+
+class TrialActivatedPayload(BaseModel):
+    merchant_id: UUID
+    grant_amount: int = 500
+
+
+class PurchaseCompletedPayload(BaseModel):
+    merchant_id: UUID
+    payment_id: str
+    product_id: str
+    metadata: dict
+
+
+class PurchaseRefundedPayload(BaseModel):
+    merchant_id: UUID
+    payment_id: str
+    metadata: dict
+
+
+class MatchCompletedPayload(BaseModel):
+    merchant_id: UUID
+    match_id: str
+    shopper_id: str
+    matched_items_count: int

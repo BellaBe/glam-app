@@ -1,144 +1,81 @@
+# services/billing-service/src/schemas/billing.py
+from __future__ import annotations
 from datetime import datetime
-from enum import Enum
+from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+PaymentStatusType = Literal["pending", "completed", "failed", "expired", "refunded"]
+ProductTypeType = Literal["credit_pack"]
 
 
-# ---------- ENUMS ----------
-class CreditPack(str, Enum):
-    SMALL = "small"
-    MEDIUM = "medium"
-    LARGE = "large"
-
-
-class Platform(str, Enum):
-    SHOPIFY = "shopify"
-    STRIPE = "stripe"
-    CUSTOM = "custom"
-
-
-class PurchaseStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    EXPIRED = "expired"
-
-
-# ---------- INPUT DTOs ----------
-class TrialActivateIn(BaseModel):
-    """Input for activating trial"""
-
-    idempotency_key: str | None = None
-    model_config = ConfigDict(extra="forbid")
-
-
-class PurchaseCreateIn(BaseModel):
-    """Input for creating credit purchase"""
-
-    pack: CreditPack
-    platform: Platform
-    return_url: str
-    idempotency_key: str | None = None
-    model_config = ConfigDict(extra="forbid")
-
-
-# ---------- OUTPUT DTOs ----------
 class TrialStatusOut(BaseModel):
     """Trial status response"""
-
     available: bool
+    activated_at: datetime | None = None
+
+
+class ProductOut(BaseModel):
+    """Pricing product output"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    type: str
+    name: str
+    price: Decimal
+    currency: str
+    metadata: dict
     active: bool
-    ends_at: datetime | None = None
-    started_at: datetime | None = None
+
+
+class CreateChargeIn(BaseModel):
+    """Create charge request"""
+    product_id: str = Field(..., description="Product ID to purchase")
+    return_url: str = Field(..., description="URL to redirect after payment")
+    platform: str = Field(..., description="Platform name (e.g., 'shopify')")
+
+
+class CreateChargeOut(BaseModel):
+    """Create charge response"""
+    payment_id: UUID
+    checkout_url: str
+
+
+class PaymentOut(BaseModel):
+    """Payment details output"""
     model_config = ConfigDict(from_attributes=True)
-
-
-class TrialActivatedOut(BaseModel):
-    """Trial activation response"""
-
-    success: bool = True
-    ends_at: datetime
-    credits_granted: int
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PurchaseOut(BaseModel):
-    """Credit purchase response"""
 
     id: UUID
     merchant_id: UUID
-    credits: int
-    amount: str
-    status: PurchaseStatus
-    platform: str | None = None
-    platform_charge_id: str | None = None
+    amount: Decimal
+    currency: str
+    description: str
+    product_type: str
+    product_id: str
+    status: PaymentStatusType
+    platform_name: str
+    platform_charge_id: str | None
+    metadata: dict | None
     created_at: datetime
-    completed_at: datetime | None = None
-    expires_at: datetime | None = None
+    completed_at: datetime | None
+    expires_at: datetime | None
+    refunded_at: datetime | None
+
+
+class BillingAccountOut(BaseModel):
+    """Billing account output"""
     model_config = ConfigDict(from_attributes=True)
 
-
-class PurchaseCreatedOut(BaseModel):
-    """Purchase creation response"""
-
-    purchase_id: UUID
-    checkout_url: str
-    expires_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-
-class BillingStatusOut(BaseModel):
-    """Overall billing status"""
-
-    trial: TrialStatusOut
-    credits_purchased: int
-    last_purchase_at: datetime | None = None
-    recent_purchases: list[PurchaseOut] = []
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ---------- EVENT PAYLOADS ----------
-class TrialStartedPayload(BaseModel):
-    """Trial started event payload"""
-
-    merchant_id: UUID
-    ends_at: datetime
-    credits: int = 500
-
-
-class TrialExpiredPayload(BaseModel):
-    """Trial expired event payload"""
-
-    merchant_id: UUID
-    expired_at: datetime
-
-
-class CreditsPurchasedPayload(BaseModel):
-    """Credits purchased event payload"""
-
-    merchant_id: UUID
-    purchase_id: UUID
-    credits: int
-    amount: str
-    platform: str
-
-
-class MerchantCreatedPayload(BaseModel):
-    """Merchant created event payload (consumed)"""
-
+    id: UUID
     merchant_id: UUID
     platform_name: str
     platform_shop_id: str
-    domain: str
-    name: str
-    email: str
-    installed_at: datetime
-
-
-class PurchaseWebhookPayload(BaseModel):
-    """Purchase webhook payload (consumed)"""
-
-    charge_id: str
-    status: str
-    merchant_id: UUID
+    platform_domain: str
+    trial_available: bool
+    trial_activated_at: datetime | None
+    total_spend_usd: Decimal
+    last_payment_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

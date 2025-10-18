@@ -1,15 +1,13 @@
-# services/credit-service/src/main.py
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
-
-from shared.api import create_health_router, setup_middleware
-from shared.utils import create_logger
-
+from shared.api import setup_middleware
+from shared.api.handlers import register_exception_handlers
+from shared.api.health import create_health_router
+from shared.utils.logger import create_logger
+from .api import api_router
 from .config import get_service_config
 from .lifecycle import ServiceLifecycle
 
-# Create singletons at module level
 config = get_service_config()
 logger = create_logger(config.service_name)
 lifecycle = ServiceLifecycle(config, logger)
@@ -17,12 +15,9 @@ lifecycle = ServiceLifecycle(config, logger)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan management for startup/shutdown"""
-    # Store in app state for dependencies
     app.state.lifecycle = lifecycle
     app.state.config = config
-    app.state.logger = logger  # REQUIRED for middleware
-
+    app.state.logger = logger
     try:
         await lifecycle.startup()
         yield
@@ -31,32 +26,17 @@ async def lifespan(app: FastAPI):
 
 
 def create_application() -> FastAPI:
-    """Create FastAPI app with shared package integration"""
-
     app = FastAPI(
         title=config.service_name,
         version=config.service_version,
         description=config.service_description,
-        lifespan=lifespan,
+        lifespan=lifespan
     )
-
-    # Setup shared middleware (handles ALL errors)
     setup_middleware(app, service_name=config.service_name)
-
-    # Add health check from shared package
-    app.include_router(create_health_router(config.service_name))
-
-    # Add credit API routes
-    from .api.v1 import credits
-
-    app.include_router(credits.router)
-
+    register_exception_handlers(app)
+    app.include_router(create_health_router(config.service_name, prefix="/api/v1/credit"))
+    app.include_router(api_router)
     return app
 
 
 app = create_application()
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug)

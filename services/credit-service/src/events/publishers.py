@@ -1,103 +1,173 @@
-# services/credit-service/src/events/publishers.py
-from shared.api.correlation import get_correlation_context
+from uuid import UUID
+from shared.messaging.events.base import MerchantIdentifiers
 from shared.messaging.publisher import Publisher
-
-from ..schemas.events import (
-    CreditsConsumedPayload,
-    CreditsExhaustedPayload,
-    CreditsGrantedPayload,
-    CreditsInsufficientPayload,
-    CreditsLowBalancePayload,
-)
+from shared.messaging.subjects import Subjects
 
 
 class CreditEventPublisher(Publisher):
-    """Publish credit events"""
-
     @property
     def service_name(self) -> str:
         return "credit-service"
 
-    async def credits_granted(self, data: dict) -> str:
-        """Publish credits granted event"""
-        payload = CreditsGrantedPayload(
-            merchant_id=data["merchant_id"],
-            amount=data["amount"],
-            balance=data["balance"],
-            reference_type=data["reference_type"],
-            reference_id=data["reference_id"],
-            platform_name=data["platform_name"],
-        )
-
-        correlation_id = get_correlation_context() or "unknown"
-
+    async def credits_granted(
+        self,
+        merchant_id: UUID,
+        amount: int,
+        balance: int,
+        credit_type: str,
+        reference_type: str,
+        reference_id: str,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.granted"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "amount": amount,
+            "balance": balance,
+            "credit_type": credit_type,
+            "reference_type": reference_type,
+            "reference_id": reference_id,
+            "platform_name": platform_name
+        }
         return await self.publish_event(
             subject="evt.credits.granted.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
+            payload=payload,
+            correlation_id=correlation_id
         )
 
-    async def credits_consumed(self, data: dict) -> str:
-        """Publish credits consumed event"""
-        payload = CreditsConsumedPayload(
-            merchant_id=data["merchant_id"],
-            amount=data["amount"],
-            balance=data["balance"],
-            reference_type=data["reference_type"],
-            reference_id=data["reference_id"],
-            platform_name=data["platform_name"],
-        )
-
-        correlation_id = get_correlation_context() or "unknown"
-
+    async def credits_consumed(
+        self,
+        merchant_id: UUID,
+        amount: int,
+        balance: int,
+        credit_type: str,
+        reference_type: str,
+        reference_id: str,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.consumed"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "amount": amount,
+            "balance": balance,
+            "credit_type": credit_type,
+            "reference_type": reference_type,
+            "reference_id": reference_id,
+            "platform_name": platform_name
+        }
         return await self.publish_event(
             subject="evt.credits.consumed.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
+            payload=payload,
+            correlation_id=correlation_id
         )
 
-    async def credits_insufficient(self, data: dict) -> str:
-        """Publish insufficient credits event"""
-        payload = CreditsInsufficientPayload(
-            merchant_id=data["merchant_id"],
-            attempted_amount=data["attempted_amount"],
-            balance=data["balance"],
-            platform_name=data["platform_name"],
-        )
-
-        correlation_id = get_correlation_context() or "unknown"
-
+    async def trial_consumed(
+        self,
+        merchant_id: UUID,
+        trial_credits_used: int,
+        trial_credits_remaining: int,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.trial.consumed"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "trial_credits_used": trial_credits_used,
+            "trial_credits_remaining": trial_credits_remaining
+        }
         return await self.publish_event(
-            subject="evt.credits.insufficient.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
+            subject="evt.credits.trial.consumed.v1",
+            payload=payload,
+            correlation_id=correlation_id
         )
 
-    async def credits_low_balance(self, data: dict) -> str:
-        """Publish low balance warning"""
-        payload = CreditsLowBalancePayload(
-            merchant_id=data["merchant_id"],
-            balance=data["balance"],
-            threshold=data["threshold"],
-            platform_name=data["platform_name"],
+    async def trial_exhausted(
+        self,
+        merchant_id: UUID,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.trial.exhausted"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "platform_name": platform_name
+        }
+        return await self.publish_event(
+            subject="evt.credits.trial.exhausted.v1",
+            payload=payload,
+            correlation_id=correlation_id
         )
 
-        correlation_id = get_correlation_context() or "unknown"
-
+    async def low_balance(
+        self,
+        merchant_id: UUID,
+        balance: int,
+        threshold: int,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.low_balance"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "balance": balance,
+            "threshold": threshold,
+            "platform_name": platform_name
+        }
         return await self.publish_event(
             subject="evt.credits.low_balance.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
+            payload=payload,
+            correlation_id=correlation_id
         )
 
-    async def credits_exhausted(self, data: dict) -> str:
-        """Publish credits exhausted event"""
-        payload = CreditsExhaustedPayload(merchant_id=data["merchant_id"], platform_name=data["platform_name"])
-
-        correlation_id = get_correlation_context() or "unknown"
-
+    async def exhausted(
+        self,
+        merchant_id: UUID,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.exhausted"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "platform_name": platform_name
+        }
         return await self.publish_event(
             subject="evt.credits.exhausted.v1",
-            data=payload.model_dump(mode="json"),
-            correlation_id=correlation_id,
+            payload=payload,
+            correlation_id=correlation_id
+        )
+
+    async def insufficient(
+        self,
+        merchant_id: UUID,
+        attempted_amount: int,
+        balance: int,
+        platform_name: str,
+        correlation_id: str
+    ) -> str:
+        """Emit evt.credits.insufficient"""
+        identifiers = MerchantIdentifiers(id=merchant_id)
+        payload = {
+            "identifiers": identifiers.model_dump(),
+            "merchant_id": str(merchant_id),
+            "attempted_amount": attempted_amount,
+            "balance": balance,
+            "platform_name": platform_name
+        }
+        return await self.publish_event(
+            subject="evt.credits.insufficient.v1",
+            payload=payload,
+            correlation_id=correlation_id
         )

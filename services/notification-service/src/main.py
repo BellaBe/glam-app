@@ -52,8 +52,3 @@ def create_application() -> FastAPI:
 
 
 app = create_application()
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("src.main:app", host=config.api_host, port=config.api_port, reload=config.debug, workers=1)

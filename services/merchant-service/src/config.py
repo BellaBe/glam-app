@@ -21,10 +21,8 @@ class ServiceConfig(BaseModel):
     debug: bool = True
 
     environment: str = Field(..., alias="APP_ENV")
-    api_host: str = "0.0.0.0"
-    api_external_port: int = Field(..., alias="MERCHANT_API_EXTERNAL_PORT")
 
-    database_enabled: bool = Field(..., alias="MERCHANT_DB_ENABLED")
+    database_enabled: bool = True
     database_url: str = Field(..., alias="DATABASE_URL")
 
     logging_level: str = "INFO"
@@ -37,19 +35,9 @@ class ServiceConfig(BaseModel):
     def nats_url(self) -> str:
         """NATS URL for event system"""
         in_container = os.path.exists("/.dockerenv")
-        if in_container or self.environment in ["development", "production"]:
+        if in_container or self.environment in ["dev", "prod"]:
             return "nats://nats:4222"
         return "nats://localhost:4222"
-
-    @property
-    def api_port(self) -> int:
-        in_container = os.path.exists("/.dockerenv")
-        return 8000 if in_container else self.api_external_port
-
-    @property
-    def is_production(self) -> bool:
-        """Check if running in production"""
-        return self.environment == "production"
 
     @model_validator(mode="after")
     def _require_db_url_when_enabled(self):

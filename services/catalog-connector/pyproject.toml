@@ -19,3 +19,4 @@ ruff = "^0.1.9"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+uvicorn = {extras = ["standard"], version = "==0.35.0"}

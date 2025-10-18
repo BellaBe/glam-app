@@ -6,14 +6,14 @@ from shared.api.dependencies import ClientAuthDep, RequestContextDep
 from shared.utils.exceptions import ForbiddenError
 
 from ...dependencies import MerchantServiceDep
-from ...schemas import MerchantOut, MerchantSyncIn, MerchantSyncOut
+from ...schemas import MerchantSyncResponse, MerchantSyncIn, MerchantOut
 
 merchants_router = APIRouter(prefix="/merchants")
 
 
 @merchants_router.post(
     "/sync",
-    response_model=ApiResponse[MerchantSyncOut],
+    response_model=ApiResponse[MerchantSyncResponse],
     status_code=status.HTTP_200_OK,
     summary="Sync merchant from OAuth flow",
     description="Create or update merchant after OAuth completion. Used in afterAuth hooks.",

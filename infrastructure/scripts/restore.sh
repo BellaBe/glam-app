@@ -1,19 +1,17 @@
 #!/bin/bash
-# Database restore script for GLAM You Up
-
 set -euo pipefail
 
 BACKUP_DATE=${1:-}
-BACKUP_DIR="/var/backups/glam"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/glam}"
 
 if [ -z "$BACKUP_DATE" ]; then
     echo "Usage: $0 YYYYMMDD_HHMMSS"
     echo "Available backups:"
-    ls -la $BACKUP_DIR/*.tar.gz 2>/dev/null || echo "No backups found"
+    ls -lh "$BACKUP_DIR"/*.tar.gz 2>/dev/null || echo "No backups found"
     exit 1
 fi
 
-BACKUP_FILE="$BACKUP_DIR/backup_${BACKUP_DATE}.tar.gz"
+BACKUP_FILE="$BACKUP_DIR/${BACKUP_DATE}.tar.gz"
 
 if [ ! -f "$BACKUP_FILE" ]; then
     echo "Backup file not found: $BACKUP_FILE"
@@ -21,20 +19,18 @@ if [ ! -f "$BACKUP_FILE" ]; then
 fi
 
 echo "Restoring from $BACKUP_FILE..."
-read -p "This will overwrite current databases. Continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+read -p "This will OVERWRITE current databases. Continue? (yes/NO) " -r
+if [[ ! $REPLY == "yes" ]]; then
     echo "Aborted"
     exit 1
 fi
 
-# Extract backup
 TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
 tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
 
-# Restore each database
 DATABASES=(
-    "shopify_session_db"
     "analytics_db"
     "billing_db"
     "catalog_db"
@@ -49,11 +45,13 @@ DATABASES=(
 )
 
 for db in "${DATABASES[@]}"; do
-    if [ -f "$TEMP_DIR/${db}.dump" ]; then
+    dump_file="$TEMP_DIR/${BACKUP_DATE}/${db}.dump"
+    if [ -f "$dump_file" ]; then
         echo "Restoring $db..."
-        docker exec -i glam-postgres pg_restore -U postgres -d "$db" -c < "$TEMP_DIR/${db}.dump" || echo "Failed to restore $db"
+        docker compose exec -T postgres pg_restore -U postgres -d "$db" --clean --if-exists < "$dump_file" || echo "⚠️  Failed to restore $db"
+    else
+        echo "⚠️  Dump not found: $dump_file"
     fi
 done
 
-rm -rf "$TEMP_DIR"
-echo "Restore complete!"
+echo "✅ Restore complete!"

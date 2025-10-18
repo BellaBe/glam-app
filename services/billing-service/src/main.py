@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from shared.api import setup_middleware
+from shared.api.handlers import register_exception_handlers
 from shared.api.health import create_health_router
 from shared.utils.logger import create_logger
 
@@ -18,17 +19,7 @@ lifecycle = ServiceLifecycle(config, logger)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan adapter"""
-    logger.info(
-        f"Starting {config.service_name}",
-        extra={
-            "service_name": config.service_name,
-            "version": config.service_version,
-            "environment": config.environment,
-            "api_host": config.api_host,
-            "api_port": config.api_port,
-        },
-    )
+    """Lifespan management for startup/shutdown"""
 
     app.state.lifecycle = lifecycle
     app.state.config = config
@@ -42,32 +33,27 @@ async def lifespan(app: FastAPI):
 
 
 def create_application() -> FastAPI:
-    """Create and configure the FastAPI application"""
+    """Create and configure the FastAPI application."""
     app = FastAPI(
         title=config.service_name,
         version=config.service_version,
+        description=config.service_description,
         lifespan=lifespan,
-        description="Billing service for trial and credit pack management",
     )
 
-    # Setup middleware (critical - must be after logger in app.state)
-    setup_middleware(
-        app,
-        service_name=config.service_name,
-    )
+    setup_middleware(app, service_name=config.service_name)
+    register_exception_handlers(app)
 
     # Include routers
-    app.include_router(create_health_router(config.service_name))
+    app.include_router(
+        create_health_router(
+            config.service_name,
+            prefix="/api/v1/billing"
+        )
+    )
     app.include_router(api_router)
 
     return app
 
 
 app = create_application()
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    port = config.api_port
-    uvicorn.run("src.main:app", host=config.api_host, port=port, reload=config.debug)

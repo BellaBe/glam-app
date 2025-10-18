@@ -1,151 +1,180 @@
-# services/merchant-service/src/services/merchant_service.py
-from prisma.enums import MerchantStatus
+from __future__ import annotations
+from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from shared.messaging.events.base import MerchantIdentifiers
+from src.db.models import Merchant, MerchantStatus, STATUS_TRANSITIONS
+from src.repositories.merchant_repository import MerchantRepository
+from src.schemas.merchant import MerchantSyncIn, MerchantOut, MerchantSyncResponse
+from src.events.publishers import MerchantEventPublisher
+from src.exceptions import (
+    MerchantNotFoundError,
+    InvalidStatusTransitionError
+)
 from shared.utils.logger import ServiceLogger
-
-from ..events.publishers import MerchantEventPublisher
-from ..repositories.merchant_repository import MerchantRepository
-from ..schemas.merchant import MerchantOut, MerchantSyncIn, MerchantSyncOut
-
-# Optional: guard rails for internal transitions
-STATUS_TRANSITIONS = {
-    MerchantStatus.PENDING: [MerchantStatus.ACTIVE, MerchantStatus.UNINSTALLED],
-    MerchantStatus.ACTIVE: [MerchantStatus.PAUSED, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
-    MerchantStatus.PAUSED: [MerchantStatus.ACTIVE, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
-    MerchantStatus.SUSPENDED: [MerchantStatus.ACTIVE, MerchantStatus.PAUSED, MerchantStatus.UNINSTALLED],
-    MerchantStatus.UNINSTALLED: [MerchantStatus.PENDING],
-}
 
 
 class MerchantService:
-    """Business logic for merchant operations."""
-
-    def __init__(self, repository: MerchantRepository, publisher: MerchantEventPublisher, logger: ServiceLogger):
-        self.repository = repository
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        publisher: MerchantEventPublisher,
+        logger: ServiceLogger
+    ):
+        self.session_factory = session_factory
         self.publisher = publisher
         self.logger = logger
 
-    async def sync_merchant(self, data: MerchantSyncIn, platform_name: str, domain: str, ctx) -> MerchantSyncOut:
-        """
-        Sync handler (create or update) invoked by BFF after-auth.
-        Rules:
-          - If merchant doesn't exist: create (status=PENDING), emit created, emit synced.
-          - If exists & status=UNINSTALLED: mark reinstalled (status=PENDING, installed_at=now),
-            update profile + last_synced_at, emit reinstalled, emit synced.
-          - Else: update profile + last_synced_at, emit synced.
-        """
-        m = await self.repository.find_by_platform_identity(
-            platform_name=platform_name, domain=domain, platform_shop_id=data.platform_shop_id
-        )
-
-        if not m:
-            m = await self.repository.create(platform_name=platform_name, domain=domain, data=data)
-            identifiers = MerchantIdentifiers(
-                merchant_id=m.id, platform_name=m.platform_name, platform_shop_id=m.platform_shop_id, domain=m.domain
+    async def sync_merchant(
+        self,
+        platform_name: str,
+        data: MerchantSyncIn,
+        correlation_id: str
+    ) -> MerchantSyncResponse:
+        """Sync merchant from platform OAuth flow"""
+        async with self.session_factory() as session:
+            repo = MerchantRepository(session)
+            
+            # Try to find existing merchant
+            existing = await repo.find_by_platform_and_domain(
+                platform_name,
+                data.domain
             )
-            # publish created + synced (flat snapshot inside publisher)
-            await self.publisher.merchant_created(m, ctx)
-            return MerchantSyncOut(success=True)
 
-        # reinstall path
-        if m.status == MerchantStatus.UNINSTALLED:
-            m = await self.repository.mark_reinstalled(merchant_id=m.id)
-            # Then sync details
-            m = await self.repository.update_for_sync(merchant_id=m.id, data=data)
-            identifiers = MerchantIdentifiers(
-                merchant_id=m.id, platform_name=m.platform_name, platform_shop_id=m.platform_shop_id, domain=m.domain
+            if existing:
+                # Update existing merchant
+                merchant = await repo.update_from_sync(existing, data)
+                await session.commit()
+                created = False
+                
+                self.logger.info(
+                    f"Merchant synced: {merchant.domain}",
+                    extra={
+                        "merchant_id": merchant.id,
+                        "platform": platform_name,
+                        "reinstall": existing.status == MerchantStatus.UNINSTALLED
+                    }
+                )
+            else:
+                # Create new merchant
+                merchant = await repo.create(platform_name, data)
+                await session.commit()
+                created = True
+                
+                self.logger.info(
+                    f"Merchant created: {merchant.domain}",
+                    extra={
+                        "merchant_id": merchant.id,
+                        "platform": platform_name
+                    }
+                )
+
+            # Convert to output schema
+            merchant_out = MerchantOut.model_validate(merchant)
+
+            # Publish events
+            if created:
+                await self.publisher.merchant_created(
+                    merchant_out,
+                    correlation_id
+                )
+
+            await self.publisher.merchant_synced(
+                merchant_out,
+                first_install=created,
+                correlation_id=correlation_id
             )
-            await self.publisher.merchant_reinstalled(m, ctx)
-            return MerchantSyncOut(success=True)
 
-        # normal sync path
-        m = await self.repository.update_for_sync(merchant_id=m.id, data=data)
-        identifiers = MerchantIdentifiers(
-            merchant_id=m.id, platform_name=m.platform_name, platform_shop_id=m.platform_shop_id, domain=m.domain
-        )
-        await self.publisher.merchant_synced(m, ctx)
-        return MerchantSyncOut(success=True)
+            return MerchantSyncResponse(
+                created=created,
+                merchant_id=UUID(merchant.id)
+            )
 
-    async def update_merchant_status(self, identifiers: MerchantIdentifiers, new_status: MerchantStatus) -> None:
-        """
-        Update status (called by internal logic listeners).
-        Emits `merchant.status_changed` when state actually changes.
-        """
-        m = await self.repository.find_by_platform_identity(
-            platform_name=identifiers.platform_name,
-            domain=identifiers.domain,
-            platform_shop_id=identifiers.platform_shop_id,
-        )
-        if not m:
-            self.logger.warning("Update status: merchant not found", extra=identifiers.model_dump())
-            return
+    async def get_merchant(
+        self,
+        platform_name: str,
+        domain: str
+    ) -> MerchantOut:
+        """Get merchant by platform and domain"""
+        async with self.session_factory() as session:
+            repo = MerchantRepository(session)
+            merchant = await repo.find_by_platform_and_domain(
+                platform_name,
+                domain
+            )
 
-        if m.status == new_status:
-            return  # no-op
+            if not merchant:
+                raise MerchantNotFoundError(
+                    message=f"Merchant not found: {domain}"
+                )
 
-        allowed = STATUS_TRANSITIONS.get(m.status, [])
+            return MerchantOut.model_validate(merchant)
+
+    async def handle_app_uninstalled(
+        self,
+        platform_name: str,
+        domain: str,
+        correlation_id: str
+    ) -> None:
+        """Handle app uninstalled event from webhook service"""
+        async with self.session_factory() as session:
+            repo = MerchantRepository(session)
+            merchant = await repo.find_by_platform_and_domain(
+                platform_name,
+                domain
+            )
+
+            if not merchant:
+                self.logger.warning(
+                    f"Uninstall event for unknown merchant: {domain}",
+                    extra={"platform": platform_name, "domain": domain}
+                )
+                return
+
+            old_status = merchant.status
+            merchant = await repo.update_status(
+                merchant,
+                MerchantStatus.UNINSTALLED
+            )
+            await session.commit()
+
+            self.logger.info(
+                f"Merchant uninstalled: {domain}",
+                extra={
+                    "merchant_id": merchant.id,
+                    "platform": platform_name,
+                    "old_status": old_status
+                }
+            )
+
+            # Publish uninstalled event
+            await self.publisher.merchant_uninstalled(
+                merchant_id=UUID(merchant.id),
+                platform_name=merchant.platform_name,
+                platform_shop_id=merchant.platform_shop_id,
+                domain=merchant.domain,
+                uninstalled_at=merchant.uninstalled_at,
+                correlation_id=correlation_id
+            )
+
+            # Publish status changed event
+            await self.publisher.merchant_status_changed(
+                merchant_id=UUID(merchant.id),
+                platform_name=merchant.platform_name,
+                platform_shop_id=merchant.platform_shop_id,
+                domain=merchant.domain,
+                old_status=old_status.value,
+                new_status=MerchantStatus.UNINSTALLED.value,
+                correlation_id=correlation_id
+            )
+
+    def validate_status_transition(
+        self,
+        current_status: MerchantStatus,
+        new_status: MerchantStatus
+    ) -> None:
+        """Validate status transition"""
+        allowed = STATUS_TRANSITIONS.get(current_status, [])
         if new_status not in allowed:
-            self.logger.warning(
-                "Invalid status transition",
-                extra={"from": m.status, "to": new_status, "merchant_id": str(m.id)},
+            raise InvalidStatusTransitionError(
+                f"Invalid status transition from {current_status} to {new_status}"
             )
-            return
-
-        m = await self.repository.update_status(merchant_id=m.id, new_status=new_status)
-        await self.publisher.merchant_status_changed(identifiers, m)
-
-    async def handle_app_uninstalled(self, platform_name: str, domain: str) -> None:
-        """
-        Uninstall from webhook event listener:
-          - Find by identity
-          - Set status=UNINSTALLED, uninstalled_at=now
-          - Emit merchant.uninstalled
-        """
-        m = await self.repository.find_by_platform_identity(
-            platform_name=platform_name, domain=domain, platform_shop_id=None
-        )
-        if not m:
-            self.logger.warning(
-                "Uninstall: merchant not found", extra={"platform_name": platform_name, "domain": domain}
-            )
-            return
-
-        if m.status == MerchantStatus.UNINSTALLED:
-            return  # idempotent
-
-        m = await self.repository.mark_uninstalled(merchant_id=m.id)
-        identifiers = MerchantIdentifiers(
-            merchant_id=m.id, platform_name=m.platform_name, platform_shop_id=m.platform_shop_id, domain=m.domain
-        )
-        await self.publisher.merchant_uninstalled(identifiers, m)
-
-    async def get_merchant(self, *, domain: str, platform_name: str) -> MerchantOut:
-        m = await self.repository.find_by_platform_identity(
-            platform_name=platform_name, domain=domain, platform_shop_id=None
-        )
-        if not m:
-            from ..exceptions import MerchantNotFoundError
-
-            raise MerchantNotFoundError(domain=domain, platform=platform_name)
-
-        # Map ORM -> API schema
-        return MerchantOut(
-            id=m.id,
-            platform_name=m.platform_name,
-            platform_shop_id=m.platform_shop_id,
-            domain=m.domain,
-            name=m.name,
-            email=m.email,
-            primary_domain=m.primary_domain,
-            currency=m.currency,
-            country=m.country,
-            platform_version=m.platform_version,
-            scopes=m.scopes,
-            status=m.status,
-            last_synced_at=m.last_synced_at,
-            created_at=m.created_at,
-            updated_at=m.updated_at,
-            installed_at=m.installed_at,
-            uninstalled_at=m.uninstalled_at,
-        )

@@ -42,14 +42,14 @@ class ServiceConfig(BaseModel):
     @property
     def nats_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
-        if in_container or self.environment in ["development", "production"]:
+        if in_container or self.environment in ["dev", "prod"]:
             return "nats://nats:4222"
         return "nats://localhost:4222"
 
     @property
     def redis_url(self) -> str:
         in_container = os.path.exists("/.dockerenv")
-        if in_container or self.environment in ["development", "production"]:
+        if in_container or self.environment in ["dev", "prod"]:
             return "redis://redis:6379"
         return "redis://localhost:6379"
 

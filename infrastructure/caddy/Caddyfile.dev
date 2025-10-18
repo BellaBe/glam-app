@@ -1,0 +1,45 @@
+# infrastructure/caddy/Caddyfile.dev
+
+localhost:80, api.glamyouup.local:80 {
+    handle /health {
+        respond "OK" 200
+    }
+
+    @webhooks {
+        path /api/webhooks/*
+    }
+    handle @webhooks {
+        reverse_proxy webhook-service:8000 {
+            header_up X-Shopify-Shop-Domain {header.X-Shopify-Shop-Domain}
+            header_up X-Shopify-Hmac-SHA256 {header.X-Shopify-Hmac-SHA256}
+            health_uri /health
+            health_interval 10s
+        }
+    }
+
+    reverse_proxy /api/* {
+        to analytics-service:8000
+        to billing-service:8000
+        to catalog-service:8000
+        to credit-service:8000
+        to merchant-service:8000
+        to notification-service:8000
+        to recommendation-service:8000
+        to season-compatibility-service:8000
+        to selfie-service:8000
+        to token-service:8000
+        
+        lb_policy round_robin
+        health_uri /health
+        health_interval 10s
+    }
+
+    handle / {
+        respond "GlamYouUp API - Development" 200
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

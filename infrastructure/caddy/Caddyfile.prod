@@ -1,0 +1,56 @@
+{
+    email {$ACME_EMAIL}
+}
+
+api.{$DOMAIN} {
+    tls {$ACME_EMAIL}
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        -Server
+    }
+
+    encode gzip
+
+    handle /health {
+        respond "OK" 200
+    }
+
+    @webhooks {
+        path /api/webhooks/*
+    }
+    handle @webhooks {
+        reverse_proxy webhook-service:8000 {
+            header_up X-Shopify-Shop-Domain {header.X-Shopify-Shop-Domain}
+            header_up X-Shopify-Hmac-SHA256 {header.X-Shopify-Hmac-SHA256}
+            health_uri /health
+            health_interval 30s
+        }
+    }
+
+    reverse_proxy /api/* {
+        to analytics-service:8000
+        to billing-service:8000
+        to catalog-service:8000
+        to credit-service:8000
+        to merchant-service:8000
+        to notification-service:8000
+        to recommendation-service:8000
+        to season-compatibility-service:8000
+        to selfie-service:8000
+        to token-service:8000
+        
+        lb_policy least_conn
+        health_uri /health
+        health_interval 30s
+    }
+
+    log {
+        output file /data/logs/access.log {
+            roll_size 100MB
+            roll_keep 3
+        }
+    }
+}

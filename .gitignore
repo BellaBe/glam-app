@@ -90,3 +90,5 @@ npm-debug.log
 yarn-error.log
 
 infrastructure/oracle
+
+alembic/versions/__pycache__/

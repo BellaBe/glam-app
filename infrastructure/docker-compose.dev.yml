@@ -1,0 +1,218 @@
+# infrastructure/docker-compose.dev.yml
+# Development: Exact prod config with debug settings
+# Pattern: DRY configuration with anchors for reuse across environments
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+x-prod-logging: &prod-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+x-prod-logging-heavy: &prod-logging-heavy
+  logging:
+    driver: json-file
+    options:
+      max-size: '20m'
+      max-file: '5'
+
+x-api-limits: &api-limits
+  deploy:
+    resources:
+      limits:
+        cpus: '0.25'
+        memory: 256M
+      reservations:
+        memory: 128M
+
+x-api-service-dev: &api-service-dev
+  <<: *prod-logging
+  build:
+    target: development
+
+services:
+  postgres:
+    <<: *prod-logging-heavy
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_parallel_maintenance_workers=2
+      -c max_connections=200
+      -c log_min_duration_statement=200
+      -c log_checkpoints=on
+      -c autovacuum_max_workers=2
+      -c autovacuum_naptime=10s
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  nats:
+    <<: *prod-logging
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: [
+      "nats-server",
+      "-js",
+      "--store_dir", "/data",
+      "--max_payload", "8MB",
+      "--max_connections", "1000",
+      "--max_subscriptions", "1000",
+      "--js_max_memory", "512MB",
+      "--js_max_storage", "10GB"
+    ]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  analytics-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8001:8000"
+
+  billing-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8002:8000"
+
+  catalog-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8003:8000"
+
+  catalog-connector:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8004:8000"
+
+  credit-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8005:8000"
+
+  merchant-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8006:8000"
+
+  notification-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8007:8000"
+
+  recommendation-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8008:8000"
+
+  season-compatibility-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8009:8000"
+
+  selfie-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8010:8000"
+
+  token-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8011:8000"
+
+  webhook-service:
+    <<: [*api-service-dev, *api-limits]
+    ports:
+      - "8012:8000"
+
+  selfie-ai-analyzer:
+    <<: *api-service-dev
+    ports:
+      - "8013:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
+        reservations:
+          memory: 2G
+
+  catalog-ai-analyzer:
+    <<: *api-service-dev
+    ports:
+      - "8014:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  caddy:
+    <<: *prod-logging-heavy
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy-data-local:/data
+      - caddy-config-local:/config
+    networks:
+      - glam
+    depends_on:
+      - postgres
+      - nats
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - glam
+    logging:
+      driver: none
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  caddy-data-local:
+  caddy-config-local:

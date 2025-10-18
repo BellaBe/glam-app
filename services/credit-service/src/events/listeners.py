@@ -1,178 +1,198 @@
-# services/credit-service/src/events/listeners.py
-from shared.api.correlation import set_correlation_context
+from shared.messaging.jetstream_client import JetStreamClient
 from shared.messaging.listener import Listener
-from shared.utils.exceptions import ValidationError
-
-from ..schemas.events import (
-    CreditsPurchasedPayload,
-    MatchCompletedPayload,
-    MerchantCreatedPayload,
-    TrialStartedPayload,
+from shared.utils.logger import ServiceLogger
+from src.services.credit_service import CreditService
+from src.schemas.credit import (
+    BillingRecordCreatedPayload,
+    TrialActivatedPayload,
+    PurchaseCompletedPayload,
+    PurchaseRefundedPayload,
+    MatchCompletedPayload
 )
+from shared.utils.exceptions import ValidationError
+from pydantic import ValidationError as PydanticValidationError
 
 
-class MerchantCreatedListener(Listener):
-    """Listen for merchant creation"""
-
+class BillingRecordCreatedListener(Listener):
     @property
     def subject(self) -> str:
-        return "evt.merchant.created.v1"
+        return "evt.billing.record.created.v1"
 
     @property
     def queue_group(self) -> str:
-        return "credit-service-merchant-handler"
+        return "credit-billing-record"
 
     @property
     def service_name(self) -> str:
         return "credit-service"
 
-    def __init__(self, js_client, service, publisher, logger):
+    def __init__(self, js_client: JetStreamClient, service: CreditService, logger: ServiceLogger):
         super().__init__(js_client, logger)
         self.service = service
-        self.publisher = publisher
 
     async def on_message(self, data: dict) -> None:
-        """Process merchant created event"""
-        # Set correlation context from event
-        correlation_id = data.get("correlation_id", "unknown")
-        set_correlation_context(correlation_id)
-
         try:
-            payload = MerchantCreatedPayload(**data)
-            await self.service.handle_merchant_created(payload, correlation_id)
-            self.logger.info(f"Credit account created for merchant {payload.merchant_id}")
-        except ValidationError as e:
-            self.logger.exception(f"Invalid merchant event: {e}")
-            return  # ACK to drop invalid message
-        except Exception as e:
-            self.logger.exception(f"Failed to create credit account: {e}")
-            raise  # NACK for retry
+            payload = BillingRecordCreatedPayload(**data)
+            correlation_id = data.get("correlation_id", "unknown")
+            await self.service.create_account(payload, correlation_id)
+        except PydanticValidationError as e:
+            raise ValidationError(message=f"Invalid payload: {e}", field="payload")
+
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        if isinstance(error, ValidationError):
+            return True  # ACK invalid messages
+        if self.delivery_count >= self.max_deliver:
+            await self.publish_event(
+                subject=f"dlq.{self.service_name}.{self.queue_group}.failed",
+                payload={"original_data": data, "error": str(error)}
+            )
+            return True
+        return False
 
 
-class TrialStartedListener(Listener):
-    """Listen for trial started events"""
-
+class TrialActivatedListener(Listener):
     @property
     def subject(self) -> str:
-        return "evt.billing.trial.started.v1"
+        return "evt.billing.trial.activated.v1"
 
     @property
     def queue_group(self) -> str:
-        return "credit-service-trial-handler"
+        return "credit-trial-activated"
 
     @property
     def service_name(self) -> str:
         return "credit-service"
 
-    def __init__(self, js_client, service, publisher, logger):
+    def __init__(self, js_client: JetStreamClient, service: CreditService, logger: ServiceLogger):
         super().__init__(js_client, logger)
         self.service = service
-        self.publisher = publisher
 
     async def on_message(self, data: dict) -> None:
-        """Process trial started event"""
-        correlation_id = data.get("correlation_id", "unknown")
-        set_correlation_context(correlation_id)
-
         try:
-            payload = TrialStartedPayload(**data)
-            result = await self.service.handle_trial_started(payload, correlation_id)
+            payload = TrialActivatedPayload(**data)
+            correlation_id = data.get("correlation_id", "unknown")
+            await self.service.grant_trial_credits(payload, correlation_id)
+        except PydanticValidationError as e:
+            raise ValidationError(message=f"Invalid payload: {e}", field="payload")
 
-            # Publish granted event
-            await self.publisher.credits_granted(result)
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        if isinstance(error, ValidationError):
+            return True
+        if self.delivery_count >= self.max_deliver:
+            await self.publish_event(
+                subject=f"dlq.{self.service_name}.{self.queue_group}.failed",
+                payload={"original_data": data, "error": str(error)}
+            )
+            return True
+        return False
 
-        except ValidationError as e:
-            self.logger.exception(f"Invalid trial event: {e}")
-            return  # ACK
-        except Exception as e:
-            self.logger.exception(f"Failed to grant trial credits: {e}")
-            raise  # NACK
 
-
-class CreditsPurchasedListener(Listener):
-    """Listen for credit purchase events"""
-
+class PurchaseCompletedListener(Listener):
     @property
     def subject(self) -> str:
-        return "evt.billing.credits.purchased.v1"
+        return "evt.billing.purchase.completed.v1"
 
     @property
     def queue_group(self) -> str:
-        return "credit-service-purchase-handler"
+        return "credit-purchase-completed"
 
     @property
     def service_name(self) -> str:
         return "credit-service"
 
-    def __init__(self, js_client, service, publisher, logger):
+    def __init__(self, js_client: JetStreamClient, service: CreditService, logger: ServiceLogger):
         super().__init__(js_client, logger)
         self.service = service
-        self.publisher = publisher
 
     async def on_message(self, data: dict) -> None:
-        """Process credits purchased event"""
-        correlation_id = data.get("correlation_id", "unknown")
-        set_correlation_context(correlation_id)
-
         try:
-            payload = CreditsPurchasedPayload(**data)
-            result = await self.service.handle_credits_purchased(payload, correlation_id)
+            payload = PurchaseCompletedPayload(**data)
+            correlation_id = data.get("correlation_id", "unknown")
+            await self.service.grant_purchased_credits(payload, correlation_id)
+        except PydanticValidationError as e:
+            raise ValidationError(message=f"Invalid payload: {e}", field="payload")
 
-            # Publish granted event
-            await self.publisher.credits_granted(result)
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        if isinstance(error, ValidationError):
+            return True
+        if self.delivery_count >= self.max_deliver:
+            await self.publish_event(
+                subject=f"dlq.{self.service_name}.{self.queue_group}.failed",
+                payload={"original_data": data, "error": str(error)}
+            )
+            return True
+        return False
 
-        except ValidationError as e:
-            self.logger.exception(f"Invalid purchase event: {e}")
-            return  # ACK
-        except Exception as e:
-            self.logger.exception(f"Failed to add purchased credits: {e}")
-            raise  # NACK
+
+class PurchaseRefundedListener(Listener):
+    @property
+    def subject(self) -> str:
+        return "evt.billing.purchase.refunded.v1"
+
+    @property
+    def queue_group(self) -> str:
+        return "credit-purchase-refunded"
+
+    @property
+    def service_name(self) -> str:
+        return "credit-service"
+
+    def __init__(self, js_client: JetStreamClient, service: CreditService, logger: ServiceLogger):
+        super().__init__(js_client, logger)
+        self.service = service
+
+    async def on_message(self, data: dict) -> None:
+        try:
+            payload = PurchaseRefundedPayload(**data)
+            correlation_id = data.get("correlation_id", "unknown")
+            await self.service.refund_purchased_credits(payload, correlation_id)
+        except PydanticValidationError as e:
+            raise ValidationError(message=f"Invalid payload: {e}", field="payload")
+
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        if isinstance(error, ValidationError):
+            return True
+        if self.delivery_count >= self.max_deliver:
+            await self.publish_event(
+                subject=f"dlq.{self.service_name}.{self.queue_group}.failed",
+                payload={"original_data": data, "error": str(error)}
+            )
+            return True
+        return False
 
 
 class MatchCompletedListener(Listener):
-    """Listen for AI match completion"""
-
     @property
     def subject(self) -> str:
-        return "evt.ai.match.completed.v1"
+        return "evt.recommendation.match.completed.v1"
 
     @property
     def queue_group(self) -> str:
-        return "credit-service-match-handler"
+        return "credit-match-completed"
 
     @property
     def service_name(self) -> str:
         return "credit-service"
 
-    def __init__(self, js_client, service, publisher, logger):
+    def __init__(self, js_client: JetStreamClient, service: CreditService, logger: ServiceLogger):
         super().__init__(js_client, logger)
         self.service = service
-        self.publisher = publisher
 
     async def on_message(self, data: dict) -> None:
-        """Process match completed event"""
-        correlation_id = data.get("correlation_id", "unknown")
-        set_correlation_context(correlation_id)
-
         try:
             payload = MatchCompletedPayload(**data)
-            result = await self.service.handle_match_completed(payload, correlation_id)
+            correlation_id = data.get("correlation_id", "unknown")
+            await self.service.consume_credit(payload, correlation_id)
+        except PydanticValidationError as e:
+            raise ValidationError(message=f"Invalid payload: {e}", field="payload")
 
-            # Publish appropriate events based on result
-            if result.get("insufficient"):
-                await self.publisher.credits_insufficient(result)
-            else:
-                await self.publisher.credits_consumed(result)
-
-                if result.get("low_balance"):
-                    await self.publisher.credits_low_balance(result)
-
-                if result.get("exhausted"):
-                    await self.publisher.credits_exhausted(result)
-
-        except ValidationError as e:
-            self.logger.exception(f"Invalid match event: {e}")
-            return  # ACK
-        except Exception as e:
-            self.logger.exception(f"Failed to consume credit: {e}")
-            raise  # NACK
+    async def on_error(self, error: Exception, data: dict) -> bool:
+        if isinstance(error, ValidationError):
+            return True
+        if self.delivery_count >= self.max_deliver:
+            await self.publish_event(
+                subject=f"dlq.{self.service_name}.{self.queue_group}.failed",
+                payload={"original_data": data, "error": str(error)}
+            )
+            return True
+        return False

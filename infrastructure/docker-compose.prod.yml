@@ -1,0 +1,184 @@
+# infrastructure/docker-compose.prod.yml
+# Purpose: Production on Oracle Cloud E5.Flex (2 OCPU, 24GB RAM)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Optimizations: Resource limits, logging rotation, SSL, tuned Postgres
+
+x-prod-logging: &prod-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+x-prod-logging-heavy: &prod-logging-heavy
+  logging:
+    driver: json-file
+    options:
+      max-size: '20m'
+      max-file: '5'
+
+x-api-limits: &api-limits
+  deploy:
+    resources:
+      limits:
+        memory: 256M
+      reservations:
+        memory: 128M
+
+x-api-service-prod: &api-service-prod
+  <<: *prod-logging
+  build:
+    target: production
+
+services:
+  postgres:
+    <<: *prod-logging-heavy
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_parallel_maintenance_workers=2
+      -c max_connections=200
+      -c log_min_duration_statement=200
+      -c log_checkpoints=on
+      -c autovacuum_max_workers=2
+      -c autovacuum_naptime=10s
+    volumes:
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  nats:
+    <<: *prod-logging
+    command: [
+      "nats-server",
+      "-js",
+      "--store_dir", "/data",
+      "--http_port", "8222",
+      "--max_payload", "8MB",
+      "--max_connections", "1000",
+      "--max_subscriptions", "1000",
+      "--js_max_memory", "512MB",
+      "--js_max_storage", "10GB"
+    ]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  analytics-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/analytics-service:${TAG}
+
+  billing-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/billing-service:${TAG}
+
+  catalog-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/catalog-service:${TAG}
+
+  catalog-connector:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/catalog-connector:${TAG}
+
+  credit-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/credit-service:${TAG}
+
+  merchant-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/merchant-service:${TAG}
+
+  notification-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/notification-service:${TAG}
+
+  recommendation-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/recommendation-service:${TAG}
+
+  season-compatibility-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/season-compatibility-service:${TAG}
+
+  selfie-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/selfie-service:${TAG}
+
+  token-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/token-service:${TAG}
+
+  webhook-service:
+    <<: [*api-service-prod, *api-limits]
+    image: ${REGISTRY:-glamyouup}/webhook-service:${TAG}
+
+  selfie-ai-analyzer:
+    <<: *api-service-prod
+    image: ${REGISTRY:-glamyouup}/selfie-ai-analyzer:${TAG}
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 2G
+
+  catalog-ai-analyzer:
+    <<: *api-service-prod
+    image: ${REGISTRY:-glamyouup}/catalog-ai-analyzer:${TAG}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  caddy:
+    <<: *prod-logging-heavy
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2019/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - glam
+    depends_on:
+      - postgres
+      - nats
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  caddy-data:
+  caddy-config:

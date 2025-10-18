@@ -2,8 +2,6 @@
 import asyncio
 import time
 
-from prisma import Prisma  # type: ignore[attr-defined]
-
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
 
@@ -12,6 +10,10 @@ from .events.listeners import AppUninstalledListener
 from .events.publishers import MerchantEventPublisher
 from .repositories import MerchantRepository
 from .services.merchant_service import MerchantService
+
+from src.db.session import make_engine, make_session_factory
+from src.events.publishers import MerchantEventPublisher
+from src.services.merchant_service import MerchantService
 
 
 class ServiceLifecycle:
@@ -23,21 +25,17 @@ class ServiceLifecycle:
 
         # External connections
         self.messaging_client: JetStreamClient | None = None
-        self.prisma: Prisma | None = None
-        self._db_connected: bool = False
+        self.engine = None
+        self.session_factory = None
 
         # Publisher / listeners
         self.event_publisher: MerchantEventPublisher | None = None
         self._listeners: list = []
 
-        # Repositories / mappers / services
-        self.merchant_repo: MerchantRepository | None = None
+        # Services
         self.merchant_service: MerchantService | None = None
 
-        self.event_publisher: MerchantEventPublisher | None = None
-
         # Tasks
-        self._listeners: list = []
         self._tasks: list[asyncio.Task] = []
 
     async def startup(self) -> None:
@@ -50,10 +48,7 @@ class ServiceLifecycle:
             # 2. Database
             await self._init_database()
 
-            # 3. Repositories
-            self._init_repositories()
-
-            # 4. Services
+            # 3. Services
             self._init_services()
 
             # 5. Event listeners
@@ -87,11 +82,11 @@ class ServiceLifecycle:
             except Exception:
                 self.logger.exception("Messaging client close failed", exc_info=True)
 
-        if self.prisma and self._db_connected:
+        if self.engine:
             try:
-                await self.prisma.disconnect()
+                await self.engine.dispose()
             except Exception:
-                self.logger.exception("Prisma disconnect failed", exc_info=True)
+                self.logger.exception("Engine dispose failed", exc_info=True)
 
         self.logger.info("%s shutdown complete", self.config.service_name)
 
@@ -99,45 +94,32 @@ class ServiceLifecycle:
         """Initialize JetStream client and publisher"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>"])
 
         # Initialize publisher
         self.event_publisher = MerchantEventPublisher(self.messaging_client, self.logger)
         self.logger.info("Messaging client and publisher initialized")
 
     async def _init_database(self) -> None:
-        """Initialize Prisma client if database is enabled."""
+        """Initialize database manager if database is enabled."""
         if not self.config.database_enabled:
-            self.logger.info("Database disabled; skipping Prisma initialization")
+            self.logger.info("Database disabled; skipping initialization")
             return
 
-        # Prisma reads DATABASE_URL from the environment; no args needed
-        self.prisma = Prisma()
-        if not self.prisma:
-            raise RuntimeError("Prisma client not initialized")
-
         try:
-            await self.prisma.connect()
-            self._db_connected = True
-            self.logger.info("Database connected")
+            self.engine = make_engine(self.config.database_url)
+            self.session_factory = make_session_factory(self.engine)
+            self.logger.info("Database initialized")
         except Exception as e:
             self.logger.exception("Database connect failed: %s", e, exc_info=True)
             raise
 
-    def _init_repositories(self) -> None:
-        if self.config.database_enabled:
-            if not (self.prisma and self._db_connected):
-                raise RuntimeError("Prisma client not initialized/connected")
-            self.merchant_repo = MerchantRepository(self.prisma)
-            self.logger.info("Merchant repository initialized")
-        else:
-            self.merchant_repo = None  # service must handle db-disabled mode
-
     def _init_services(self) -> None:
-        if not self.merchant_repo or not self.event_publisher:
-            raise RuntimeError("Merchant repository not initialized")
+        if not self.session_factory or not self.event_publisher:
+            raise RuntimeError("Session factory or publisher not ready")
 
         self.merchant_service = MerchantService(
-            repository=self.merchant_repo, publisher=self.event_publisher, logger=self.logger
+            session_factory=self.session_factory, publisher=self.event_publisher, logger=self.logger
         )
         self.logger.info("Merchant service initialized")
 

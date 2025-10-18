@@ -1,55 +1,33 @@
-# services/credit-service/src/dependencies.py
 from typing import Annotated
-
-from fastapi import Depends, HTTPException, Request
-
-from shared.api.dependencies import (
-    ClientAuthDep,
-    LoggerDep,
-    PaginationDep,
-    PlatformContextDep,
-    RequestContextDep,
-)
-
+from fastapi import Depends, HTTPException, Request, status
 from .config import ServiceConfig
 from .lifecycle import ServiceLifecycle
 from .services.credit_service import CreditService
 
-# Re-export shared dependencies
-__all__ = [
-    "ClientAuthDep",
-    "ConfigDep",
-    "CreditServiceDep",
-    "LifecycleDep",
-    "LoggerDep",
-    "PaginationDep",
-    "PlatformContextDep",
-    "RequestContextDep",
-]
 
-
-# Core dependencies
 def get_lifecycle(request: Request) -> ServiceLifecycle:
-    """Get service lifecycle from app state"""
-    return request.app.state.lifecycle
+    lc = getattr(request.app.state, "lifecycle", None)
+    if lc is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
+    return lc
 
 
-def get_config(request: Request):
-    """Get service config from app state"""
-    return request.app.state.config
+def get_config(request: Request) -> ServiceConfig:
+    cfg = getattr(request.app.state, "config", None)
+    if cfg is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
+    return cfg
 
 
-# Type aliases
 LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
 
 
-# Service dependencies
 def get_credit_service(lifecycle: LifecycleDep) -> CreditService:
-    """Get credit service"""
-    if not lifecycle.credit_service:
-        raise HTTPException(500, "Credit service not initialized")
-    return lifecycle.credit_service
+    svc = lifecycle.credit_service
+    if not svc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "CreditService not initialized")
+    return svc
 
 
 CreditServiceDep = Annotated[CreditService, Depends(get_credit_service)]

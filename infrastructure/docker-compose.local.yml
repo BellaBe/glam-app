@@ -1,0 +1,68 @@
+# infrastructure/docker-compose.local.yml
+# Purpose: Local development - services run OUTSIDE Docker, only infra in containers
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# Setup: echo "127.0.0.1 api.glamyouup.local" | sudo tee -a /etc/hosts
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  nats:
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  # Disable all services
+  analytics-service:
+    deploy:
+      replicas: 0
+  billing-service:
+    deploy:
+      replicas: 0
+  catalog-service:
+    deploy:
+      replicas: 0
+  catalog-connector:
+    deploy:
+      replicas: 0
+  credit-service:
+    deploy:
+      replicas: 0
+  merchant-service:
+    deploy:
+      replicas: 0
+  notification-service:
+    deploy:
+      replicas: 0
+  recommendation-service:
+    deploy:
+      replicas: 0
+  season-compatibility-service:
+    deploy:
+      replicas: 0
+  selfie-service:
+    deploy:
+      replicas: 0
+  token-service:
+    deploy:
+      replicas: 0
+  webhook-service:
+    deploy:
+      replicas: 0
+  selfie-ai-analyzer:
+    deploy:
+      replicas: 0
+  catalog-ai-analyzer:
+    deploy:
+      replicas: 0
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - glam
+    logging:
+      driver: none
+      

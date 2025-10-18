@@ -18,6 +18,17 @@ def load_root_env():
             break
         current = current.parent
     else:
-        env_file = current / ".env"
+        # Determine which env file to load
+        env_name = os.getenv("APP_ENV", "local")
+        infrastructure_dir = current / "infrastructure"
+        
+        # Load environment-specific file
+        env_file = infrastructure_dir / f".env.{env_name}"
+        if env_file.exists():
+            load_dotenv(env_file, override=False)
+            return
+        
+        # Fallback to .env.local
+        env_file = infrastructure_dir / ".env.local"
         if env_file.exists():
             load_dotenv(env_file, override=False)

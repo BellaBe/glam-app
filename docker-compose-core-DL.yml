@@ -1,0 +1,587 @@
+# docker-compose.original.yml
+# Production configuration - test locally OR deploy to server
+# 
+# Local testing:
+#   1. echo "127.0.0.1 api.glamyouup.local" | sudo tee -a /etc/hosts
+#   2. docker compose --env-file .env.test up -d
+#   3. curl -k https://api.glamyouup.local/health
+#
+# Production:
+#   docker compose --env-file .env.prod up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: glam-caddy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 256M
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${ACME_EMAIL}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - glam-prod
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: glam-postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 4G
+        reservations:
+          memory: 2G
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=10MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c max_parallel_maintenance_workers=2
+      -c max_connections=200
+      -c log_min_duration_statement=200
+      -c log_connections=off
+      -c log_disconnections=off
+      -c log_checkpoints=on
+      -c log_temp_files=0
+      -c autovacuum_max_workers=2
+      -c autovacuum_naptime=10s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/scripts/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./infrastructure/scripts/postgres-backup.sh:/usr/local/bin/backup.sh:ro
+    networks:
+      - glam-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  nats:
+    image: nats:2.10.7-alpine
+    container_name: glam-nats
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          memory: 512M
+    command: [
+      "nats-server",
+      "-js",
+      "--store_dir", "/data",
+      "--max_payload", "8MB",
+      "--max_connections", "1000",
+      "--max_subscriptions", "1000",
+      "--max_control_line", "4KB",
+      "--max_pending", "64MB",
+      "--write_deadline", "10s",
+      "--js_max_memory", "512MB",
+      "--js_max_storage", "10GB"
+    ]
+    volumes:
+      - nats-data:/data
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Regular Services
+  analytics-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/analytics-service:${IMAGE_TAG:-latest}
+    container_name: analytics-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/analytics_db
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  billing-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/billing-service:${IMAGE_TAG:-latest}
+    container_name: billing-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  catalog-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/catalog-service:${IMAGE_TAG:-latest}
+    container_name: catalog-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/catalog_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  catalog-connector:
+    image: ${DOCKER_REGISTRY:-glamyouup}/catalog-connector:${IMAGE_TAG:-latest}
+    container_name: catalog-connector
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      nats:
+        condition: service_healthy
+      token-service:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      TOKEN_SERVICE_URL: http://token-service:8000
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  credit-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/credit-service:${IMAGE_TAG:-latest}
+    container_name: credit-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/credit_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  merchant-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/merchant-service:${IMAGE_TAG:-latest}
+    container_name: merchant-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/merchant_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  notification-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/notification-service:${IMAGE_TAG:-latest}
+    container_name: notification-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/notification_db
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM}
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  recommendation-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/recommendation-service:${IMAGE_TAG:-latest}
+    container_name: recommendation-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      season-compatibility-service:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recommendation_db
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      SEASON_COMPATIBILITY_SERVICE_URL: http://season-compatibility-service:8000
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  season-compatibility-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/season-compatibility-service:${IMAGE_TAG:-latest}
+    container_name: season-compatibility-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/season_compatibility_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  selfie-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/selfie-service:${IMAGE_TAG:-latest}
+    container_name: selfie-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      selfie-ai-analyzer:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/selfie_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      SELFIE_AI_ANALYZER_URL: http://selfie-ai-analyzer:8000
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  token-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/token-service:${IMAGE_TAG:-latest}
+    container_name: token-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/token_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  webhook-service:
+    image: ${DOCKER_REGISTRY:-glamyouup}/webhook-service:${IMAGE_TAG:-latest}
+    container_name: webhook-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/webhook_db
+      APP_ENV: ${APP_ENV}
+      CLIENT_JWT_SECRET: ${JWT_SECRET}
+      NATS_URL: nats://nats:4222
+      SHOPIFY_WEBHOOK_SECRET: ${SHOPIFY_WEBHOOK_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # AI Services
+  selfie-ai-analyzer:
+    image: ${DOCKER_REGISTRY:-glamyouup}/selfie-ai-analyzer:${IMAGE_TAG:-latest}
+    container_name: selfie-ai-analyzer
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
+        reservations:
+          memory: 2G
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      OMP_NUM_THREADS: "2"
+      OPENCV_VIDEOIO_PRIORITY_BACKEND: "0"
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+  catalog-ai-analyzer:
+    image: ${DOCKER_REGISTRY:-glamyouup}/catalog-ai-analyzer:${IMAGE_TAG:-latest}
+    container_name: catalog-ai-analyzer
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          memory: 1G
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV}
+      NATS_URL: nats://nats:4222
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OMP_NUM_THREADS: "1"
+      LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+    networks:
+      - glam-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+networks:
+  glam-prod:
+    driver: bridge
+    name: glam-prod
+
+volumes:
+  postgres-data:
+  nats-data:
+  caddy-data:
+  caddy-config:
