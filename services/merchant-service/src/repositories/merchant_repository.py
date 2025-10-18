@@ -1,9 +1,10 @@
 # services/merchant-service/src/repositories/merchant_repository.py
 from __future__ import annotations
+
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Merchant, MerchantStatus
@@ -18,39 +19,19 @@ class MerchantRepository:
         """Find merchant by ID"""
         return await self.session.get(Merchant, str(merchant_id))
 
-    async def find_by_platform_and_domain(
-        self,
-        platform_name: str,
-        domain: str
-    ) -> Merchant | None:
+    async def find_by_platform_and_domain(self, platform_name: str, domain: str) -> Merchant | None:
         """Find merchant by platform and domain"""
-        stmt = select(Merchant).where(
-            and_(
-                Merchant.platform_name == platform_name,
-                Merchant.domain == domain
-            )
-        )
+        stmt = select(Merchant).where(and_(Merchant.platform_name == platform_name, Merchant.domain == domain))
         return (await self.session.execute(stmt)).scalars().first()
 
-    async def find_by_platform_and_shop(
-        self,
-        platform_name: str,
-        platform_shop_id: str
-    ) -> Merchant | None:
+    async def find_by_platform_and_shop(self, platform_name: str, platform_shop_id: str) -> Merchant | None:
         """Find merchant by platform and shop ID"""
         stmt = select(Merchant).where(
-            and_(
-                Merchant.platform_name == platform_name,
-                Merchant.platform_shop_id == platform_shop_id
-            )
+            and_(Merchant.platform_name == platform_name, Merchant.platform_shop_id == platform_shop_id)
         )
         return (await self.session.execute(stmt)).scalars().first()
 
-    async def create(
-        self,
-        platform_name: str,
-        data: MerchantSyncIn
-    ) -> Merchant:
+    async def create(self, platform_name: str, data: MerchantSyncIn) -> Merchant:
         """Create new merchant"""
         now = datetime.now(UTC)
         merchant = Merchant(
@@ -66,21 +47,17 @@ class MerchantRepository:
             scopes=data.scopes,
             status=MerchantStatus.PENDING,
             installed_at=now,
-            last_synced_at=now
+            last_synced_at=now,
         )
         self.session.add(merchant)
         await self.session.flush()
         await self.session.refresh(merchant)
         return merchant
 
-    async def update_from_sync(
-        self,
-        merchant: Merchant,
-        data: MerchantSyncIn
-    ) -> Merchant:
+    async def update_from_sync(self, merchant: Merchant, data: MerchantSyncIn) -> Merchant:
         """Update merchant from sync data"""
         now = datetime.now(UTC)
-        
+
         merchant.name = data.name
         merchant.email = data.email
         merchant.primary_domain = data.primary_domain
@@ -100,18 +77,13 @@ class MerchantRepository:
         await self.session.refresh(merchant)
         return merchant
 
-    async def update_status(
-        self,
-        merchant: Merchant,
-        new_status: MerchantStatus
-    ) -> Merchant:
+    async def update_status(self, merchant: Merchant, new_status: MerchantStatus) -> Merchant:
         """Update merchant status"""
         merchant.status = new_status
-        
+
         if new_status == MerchantStatus.UNINSTALLED:
             merchant.uninstalled_at = datetime.now(UTC)
-        
+
         await self.session.flush()
         await self.session.refresh(merchant)
         return merchant
-

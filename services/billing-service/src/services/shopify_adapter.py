@@ -1,13 +1,16 @@
 # services/billing-service/src/services/shopify_adapter.py
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
+
 import httpx
 
 if TYPE_CHECKING:
-    from ..db.models import BillingAccount, Payment, PricingProduct
-    from ..config import ServiceConfig
     from shared.utils.logger import ServiceLogger
+
+    from ..config import ServiceConfig
+    from ..db.models import BillingAccount, Payment, PricingProduct
 
 
 class ShopifyAdapter:
@@ -27,10 +30,10 @@ class ShopifyAdapter:
         return_url: str,
     ) -> str:
         """Create Shopify application charge"""
-        
+
         # Get access token (from token service)
         access_token = await self._get_access_token(account.merchant_id)
-        
+
         # Build charge request
         charge_data = {
             "application_charge": {
@@ -40,10 +43,10 @@ class ShopifyAdapter:
                 "test": self.test_mode,
             }
         }
-        
+
         # Call Shopify API
         url = f"https://{account.platform_domain}/admin/api/{self.api_version}/application_charges.json"
-        
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
@@ -55,21 +58,19 @@ class ShopifyAdapter:
                     json=charge_data,
                     timeout=10.0,
                 )
-                
+
                 if response.status_code != 201:
-                    self.logger.error(
-                        f"Shopify charge creation failed: {response.text}"
-                    )
+                    self.logger.error(f"Shopify charge creation failed: {response.text}")
                     raise Exception(f"Shopify API error: {response.status_code}")
-                
+
                 charge = response.json()["application_charge"]
-                
+
                 # Update payment with platform charge ID
                 # This would be done in the service layer
                 # payment.platform_charge_id = str(charge["id"])
-                
+
                 return charge["confirmation_url"]
-                
+
             except httpx.TimeoutException as e:
                 self.logger.error(f"Shopify API timeout: {e}")
                 raise Exception("Platform API timeout") from e

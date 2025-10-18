@@ -1,12 +1,12 @@
 from __future__ import annotations
+
 from uuid import UUID
 
-from fastapi import APIRouter, status, Header
+from fastapi import APIRouter, Header, status
 
 from shared.api import ApiResponse, success_response
 from shared.api.dependencies import ClientAuthDep, RequestContextDep
 from shared.utils.exceptions import ForbiddenError
-
 
 billing_router = APIRouter(prefix="/billing")
 
@@ -25,6 +25,9 @@ async def activate_trial(
 ):
     """Activate trial"""
     
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
+
     await service.activate_trial(auth.merchant_id, ctx.correlation_id)
     return success_response({"success": True}, ctx.correlation_id)
 
@@ -43,6 +46,8 @@ async def get_trial_status(
 ):
     """Get trial status"""
     
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
     result = await service.get_trial_status(auth.merchant_id)
     return success_response(result, ctx.correlation_id)
 
@@ -57,8 +62,13 @@ async def get_trial_status(
 async def list_products(
     service,  # BillingServiceDep
     ctx: RequestContextDep,
+    auth: ClientAuthDep,
 ):
     """List pricing products"""
+
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
+
     result = await service.list_products()
     return success_response({"products": result}, ctx.correlation_id)
 
@@ -75,16 +85,12 @@ async def create_charge(
     service,  # BillingServiceDep
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    x_shop_domain: str = Header(...),
 ):
     """Create charge"""
-    
-    if auth.shop_domain != x_shop_domain:
-        raise ForbiddenError(
-            message="Shop domain mismatch",
-            required_permission="shop_access"
-        )
-    
+
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
+
     result = await service.create_charge(
         merchant_id=auth.merchant_id,
         data=data,
@@ -104,17 +110,13 @@ async def list_payments(
     service,  # BillingServiceDep
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    x_shop_domain: str = Header(...),
     limit: int = 100,
     offset: int = 0,
 ):
     """List payments"""
-    
-    if auth.shop_domain != x_shop_domain:
-        raise ForbiddenError(
-            message="Shop domain mismatch",
-            required_permission="shop_access"
-        )
+
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
     
     result = await service.list_payments(
         merchant_id=auth.merchant_id,
@@ -136,23 +138,16 @@ async def get_payment(
     service,  # BillingServiceDep
     ctx: RequestContextDep,
     auth: ClientAuthDep,
-    x_shop_domain: str = Header(...),
 ):
     """Get payment by ID"""
-    
-    if auth.shop_domain != x_shop_domain:
-        raise ForbiddenError(
-            message="Shop domain mismatch",
-            required_permission="shop_access"
-        )
-    
+
+    if auth.scope not in ["bff:api:access"]:
+        raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
+
     result = await service.get_payment(payment_id)
-    
+
     # Verify merchant owns this payment
     if result.merchant_id != UUID(auth.merchant_id):
-        raise ForbiddenError(
-            message="Cannot access payment",
-            required_permission="payment_owner"
-        )
-    
+        raise ForbiddenError(message="Cannot access payment", required_permission="payment_owner")
+
     return success_response(result, ctx.correlation_id)

@@ -1,12 +1,14 @@
 # src/db/models.py
 from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import String, DateTime, Enum as SAEnum, text, Index
+from sqlalchemy import DateTime, Enum as SAEnum, Index, String, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from .session import Base
 
 
@@ -21,11 +23,7 @@ class MerchantStatus(StrEnum):
 class Merchant(Base):
     __tablename__ = "merchants"
 
-    id: Mapped[str] = mapped_column(
-        PG_UUID(as_uuid=False),
-        primary_key=True,
-        default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(PG_UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
 
     platform_name: Mapped[str] = mapped_column(String, nullable=False)
     platform_shop_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -40,43 +38,28 @@ class Merchant(Base):
     scopes: Mapped[str] = mapped_column(String, nullable=False)
 
     status: Mapped[MerchantStatus] = mapped_column(
-        SAEnum(MerchantStatus, name="merchantstatus"),
-        nullable=False,
-        default=MerchantStatus.PENDING,
-        index=True
+        SAEnum(MerchantStatus, name="merchantstatus"), nullable=False, default=MerchantStatus.PENDING, index=True
     )
 
-    installed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-    uninstalled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
-    )
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        index=True
-    )
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uninstalled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
-        server_onupdate=text("CURRENT_TIMESTAMP")
+        server_onupdate=text("CURRENT_TIMESTAMP"),
     )
 
     __table_args__ = (
-        Index('ix_merchants_platform_shop', 'platform_name', 'platform_shop_id', unique=True),
-        Index('ix_merchants_platform_domain', 'platform_name', 'domain', unique=True),
-        Index('ix_merchants_shop_domain', 'platform_shop_id', 'domain'),
-        Index('ix_merchants_domain', 'domain'),
+        Index("ix_merchants_platform_shop", "platform_name", "platform_shop_id", unique=True),
+        Index("ix_merchants_platform_domain", "platform_name", "domain", unique=True),
+        Index("ix_merchants_shop_domain", "platform_shop_id", "domain"),
+        Index("ix_merchants_domain", "domain"),
     )
 
 
@@ -85,22 +68,10 @@ STATUS_TRANSITIONS = {
         MerchantStatus.ACTIVE,
         MerchantStatus.PAUSED,
         MerchantStatus.SUSPENDED,
-        MerchantStatus.UNINSTALLED
+        MerchantStatus.UNINSTALLED,
     ],
-    MerchantStatus.ACTIVE: [
-        MerchantStatus.PAUSED,
-        MerchantStatus.SUSPENDED,
-        MerchantStatus.UNINSTALLED
-    ],
-    MerchantStatus.PAUSED: [
-        MerchantStatus.ACTIVE,
-        MerchantStatus.SUSPENDED,
-        MerchantStatus.UNINSTALLED
-    ],
-    MerchantStatus.SUSPENDED: [
-        MerchantStatus.ACTIVE,
-        MerchantStatus.PAUSED,
-        MerchantStatus.UNINSTALLED
-    ],
-    MerchantStatus.UNINSTALLED: []
+    MerchantStatus.ACTIVE: [MerchantStatus.PAUSED, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
+    MerchantStatus.PAUSED: [MerchantStatus.ACTIVE, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
+    MerchantStatus.SUSPENDED: [MerchantStatus.ACTIVE, MerchantStatus.PAUSED, MerchantStatus.UNINSTALLED],
+    MerchantStatus.UNINSTALLED: [],
 }

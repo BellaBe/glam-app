@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select, and_, update
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import BillingAccount, PricingProduct, Payment, PaymentStatus
+from ..db.models import BillingAccount, Payment, PaymentStatus, PricingProduct
 
 
 class BillingAccountRepository:
@@ -14,9 +15,7 @@ class BillingAccountRepository:
 
     async def find_by_merchant_id(self, merchant_id: str) -> BillingAccount | None:
         """Find billing account by merchant ID"""
-        stmt = select(BillingAccount).where(
-            BillingAccount.merchant_id == merchant_id
-        )
+        stmt = select(BillingAccount).where(BillingAccount.merchant_id == merchant_id)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
@@ -46,7 +45,7 @@ class BillingAccountRepository:
         account = await self.find_by_merchant_id(merchant_id)
         if not account:
             raise ValueError(f"Account not found: {merchant_id}")
-        
+
         account.trial_available = False
         account.trial_activated_at = datetime.now(UTC)
         await self.session.flush()
@@ -62,7 +61,7 @@ class BillingAccountRepository:
         account = await self.find_by_merchant_id(merchant_id)
         if not account:
             raise ValueError(f"Account not found: {merchant_id}")
-        
+
         account.total_spend_usd += amount
         account.last_payment_at = datetime.now(UTC)
         await self.session.flush()
@@ -118,14 +117,9 @@ class PaymentRepository:
         """Find payment by ID"""
         return await self.session.get(Payment, payment_id)
 
-    async def find_by_platform_charge_id(
-        self,
-        platform_charge_id: str
-    ) -> Payment | None:
+    async def find_by_platform_charge_id(self, platform_charge_id: str) -> Payment | None:
         """Find payment by platform charge ID"""
-        stmt = select(Payment).where(
-            Payment.platform_charge_id == platform_charge_id
-        )
+        stmt = select(Payment).where(Payment.platform_charge_id == platform_charge_id)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
@@ -185,7 +179,7 @@ class PaymentRepository:
         payment = await self.find_by_id(payment_id)
         if not payment:
             raise ValueError(f"Payment not found: {payment_id}")
-        
+
         payment.platform_charge_id = platform_charge_id
         await self.session.flush()
         await self.session.refresh(payment)
@@ -196,7 +190,7 @@ class PaymentRepository:
         payment = await self.find_by_id(payment_id)
         if not payment:
             raise ValueError(f"Payment not found: {payment_id}")
-        
+
         payment.status = PaymentStatus.COMPLETED
         payment.completed_at = datetime.now(UTC)
         await self.session.flush()
@@ -208,7 +202,7 @@ class PaymentRepository:
         payment = await self.find_by_id(payment_id)
         if not payment:
             raise ValueError(f"Payment not found: {payment_id}")
-        
+
         payment.status = PaymentStatus.FAILED
         await self.session.flush()
         await self.session.refresh(payment)
@@ -219,7 +213,7 @@ class PaymentRepository:
         payment = await self.find_by_id(payment_id)
         if not payment:
             raise ValueError(f"Payment not found: {payment_id}")
-        
+
         payment.status = PaymentStatus.REFUNDED
         payment.refunded_at = datetime.now(UTC)
         await self.session.flush()
@@ -228,16 +222,10 @@ class PaymentRepository:
 
     async def mark_expired_payments(self) -> int:
         """Mark expired pending payments"""
-        from sqlalchemy import update
-        
+
         stmt = (
             update(Payment)
-            .where(
-                and_(
-                    Payment.status == PaymentStatus.PENDING,
-                    Payment.expires_at <= datetime.now(UTC)
-                )
-            )
+            .where(and_(Payment.status == PaymentStatus.PENDING, Payment.expires_at <= datetime.now(UTC)))
             .values(status=PaymentStatus.EXPIRED)
         )
         result = await self.session.execute(stmt)

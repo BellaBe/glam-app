@@ -22,7 +22,7 @@ class MerchantCreatedListener(Listener):
         self,
         js_client: JetStreamClient,
         service,  # BillingService
-        logger: ServiceLogger
+        logger: ServiceLogger,
     ):
         super().__init__(js_client, logger)
         self.service = service
@@ -37,10 +37,7 @@ class MerchantCreatedListener(Listener):
             correlation_id = data.get("correlation_id")
 
             if not all([merchant_id, platform_name, platform_id, platform_domain]):
-                self.logger.error(
-                    "Missing required fields in merchant created event",
-                    extra={"data": data}
-                )
+                self.logger.error("Missing required fields in merchant created event", extra={"data": data})
                 return
 
             self.logger.info(
@@ -57,11 +54,7 @@ class MerchantCreatedListener(Listener):
             )
 
         except Exception as e:
-            self.logger.exception(
-                f"Failed to process merchant created: {e}",
-                exc_info=True,
-                extra={"data": data}
-            )
+            self.logger.exception(f"Failed to process merchant created: {e}", exc_info=True, extra={"data": data})
             raise
 
 
@@ -84,7 +77,7 @@ class PurchaseUpdatedListener(Listener):
         self,
         js_client: JetStreamClient,
         service,  # BillingService
-        logger: ServiceLogger
+        logger: ServiceLogger,
     ):
         super().__init__(js_client, logger)
         self.service = service
@@ -98,10 +91,7 @@ class PurchaseUpdatedListener(Listener):
             correlation_id = data.get("correlation_id")
 
             if not all([charge_id, status]):
-                self.logger.error(
-                    "Missing required fields in purchase updated event",
-                    extra={"data": data}
-                )
+                self.logger.error("Missing required fields in purchase updated event", extra={"data": data})
                 return
 
             self.logger.info(
@@ -116,11 +106,7 @@ class PurchaseUpdatedListener(Listener):
             )
 
         except Exception as e:
-            self.logger.exception(
-                f"Failed to process purchase updated: {e}",
-                exc_info=True,
-                extra={"data": data}
-            )
+            self.logger.exception(f"Failed to process purchase updated: {e}", exc_info=True, extra={"data": data})
             raise
 
 
@@ -143,7 +129,7 @@ class PurchaseRefundedListener(Listener):
         self,
         js_client: JetStreamClient,
         service,  # BillingService
-        logger: ServiceLogger
+        logger: ServiceLogger,
     ):
         super().__init__(js_client, logger)
         self.service = service
@@ -157,10 +143,7 @@ class PurchaseRefundedListener(Listener):
             correlation_id = data.get("correlation_id")
 
             if not all([charge_id, merchant_id]):
-                self.logger.error(
-                    "Missing required fields in purchase refunded event",
-                    extra={"data": data}
-                )
+                self.logger.error("Missing required fields in purchase refunded event", extra={"data": data})
                 return
 
             self.logger.info(
@@ -174,10 +157,5 @@ class PurchaseRefundedListener(Listener):
             )
 
         except Exception as e:
-            self.logger.exception(
-                f"Failed to process purchase refunded: {e}",
-                exc_info=True,
-                extra={"data": data}
-            )
+            self.logger.exception(f"Failed to process purchase refunded: {e}", exc_info=True, extra={"data": data})
             raise
-

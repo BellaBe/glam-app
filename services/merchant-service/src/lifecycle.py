@@ -4,16 +4,14 @@ import time
 
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
+from src.db.session import make_engine, make_session_factory
+from src.events.publishers import MerchantEventPublisher
+from src.services.merchant_service import MerchantService
 
 from .config import ServiceConfig
 from .events.listeners import AppUninstalledListener
 from .events.publishers import MerchantEventPublisher
-from .repositories import MerchantRepository
 from .services.merchant_service import MerchantService
-
-from src.db.session import make_engine, make_session_factory
-from src.events.publishers import MerchantEventPublisher
-from src.services.merchant_service import MerchantService
 
 
 class ServiceLifecycle:

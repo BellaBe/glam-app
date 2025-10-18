@@ -6,7 +6,7 @@ from shared.api.dependencies import ClientAuthDep, RequestContextDep
 from shared.utils.exceptions import ForbiddenError
 
 from ...dependencies import MerchantServiceDep
-from ...schemas import MerchantSyncResponse, MerchantSyncIn, MerchantOut
+from ...schemas import MerchantOut, MerchantSyncIn, MerchantSyncResponse
 
 merchants_router = APIRouter(prefix="/merchants")
 

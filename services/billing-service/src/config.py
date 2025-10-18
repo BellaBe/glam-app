@@ -24,7 +24,7 @@ class ServiceConfig(BaseModel):
 
     database_enabled: bool = True
     database_url: str = Field(..., alias="DATABASE_URL")
-    
+
     client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
     internal_jwt_secret: str = Field(..., alias="INTERNAL_API_KEY")
 
@@ -32,7 +32,6 @@ class ServiceConfig(BaseModel):
     shopify_api_secret: str = Field(..., alias="SHOPIFY_API_SECRET")
     shopify_api_version: str = "2024-01"
     shopify_test_mode: bool = True
-
 
     logging_level: str = "INFO"
     logging_format: str = "json"
@@ -74,7 +73,5 @@ def get_service_config() -> ServiceConfig:
         return ServiceConfig(**os.environ)  # type: ignore[arg-type]
     except Exception as e:
         raise ConfigurationError(
-            f"Failed to load service configuration: {e}", 
-            config_key="billing-service", 
-            expected_value="valid config"
+            f"Failed to load service configuration: {e}", config_key="billing-service", expected_value="valid config"
         ) from e

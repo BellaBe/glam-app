@@ -1,6 +1,6 @@
 # services/merchant-service/src/events/publishers.py
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
 
 from shared.messaging.publisher import Publisher
 from shared.messaging.subjects import Subjects
@@ -15,11 +15,7 @@ class MerchantEventPublisher(Publisher):
     def service_name(self) -> str:
         return "merchant-service"
 
-    async def merchant_created(
-        self,
-        merchant: MerchantOut,
-        correlation_id: str
-    ) -> str:
+    async def merchant_created(self, merchant: MerchantOut, correlation_id: str) -> str:
         """Publish merchant created event"""
         payload = {
             "merchant_id": str(merchant.id),
@@ -35,21 +31,14 @@ class MerchantEventPublisher(Publisher):
             "scopes": merchant.scopes,
             "installed_at": merchant.installed_at.isoformat() if merchant.installed_at else None,
             "status": merchant.status,
-            "correlation_id": correlation_id
+            "correlation_id": correlation_id,
         }
 
         return await self.publish_event(
-            subject=Subjects.MERCHANT_CREATED,
-            payload=payload,
-            correlation_id=correlation_id
+            subject=Subjects.MERCHANT_CREATED, payload=payload, correlation_id=correlation_id
         )
 
-    async def merchant_synced(
-        self,
-        merchant: MerchantOut,
-        first_install: bool,
-        correlation_id: str
-    ) -> str:
+    async def merchant_synced(self, merchant: MerchantOut, first_install: bool, correlation_id: str) -> str:
         """Publish merchant synced event"""
         payload = {
             "merchant_id": str(merchant.id),
@@ -59,13 +48,11 @@ class MerchantEventPublisher(Publisher):
             "first_install": first_install,
             "last_synced_at": merchant.last_synced_at.isoformat() if merchant.last_synced_at else None,
             "scopes": merchant.scopes,
-            "correlation_id": correlation_id
+            "correlation_id": correlation_id,
         }
 
         return await self.publish_event(
-            subject=Subjects.MERCHANT_SYNCED,
-            payload=payload,
-            correlation_id=correlation_id
+            subject=Subjects.MERCHANT_SYNCED, payload=payload, correlation_id=correlation_id
         )
 
     async def merchant_status_changed(
@@ -76,7 +63,7 @@ class MerchantEventPublisher(Publisher):
         domain: str,
         old_status: str,
         new_status: str,
-        correlation_id: str
+        correlation_id: str,
     ) -> str:
         """Publish merchant status changed event"""
         payload = {
@@ -87,13 +74,11 @@ class MerchantEventPublisher(Publisher):
             "old_status": old_status,
             "new_status": new_status,
             "changed_at": datetime.utcnow().isoformat(),
-            "correlation_id": correlation_id
+            "correlation_id": correlation_id,
         }
 
         return await self.publish_event(
-            subject=Subjects.MERCHANT_STATUS_CHANGED,
-            payload=payload,
-            correlation_id=correlation_id
+            subject=Subjects.MERCHANT_STATUS_CHANGED, payload=payload, correlation_id=correlation_id
         )
 
     async def merchant_uninstalled(
@@ -103,7 +88,7 @@ class MerchantEventPublisher(Publisher):
         platform_shop_id: str,
         domain: str,
         uninstalled_at: datetime,
-        correlation_id: str
+        correlation_id: str,
     ) -> str:
         """Publish merchant uninstalled event"""
         payload = {
@@ -112,11 +97,9 @@ class MerchantEventPublisher(Publisher):
             "platform_shop_id": platform_shop_id,
             "domain": domain,
             "uninstalled_at": uninstalled_at.isoformat(),
-            "correlation_id": correlation_id
+            "correlation_id": correlation_id,
         }
 
         return await self.publish_event(
-            subject=Subjects.MERCHANT_UNINSTALLED,
-            payload=payload,
-            correlation_id=correlation_id
+            subject=Subjects.MERCHANT_UNINSTALLED, payload=payload, correlation_id=correlation_id
         )

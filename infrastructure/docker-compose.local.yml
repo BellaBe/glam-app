@@ -65,4 +65,3 @@ services:
       - glam
     logging:
       driver: none
-      

@@ -37,10 +37,7 @@ class TrialAlreadyActivatedError(ConflictError):
     """Raised when trial is already activated"""
 
     def __init__(self, message: str = "Trial already activated"):
-        super().__init__(
-            message=message,
-            conflicting_resource="trial"
-        )
+        super().__init__(message=message, conflicting_resource="trial")
 
 
 class ProductInactiveError(ValidationError):
@@ -59,4 +56,5 @@ class InvalidPlatformError(ValidationError):
 
 class PlatformChargeError(Exception):
     """Raised when platform charge creation fails"""
+
     pass

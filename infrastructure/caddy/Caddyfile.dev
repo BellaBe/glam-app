@@ -28,7 +28,7 @@ localhost:80, api.glamyouup.local:80 {
         to season-compatibility-service:8000
         to selfie-service:8000
         to token-service:8000
-        
+
         lb_policy round_robin
         health_uri /health
         health_interval 10s

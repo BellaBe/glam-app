@@ -45,12 +45,7 @@ def create_application() -> FastAPI:
     register_exception_handlers(app)
 
     # Include routers
-    app.include_router(
-        create_health_router(
-            config.service_name,
-            prefix="/api/v1/billing"
-        )
-    )
+    app.include_router(create_health_router(config.service_name, prefix="/api/v1/billing"))
     app.include_router(api_router)
 
     return app

@@ -8,11 +8,11 @@ caddy/
 └── Caddyfile.prod
 docker/
 ├── ai-service.Dockerfile
-│   
+│
 │   ```Dockerfile
 │   # infrastructure/docker/ai-service.Dockerfile
 │   ARG SERVICE
-│   
+│
 │   FROM python:3.11-slim AS builder
 │   ARG SERVICE
 │   ENV DEBIAN_FRONTEND=noninteractive \
@@ -20,49 +20,49 @@ docker/
 │       POETRY_VERSION=1.8.3 \
 │       POETRY_VIRTUALENVS_CREATE=false \
 │       POETRY_NO_INTERACTION=1
-│   
+│
 │   RUN apt-get update && apt-get install -y --no-install-recommends curl gcc g++ cmake \
 │       && rm -rf /var/lib/apt/lists/*
-│   
+│
 │   RUN curl -sSL https://install.python-poetry.org | python3 -
 │   ENV PATH="/root/.local/bin:${PATH}"
-│   
+│
 │   WORKDIR /build
 │   # Copy only metadata first
 │   COPY services/${SERVICE}/pyproject.toml /build/pyproject.toml
 │   COPY services/${SERVICE}/poetry.lock /build/poetry.lock
-│   
+│
 │   # Export and build wheels
 │   RUN poetry export --with main -f requirements.txt > /requirements.txt
 │   RUN pip wheel --no-cache-dir --wheel-dir /wheels -r /requirements.txt
-│   
+│
 │   # Copy code/models after deps
 │   COPY services/${SERVICE}/ /build/service
-│   
-│   
+│
+│
 │   FROM python:3.11-slim AS production
 │   ARG SERVICE
 │   ENV PYTHONUNBUFFERED=1 OMP_NUM_THREADS=2 OPENCV_VIDEOIO_PRIORITY_BACKEND=0
-│   
+│
 │   RUN apt-get update && apt-get install -y --no-install-recommends \
 │       libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 libgl1-mesa-glx libglu1-mesa curl \
 │       && apt-get clean && rm -rf /var/lib/apt/lists/* \
 │       && useradd -m -u 1000 appuser
-│   
+│
 │   WORKDIR /app
 │   COPY --from=builder /wheels /wheels
 │   COPY --from=builder /requirements.txt /requirements.txt
 │   RUN pip install --no-cache-dir --find-links=/wheels -r /requirements.txt \
 │       && rm -rf /wheels /requirements.txt
-│   
+│
 │   COPY --chown=appuser:appuser --from=builder /build/service /app
-│   
+│
 │   USER appuser
 │   EXPOSE 8000
 │   HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
 │     CMD curl -f http://localhost:8000/health || exit 1
 │   CMD ["uvicorn","src.main:app","--host","0.0.0.0","--port","8000","--workers","1"]
-│   
+│
 │   FROM builder AS development
 │   WORKDIR /app
 │   RUN poetry install --with dev --no-root && pip install watchdog
@@ -71,13 +71,13 @@ docker/
 │   EXPOSE 8000
 │   CMD ["uvicorn","src.main:app","--host","0.0.0.0","--port","8000","--reload"]
 │   ```
-│   
+│
 └── service.Dockerfile
-    
+
     ```Dockerfile
     # infrastructure/docker/service.Dockerfile
     ARG SERVICE
-    
+
     FROM python:3.11-slim AS builder
     ARG SERVICE
     ENV DEBIAN_FRONTEND=noninteractive \
@@ -85,17 +85,17 @@ docker/
         POETRY_VERSION=1.8.3 \
         POETRY_VIRTUALENVS_CREATE=false \
         POETRY_NO_INTERACTION=1
-    
+
     # Build deps only here
     RUN apt-get update && apt-get install -y --no-install-recommends curl gcc g++ build-essential \
         && rm -rf /var/lib/apt/lists/*
-    
+
     # Install Poetry in builder
     RUN curl -sSL https://install.python-poetry.org | python3 -
     ENV PATH="/root/.local/bin:${PATH}"
-    
+
     WORKDIR /build
-    
+
     # Copy only lock metadata first for cache
     # Shared layer
     COPY shared/pyproject.toml /build/shared/pyproject.toml
@@ -103,54 +103,54 @@ docker/
     # Service layer
     COPY services/${SERVICE}/pyproject.toml /build/service/pyproject.toml
     COPY services/${SERVICE}/poetry.lock /build/service/poetry.lock
-    
+
     # Export fully pinned requirements from locks
     # Remove editable lines if any
     RUN cd /build/shared  && poetry export --with main -f requirements.txt | sed '/^-e /d' > /req-shared.txt
     RUN cd /build/service && poetry export --with main -f requirements.txt | sed '/^-e /d' > /req-svc.txt
     RUN cat /req-shared.txt /req-svc.txt > /requirements.txt
-    
+
     # Build wheels for offline deterministic installs
     RUN pip wheel --no-cache-dir --wheel-dir /wheels -r /requirements.txt
-    
+
     # Now copy source (after deps for better caching)
     COPY shared /build/shared
     COPY services/${SERVICE} /build/service
-    
+
     # Optional: build local wheels for your own packages if they are proper PEP 517 packages
     # RUN pip install build && python -m build /build/shared -o /dist && python -m build /build/service -o /dist && \
     #     pip wheel --no-cache-dir --wheel-dir /wheels /dist/*.whl
-    
+
     FROM python:3.11-slim AS production
     ARG SERVICE
     ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-    
+
     RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl \
         && apt-get clean && rm -rf /var/lib/apt/lists/* \
         && useradd -m -u 1000 appuser
-    
+
     WORKDIR /app
-    
+
     # Install from wheels exactly
     COPY --from=builder /wheels /wheels
     COPY --from=builder /requirements.txt /requirements.txt
     RUN pip install --no-cache-dir --find-links=/wheels -r /requirements.txt \
         && rm -rf /wheels /requirements.txt
-    
+
     # Bring application code
     COPY --chown=appuser:appuser --from=builder /build/shared /shared
     COPY --chown=appuser:appuser --from=builder /build/service /app
-    
+
     USER appuser
     EXPOSE 8000
-    
+
     # Migrations via module invocation to avoid missing console scripts
     HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
       CMD curl -f http://localhost:8000/health || exit 1
-    
+
     CMD sh -c "if [ -d alembic ]; then python -m alembic upgrade head; fi && \
                uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1"
-    
+
     # Dev target keeps Poetry if you need it
     FROM builder AS development
     ARG SERVICE
@@ -164,25 +164,25 @@ docker/
     EXPOSE 8000
     CMD ["uvicorn","src.main:app","--host","0.0.0.0","--port","8000","--reload"]
     ```
-    
+
 scripts/
 ├── backup.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   set -euo pipefail
-│   
+│
 │   # Configuration
 │   BACKUP_DIR="${BACKUP_DIR:-/var/backups/glam}"
 │   DATE=$(date +%Y%m%d_%H%M%S)
 │   BACKUP_PATH="${BACKUP_DIR}/${DATE}"
 │   RETENTION_DAYS=7
 │   COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
-│   
+│
 │   mkdir -p "${BACKUP_PATH}"
-│   
+│
 │   echo "Starting backup at $(date)"
-│   
+│
 │   DATABASES=(
 │       "analytics_db"
 │       "billing_db"
@@ -196,82 +196,82 @@ scripts/
 │       "token_db"
 │       "webhook_db"
 │   )
-│   
+│
 │   for db in "${DATABASES[@]}"; do
 │       echo "  Backing up ${db}..."
 │       docker compose exec -T postgres pg_dump -U postgres -Fc "${db}" > "${BACKUP_PATH}/${db}.dump"
 │   done
-│   
+│
 │   # Backup config (without secrets)
 │   echo "Backing up configuration..."
 │   grep -v "PASS\|KEY\|SECRET\|TOKEN" .env.prod > "${BACKUP_PATH}/env.backup" 2>/dev/null || true
-│   
+│
 │   # Compress
 │   echo "Compressing backup..."
 │   tar -czf "${BACKUP_PATH}.tar.gz" -C "${BACKUP_DIR}" "${DATE}"
 │   rm -rf "${BACKUP_PATH}"
-│   
+│
 │   # Cleanup old backups
 │   echo "Cleaning old backups..."
 │   find "${BACKUP_DIR}" -name "*.tar.gz" -mtime +${RETENTION_DAYS} -delete
-│   
+│
 │   echo "✅ Backup completed: ${BACKUP_PATH}.tar.gz"
 │   echo "   Size: $(du -h ${BACKUP_PATH}.tar.gz | cut -f1)"
 │   ```
-│   
+│
 ├── cleanup-system.sh
 ├── debug-container.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   # Container Debugging Script
 │   # Source: Docker Troubleshooting Ch.7, pg 98-105
-│   
+│
 │   set -e
-│   
+│
 │   CONTAINER=$1
-│   
+│
 │   if [ -z "$CONTAINER" ]; then
 │       echo "Usage: $0 <container-name-or-id>"
 │       exit 1
 │   fi
-│   
+│
 │   echo "=== Container Status ==="
 │   docker inspect $CONTAINER --format '{{.State.Status}}'
 │   docker inspect $CONTAINER --format 'Exit Code: {{.State.ExitCode}}'
 │   # Exit codes: 0=clean, 1=app error, 137=OOM killed, 139=segfault
-│   
+│
 │   echo -e "\n=== Last 50 Log Lines ==="
 │   docker logs --tail 50 $CONTAINER
-│   
+│
 │   echo -e "\n=== Resource Usage ==="
 │   docker stats --no-stream $CONTAINER
-│   
+│
 │   echo -e "\n=== Running Processes ==="
 │   docker top $CONTAINER
-│   
+│
 │   echo -e "\n=== Port Bindings ==="
 │   docker port $CONTAINER
-│   
+│
 │   echo -e "\n=== Network Config ==="
 │   docker inspect $CONTAINER --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-│   
+│
 │   echo -e "\n=== Volume Mounts ==="
 │   docker inspect $CONTAINER --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
-│   
+│
 │   echo -e "\n=== Environment Variables ==="
 │   docker exec $CONTAINER env | sort
 │   ```
-│   
+│
 ├── postgres-init.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   set -e
-│   
+│
 │   echo "=== GlamYouUp Database Initialization ==="
 │   echo "Starting at $(date)"
-│   
+│
 │   DATABASES=(
 │       "analytics_db"
 │       "billing_db"
@@ -285,39 +285,39 @@ scripts/
 │       "token_db"
 │       "webhook_db"
 │   )
-│   
+│
 │   for DB in "${DATABASES[@]}"; do
 │       echo "Creating database: $DB"
 │       psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
 │           CREATE DATABASE $DB
-│               WITH 
+│               WITH
 │               ENCODING = 'UTF8'
 │               LC_COLLATE = 'C'
 │               LC_CTYPE = 'C'
 │               TEMPLATE = template0;
-│   
+│
 │           GRANT ALL PRIVILEGES ON DATABASE $DB TO $POSTGRES_USER;
-│           
+│
 │           \c $DB
-│           
+│
 │           CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 │           CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 │           CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 │           CREATE EXTENSION IF NOT EXISTS "btree_gin";
 │           CREATE EXTENSION IF NOT EXISTS "btree_gist";
-│           
+│
 │           GRANT ALL ON SCHEMA public TO $POSTGRES_USER;
 │           GRANT ALL ON ALL TABLES IN SCHEMA public TO $POSTGRES_USER;
 │           GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO $POSTGRES_USER;
 │           GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO $POSTGRES_USER;
-│           
+│
 │           ALTER DEFAULT PRIVILEGES IN SCHEMA public
 │               GRANT ALL ON TABLES TO $POSTGRES_USER;
 │           ALTER DEFAULT PRIVILEGES IN SCHEMA public
 │               GRANT ALL ON SEQUENCES TO $POSTGRES_USER;
 │           ALTER DEFAULT PRIVILEGES IN SCHEMA public
 │               GRANT ALL ON FUNCTIONS TO $POSTGRES_USER;
-│           
+│
 │           ALTER DATABASE $DB SET random_page_cost = 1.1;
 │           ALTER DATABASE $DB SET effective_io_concurrency = 200;
 │           ALTER DATABASE $DB SET statement_timeout = '30s';
@@ -325,21 +325,21 @@ scripts/
 │   EOSQL
 │       echo "✅ Created database: $DB"
 │   done
-│   
+│
 │   psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname=postgres <<-EOSQL
 │       CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-│       
+│
 │       CREATE OR REPLACE VIEW db_sizes AS
-│       SELECT 
+│       SELECT
 │           datname as database,
 │           pg_size_pretty(pg_database_size(datname)) as size,
 │           pg_database_size(datname) as bytes
 │       FROM pg_database
 │       WHERE datname NOT IN ('postgres', 'template0', 'template1')
 │       ORDER BY pg_database_size(datname) DESC;
-│       
+│
 │       CREATE OR REPLACE VIEW db_connections AS
-│       SELECT 
+│       SELECT
 │           datname as database,
 │           count(*) as connections,
 │           max(backend_start) as oldest_connection,
@@ -351,46 +351,46 @@ scripts/
 │       GROUP BY datname
 │       ORDER BY count(*) DESC;
 │   EOSQL
-│   
+│
 │   echo "✅ Initialization Complete"
 │   echo "Total databases: ${#DATABASES[@]}"
 │   ```
-│   
+│
 ├── restore.sh
-│   
+│
 │   ```sh
 │   #!/bin/bash
 │   set -euo pipefail
-│   
+│
 │   BACKUP_DATE=${1:-}
 │   BACKUP_DIR="${BACKUP_DIR:-/var/backups/glam}"
-│   
+│
 │   if [ -z "$BACKUP_DATE" ]; then
 │       echo "Usage: $0 YYYYMMDD_HHMMSS"
 │       echo "Available backups:"
 │       ls -lh "$BACKUP_DIR"/*.tar.gz 2>/dev/null || echo "No backups found"
 │       exit 1
 │   fi
-│   
+│
 │   BACKUP_FILE="$BACKUP_DIR/${BACKUP_DATE}.tar.gz"
-│   
+│
 │   if [ ! -f "$BACKUP_FILE" ]; then
 │       echo "Backup file not found: $BACKUP_FILE"
 │       exit 1
 │   fi
-│   
+│
 │   echo "Restoring from $BACKUP_FILE..."
 │   read -p "This will OVERWRITE current databases. Continue? (yes/NO) " -r
 │   if [[ ! $REPLY == "yes" ]]; then
 │       echo "Aborted"
 │       exit 1
 │   fi
-│   
+│
 │   TEMP_DIR=$(mktemp -d)
 │   trap "rm -rf $TEMP_DIR" EXIT
-│   
+│
 │   tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
-│   
+│
 │   DATABASES=(
 │       "analytics_db"
 │       "billing_db"
@@ -404,7 +404,7 @@ scripts/
 │       "token_db"
 │       "webhook_db"
 │   )
-│   
+│
 │   for db in "${DATABASES[@]}"; do
 │       dump_file="$TEMP_DIR/${BACKUP_DATE}/${db}.dump"
 │       if [ -f "$dump_file" ]; then
@@ -414,10 +414,10 @@ scripts/
 │           echo "⚠️  Dump not found: $dump_file"
 │       fi
 │   done
-│   
+│
 │   echo "✅ Restore complete!"
 │   ```
-│   
+│
 └── security-scan.sh
 .env.dev
 .env.example
@@ -716,7 +716,7 @@ services:
       - glam
     logging:
       driver: none
-      
+
 ```
 
 docker-compose.prod.yml

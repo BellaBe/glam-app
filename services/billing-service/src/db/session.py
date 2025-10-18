@@ -1,8 +1,9 @@
 # src/db/session.py
 from __future__ import annotations
+
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import MetaData
 
 convention = {
     "ix": "ix_%(column_0_label)s",

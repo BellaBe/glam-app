@@ -1,5 +1,6 @@
 # services/billing-service/src/schemas/billing.py
 from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -13,12 +14,14 @@ ProductTypeType = Literal["credit_pack"]
 
 class TrialStatusOut(BaseModel):
     """Trial status response"""
+
     available: bool
     activated_at: datetime | None = None
 
 
 class ProductOut(BaseModel):
     """Pricing product output"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -32,6 +35,7 @@ class ProductOut(BaseModel):
 
 class CreateChargeIn(BaseModel):
     """Create charge request"""
+
     product_id: str = Field(..., description="Product ID to purchase")
     return_url: str = Field(..., description="URL to redirect after payment")
     platform: str = Field(..., description="Platform name (e.g., 'shopify')")
@@ -39,12 +43,14 @@ class CreateChargeIn(BaseModel):
 
 class CreateChargeOut(BaseModel):
     """Create charge response"""
+
     payment_id: UUID
     checkout_url: str
 
 
 class PaymentOut(BaseModel):
     """Payment details output"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -66,6 +72,7 @@ class PaymentOut(BaseModel):
 
 class BillingAccountOut(BaseModel):
     """Billing account output"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

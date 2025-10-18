@@ -9,8 +9,8 @@ from .config import ServiceConfig
 from .db.session import make_engine, make_session_factory
 from .events.listeners import (
     MerchantCreatedListener,
-    PurchaseUpdatedListener,
     PurchaseRefundedListener,
+    PurchaseUpdatedListener,
 )
 from .events.publishers import BillingEventPublisher
 from .services.billing_service import BillingService
@@ -46,7 +46,7 @@ class ServiceLifecycle:
         try:
             self.logger.info("Starting billing service components...")
             start_time = time.time()
-            
+
             # 1. Messaging
             await self._init_messaging()
 
@@ -65,10 +65,7 @@ class ServiceLifecycle:
             # 6. Background tasks
             self._start_background_tasks()
 
-            self.logger.info(
-                f"{self.config.service_name} started successfully "
-                f"in {time.time() - start_time:.2f}s"
-            )
+            self.logger.info(f"{self.config.service_name} started successfully in {time.time() - start_time:.2f}s")
 
         except Exception:
             self.logger.critical("Service failed to start", exc_info=True)
@@ -97,20 +94,14 @@ class ServiceLifecycle:
             try:
                 await self.messaging_client.close()
             except Exception:
-                self.logger.exception(
-                    "Messaging client close failed",
-                    exc_info=True
-                )
+                self.logger.exception("Messaging client close failed", exc_info=True)
 
         # Dispose database
         if self.engine:
             try:
                 await self.engine.dispose()
             except Exception:
-                self.logger.exception(
-                    "Engine dispose failed",
-                    exc_info=True
-                )
+                self.logger.exception("Engine dispose failed", exc_info=True)
 
         self.logger.info("%s shutdown complete", self.config.service_name)
 
@@ -118,15 +109,9 @@ class ServiceLifecycle:
         """Initialize JetStream client and publisher"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        await self.messaging_client.ensure_stream(
-            "GLAM_EVENTS",
-            ["evt.*", "cmd.*"]
-        )
+        await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
 
-        self.event_publisher = BillingEventPublisher(
-            self.messaging_client,
-            self.logger
-        )
+        self.event_publisher = BillingEventPublisher(self.messaging_client, self.logger)
         self.logger.info("Messaging client and publisher initialized")
 
     async def _init_database(self) -> None:
@@ -140,11 +125,7 @@ class ServiceLifecycle:
             self.session_factory = make_session_factory(self.engine)
             self.logger.info("Database initialized")
         except Exception as e:
-            self.logger.exception(
-                "Database connect failed: %s",
-                e,
-                exc_info=True
-            )
+            self.logger.exception("Database connect failed: %s", e, exc_info=True)
             raise
 
     def _init_adapters(self) -> None:
@@ -172,23 +153,11 @@ class ServiceLifecycle:
             raise RuntimeError("Messaging or service layer not ready")
 
         listeners = [
-            MerchantCreatedListener(
-                self.messaging_client,
-                self.billing_service,
-                self.logger
-            ),
-            PurchaseUpdatedListener(
-                self.messaging_client,
-                self.billing_service,
-                self.logger
-            ),
-            PurchaseRefundedListener(
-                self.messaging_client,
-                self.billing_service,
-                self.logger
-            ),
+            MerchantCreatedListener(self.messaging_client, self.billing_service, self.logger),
+            PurchaseUpdatedListener(self.messaging_client, self.billing_service, self.logger),
+            PurchaseRefundedListener(self.messaging_client, self.billing_service, self.logger),
         ]
-        
+
         for listener in listeners:
             await listener.start()
             self._listeners.append(listener)
@@ -210,7 +179,4 @@ class ServiceLifecycle:
             except asyncio.CancelledError:
                 break
             except Exception:
-                self.logger.exception(
-                    "Cleanup task failed",
-                    exc_info=True
-                )
+                self.logger.exception("Cleanup task failed", exc_info=True)

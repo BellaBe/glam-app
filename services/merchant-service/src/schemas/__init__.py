@@ -5,7 +5,7 @@ from .merchant import (
 )
 
 __all__ = [
+    "MerchantOut",
     "MerchantSyncIn",
     "MerchantSyncResponse",
-    "MerchantOut",
 ]

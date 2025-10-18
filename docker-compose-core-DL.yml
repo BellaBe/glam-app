@@ -1,6 +1,6 @@
 # docker-compose.original.yml
 # Production configuration - test locally OR deploy to server
-# 
+#
 # Local testing:
 #   1. echo "127.0.0.1 api.glamyouup.local" | sudo tee -a /etc/hosts
 #   2. docker compose --env-file .env.test up -d

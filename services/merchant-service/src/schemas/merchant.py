@@ -1,5 +1,6 @@
 # services/merchant-service/src/schemas/merchant.py
 from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 from uuid import UUID
@@ -11,6 +12,7 @@ MerchantStatus = Literal["PENDING", "ACTIVE", "PAUSED", "SUSPENDED", "UNINSTALLE
 
 class MerchantSyncIn(BaseModel):
     """Input schema for syncing merchant from platform"""
+
     platform_shop_id: str = Field(..., description="Platform shop ID")
     domain: str = Field(..., description="Merchant domain")
     name: str = Field(..., description="Merchant name")
@@ -33,6 +35,7 @@ class MerchantSyncIn(BaseModel):
 
 class MerchantOut(BaseModel):
     """Output schema for merchant"""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -56,5 +59,6 @@ class MerchantOut(BaseModel):
 
 class MerchantSyncResponse(BaseModel):
     """Response schema for merchant sync"""
+
     created: bool
     merchant_id: UUID

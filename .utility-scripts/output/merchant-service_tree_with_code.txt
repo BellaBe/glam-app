@@ -6,51 +6,51 @@ merchant-service/
 alembic/
 ├── versions/
 ├── env.py
-│   
+│
 │   ```py
 │   # alembic/env.py
 │   """Alembic migration environment for merchant service."""
-│   
+│
 │   import os
 │   import sys
 │   from logging.config import fileConfig
 │   from pathlib import Path
-│   
+│
 │   from alembic import context
 │   from sqlalchemy import engine_from_config, pool
-│   
+│
 │   # Add parent directory to path so we can import models
 │   sys.path.append(str(Path(__file__).parent.parent))
-│   
+│
 │   # Import all SQLModel models to ensure metadata is complete
 │   from src.db.session import Base
 │   from src.db import models
-│   
+│
 │   target_metadata = Base.metadata
-│   
+│
 │   # This is the Alembic Config object
 │   config = context.config
-│   
+│
 │   # Interpret the config file for Python logging
 │   if config.config_file_name is not None:
 │       fileConfig(config.config_file_name)
-│   
+│
 │   # Get database URL with fallback logic
 │   database_url = os.getenv("DATABASE_URL")
-│   
+│
 │   if database_url and database_url.startswith("postgresql+asyncpg://"):
 │       database_url = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
 │   config.set_main_option("sqlalchemy.url", database_url)
-│   
-│   
+│
+│
 │   def run_migrations_offline() -> None:
 │       """Run migrations in 'offline' mode.
-│   
+│
 │       This configures the context with just a URL
 │       and not an Engine, though an Engine is acceptable
 │       here as well. By skipping the Engine creation
 │       we don't even need a DBAPI to be available.
-│   
+│
 │       Calls to context.execute() here emit the given string to the
 │       script output.
 │       """
@@ -61,14 +61,14 @@ alembic/
 │           literal_binds=True,
 │           dialect_opts={"paramstyle": "named"},
 │       )
-│   
+│
 │       with context.begin_transaction():
 │           context.run_migrations()
-│   
-│   
+│
+│
 │   def run_migrations_online() -> None:
 │       """Run migrations in 'online' mode.
-│   
+│
 │       In this scenario we need to create an Engine
 │       and associate a connection with the context.
 │       """
@@ -77,62 +77,62 @@ alembic/
 │           prefix="sqlalchemy.",
 │           poolclass=pool.NullPool,
 │       )
-│   
+│
 │       with connectable.connect() as connection:
 │           context.configure(
-│               connection=connection, 
+│               connection=connection,
 │               target_metadata=target_metadata
 │           )
-│   
+│
 │           with context.begin_transaction():
 │               context.run_migrations()
-│   
-│   
+│
+│
 │   if context.is_offline_mode():
 │       run_migrations_offline()
 │   else:
 │       run_migrations_online()
 │   ```
-│   
+│
 ├── README.md
-│   
+│
 │   ```md
 │   # Alembic Migrations for Merchant Service
-│   
+│
 │   Generic single-database configuration with SQLModel.
-│   
+│
 │   ## Quick Start
-│   
+│
 │   ### Create a new migration
 │   ```bash
 │   # Set environment variables
 │   export DB_USER=glamlocal
 │   export DB_PASSWORD=localpass
-│   
+│
 │   # Create migration (Alembic detects changes automatically)
 │   poetry run alembic revision --autogenerate -m "descriptive message"
 │   ```
-│   
+│
 │   ### Apply migrations
 │   ```bash
 │   # Upgrade to latest
 │   poetry run alembic upgrade head
-│   
+│
 │   # Upgrade by 1 version
 │   poetry run alembic upgrade +1
-│   
+│
 │   # Upgrade to specific revision
 │   poetry run alembic upgrade <revision_id>
 │   ```
-│   
+│
 │   ### Rollback migrations
 │   ```bash
 │   # Downgrade by 1 version
 │   poetry run alembic downgrade -1
-│   
+│
 │   # Downgrade to specific revision
 │   poetry run alembic downgrade <revision_id>
-│   
+│
 │   # Downgrade all (back to empty database)
 │   poetry run alembic downgrade base
 │   ```
@@ -140,195 +140,195 @@ alembic/
 │   ```bash
 │   # Show current revision
 │   poetry run alembic current
-│   
+│
 │   # Show migration history
 │   poetry run alembic history --verbose
-│   
+│
 │   # Show specific migration
 │   poetry run alembic show <revision_id>
 │   ```
-│   
+│
 │   ### Migration Workflow
-│   
+│
 │   1. Modify your model in src/models/merchant.py
 │   2. Create migration
-│   
+│
 │   ```bash
 │   poetry run alembic revision --autogenerate -m "add phone field"
 │   ```
-│   
+│
 │   3. Review generated migration in alembic/versions/
-│   
+│
 │   Check the upgrade() function
 │   Check the downgrade() function
 │   Make any manual adjustments if needed
-│   
-│   
+│
+│
 │   4. Test migration
-│   
+│
 │   ```bash
 │      # Apply it
 │      poetry run alembic upgrade head
-│      
+│
 │      # Test rollback
 │      poetry run alembic downgrade -1
-│      
+│
 │      # Re-apply
 │      poetry run alembic upgrade head
 │   ```
-│   
+│
 │   5. Commit migration file to git
-│   
+│
 │   ## Common Operations
-│   
+│
 │   ### Add a new field
-│   
+│
 │   1. Update model:
-│   
+│
 │   ```python
 │      class Merchant(SQLModel, table=True):
 │          # ... existing fields ...
 │          phone: str | None = None  # New field
 │   ```
 │   2. Generate migration:
-│   
+│
 │   ```bash
 │      poetry run alembic revision --autogenerate -m "add merchant phone field"
 │   ```
-│   
+│
 │   3. Apply:
-│   
+│
 │   ```bash
 │      poetry run alembic upgrade head
 │   ```
-│   
+│
 │   ### Remove a field
-│   
+│
 │   1. Remove from model:
-│   
+│
 │   ```python
 │      class Merchant(SQLModel, table=True):
 │          # ... existing fields ...
 │          phone: str | None = None  # New field
 │   ```
-│   
+│
 │   2. Generate migration:
-│   
+│
 │   ```bash
 │      poetry run alembic revision --autogenerate -m "remove merchant phone field"
 │   ```
-│   
+│
 │   3. IMPORTANT: Review migration - may need to handle data migration
-│   
+│
 │   4. Apply:
-│   
+│
 │   ```bash
 │      poetry run alembic upgrade head
 │   ```
 │   ### Rename a field
 │   Alembic sees this as drop + add. You need to manually edit the migration:
-│   
+│
 │   ```python
 │   def upgrade() -> None:
 │       # Instead of drop + add, use rename
 │       op.alter_column('merchants', 'old_name', new_column_name='new_name')
-│   
+│
 │   def downgrade() -> None:
 │       op.alter_column('merchants', 'new_name', new_column_name='old_name')
 │   ```
-│   
+│
 │   Troubleshooting
 │   "Target database is not up to date"
 │   bash# Check current version
 │   poetry run alembic current
-│   
+│
 │   # Check what's pending
 │   poetry run alembic history
-│   
+│
 │   # Apply pending migrations
 │   poetry run alembic upgrade head
 │   "Can't locate revision identified by 'xyz'"
 │   Your database has a revision that doesn't exist in your migration files.
 │   bash# Check database state
 │   poetry run alembic current
-│   
+│
 │   # Either rollback or fix migration files
 │   poetry run alembic downgrade base
 │   poetry run alembic upgrade head
 │   Start fresh (development only!)
 │   bash# WARNING: This deletes all data!
-│   
+│
 │   # Drop everything
 │   poetry run alembic downgrade base
-│   
+│
 │   # Re-apply all migrations
 │   poetry run alembic upgrade head
 │   Migration conflicts (multiple developers)
 │   If two developers create migrations simultaneously:
-│   
+│
 │   Merge both migration files
 │   Edit one to set down_revision to the other's revision
 │   Test: alembic upgrade head
-│   
+│
 │   Production Deployment
-│   
+│
 │   Never run migrations automatically in production
 │   Always test migrations in staging first
 │   Backup database before running migrations
 │   Run migrations manually during deployment:
-│   
+│
 │   bash   docker exec merchant-service alembic upgrade head
 │   Tips
-│   
+│
 │   Always review autogenerated migrations
 │   Test rollback before deploying
 │   Keep migrations small and focused
 │   Don't modify old migrations after they're deployed
 │   Use meaningful names: add_phone_field not migration1
-│   
-│   
+│
+│
 │   ## 5. Create Initial Migration
-│   
+│
 │   Now create your first migration:
 │   ```bash
 │   cd services/merchant
-│   
+│
 │   # Set credentials
 │   export DB_USER=glamlocal
 │   export DB_PASSWORD=localpass
-│   
+│
 │   # Make sure infrastructure is running
 │   cd ../..
 │   docker-compose -f docker-compose.local.yml up -d postgres-local
-│   
+│
 │   # Back to service
 │   cd services/merchant
-│   
+│
 │   # Create initial migration
 │   poetry run alembic revision --autogenerate -m "initial merchant schema"
 │   This will create a file like: alembic/versions/20251004_1530_initial_merchant_schema.py
 │   6. Example Initial Migration
 │   python# alembic/versions/20251004_1530_initial_merchant_schema.py
 │   """initial merchant schema
-│   
+│
 │   Revision ID: 1a2b3c4d5e6f
-│   Revises: 
+│   Revises:
 │   Create Date: 2025-10-04 15:30:00.123456
-│   
+│
 │   """
 │   from typing import Sequence, Union
-│   
+│
 │   from alembic import op
 │   import sqlalchemy as sa
 │   from sqlalchemy.dialects import postgresql
-│   
+│
 │   # revision identifiers, used by Alembic.
 │   revision: str = '1a2b3c4d5e6f'
 │   down_revision: Union[str, None] = None
 │   branch_labels: Union[str, Sequence[str], None] = None
 │   depends_on: Union[str, Sequence[str], None] = None
-│   
-│   
+│
+│
 │   def upgrade() -> None:
 │       # Create ENUM type
 │       merchantstatus = postgresql.ENUM(
@@ -336,7 +336,7 @@ alembic/
 │           name='merchantstatus'
 │       )
 │       merchantstatus.create(op.get_bind())
-│   
+│
 │       # Create merchants table
 │       op.create_table(
 │           'merchants',
@@ -359,94 +359,94 @@ alembic/
 │           sa.Column('updated_at', sa.TIMESTAMP(), nullable=False),
 │           sa.PrimaryKeyConstraint('id')
 │       )
-│       
+│
 │       # Create indexes
 │       op.create_index('ix_merchants_domain', 'merchants', ['domain'], unique=False)
 │       op.create_index('ix_merchants_platform_name', 'merchants', ['platform_name'], unique=False)
 │       op.create_index('ix_merchants_platform_shop_id', 'merchants', ['platform_shop_id'], unique=False)
-│   
-│   
+│
+│
 │   def downgrade() -> None:
 │       # Drop indexes
 │       op.drop_index('ix_merchants_platform_shop_id', table_name='merchants')
 │       op.drop_index('ix_merchants_platform_name', table_name='merchants')
 │       op.drop_index('ix_merchants_domain', table_name='merchants')
-│       
+│
 │       # Drop table
 │       op.drop_table('merchants')
-│       
+│
 │       # Drop ENUM type
 │       merchantstatus = postgresql.ENUM(
 │           'PENDING', 'ACTIVE', 'PAUSED', 'SUSPENDED', 'UNINSTALLED',
 │           name='merchantstatus'
 │       )
 │       merchantstatus.drop(op.get_bind())
-│   
+│
 │   Complete Setup Commands
 │   bash `cd services/merchant`
-│   
+│
 │   # 1. Initialize Alembic (creates alembic/ directory)
 │   poetry run alembic init alembic
-│   
+│
 │   # 2. Replace generated files with the ones above
 │   #    - alembic.ini
 │   #    - alembic/env.py
 │   #    - alembic/script.py.mako
 │   #    - alembic/README
-│   
+│
 │   # 3. Set environment variables
 │   export DB_USER=glamlocal
 │   export DB_PASSWORD=localpass
-│   
+│
 │   # 4. Ensure PostgreSQL is running
 │   docker-compose -f ../../docker-compose.local.yml up -d postgres-local
-│   
+│
 │   # 5. Create initial migration
 │   poetry run alembic revision --autogenerate -m "initial merchant schema"
-│   
+│
 │   # 6. Review the generated migration in alembic/versions/
-│   
+│
 │   # 7. Apply the migration
 │   poetry run alembic upgrade head
-│   
+│
 │   # 8. Verify it worked
 │   poetry run python scripts/test_db_connection.py
 │   ```
-│   
+│
 └── script.py.mako
 migrations/
 src/
 ├── api/
 │   ├── v1/
 │   │   ├── __init__.py
-│   │   │   
+│   │   │
 │   │   │   ```py
 │   │   │   # services/merchant-service/src/api/v1/__init__.py
 │   │   │   from fastapi import APIRouter
-│   │   │   
+│   │   │
 │   │   │   from .merchants import merchants_router
-│   │   │   
+│   │   │
 │   │   │   v1_router = APIRouter(prefix="/v1")
-│   │   │   
+│   │   │
 │   │   │   v1_router.include_router(merchants_router, tags=["merchants"])
 │   │   │   ```
-│   │   │   
+│   │   │
 │   │   └── merchants.py
-│   │       
+│   │
 │   │       ```py
 │   │       # services/merchant-service/src/api/v1/merchants.py
 │   │       from fastapi import APIRouter, status
-│   │       
+│   │
 │   │       from shared.api import ApiResponse, success_response
 │   │       from shared.api.dependencies import ClientAuthDep, RequestContextDep
 │   │       from shared.utils.exceptions import ForbiddenError
-│   │       
+│   │
 │   │       from ...dependencies import MerchantServiceDep
 │   │       from ...schemas import MerchantOut, MerchantSyncIn, MerchantSyncOut
-│   │       
+│   │
 │   │       merchants_router = APIRouter(prefix="/merchants")
-│   │       
-│   │       
+│   │
+│   │
 │   │       @merchants_router.post(
 │   │           "/sync",
 │   │           response_model=ApiResponse[MerchantSyncOut],
@@ -461,17 +461,17 @@ src/
 │   │           auth: ClientAuthDep,
 │   │       ):
 │   │           """Sync merchant after OAuth completion."""
-│   │       
+│   │
 │   │           if auth.scope not in ["bff:api:access"]:
 │   │               raise ForbiddenError(message="Cannot sync merchant", required_permission="bff:api:access")
-│   │       
+│   │
 │   │           platform_name = ctx.platform
 │   │           domain = ctx.domain
-│   │       
+│   │
 │   │           result = await service.sync_merchant(data, platform_name, domain, ctx)
 │   │           return success_response(result, ctx.correlation_id)
-│   │       
-│   │       
+│   │
+│   │
 │   │       @merchants_router.get(
 │   │           "/self",
 │   │           response_model=ApiResponse[MerchantOut],
@@ -485,62 +485,62 @@ src/
 │   │           auth: ClientAuthDep,
 │   │       ):
 │   │           """Get current merchant using platform context from headers."""
-│   │       
+│   │
 │   │           if auth.scope not in ["bff:api:access"]:
 │   │               raise ForbiddenError(message="Cannot read merchant", required_permission="bff:api:access")
-│   │       
+│   │
 │   │           merchant = await service.get_merchant(
 │   │               domain=ctx.domain,
 │   │               platform_name=ctx.platform,
 │   │           )
-│   │       
+│   │
 │   │           return success_response(merchant, ctx.correlation_id)
 │   │       ```
-│   │       
+│   │
 │   └── __init__.py
-│       
+│
 │       ```py
 │       # services/merchant-service/src/api/__init__.py
 │       from fastapi import APIRouter
-│       
+│
 │       from .v1 import v1_router
-│       
+│
 │       api_router = APIRouter(prefix="/api")
-│       
+│
 │       # Include v1 routes
 │       api_router.include_router(v1_router)
 │       ```
-│       
+│
 ├── db/
 │   ├── models.py
-│   │   
+│   │
 │   │   ```py
 │   │   # src/db/models.py
 │   │   from __future__ import annotations
 │   │   from datetime import datetime, timezone
 │   │   from enum import StrEnum
 │   │   from uuid import uuid4
-│   │   
+│   │
 │   │   from sqlalchemy import String, DateTime, Enum as SAEnum, text
 │   │   from sqlalchemy.dialects.postgresql import UUID
 │   │   from sqlalchemy.orm import Mapped, mapped_column
 │   │   from .session import Base
-│   │   
+│   │
 │   │   class MerchantStatus(StrEnum):
 │   │       PENDING = "PENDING"
 │   │       ACTIVE = "ACTIVE"
 │   │       PAUSED = "PAUSED"
 │   │       SUSPENDED = "SUSPENDED"
 │   │       UNINSTALLED = "UNINSTALLED"
-│   │   
+│   │
 │   │   class Merchant(Base):
 │   │       __tablename__ = "merchants"
-│   │   
+│   │
 │   │       id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4()))
 │   │       platform_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
 │   │       platform_shop_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
 │   │       domain: Mapped[str] = mapped_column(String, index=True, nullable=False)
-│   │   
+│   │
 │   │       name: Mapped[str] = mapped_column(String, nullable=False)
 │   │       email: Mapped[str] = mapped_column(String, nullable=False)
 │   │       primary_domain: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -548,15 +548,15 @@ src/
 │   │       country: Mapped[str] = mapped_column(String, nullable=False)
 │   │       platform_version: Mapped[str | None] = mapped_column(String, nullable=True)
 │   │       scopes: Mapped[str] = mapped_column(String, nullable=False)
-│   │   
+│   │
 │   │       status: Mapped[MerchantStatus] = mapped_column(
 │   │           SAEnum(MerchantStatus, name="merchantstatus"), nullable=False, default=MerchantStatus.PENDING
 │   │       )
-│   │   
+│   │
 │   │       installed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 │   │       uninstalled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 │   │       last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-│   │   
+│   │
 │   │       created_at: Mapped[datetime] = mapped_column(
 │   │           DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
 │   │       )
@@ -567,16 +567,16 @@ src/
 │   │           server_onupdate=text("CURRENT_TIMESTAMP"),
 │   │       )
 │   │   ```
-│   │   
+│   │
 │   └── session.py
-│       
+│
 │       ```py
 │       # src/db/session.py
 │       from __future__ import annotations
 │       from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 │       from sqlalchemy.orm import DeclarativeBase
 │       from sqlalchemy import MetaData
-│       
+│
 │       convention = {
 │           "ix": "ix_%(column_0_label)s",
 │           "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -585,76 +585,76 @@ src/
 │           "pk": "pk_%(table_name)s",
 │       }
 │       metadata = MetaData(naming_convention=convention)
-│       
+│
 │       class Base(DeclarativeBase):
 │           metadata = metadata
-│       
+│
 │       def make_engine(database_url: str):
 │           return create_async_engine(database_url, pool_pre_ping=True)
-│       
+│
 │       def make_session_factory(engine):
 │           return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 │       ```
-│       
+│
 ├── events/
 │   ├── __init__.py
 │   ├── listeners.py
-│   │   
+│   │
 │   │   ```py
 │   │   from shared.messaging.jetstream_client import JetStreamClient
 │   │   from shared.messaging.listener import Listener
 │   │   from shared.utils.logger import ServiceLogger
-│   │   
+│   │
 │   │   from ..services.merchant_service import MerchantService
-│   │   
-│   │   
+│   │
+│   │
 │   │   class AppUninstalledListener(Listener):
 │   │       """Listener for app uninstalled webhook events"""
-│   │   
+│   │
 │   │       @property
 │   │       def subject(self) -> str:
 │   │           return "evt.webhook.app.uninstalled.v1"
-│   │   
+│   │
 │   │       @property
 │   │       def queue_group(self) -> str:
 │   │           return "merchant-uninstall"
-│   │   
+│   │
 │   │       @property
 │   │       def service_name(self) -> str:
 │   │           return "merchant-service"
-│   │   
+│   │
 │   │       def __init__(self, js_client: JetStreamClient, service: MerchantService, logger: ServiceLogger):
 │   │           super().__init__(js_client, logger)
 │   │           self.service = service
-│   │   
+│   │
 │   │       async def on_message(self, data: dict) -> None:
 │   │           """Handle app uninstalled event"""
 │   │           try:
 │   │               domain = data.get("domain")
 │   │               uninstall_reason = data.get("uninstall_reason")
-│   │   
+│   │
 │   │               if not domain:
 │   │                   self.logger.exception("Missing domain in uninstall event", extra={"data": data})
 │   │                   return
-│   │   
+│   │
 │   │               self.logger.info(
 │   │                   f"Processing app uninstall for {domain}",
 │   │                   extra={"domain": domain, "uninstall_reason": uninstall_reason},
 │   │               )
-│   │   
+│   │
 │   │               await self.service.handle_app_uninstalled(domain, uninstall_reason)
-│   │   
+│   │
 │   │           except Exception as e:
 │   │               self.logger.exception(f"Failed to process app uninstall: {e}", exc_info=True, extra={"data": data})
 │   │               raise  # NACK for retry
 │   │   ```
-│   │   
+│   │
 │   └── publishers.py
-│       
+│
 │       ```py
 │       # services/merchant-service/src/events/publishers.py
 │       from uuid import UUID
-│       
+│
 │       from shared.messaging.events.base import MerchantIdentifiers
 │       from shared.messaging.events.merchant import (
 │           MerchantCreatedPayload,
@@ -665,27 +665,27 @@ src/
 │       )
 │       from shared.messaging.publisher import Publisher
 │       from shared.messaging.subjects import Subjects
-│       
+│
 │       from ..schemas.merchant import MerchantOut
-│       
-│       
+│
+│
 │       class MerchantEventPublisher(Publisher):
 │           """Publisher for merchant domain events"""
-│       
+│
 │           @property
 │           def service_name(self) -> str:
 │               return "merchant-service"
-│       
+│
 │           async def merchant_created(self, merchant: MerchantOut, ctx) -> str:
 │               """Publish merchant created event"""
-│       
+│
 │               identifiers = MerchantIdentifiers(
 │                   merchant_id=UUID(merchant.id),
 │                   platform_name=merchant.platform_name,
 │                   platform_shop_id=merchant.platform_shop_id,
 │                   domain=merchant.domain,
 │               )
-│       
+│
 │               payload = MerchantCreatedPayload(
 │                   identifiers=identifiers,
 │                   name=merchant.name,
@@ -697,27 +697,27 @@ src/
 │                   scopes=merchant.scopes,
 │                   status=merchant.status,
 │               )
-│       
+│
 │               return await self.publish_event(
 │                   subject=Subjects.MERCHANT_CREATED,
 │                   payload=payload,
 │                   correlation_id=ctx.correlation_id,
 │               )
-│       
+│
 │           async def merchant_synced(
 │               self,
 │               merchant: MerchantOut,
 │               ctx,
 │           ) -> str:
 │               """Publish evt.merchant.synced event"""
-│       
+│
 │               identifiers = MerchantIdentifiers(
 │                   merchant_id=UUID(merchant.id),
 │                   platform_name=merchant.platform_name,
 │                   platform_shop_id=merchant.platform_shop_id,
 │                   domain=merchant.domain,
 │               )
-│       
+│
 │               payload = MerchantSyncedPayload(
 │                   identifiers=identifiers,
 │                   name=merchant.name,
@@ -730,27 +730,27 @@ src/
 │                   status=merchant.status,
 │                   last_synced_at=merchant.last_synced_at,
 │               )
-│       
+│
 │               return await self.publish_event(
 │                   subject=Subjects.MERCHANT_SYNCED,
 │                   payload=payload,
 │                   correlation_id=ctx.correlation_id,
 │               )
-│       
+│
 │           async def merchant_reinstalled(
 │               self,
 │               merchant: MerchantOut,
 │               ctx,
 │           ) -> str:
 │               """Publish evt.merchant.reinstalled event"""
-│       
+│
 │               identifiers = MerchantIdentifiers(
 │                   merchant_id=UUID(merchant.id),
 │                   platform_name=merchant.platform_name,
 │                   platform_shop_id=merchant.platform_shop_id,
 │                   domain=merchant.domain,
 │               )
-│       
+│
 │               payload = MerchantReinstalledPayload(
 │                   identifiers=identifiers,
 │                   name=merchant.name,
@@ -761,13 +761,13 @@ src/
 │                   platform_version=merchant.platform_version,
 │                   scopes=merchant.scopes,
 │               )
-│       
+│
 │               return await self.publish_event(
 │                   subject=Subjects.MERCHANT_REINSTALLED,
 │                   payload=payload,
 │                   correlation_id=ctx.correlation_id,
 │               )
-│       
+│
 │           async def merchant_uninstalled(
 │               self,
 │               identifiers: MerchantIdentifiers,
@@ -775,18 +775,18 @@ src/
 │               ctx,
 │           ) -> str:
 │               """Publish evt.merchant.uninstalled event"""
-│       
+│
 │               payload = MerchantUninstalledPayload(
 │                   identifiers=identifiers,
 │                   updated_at=updated_at,
 │               )
-│       
+│
 │               return await self.publish_event(
 │                   subject=Subjects.MERCHANT_UNINSTALLED,
 │                   payload=payload,
 │                   correlation_id=ctx.correlation_id,
 │               )
-│       
+│
 │           async def merchant_status_changed(
 │               self,
 │               identifiers: MerchantIdentifiers,
@@ -796,7 +796,7 @@ src/
 │               ctx,
 │           ) -> str:
 │               """Publish evt.merchant.status_changed event"""
-│       
+│
 │               payload = MerchantStatusChangedPayload(
 │                   identifiers=identifiers,
 │                   from_status=from_status,
@@ -809,47 +809,47 @@ src/
 │                   platform_version=merchant.platform_version,
 │                   scopes=merchant.scopes,
 │               )
-│       
+│
 │               return await self.publish_event(
 │                   subject=Subjects.MERCHANT_STATUS_CHANGED,
 │                   payload=payload,
 │                   correlation_id=ctx.correlation_id,
 │               )
 │       ```
-│       
+│
 ├── repositories/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/merchant-service/src/repositories/__init__.py
 │   │   """Repository package for merchant service"""
-│   │   
+│   │
 │   │   from .merchant_repository import MerchantRepository
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "MerchantRepository",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   └── merchant_repository.py
-│       
+│
 │       ```py
 │       # services/merchant-service/src/repositories/merchant_repository.py
 │       from __future__ import annotations
 │       from datetime import UTC, datetime
 │       from typing import Optional
 │       from uuid import UUID
-│       
+│
 │       from sqlalchemy import and_, select
 │       from sqlalchemy.ext.asyncio import AsyncSession
-│       
+│
 │       from src.db.models import Merchant, MerchantStatus
 │       from src.schemas.merchant import MerchantSyncIn
-│       
+│
 │       class MerchantRepository:
 │           def __init__(self, session: AsyncSession):
 │               self.session = session
-│       
+│
 │           async def find_by_platform_identity(
 │               self, *, platform_name: str, domain: str, platform_shop_id: Optional[str]
 │           ) -> Merchant | None:
@@ -863,7 +863,7 @@ src/
 │                   and_(Merchant.platform_name == platform_name, Merchant.domain == domain.lower())
 │               )
 │               return (await self.session.execute(stmt)).scalars().first()
-│       
+│
 │           async def create(self, *, platform_name: str, domain: str, data: MerchantSyncIn) -> Merchant:
 │               now = datetime.now(UTC)
 │               m = Merchant(
@@ -885,7 +885,7 @@ src/
 │               await self.session.flush()
 │               await self.session.refresh(m)
 │               return m
-│       
+│
 │           async def update_for_sync(self, *, merchant_id: UUID | str, data: MerchantSyncIn) -> Merchant:
 │               m = await self.session.get(Merchant, str(merchant_id))
 │               m.name = data.shop_name
@@ -899,7 +899,7 @@ src/
 │               await self.session.flush()
 │               await self.session.refresh(m)
 │               return m
-│       
+│
 │           async def mark_reinstalled(self, *, merchant_id: UUID | str) -> Merchant:
 │               m = await self.session.get(Merchant, str(merchant_id))
 │               m.status = MerchantStatus.PENDING
@@ -907,7 +907,7 @@ src/
 │               await self.session.flush()
 │               await self.session.refresh(m)
 │               return m
-│       
+│
 │           async def mark_uninstalled(self, *, merchant_id: UUID | str) -> Merchant:
 │               m = await self.session.get(Merchant, str(merchant_id))
 │               m.status = MerchantStatus.UNINSTALLED
@@ -915,7 +915,7 @@ src/
 │               await self.session.flush()
 │               await self.session.refresh(m)
 │               return m
-│       
+│
 │           async def update_status(self, *, merchant_id: UUID | str, new_status: MerchantStatus) -> Merchant:
 │               m = await self.session.get(Merchant, str(merchant_id))
 │               m.status = new_status
@@ -923,45 +923,45 @@ src/
 │               await self.session.refresh(m)
 │               return m
 │       ```
-│       
+│
 ├── schemas/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   from .merchant import (
 │   │       MerchantOut,
 │   │       MerchantSyncIn,
 │   │       MerchantSyncOut,
 │   │   )
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "MerchantOut",
 │   │       "MerchantSyncIn",
 │   │       "MerchantSyncOut",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   └── merchant.py
-│       
+│
 │       ```py
 │       # merchant/api/schemas.py
 │       from __future__ import annotations
-│       
+│
 │       from datetime import datetime
 │       from typing import Literal
 │       from uuid import UUID
-│       
+│
 │       from pydantic import BaseModel, ConfigDict, EmailStr, Field
-│       
+│
 │       MerchantStatus = Literal["PENDING", "ACTIVE", "PAUSED", "SUSPENDED", "UNINSTALLED"]
-│       
-│       
+│
+│
 │       class MerchantSyncIn(BaseModel):
 │           """
 │           Body for /sync (Shopify BFF -> merchant-service).
 │           NOTE: platform_name and domain come from headers via RequestContext.
 │           """
-│       
+│
 │           platform_shop_id: str = Field(..., description="Platform shop ID (e.g., Shopify GID)")
 │           shop_name: str = Field(..., description="Display name of the shop")
 │           email: EmailStr
@@ -970,24 +970,24 @@ src/
 │           country: str = Field(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2")
 │           platform_version: str | None = None
 │           scopes: str
-│       
-│       
+│
+│
 │       class MerchantSyncOut(BaseModel):
 │           """Minimal result for after-auth hook—client doesn't consume events."""
-│       
+│
 │           success: bool
-│       
-│       
+│
+│
 │       class MerchantOut(BaseModel):
 │           """Snapshot for dashboard (/self)."""
-│       
+│
 │           model_config = ConfigDict(from_attributes=True)
-│       
+│
 │           id: UUID
 │           platform_name: str
 │           platform_shop_id: str
 │           domain: str
-│       
+│
 │           name: str
 │           email: EmailStr
 │           primary_domain: str | None
@@ -995,38 +995,38 @@ src/
 │           country: str
 │           platform_version: str | None
 │           scopes: str
-│       
+│
 │           installed_at: datetime | None
 │           uninstalled_at: datetime | None
-│       
+│
 │           status: MerchantStatus
 │           last_synced_at: datetime | None  # <- aligns with DB
-│       
+│
 │           created_at: datetime
 │           updated_at: datetime
 │       ```
-│       
+│
 ├── services/
 │   ├── __init__.py
-│   │   
+│   │
 │   │   ```py
 │   │   # services/merchant-service/src/services/__init__.py
 │   │   """Service package for merchant service"""
-│   │   
+│   │
 │   │   from .merchant_service import MerchantService
-│   │   
+│   │
 │   │   __all__ = [
 │   │       "MerchantService",
 │   │   ]
 │   │   ```
-│   │   
+│   │
 │   └── merchant_service.py
-│       
+│
 │       ```py
 │       # src/services/merchant_service.py
 │       from __future__ import annotations
 │       from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-│       
+│
 │       from src.db.models import MerchantStatus
 │       from src.repositories.merchant_repository import MerchantRepository
 │       from src.schemas.merchant import MerchantOut, MerchantSyncIn, MerchantSyncOut
@@ -1034,7 +1034,7 @@ src/
 │       from shared.utils.logger import ServiceLogger
 │       from src.events.publishers import MerchantEventPublisher
 │       from src.exceptions import MerchantNotFoundError
-│       
+│
 │       STATUS_TRANSITIONS = {
 │           MerchantStatus.PENDING: [MerchantStatus.ACTIVE, MerchantStatus.UNINSTALLED],
 │           MerchantStatus.ACTIVE: [MerchantStatus.PAUSED, MerchantStatus.SUSPENDED, MerchantStatus.UNINSTALLED],
@@ -1042,33 +1042,33 @@ src/
 │           MerchantStatus.SUSPENDED: [MerchantStatus.ACTIVE, MerchantStatus.PAUSED, MerchantStatus.UNINSTALLED],
 │           MerchantStatus.UNINSTALLED: [MerchantStatus.PENDING],
 │       }
-│       
+│
 │       class MerchantService:
 │           def __init__(self, session_factory: async_sessionmaker[AsyncSession], publisher: MerchantEventPublisher, logger: ServiceLogger):
 │               self.session_factory = session_factory
 │               self.publisher = publisher
 │               self.logger = logger
-│       
+│
 │           async def sync_merchant(self, data: MerchantSyncIn, platform_name: str, domain: str, ctx) -> MerchantSyncOut:
 │               async with self.session_factory() as session:
 │                   repo = MerchantRepository(session)
 │                   m = await repo.find_by_platform_identity(platform_name=platform_name, domain=domain, platform_shop_id=data.platform_shop_id)
-│       
+│
 │                   if not m:
 │                       m = await repo.create(platform_name=platform_name, domain=domain, data=data)
 │                       await self.publisher.merchant_created(MerchantOut.model_validate(m), ctx)
 │                       return MerchantSyncOut(success=True)
-│       
+│
 │                   if m.status == MerchantStatus.UNINSTALLED:
 │                       m = await repo.mark_reinstalled(merchant_id=m.id)
 │                       m = await repo.update_for_sync(merchant_id=m.id, data=data)
 │                       await self.publisher.merchant_reinstalled(MerchantOut.model_validate(m), ctx)
 │                       return MerchantSyncOut(success=True)
-│       
+│
 │                   m = await repo.update_for_sync(merchant_id=m.id, data=data)
 │                   await self.publisher.merchant_synced(MerchantOut.model_validate(m), ctx)
 │                   return MerchantSyncOut(success=True)
-│       
+│
 │           async def get_merchant(self, *, domain: str, platform_name: str) -> MerchantOut:
 │               async with self.session_factory() as session:
 │                   repo = MerchantRepository(session)
@@ -1076,7 +1076,7 @@ src/
 │                   if not m:
 │                       raise MerchantNotFoundError(message=f"Merchant not found: {domain}")
 │                   return MerchantOut.model_validate(m)
-│       
+│
 │           async def handle_app_uninstalled(self, domain: str, uninstall_reason: str | None) -> None:
 │               async with self.session_factory() as session:
 │                   repo = MerchantRepository(session)
@@ -1089,44 +1089,44 @@ src/
 │                   )
 │                   await self.publisher.merchant_uninstalled(identifiers, m.updated_at, {"uninstall_reason": uninstall_reason})
 │       ```
-│       
+│
 ├── __init__.py
 ├── config.py
-│   
+│
 │   ```py
 │   import os
 │   from functools import lru_cache
-│   
+│
 │   from pydantic import BaseModel, ConfigDict, Field, model_validator
-│   
+│
 │   from shared.utils import load_root_env
 │   from shared.utils.exceptions import ConfigurationError
-│   
-│   
+│
+│
 │   class ServiceConfig(BaseModel):
 │       """Merchant service configuration"""
-│   
+│
 │       model_config = ConfigDict(
 │           extra="ignore",
 │           populate_by_name=True,
 │       )
-│   
+│
 │       service_name: str = "merchant-service"
 │       service_version: str = "1.0.0"
 │       service_description: str = "Merchant management service"
 │       debug: bool = True
-│   
+│
 │       environment: str = Field(..., alias="APP_ENV")
-│   
+│
 │       database_enabled: bool = True
 │       database_url: str = Field(..., alias="DATABASE_URL")
-│   
+│
 │       logging_level: str = "INFO"
 │       logging_format: str = "json"
 │       logging_file_path: str = ""
-│   
+│
 │       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
-│   
+│
 │       @property
 │       def nats_url(self) -> str:
 │           """NATS URL for event system"""
@@ -1134,14 +1134,14 @@ src/
 │           if in_container or self.environment in ["dev", "prod"]:
 │               return "nats://nats:4222"
 │           return "nats://localhost:4222"
-│   
+│
 │       @model_validator(mode="after")
 │       def _require_db_url_when_enabled(self):
 │           if self.database_enabled and not self.database_url:
 │               raise ValueError("database_enabled=true requires DATABASE_URL")
 │           return self
-│   
-│   
+│
+│
 │   @lru_cache
 │   def get_service_config() -> ServiceConfig:
 │       try:
@@ -1154,193 +1154,193 @@ src/
 │               expected_value="valid config",
 │           ) from e
 │   ```
-│   
+│
 ├── dependencies.py
-│   
+│
 │   ```py
 │   from typing import Annotated
-│   
+│
 │   from fastapi import Depends, HTTPException, Request, status
-│   
+│
 │   from .config import ServiceConfig
 │   from .lifecycle import ServiceLifecycle
 │   from .services import MerchantService
-│   
-│   
+│
+│
 │   # Core dependencies
 │   def get_lifecycle(request: Request) -> ServiceLifecycle:
 │       lc = getattr(request.app.state, "lifecycle", None)
 │       if lc is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Lifecycle not initialized")
 │       return lc
-│   
-│   
+│
+│
 │   def get_config(request: Request) -> ServiceConfig:
 │       cfg = getattr(request.app.state, "config", None)
 │       if cfg is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Config not initialized")
 │       return cfg
-│   
-│   
+│
+│
 │   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
 │   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
-│   
-│   
+│
+│
 │   def get_merchant_service(lifecycle: LifecycleDep) -> MerchantService:
 │       svc = lifecycle.merchant_service
 │       if svc is None:
 │           raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "MerchantService not initialized")
 │       return svc
-│   
-│   
+│
+│
 │   MerchantServiceDep = Annotated[MerchantService, Depends(get_merchant_service)]
 │   ```
-│   
+│
 ├── exceptions.py
-│   
+│
 │   ```py
 │   from shared.utils.exceptions import ConflictError, DomainError, NotFoundError, ValidationError
-│   
-│   
+│
+│
 │   class MerchantNotFoundError(NotFoundError):
 │       """Raised when merchant is not found"""
-│   
+│
 │       def __init__(self, message: str = "Merchant not found"):
 │           super().__init__(message=message, resource="merchant")
-│   
-│   
+│
+│
 │   class InvalidDomainError(ValidationError):
 │       """Raised when shop domain is invalid"""
-│   
+│
 │       def __init__(self, message: str = "Invalid shop domain format"):
 │           super().__init__(message=message, field="domain")
-│   
-│   
+│
+│
 │   class ConsentViolationError(ConflictError):
 │       """Raised when trying to violate consent rules"""
-│   
+│
 │       def __init__(self, message: str = "Cannot unset required consent"):
 │           super().__init__(message=message, conflicting_resource="consent")
-│   
-│   
+│
+│
 │   class InvalidStatusTransitionError(DomainError):
 │       """Raised when status transition is invalid"""
-│   
+│
 │       def __init__(self, message: str):
 │           super().__init__(message=message, code="INVALID_STATUS_TRANSITION")
 │   ```
-│   
+│
 ├── lifecycle.py
-│   
+│
 │   ```py
 │   # services/merchant-service/src/lifecycle.py
 │   import asyncio
 │   import time
-│   
+│
 │   from shared.messaging.jetstream_client import JetStreamClient
 │   from shared.utils.logger import ServiceLogger
-│   
+│
 │   from .config import ServiceConfig
 │   from .events.listeners import AppUninstalledListener
 │   from .events.publishers import MerchantEventPublisher
 │   from .repositories import MerchantRepository
 │   from .services.merchant_service import MerchantService
-│   
+│
 │   from src.db.session import make_engine, make_session_factory
 │   from src.events.publishers import MerchantEventPublisher
 │   from src.services.merchant_service import MerchantService
-│   
-│   
+│
+│
 │   class ServiceLifecycle:
 │       """Manages service lifecycle and dependencies"""
-│   
+│
 │       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
 │           self.config = config
 │           self.logger = logger
-│   
+│
 │           # External connections
 │           self.messaging_client: JetStreamClient | None = None
 │           self.engine = None
 │           self.session_factory = None
-│   
+│
 │           # Publisher / listeners
 │           self.event_publisher: MerchantEventPublisher | None = None
 │           self._listeners: list = []
-│   
+│
 │           # Services
 │           self.merchant_service: MerchantService | None = None
-│   
+│
 │           # Tasks
 │           self._tasks: list[asyncio.Task] = []
-│   
+│
 │       async def startup(self) -> None:
 │           try:
 │               self.logger.info("Starting merchant service components...")
 │               start_time = time.time()
 │               # 1. Messaging
 │               await self._init_messaging()
-│   
+│
 │               # 2. Database
 │               await self._init_database()
-│   
+│
 │               # 3. Services
 │               self._init_services()
-│   
+│
 │               # 5. Event listeners
 │               await self._init_listeners()
-│   
+│
 │               self.logger.info(f"Merchant service started successfully in {time.time() - start_time:.2f}s")
-│   
+│
 │           except Exception:
 │               self.logger.critical("Service failed to start", exc_info=True)
 │               await self.shutdown()
 │               raise
-│   
+│
 │       async def shutdown(self) -> None:
 │           """Graceful shutdown of all components"""
 │           self.logger.info("Shutting down %s", self.config.service_name)
-│   
+│
 │           for task in self._tasks:
 │               task.cancel()
 │           if self._tasks:
 │               await asyncio.gather(*self._tasks, return_exceptions=True)
-│   
+│
 │           for listener in self._listeners:
 │               try:
 │                   await listener.stop()
 │               except Exception:
 │                   self.logger.exception("Listener stop failed", exc_info=True)
-│   
+│
 │           if self.messaging_client:
 │               try:
 │                   await self.messaging_client.close()
 │               except Exception:
 │                   self.logger.exception("Messaging client close failed", exc_info=True)
-│   
+│
 │           if self.engine:
 │               try:
 │                   await self.engine.dispose()
 │               except Exception:
 │                   self.logger.exception("Engine dispose failed", exc_info=True)
-│   
+│
 │           self.logger.info("%s shutdown complete", self.config.service_name)
-│   
+│
 │       async def _init_messaging(self) -> None:
 │           """Initialize JetStream client and publisher"""
 │           self.messaging_client = JetStreamClient(self.logger)
 │           await self.messaging_client.connect([self.config.nats_url])
 │           await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.*", "cmd.*"])
-│   
+│
 │           # Initialize publisher
 │           self.event_publisher = MerchantEventPublisher(self.messaging_client, self.logger)
 │           self.logger.info("Messaging client and publisher initialized")
-│   
+│
 │       async def _init_database(self) -> None:
 │           """Initialize database manager if database is enabled."""
 │           if not self.config.database_enabled:
 │               self.logger.info("Database disabled; skipping initialization")
 │               return
-│   
+│
 │           try:
 │               self.engine = make_engine(self.config.database_url)
 │               self.session_factory = make_session_factory(self.engine)
@@ -1348,20 +1348,20 @@ src/
 │           except Exception as e:
 │               self.logger.exception("Database connect failed: %s", e, exc_info=True)
 │               raise
-│   
+│
 │       def _init_services(self) -> None:
 │           if not self.session_factory or not self.event_publisher:
 │               raise RuntimeError("Session factory or publisher not ready")
-│   
+│
 │           self.merchant_service = MerchantService(
 │               session_factory=self.session_factory, publisher=self.event_publisher, logger=self.logger
 │           )
 │           self.logger.info("Merchant service initialized")
-│   
+│
 │       async def _init_listeners(self) -> None:
 │           if not self.messaging_client or not self.merchant_service or not self.event_publisher:
 │               raise RuntimeError("Messaging or service layer not ready")
-│   
+│
 │           listeners = [
 │               AppUninstalledListener(self.messaging_client, self.merchant_service, self.logger),
 │           ]
@@ -1370,44 +1370,44 @@ src/
 │               self._listeners.append(listener)
 │               self.logger.info("Listener started: %s", listener.subject)
 │   ```
-│   
+│
 └── main.py
-    
+
     ```py
     from contextlib import asynccontextmanager
-    
+
     from fastapi import FastAPI
-    
+
     from shared.api import setup_middleware
     from shared.api.handlers import register_exception_handlers
     from shared.api.health import create_health_router
     from shared.utils.logger import create_logger
-    
+
     from .api import api_router
     from .config import get_service_config
     from .lifecycle import ServiceLifecycle
-    
+
     # Global singletons
     config = get_service_config()
     logger = create_logger(config.service_name)
     lifecycle = ServiceLifecycle(config, logger)
-    
-    
+
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Lifespan management for startup/shutdown"""
-    
+
         app.state.lifecycle = lifecycle
         app.state.config = config
         app.state.logger = logger
-    
+
         try:
             await lifecycle.startup()
             yield
         finally:
             await lifecycle.shutdown()
-    
-    
+
+
     def create_application() -> FastAPI:
         """Create and configure the FastAPI application."""
         app = FastAPI(
@@ -1416,20 +1416,20 @@ src/
             description=config.service_description,
             lifespan=lifespan,
         )
-    
+
         setup_middleware(app, service_name=config.service_name)
         register_exception_handlers(app)
-    
+
         # Include routers
         app.include_router(create_health_router(config.service_name, prefix="/api/v1/merchants"))
         app.include_router(api_router)
-    
+
         return app
-    
-    
+
+
     app = create_application()
     ```
-    
+
 tests/
 └── __init__.py
 .python-version
@@ -1455,7 +1455,7 @@ keys = generic
 [logger_root]
 level = WARN
 handlers = console
-qualname = 
+qualname =
 
 [logger_sqlalchemy]
 level = WARN
