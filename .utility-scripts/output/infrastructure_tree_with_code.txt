@@ -140,6 +140,7 @@ docker/
     # Bring application code
     COPY --chown=appuser:appuser --from=builder /build/shared /shared
     COPY --chown=appuser:appuser --from=builder /build/service /app
+    RUN chown -R appuser:appuser /app /shared
 
     USER appuser
     EXPOSE 8000
@@ -148,8 +149,7 @@ docker/
     HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
       CMD curl -f http://localhost:8000/health || exit 1
 
-    CMD sh -c "if [ -d alembic ]; then python -m alembic upgrade head; fi && \
-               uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    CMD ["sh", "-c", "sleep $((RANDOM % 10)) && if [ -d alembic ]; then python -m alembic upgrade head; fi && exec uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1"]
 
     # Dev target keeps Poetry if you need it
     FROM builder AS development
@@ -261,6 +261,24 @@ scripts/
 │
 │   echo -e "\n=== Environment Variables ==="
 │   docker exec $CONTAINER env | sort
+│   ```
+│
+├── migrate.sh
+│
+│   ```sh
+│   # Create infrastructure/scripts/migrate.sh
+│   #!/bin/bash
+│   set -euo pipefail
+│
+│   DB_URL=$1
+│   LOCKFILE="/tmp/migration.lock"
+│
+│   exec 200>$LOCKFILE
+│   flock -w 300 200 || exit 1
+│
+│   if [ -d alembic ]; then
+│       python -m alembic upgrade head
+│   fi
 │   ```
 │
 ├── postgres-init.sh
@@ -716,7 +734,6 @@ services:
       - glam
     logging:
       driver: none
-
 ```
 
 docker-compose.prod.yml
@@ -928,17 +945,18 @@ x-healthcheck-ai: &healthcheck-ai
   retries: 3
   start_period: 60s
 
+x-common-env: &common-env
+  NATS_URL: nats://nats:4222
+  JWT_SECRET: ${JWT_SECRET}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  APP_ENV: ${APP_ENV}
+
 x-api-service: &api-service
   build:
     context: ..
     dockerfile: infrastructure/docker/service.Dockerfile
   networks:
     - glam
-  environment:
-    - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${DB_NAME}
-    - NATS_URL=nats://nats:4222
-    - JWT_SECRET=${JWT_SECRET}
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
   depends_on:
     postgres:
       condition: service_healthy
@@ -956,8 +974,7 @@ x-ai-service: &ai-service
   networks:
     - glam
   environment:
-    - NATS_URL=nats://nats:4222
-    - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    <<: *common-env
   depends_on:
     nats:
       condition: service_healthy
@@ -979,7 +996,7 @@ services:
     networks:
       - glam
     healthcheck:
-      test: pg_isready -U ${POSTGRES_USER} && psql -U ${POSTGRES_USER} -tAc "SELECT 1 FROM pg_database WHERE datname='analytics_db'" | grep -q 1
+      test: pg_isready -U ${POSTGRES_USER}
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1008,10 +1025,8 @@ services:
       args:
         SERVICE: analytics-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/analytics_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/analytics_db
 
   billing-service:
     <<: *api-service
@@ -1021,10 +1036,8 @@ services:
       args:
         SERVICE: billing-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing_db
 
   catalog-service:
     <<: *api-service
@@ -1034,10 +1047,8 @@ services:
       args:
         SERVICE: catalog-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/catalog_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/catalog_db
 
   catalog-connector:
     <<: *api-service
@@ -1047,9 +1058,8 @@ services:
       args:
         SERVICE: catalog-connector
     environment:
-      - NATS_URL=nats://nats:4222
-      - TOKEN_SERVICE_URL=http://token-service:8000
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      TOKEN_SERVICE_URL: http://token-service:8000
     depends_on:
       nats:
         condition: service_healthy
@@ -1064,10 +1074,8 @@ services:
       args:
         SERVICE: credit-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/credit_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/credit_db
 
   merchant-service:
     <<: *api-service
@@ -1077,10 +1085,8 @@ services:
       args:
         SERVICE: merchant-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/merchant_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/merchant_db
 
   notification-service:
     <<: *api-service
@@ -1090,14 +1096,13 @@ services:
       args:
         SERVICE: notification-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/notification_db
-      - NATS_URL=nats://nats:4222
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - EMAIL_FROM=${EMAIL_FROM}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/notification_db
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
 
   recommendation-service:
     <<: *api-service
@@ -1107,10 +1112,9 @@ services:
       args:
         SERVICE: recommendation-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recommendation_db
-      - NATS_URL=nats://nats:4222
-      - SEASON_COMPATIBILITY_SERVICE_URL=http://season-compatibility-service:8000
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recommendation_db
+      SEASON_COMPATIBILITY_SERVICE_URL: http://season-compatibility-service:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -1127,10 +1131,8 @@ services:
       args:
         SERVICE: season-compatibility-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/season_compatibility_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/season_compatibility_db
 
   selfie-service:
     <<: *api-service
@@ -1140,11 +1142,9 @@ services:
       args:
         SERVICE: selfie-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/selfie_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - SELFIE_AI_ANALYZER_URL=http://selfie-ai-analyzer:8000
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/selfie_db
+      SELFIE_AI_ANALYZER_URL: http://selfie-ai-analyzer:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -1161,11 +1161,9 @@ services:
       args:
         SERVICE: token-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/token_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/token_db
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
 
   webhook-service:
     <<: *api-service
@@ -1175,11 +1173,9 @@ services:
       args:
         SERVICE: webhook-service
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/webhook_db
-      - NATS_URL=nats://nats:4222
-      - JWT_SECRET=${JWT_SECRET}
-      - SHOPIFY_WEBHOOK_SECRET=${SHOPIFY_WEBHOOK_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/webhook_db
+      SHOPIFY_WEBHOOK_SECRET: ${SHOPIFY_WEBHOOK_SECRET:-}
 
   selfie-ai-analyzer:
     <<: *ai-service
@@ -1189,11 +1185,10 @@ services:
       args:
         SERVICE: selfie-ai-analyzer
     environment:
-      - NATS_URL=nats://nats:4222
-      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
-      - OMP_NUM_THREADS=2
-      - OPENCV_VIDEOIO_PRIORITY_BACKEND=0
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      OMP_NUM_THREADS: "2"
+      OPENCV_VIDEOIO_PRIORITY_BACKEND: "0"
 
   catalog-ai-analyzer:
     <<: *ai-service
@@ -1203,10 +1198,9 @@ services:
       args:
         SERVICE: catalog-ai-analyzer
     environment:
-      - NATS_URL=nats://nats:4222
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OMP_NUM_THREADS=1
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      <<: *common-env
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OMP_NUM_THREADS: "1"
 
 networks:
   glam:

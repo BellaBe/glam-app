@@ -1,0 +1,2941 @@
+================================================================================
+Directory Structure: /home/bellabe/glam-app/services/notification-service
+================================================================================
+
+notification-service/
+prisma/
+├── migrations/
+│   ├── 20250904144547_desktop_pgt_1_cqb/
+│   │   └── migration.sql
+│   │
+│   │       ```sql
+│   │       -- CreateEnum
+│   │       CREATE TYPE "NotificationStatus" AS ENUM ('pending', 'sent', 'failed');
+│   │
+│   │       -- CreateEnum
+│   │       CREATE TYPE "AttemptStatus" AS ENUM ('success', 'failed', 'timeout');
+│   │
+│   │       -- CreateTable
+│   │       CREATE TABLE "notifications" (
+│   │           "id" UUID NOT NULL,
+│   │           "merchant_id" UUID NOT NULL,
+│   │           "platform_name" VARCHAR(255) NOT NULL,
+│   │           "platform_shop_id" VARCHAR(255) NOT NULL,
+│   │           "domain" VARCHAR(255) NOT NULL,
+│   │           "recipient_email" VARCHAR(255) NOT NULL,
+│   │           "template_type" VARCHAR(100) NOT NULL,
+│   │           "template_variables" JSON NOT NULL,
+│   │           "status" "NotificationStatus" NOT NULL DEFAULT 'pending',
+│   │           "provider_message_id" VARCHAR(255),
+│   │           "idempotency_key" VARCHAR(255) NOT NULL,
+│   │           "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+│   │           "updated_at" TIMESTAMPTZ(3) NOT NULL,
+│   │
+│   │           CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+│   │       );
+│   │
+│   │       -- CreateTable
+│   │       CREATE TABLE "notification_attempts" (
+│   │           "id" UUID NOT NULL,
+│   │           "notification_id" UUID NOT NULL,
+│   │           "attempt_number" INTEGER NOT NULL,
+│   │           "provider" VARCHAR(50) NOT NULL,
+│   │           "status" "AttemptStatus" NOT NULL,
+│   │           "error_message" TEXT,
+│   │           "provider_response" JSON,
+│   │           "attempted_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+│   │
+│   │           CONSTRAINT "notification_attempts_pkey" PRIMARY KEY ("id")
+│   │       );
+│   │
+│   │       -- CreateIndex
+│   │       CREATE UNIQUE INDEX "notifications_provider_message_id_key" ON "notifications"("provider_message_id");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE UNIQUE INDEX "notifications_idempotency_key_key" ON "notifications"("idempotency_key");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_merchant_id_created_at_idx" ON "notifications"("merchant_id", "created_at");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_platform_name_platform_shop_id_idx" ON "notifications"("platform_name", "platform_shop_id");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_status_created_at_idx" ON "notifications"("status", "created_at");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_template_type_idx" ON "notifications"("template_type");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_idempotency_key_idx" ON "notifications"("idempotency_key");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notification_attempts_notification_id_attempt_number_idx" ON "notification_attempts"("notification_id", "attempt_number");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE UNIQUE INDEX "notification_attempts_notification_id_attempt_number_key" ON "notification_attempts"("notification_id", "attempt_number");
+│   │
+│   │       -- AddForeignKey
+│   │       ALTER TABLE "notification_attempts" ADD CONSTRAINT "notification_attempts_notification_id_fkey" FOREIGN KEY ("notification_id") REFERENCES "notifications"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+│   │       ```
+│   │
+│   ├── 20250905041725_desktop_pgt_1_cqb/
+│   │   └── migration.sql
+│   │
+│   │       ```sql
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_provider_message_id_key";
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_provider_message_id_idx" ON "notifications"("provider_message_id");
+│   │       ```
+│   │
+│   ├── 20250906044104_desktop_pgt_1_cqb/
+│   │   └── migration.sql
+│   │
+│   │       ```sql
+│   │       /*
+│   │         Warnings:
+│   │
+│   │         - You are about to drop the column `created_at` on the `notifications` table. All the data in the column will be lost.
+│   │         - You are about to drop the column `updated_at` on the `notifications` table. All the data in the column will be lost.
+│   │         - You are about to drop the `notification_attempts` table. If the table is not empty, all the data it contains will be lost.
+│   │
+│   │       */
+│   │       -- DropForeignKey
+│   │       ALTER TABLE "notification_attempts" DROP CONSTRAINT "notification_attempts_notification_id_fkey";
+│   │
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_idempotency_key_idx";
+│   │
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_merchant_id_created_at_idx";
+│   │
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_platform_name_platform_shop_id_idx";
+│   │
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_status_created_at_idx";
+│   │
+│   │       -- DropIndex
+│   │       DROP INDEX "notifications_template_type_idx";
+│   │
+│   │       -- AlterTable
+│   │       ALTER TABLE "notifications" DROP COLUMN "created_at",
+│   │       DROP COLUMN "updated_at",
+│   │       ADD COLUMN     "attempt_count" INTEGER NOT NULL DEFAULT 0,
+│   │       ADD COLUMN     "delivered_at" TIMESTAMPTZ(3),
+│   │       ADD COLUMN     "first_attempt_at" TIMESTAMPTZ(3),
+│   │       ADD COLUMN     "last_attempt_at" TIMESTAMPTZ(3),
+│   │       ADD COLUMN     "provider_message" JSON;
+│   │
+│   │       -- DropTable
+│   │       DROP TABLE "notification_attempts";
+│   │
+│   │       -- DropEnum
+│   │       DROP TYPE "AttemptStatus";
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_merchant_id_first_attempt_at_idx" ON "notifications"("merchant_id", "first_attempt_at");
+│   │
+│   │       -- CreateIndex
+│   │       CREATE INDEX "notifications_status_last_attempt_at_idx" ON "notifications"("status", "last_attempt_at");
+│   │       ```
+│   │
+│   └── migration_lock.toml
+│
+│       ```toml
+│       # Please do not edit this file manually
+│       # It should be added in your version-control system (i.e. Git)
+│       provider = "postgresql"
+│       ```
+│
+└── schema.prisma
+src/
+├── api/
+│   ├── v1/
+│   │   ├── __init__.py
+│   │   │
+│   │   │   ```py
+│   │   │   # services/notification-service/src/api/v1/__init__.py
+│   │   │   from fastapi import APIRouter
+│   │   │
+│   │   │   from .notifications import notifications_router
+│   │   │
+│   │   │   v1_router = APIRouter(prefix="/v1")
+│   │   │
+│   │   │   v1_router.include_router(notifications_router, tags=["notifications"])
+│   │   │   ```
+│   │   │
+│   │   └── notifications.py
+│   │
+│   │       ```py
+│   │       # services/notification-service/src/api/v1/notifications.py
+│   │       from uuid import UUID
+│   │
+│   │       from fastapi import APIRouter, Query
+│   │
+│   │       from shared.api import ApiResponse, paginated_response_ctx, success_response
+│   │       from shared.api.dependencies import ClientAuthDep, PaginationDep, RequestContextDep
+│   │       from shared.utils.exceptions import ForbiddenError
+│   │
+│   │       from ...dependencies import NotificationServiceDep
+│   │       from ...schemas.notification import NotificationOut, NotificationStats
+│   │
+│   │       notifications_router = APIRouter(prefix="/notifications")
+│   │
+│   │
+│   │       @notifications_router.get("", response_model=ApiResponse[list[NotificationOut]], summary="List sent notifications")
+│   │       async def list_notifications(
+│   │           svc: NotificationServiceDep,
+│   │           ctx: RequestContextDep,
+│   │           auth: ClientAuthDep,
+│   │           pagination: PaginationDep,
+│   │           status: str | None = Query(None, description="Filter by status"),
+│   │           merchant_id: UUID | None = Query(None, description="Filter by merchant"),
+│   │       ):
+│   │           if auth.scope not in ["notifications:read", "bff:api:access"]:
+│   │               raise ForbiddenError(message="Cannot read notifications", required_permission="notifications:read")
+│   │
+│   │           filters = {}
+│   │           if status:
+│   │               filters["status"] = status
+│   │           if merchant_id:
+│   │               filters["merchant_id"] = str(merchant_id)
+│   │
+│   │           total, notifications = await svc.list_notifications(
+│   │               skip=pagination.offset, limit=pagination.limit, filters=filters if filters else None
+│   │           )
+│   │
+│   │           return paginated_response_ctx(
+│   │               data=notifications,
+│   │               page=pagination.page,
+│   │               limit=pagination.limit,
+│   │               total=total,
+│   │               ctx=ctx,
+│   │               # include filters so links preserve them
+│   │               status=status,
+│   │               merchant_id=str(merchant_id) if merchant_id else None,
+│   │           )
+│   │
+│   │
+│   │       @notifications_router.get(
+│   │           "/stats", response_model=ApiResponse[NotificationStats], summary="Get notification statistics"
+│   │       )
+│   │       async def get_stats(svc: NotificationServiceDep, ctx: RequestContextDep, auth: ClientAuthDep):
+│   │           """Get daily notification statistics"""
+│   │           # Permission check
+│   │           if auth.scope not in ["notifications:read", "bff:api:access"]:
+│   │               raise ForbiddenError(message="Cannot read notification stats", required_permission="notifications:read")
+│   │
+│   │           stats = await svc.get_stats()
+│   │
+│   │           return success_response(data=stats, correlation_id=ctx.correlation_id)
+│   │
+│   │
+│   │       @notifications_router.get(
+│   │           "/{notification_id}", response_model=ApiResponse[NotificationOut], summary="Get notification details"
+│   │       )
+│   │       async def get_notification(
+│   │           notification_id: UUID, svc: NotificationServiceDep, ctx: RequestContextDep, auth: ClientAuthDep
+│   │       ):
+│   │           """Get notification by ID"""
+│   │           # Permission check
+│   │           if auth.scope not in ["notifications:read", "bff:api:access"]:
+│   │               raise ForbiddenError(message="Cannot read notifications", required_permission="notifications:read")
+│   │
+│   │           # Get notification - service raises NotFoundError if missing
+│   │           notification = await svc.get_notification(notification_id)
+│   │
+│   │           return success_response(data=notification, correlation_id=ctx.correlation_id)
+│   │       ```
+│   │
+│   └── __init__.py
+│
+│       ```py
+│       # services/notification-service/src/api/__init__.py
+│       from fastapi import APIRouter
+│
+│       from .v1 import v1_router
+│
+│       api_router = APIRouter(prefix="/api")
+│
+│       # Include v1 routes
+│       api_router.include_router(v1_router)
+│       ```
+│
+├── events/
+│   ├── listeners/
+│   │   ├── __init__.py
+│   │   │
+│   │   │   ```py
+│   │   │   from .billing_events import BillingEventsListener
+│   │   │   from .catalog_events import CatalogEventsListener
+│   │   │   from .credit_events import CreditEventsListener
+│   │   │   from .merchant_events import MerchantEventsListener
+│   │   │
+│   │   │   __all__ = ["BillingEventsListener", "CatalogEventsListener", "CreditEventsListener", "MerchantEventsListener"]
+│   │   │   ```
+│   │   │
+│   │   ├── billing_events.py
+│   │   │
+│   │   │   ```py
+│   │   │   # services/notification-service/src/events/listeners/billing_events.py
+│   │   │   from typing import Any
+│   │   │
+│   │   │   from shared.messaging import Listener, Subjects
+│   │   │   from shared.utils.exceptions import ValidationError
+│   │   │   from shared.utils.logger import ServiceLogger
+│   │   │   from src.events.publishers import NotificationEventPublisher
+│   │   │   from src.services.notification_service import NotificationService
+│   │   │
+│   │   │
+│   │   │   class BillingEventsListener(Listener):
+│   │   │       """Handle all billing-related events"""
+│   │   │
+│   │   │       @property
+│   │   │       def subject(self) -> str:
+│   │   │           return "evt.billing.>"
+│   │   │
+│   │   │       @property
+│   │   │       def queue_group(self) -> str:
+│   │   │           return "notification-billing-events"
+│   │   │
+│   │   │       @property
+│   │   │       def service_name(self) -> str:
+│   │   │           return "notification-service"
+│   │   │
+│   │   │       def __init__(
+│   │   │           self,
+│   │   │           js_client,
+│   │   │           notification_service: NotificationService,
+│   │   │           event_publisher: NotificationEventPublisher,
+│   │   │           logger: ServiceLogger,
+│   │   │       ):
+│   │   │           super().__init__(js_client, logger)
+│   │   │           self.notification_service = notification_service
+│   │   │           self.event_publisher = event_publisher
+│   │   │
+│   │   │       async def on_message(self, data: dict[str, Any]) -> None:
+│   │   │           """Process billing events"""
+│   │   │           event_type = data.get("event_type", "")
+│   │   │
+│   │   │           try:
+│   │   │               event_data = self._flatten_platform_data(data)
+│   │   │
+│   │   │               if event_type == Subjects.BILLING_TRIAL_ACTIVATED:
+│   │   │                   await self._handle_trial_activated(event_data, data.get("correlation_id"))
+│   │   │               elif event_type == Subjects.BILLING_PURCHASE_COMPLETED:
+│   │   │                   await self._handle_purchase_completed(event_data, data.get("correlation_id"))
+│   │   │               else:
+│   │   │                   self.logger.debug(f"Unhandled billing event: {event_type}")
+│   │   │                   return
+│   │   │
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(f"Invalid {event_type} event: {e}")
+│   │   │           except Exception as e:
+│   │   │               self.logger.exception(f"Failed to process {event_type}: {e}")
+│   │   │               raise
+│   │   │
+│   │   │       async def _handle_trial_activated(self, event_data: dict, correlation_id: str):
+│   │   │           """Handle trial activation - 500 free credits granted"""
+│   │   │           event_data["_template_override"] = "trial_activated"
+│   │   │           event_data["_priority"] = "high"
+│   │   │           event_data["credits_granted"] = event_data.get("credits", 500)
+│   │   │
+│   │   │           notification = await self.notification_service.process_event(
+│   │   │               event_type="evt.billing.trial.activated.v1",
+│   │   │               event_data=event_data,
+│   │   │               correlation_id=correlation_id or "unknown",
+│   │   │           )
+│   │   │
+│   │   │           await self._publish_result(notification)
+│   │   │
+│   │   │       async def _handle_purchase_completed(self, event_data: dict, correlation_id: str):
+│   │   │           """Handle purchase completion - send receipt"""
+│   │   │           event_data["_template_override"] = "purchase_confirmation"
+│   │   │           event_data["_priority"] = "high"
+│   │   │
+│   │   │           notification = await self.notification_service.process_event(
+│   │   │               event_type="evt.billing.purchase.completed.v1",
+│   │   │               event_data=event_data,
+│   │   │               correlation_id=correlation_id or "unknown",
+│   │   │           )
+│   │   │
+│   │   │           await self._publish_result(notification)
+│   │   │
+│   │   │       def _flatten_platform_data(self, data: dict[str, Any]) -> dict[str, Any]:
+│   │   │           event_data = data.get("data", {}).copy()
+│   │   │           if "platform" in event_data:
+│   │   │               platform = event_data.pop("platform")
+│   │   │               event_data["merchant_id"] = platform.get("merchant_id")
+│   │   │               event_data["platform_name"] = platform.get("platform_name")
+│   │   │               event_data["platform_shop_id"] = platform.get("platform_shop_id")
+│   │   │               event_data["shop_domain"] = platform.get("domain")
+│   │   │           return event_data
+│   │   │
+│   │   │       async def _publish_result(self, notification):
+│   │   │           if notification:
+│   │   │               if notification.status == "sent":
+│   │   │                   await self.event_publisher.email_sent(notification)
+│   │   │               else:
+│   │   │                   await self.event_publisher.email_failed(
+│   │   │                       notification, error=notification.error_message or "Unknown error"
+│   │   │                   )
+│   │   │   ```
+│   │   │
+│   │   ├── catalog_events.py
+│   │   │
+│   │   │   ```py
+│   │   │   # services/notification-service/src/events/listeners/catalog_events.py
+│   │   │   from typing import Any
+│   │   │
+│   │   │   from shared.messaging import Listener, Subjects
+│   │   │   from shared.utils.exceptions import ValidationError
+│   │   │   from shared.utils.logger import ServiceLogger
+│   │   │   from src.events.publishers import NotificationEventPublisher
+│   │   │   from src.services.notification_service import NotificationService
+│   │   │
+│   │   │
+│   │   │   class CatalogEventsListener(Listener):
+│   │   │       """Handle all catalog-related events"""
+│   │   │
+│   │   │       @property
+│   │   │       def subject(self) -> str:
+│   │   │           return "evt.catalog.>"
+│   │   │
+│   │   │       @property
+│   │   │       def queue_group(self) -> str:
+│   │   │           return "notification-catalog-events"
+│   │   │
+│   │   │       @property
+│   │   │       def service_name(self) -> str:
+│   │   │           return "notification-service"
+│   │   │
+│   │   │       def __init__(
+│   │   │           self,
+│   │   │           js_client,
+│   │   │           notification_service: NotificationService,
+│   │   │           event_publisher: NotificationEventPublisher,
+│   │   │           logger: ServiceLogger,
+│   │   │       ):
+│   │   │           super().__init__(js_client, logger)
+│   │   │           self.notification_service = notification_service
+│   │   │           self.event_publisher = event_publisher
+│   │   │
+│   │   │       async def on_message(self, data: dict[str, Any]) -> None:
+│   │   │           """Process catalog events"""
+│   │   │           event_type = data.get("event_type", "")
+│   │   │
+│   │   │           try:
+│   │   │               event_data = self._flatten_platform_data(data)
+│   │   │
+│   │   │               if event_type == Subjects.CATAlOG_SYNC_STARTED:
+│   │   │                   if event_data.get("first_sync", False):  # Only notify on first sync
+│   │   │                       await self._handle_sync_started(event_data, data.get("correlation_id"))
+│   │   │               elif event_type == Subjects.CATALOG_SYNC_COMPLETED:
+│   │   │                   await self._handle_sync_completed(event_data, data.get("correlation_id"))
+│   │   │               elif event_type == Subjects.CATALOG_SYNC_FAILED:
+│   │   │                   await self._handle_sync_failed(event_data, data.get("correlation_id"))
+│   │   │               else:
+│   │   │                   self.logger.debug(f"Unhandled catalog event: {event_type}")
+│   │   │                   return
+│   │   │
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(f"Invalid {event_type} event: {e}")
+│   │   │           except Exception as e:
+│   │   │               self.logger.exception(f"Failed to process {event_type}: {e}")
+│   │   │               raise
+│   │   │
+│   │   │       async def _handle_sync_started(self, event_data: dict, correlation_id: str):
+│   │   │           """Handle sync started - only for first sync"""
+│   │   │           event_data["_template_override"] = "sync_started"
+│   │   │           event_data["_priority"] = "low"
+│   │   │
+│   │   │           notification = await self.notification_service.process_event(
+│   │   │               event_type="evt.catalog.sync.started.v1", event_data=event_data, correlation_id=correlation_id or "unknown"
+│   │   │           )
+│   │   │
+│   │   │           await self._publish_result(notification)
+│   │   │
+│   │   │       async def _handle_sync_completed(self, event_data: dict, correlation_id: str):
+│   │   │           """Handle sync completed"""
+│   │   │           # Choose template based on whether it's first sync
+│   │   │           if event_data.get("first_sync", False):
+│   │   │               template = "registration_complete"
+│   │   │           elif event_data.get("has_changes", False):
+│   │   │               template = "registration_update"
+│   │   │           else:
+│   │   │               return  # No notification if no changes
+│   │   │
+│   │   │           event_data["_template_override"] = template
+│   │   │           event_data["_priority"] = "high"
+│   │   │
+│   │   │           notification = await self.notification_service.process_event(
+│   │   │               event_type="evt.catalog.sync.completed.v1",
+│   │   │               event_data=event_data,
+│   │   │               correlation_id=correlation_id or "unknown",
+│   │   │           )
+│   │   │
+│   │   │           await self._publish_result(notification)
+│   │   │
+│   │   │       async def _handle_sync_failed(self, event_data: dict, correlation_id: str):
+│   │   │           """Handle sync failure"""
+│   │   │           event_data["_template_override"] = "sync_failed"
+│   │   │           event_data["_priority"] = "high"
+│   │   │
+│   │   │           notification = await self.notification_service.process_event(
+│   │   │               event_type="evt.catalog.sync.failed.v1", event_data=event_data, correlation_id=correlation_id or "unknown"
+│   │   │           )
+│   │   │
+│   │   │           await self._publish_result(notification)
+│   │   │
+│   │   │       def _flatten_platform_data(self, data: dict[str, Any]) -> dict[str, Any]:
+│   │   │           event_data = data.get("data", {}).copy()
+│   │   │           if "platform" in event_data:
+│   │   │               platform = event_data.pop("platform")
+│   │   │               event_data["merchant_id"] = platform.get("merchant_id")
+│   │   │               event_data["platform_name"] = platform.get("platform_name")
+│   │   │               event_data["platform_shop_id"] = platform.get("platform_shop_id")
+│   │   │               event_data["shop_domain"] = platform.get("domain")
+│   │   │           return event_data
+│   │   │
+│   │   │       async def _publish_result(self, notification):
+│   │   │           if notification:
+│   │   │               if notification.status == "sent":
+│   │   │                   await self.event_publisher.email_sent(notification)
+│   │   │               else:
+│   │   │                   await self.event_publisher.email_failed(
+│   │   │                       notification, error=notification.error_message or "Unknown error"
+│   │   │                   )
+│   │   │   ```
+│   │   │
+│   │   ├── credit_events.py
+│   │   │
+│   │   │   ```py
+│   │   │   # services/notification-service/src/events/listeners/credit_events.py
+│   │   │   from typing import Any
+│   │   │
+│   │   │   from shared.messaging import Listener, Subjects
+│   │   │   from shared.messaging.events.base import EventEnvelope
+│   │   │   from shared.utils.exceptions import ValidationError
+│   │   │   from shared.utils.logger import ServiceLogger
+│   │   │   from src.events.publishers import NotificationEventPublisher
+│   │   │   from src.services.notification_service import NotificationService
+│   │   │
+│   │   │   from shared.messaging.events.credit import (
+│   │   │       CreditBalanceGrantedPayload,
+│   │   │       CreditBalanceExhaustedPayload,
+│   │   │       CreditBalanceLowPayload,
+│   │   │       CreditTrialGrantedPayload,
+│   │   │       CreditTrialLowPayload,
+│   │   │       CreditTrialExhaustedPayload,
+│   │   │   )
+│   │   │
+│   │   │
+│   │   │   class CreditEventsListener(Listener):
+│   │   │       """Handle all credit-related events"""
+│   │   │
+│   │   │       @property
+│   │   │       def subject(self) -> str:
+│   │   │           return "evt.credit.>"
+│   │   │
+│   │   │       @property
+│   │   │       def queue_group(self) -> str:
+│   │   │           return "notification-credit"
+│   │   │
+│   │   │       @property
+│   │   │       def service_name(self) -> str:
+│   │   │           return "notification-service"
+│   │   │
+│   │   │       def __init__(
+│   │   │           self,
+│   │   │           js_client,
+│   │   │           notification_service: NotificationService,
+│   │   │           event_publisher: NotificationEventPublisher,
+│   │   │           logger: ServiceLogger,
+│   │   │       ):
+│   │   │           super().__init__(js_client, logger)
+│   │   │           self.notification_service = notification_service
+│   │   │           self.event_publisher = event_publisher
+│   │   │
+│   │   │       async def on_message(self, envelope: EventEnvelope) -> None:
+│   │   │           """Process credit events"""
+│   │   │
+│   │   │           event_type = envelope.event_type
+│   │   │
+│   │   │           try:
+│   │   │
+│   │   │               if event_type == Subjects.CREDIT_TRIAL_GRANTED:
+│   │   │                   await self._handle_trial_granted(envelope)
+│   │   │               elif event_type == Subjects.CREDIT_TRIAL_LOW:
+│   │   │                   await self.handle_trial_low(envelope)
+│   │   │               elif event_type == Subjects.CREDIT_TRIAL_EXHAUSTED:
+│   │   │                   await self._handle_trial_exhausted(envelope)
+│   │   │               elif event_type == Subjects.CREDIT_BALANCE_GRANTED:
+│   │   │                   await self.handle_credit_granted(envelope)
+│   │   │               elif event_type == Subjects.CREDIT_BALANCE_LOW:
+│   │   │                   await self._handle_credit_low(envelope)
+│   │   │               elif event_type == Subjects.CREDIT_BALANCE_EXHAUSTED:
+│   │   │                   await self._handle_credit_exhausted(envelope)
+│   │   │               else:
+│   │   │                   self.logger.debug(f"Unhandled credit event: {event_type}")
+│   │   │                   return
+│   │   │
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(f"Invalid {event_type} event: {e}")
+│   │   │           except Exception as e:
+│   │   │               self.logger.exception(f"Failed to process {event_type}: {e}")
+│   │   │               raise
+│   │   │
+│   │   │
+│   │   │       async def _handle_trial_granted(self, envelope: EventEnvelope):
+│   │   │           """Trial credits granted - welcome email"""
+│   │   │           try:
+│   │   │               payload = CreditTrialGrantedPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.trial_granted payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return
+│   │   │           try:
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │           self.logger.info(
+│   │   │               "Trial granted email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │       async def handle_trial_low(self, envelope: EventEnvelope):
+│   │   │           """Trial credits running low - prompt upgrade"""
+│   │   │           try:
+│   │   │               payload = CreditTrialLowPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.trial_low payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return
+│   │   │           try:
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │           self.logger.info(
+│   │   │               "Trial low email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │       async def _handle_trial_exhausted(self, envelope: EventEnvelope):
+│   │   │           """ Trial credits exhausted - prompt upgrade """
+│   │   │
+│   │   │           try:
+│   │   │               payload = CreditTrialExhaustedPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.trial_exhausted payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return  # Don't retry bad data
+│   │   │
+│   │   │           try:
+│   │   │
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │
+│   │   │           self.logger.info(
+│   │   │               "Trial exhausted email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │       async def handle_credit_granted(self, envelope: EventEnvelope):
+│   │   │           """Credits granted - confirmation email"""
+│   │   │           try:
+│   │   │               payload = CreditBalanceGrantedPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.granted payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return
+│   │   │           try:
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │           self.logger.info(
+│   │   │               "Credit granted email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │       async def _handle_credit_low(self, envelope: EventEnvelope):
+│   │   │           """Credits running low - prompt top-up"""
+│   │   │           try:
+│   │   │               payload = CreditBalanceLowPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.balance_low payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return
+│   │   │           try:
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │           self.logger.info(
+│   │   │               "Low credit balance email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │       async def _handle_credit_exhausted(self, envelope: EventEnvelope):
+│   │   │           """Credits fully exhausted - service interruption warning"""
+│   │   │           try:
+│   │   │               payload = CreditBalanceExhaustedPayload.model_validate(envelope.data)
+│   │   │           except ValidationError as e:
+│   │   │               self.logger.exception(
+│   │   │                   "Invalid credit.balance_exhausted payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │   │               )
+│   │   │               return
+│   │   │           try:
+│   │   │               notification = await self.notification_service.process_event(
+│   │   │                   event_type=envelope.event_type,
+│   │   │                   data=payload,
+│   │   │                   event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │   │                   correlation_id=envelope.correlation_id,
+│   │   │               )
+│   │   │           except AttributeError:
+│   │   │               raise
+│   │   │           except Exception:
+│   │   │               raise
+│   │   │           self.logger.info(
+│   │   │               "Credit exhausted email sent",
+│   │   │               extra={
+│   │   │                   "event_id": envelope.event_id,
+│   │   │                   "merchant_id": str(payload.identifiers.merchant_id),
+│   │   │                   "correlation_id": envelope.correlation_id,
+│   │   │               },
+│   │   │           )
+│   │   │           await self.event_publisher.email_sent(notification=notification, ctx=envelope)
+│   │   │
+│   │   │
+│   │   │
+│   │   │
+│   │   │   ```
+│   │   │
+│   │   └── merchant_events.py
+│   │
+│   │       ```py
+│   │       # services/notification-service/src/events/listeners/merchant_events.py
+│   │       from pydantic import ValidationError
+│   │
+│   │       from shared.messaging import Listener
+│   │       from shared.messaging.events.base import EventEnvelope
+│   │       from shared.messaging.events.merchant import MerchantCreatedPayload
+│   │       from shared.utils.logger import ServiceLogger
+│   │       from src.services.notification_service import NotificationService
+│   │
+│   │       from ..publishers import NotificationEventPublisher
+│   │
+│   │
+│   │       class MerchantEventsListener(Listener):
+│   │           """Handle all merchant events with validation."""
+│   │
+│   │           @property
+│   │           def subject(self) -> str:
+│   │               return "evt.merchant.>"
+│   │
+│   │           @property
+│   │           def queue_group(self) -> str:
+│   │               return "notification-merchant"
+│   │
+│   │           @property
+│   │           def service_name(self) -> str:
+│   │               return "notification-service"
+│   │
+│   │           def __init__(
+│   │               self,
+│   │               js_client,
+│   │               notification_service: NotificationService,
+│   │               publisher: NotificationEventPublisher,
+│   │               logger: ServiceLogger,
+│   │           ):
+│   │               super().__init__(js_client, logger)
+│   │               self.notification_service = notification_service
+│   │               self.publisher = publisher
+│   │
+│   │           async def on_message(self, envelope: EventEnvelope) -> None:
+│   │               """
+│   │               Route merchant events based on event_type.
+│   │               Validate data based on specific event type.
+│   │               """
+│   │
+│   │               # Route by event type
+│   │               if envelope.event_type == "evt.merchant.created.v1":
+│   │                   await self._handle_created(envelope)
+│   │               else:
+│   │                   # Unknown merchant event - just log
+│   │                   self.logger.debug(f"Ignoring {envelope.event_type}", extra={"event_id": envelope.event_id})
+│   │
+│   │           async def _handle_created(self, envelope: EventEnvelope):
+│   │               """Send welcome email for new merchant."""
+│   │
+│   │               # Validate the data field with specific payload type
+│   │               try:
+│   │                   payload = MerchantCreatedPayload.model_validate(envelope.data)
+│   │               except ValidationError as e:
+│   │                   self.logger.exception(
+│   │                       "Invalid merchant.created payload", extra={"event_id": envelope.event_id, "errors": e.errors()}
+│   │                   )
+│   │                   return  # Don't retry bad data
+│   │
+│   │               try:
+│   │                   notification = await self.notification_service.process_event(
+│   │                       event_type=envelope.event_type,
+│   │                       data=payload,
+│   │                       event_id=f"{payload.identifiers.platform_name}_{envelope.source_service}_{envelope.event_id}",
+│   │                       correlation_id=envelope.correlation_id,
+│   │                   )
+│   │
+│   │               except AttributeError:
+│   │                   raise
+│   │               except Exception:
+│   │                   raise
+│   │
+│   │               self.logger.info(
+│   │                   "Welcome email sent",
+│   │                   extra={
+│   │                       "event_id": envelope.event_id,
+│   │                       "merchant_id": str(payload.identifiers.merchant_id),
+│   │                       "correlation_id": envelope.correlation_id,
+│   │                   },
+│   │               )
+│   │
+│   │               await self.publisher.email_sent(notification=notification, ctx=envelope)
+│   │       ```
+│   │
+│   ├── __init__.py
+│   └── publishers.py
+│
+│       ```py
+│       # services/notification-service/src/events/publishers.py
+│       from uuid import UUID
+│
+│       from shared.messaging.events.base import MerchantIdentifiers
+│       from shared.messaging.publisher import Publisher
+│       from shared.messaging.subjects import Subjects
+│
+│       from ..schemas.events import EmailFailedPayload, NotificationSentPayload
+│       from ..schemas.notification import NotificationOut
+│
+│
+│       class NotificationEventPublisher(Publisher):
+│           """Publisher for notification events"""
+│
+│           @property
+│           def service_name(self) -> str:
+│               return "notification-service"
+│
+│           async def email_sent(self, notification: NotificationOut, ctx) -> str:
+│               """Publish email sent event"""
+│
+│               identifiers = MerchantIdentifiers(
+│                   merchant_id=UUID(notification.merchant_id),
+│                   platform_name=notification.platform_name,
+│                   platform_shop_id=notification.platform_shop_id,
+│                   domain=notification.domain,
+│               )
+│
+│               payload = NotificationSentPayload(
+│                   identifiers=identifiers,
+│                   notification_id=notification.id,
+│                   template_type=notification.template_type,
+│                   delivered_at=notification.delivered_at,
+│                   provider=notification.provider_message.get("provider") if notification.provider_message else None,
+│               )
+│
+│               return await self.publish_event(
+│                   subject=Subjects.NOTIFICATION_EMAIL_SENT,
+│                   payload=payload,
+│                   correlation_id=ctx.correlation_id,
+│               )
+│
+│           async def email_failed(self, notification: NotificationOut, error: str, ctx) -> str:
+│               """Publish email failed event"""
+│               payload = EmailFailedPayload(
+│                   notification_id=notification.id,
+│                   merchant_id=notification.merchant_id,
+│                   platform_name=notification.platform_name,
+│                   platform_shop_id=notification.platform_shop_id,
+│                   domain=notification.domain,
+│                   template_type=notification.template_type,
+│                   error=error,
+│                   failed_at=notification.failed_at or notification.created_at,
+│               )
+│
+│               return await self.publish_event(
+│                   subject=Subjects.NOTIFICATION_EMAIL_FAILED,
+│                   payload=payload,
+│                   correlation_id=ctx.correlation_id,
+│               )
+│       ```
+│
+├── providers/
+│   ├── base.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/providers/base.py
+│   │   from abc import ABC, abstractmethod
+│   │   from dataclasses import dataclass
+│   │   from typing import Any
+│   │
+│   │
+│   │   @dataclass
+│   │   class EmailMessage:
+│   │       to: str
+│   │       subject: str
+│   │       html: str
+│   │       text: str
+│   │       from_email: str | None = None
+│   │       from_name: str | None = None
+│   │       metadata: dict[str, Any] | None = None
+│   │
+│   │
+│   │   class EmailProvider(ABC):
+│   │       """Base email provider interface"""
+│   │
+│   │       @property
+│   │       @abstractmethod
+│   │       def name(self) -> str:
+│   │           """Provider name"""
+│   │           pass
+│   │
+│   │       @abstractmethod
+│   │       async def send(self, message: EmailMessage) -> dict[str, Any]:  # ✅ Must return dict
+│   │           """Send email and return response dict with at least 'message_id' key"""
+│   │           pass
+│   │
+│   │       @abstractmethod
+│   │       async def get_status(self, message_id: str) -> dict[str, Any]:
+│   │           """Get message status"""
+│   │           pass
+│   │   ```
+│   │
+│   ├── mailhog_provider.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/providers/mailhog_provider.py
+│   │   import smtplib
+│   │   import uuid
+│   │   from datetime import datetime
+│   │   from email.mime.multipart import MIMEMultipart
+│   │   from email.mime.text import MIMEText
+│   │   from typing import Any
+│   │
+│   │   from shared.utils.logger import ServiceLogger
+│   │
+│   │   from .base import EmailMessage, EmailProvider
+│   │
+│   │
+│   │   class MailhogProvider(EmailProvider):
+│   │       """Mailhog SMTP provider for local testing"""
+│   │
+│   │       def __init__(
+│   │           self,
+│   │           smtp_host: str = "localhost",
+│   │           smtp_port: int = 1025,
+│   │           logger: ServiceLogger = None,
+│   │       ):
+│   │           self.smtp_host = smtp_host
+│   │           self.smtp_port = smtp_port
+│   │           self.logger = logger
+│   │
+│   │       @property
+│   │       def name(self) -> str:
+│   │           return "mailhog"
+│   │
+│   │       async def send(self, message: EmailMessage) -> dict:  # ✅ Return dict
+│   │           """Send email via Mailhog SMTP"""
+│   │           # Create message
+│   │           msg = MIMEMultipart("alternative")
+│   │           msg["Subject"] = message.subject
+│   │           msg["From"] = message.from_email or "noreply@glamyouup.com"
+│   │           msg["To"] = message.to
+│   │
+│   │           # Generate a message ID
+│   │           message_id = f"mailhog-{uuid.uuid4().hex[:12]}"
+│   │           msg["Message-ID"] = f"<{message_id}@glamyouup.com>"
+│   │
+│   │           # Add text and HTML parts
+│   │           text_part = MIMEText(message.text, "plain")
+│   │           html_part = MIMEText(message.html, "html")
+│   │           msg.attach(text_part)
+│   │           msg.attach(html_part)
+│   │
+│   │           # Send via SMTP
+│   │           try:
+│   │               with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+│   │                   server.send_message(msg)
+│   │
+│   │               if self.logger:
+│   │                   self.logger.info(
+│   │                       "Email sent via Mailhog",
+│   │                       extra={
+│   │                           "to": message.to,
+│   │                           "message_id": message_id,
+│   │                           "host": self.smtp_host,
+│   │                           "port": self.smtp_port,
+│   │                       },
+│   │                   )
+│   │
+│   │               # ✅ Return dict instead of string
+│   │               return {
+│   │                   "message_id": message_id,
+│   │                   "provider": self.name,
+│   │                   "status": "accepted",
+│   │                   "timestamp": datetime.now().isoformat(),
+│   │               }
+│   │
+│   │           except Exception as e:
+│   │               raise Exception(f"Mailhog SMTP error: {e!s}") from e
+│   │
+│   │       async def get_status(self, message_id: str) -> dict[str, Any]:
+│   │           """Get message status (always sent for Mailhog)"""
+│   │           return {"message_id": message_id, "status": "sent", "provider": self.name}
+│   │   ```
+│   │
+│   └── sendgrid_provider.py
+│
+│       ```py
+│       # services/notification-service/src/providers/sendgrid_provider.py
+│       from datetime import datetime
+│       from typing import Any
+│
+│       import httpx
+│
+│       from shared.utils.logger import ServiceLogger
+│
+│       from .base import EmailMessage, EmailProvider
+│
+│
+│       class SendGridProvider(EmailProvider):
+│           """SendGrid email provider"""
+│
+│           def __init__(
+│               self,
+│               api_key: str,
+│               from_email: str,
+│               from_name: str,
+│               sandbox_mode: bool = False,
+│               logger: ServiceLogger = None,
+│           ):
+│               self.api_key = api_key
+│               self.from_email = from_email
+│               self.from_name = from_name
+│               self.sandbox_mode = sandbox_mode
+│               self.logger = logger
+│               self.base_url = "https://api.sendgrid.com/v3"
+│
+│           @property
+│           def name(self) -> str:
+│               return "sendgrid"
+│
+│           async def send(self, message: EmailMessage) -> dict:  # ✅ Return dict
+│               """Send email via SendGrid API"""
+│               async with httpx.AsyncClient() as client:
+│                   payload = {
+│                       "personalizations": [{"to": [{"email": message.to}], "subject": message.subject}],
+│                       "from": {
+│                           "email": message.from_email or self.from_email,
+│                           "name": message.from_name or self.from_name,
+│                       },
+│                       "content": [
+│                           {"type": "text/plain", "value": message.text},
+│                           {"type": "text/html", "value": message.html},
+│                       ],
+│                   }
+│
+│                   # Add sandbox mode for testing
+│                   if self.sandbox_mode:
+│                       payload["mail_settings"] = {"sandbox_mode": {"enable": True}}
+│
+│                   # Add custom metadata if provided
+│                   if message.metadata:
+│                       payload["custom_args"] = message.metadata
+│
+│                   response = await client.post(
+│                       f"{self.base_url}/mail/send",
+│                       json=payload,
+│                       headers={
+│                           "Authorization": f"Bearer {self.api_key}",
+│                           "Content-Type": "application/json",
+│                       },
+│                   )
+│
+│                   if response.status_code not in (200, 202):
+│                       error_data = response.json() if response.content else {}
+│                       raise Exception(f"SendGrid API error: {response.status_code} - {error_data}")
+│
+│                   # Extract message ID from headers
+│                   message_id = response.headers.get("X-Message-Id", "")
+│
+│                   if self.logger:
+│                       self.logger.info(
+│                           "Email sent via SendGrid",
+│                           extra={
+│                               "to": message.to,
+│                               "message_id": message_id,
+│                               "sandbox": self.sandbox_mode,
+│                           },
+│                       )
+│
+│                   # ✅ Return dict instead of string
+│                   return {
+│                       "message_id": message_id,
+│                       "provider": self.name,
+│                       "status": "accepted",
+│                       "status_code": response.status_code,
+│                       "sandbox_mode": self.sandbox_mode,
+│                       "timestamp": datetime.now().isoformat(),
+│                   }
+│
+│           async def get_status(self, message_id: str) -> dict[str, Any]:
+│               """Get message status from SendGrid"""
+│               return {"message_id": message_id, "status": "sent", "provider": self.name}
+│       ```
+│
+├── repositories/
+│   ├── __init__.py
+│   └── notification_repository.py
+│
+│       ```py
+│       # services/notification-service/src/repositories/notification_repository.py
+│       from datetime import UTC, datetime, timedelta
+│       from typing import Any
+│       from uuid import UUID
+│
+│       from prisma import Prisma
+│
+│       from ..schemas.notification import NotificationOut, NotificationStats, NotificationStatus
+│
+│
+│       class NotificationRepository:
+│           """Repository for notification data access"""
+│
+│           def __init__(self, prisma: Prisma):
+│               self.prisma = prisma
+│
+│           async def create(self, data: dict[str, Any]) -> NotificationOut:
+│               """Create a new notification record"""
+│               try:
+│                   notification = await self.prisma.notification.create(data=data)
+│                   return NotificationOut.model_validate(notification)
+│               except Exception:
+│                   raise
+│
+│           async def find_by_id(self, notification_id: UUID) -> NotificationOut | None:
+│               """Find notification by ID"""
+│               notification = await self.prisma.notification.find_unique(where={"id": str(notification_id)})
+│               return NotificationOut.model_validate(notification) if notification else None
+│
+│           async def find_by_idempotency_key(self, idempotency_key: str) -> NotificationOut | None:
+│               """Find notification by idempotency key"""
+│               notification = await self.prisma.notification.find_unique(where={"idempotency_key": idempotency_key})
+│               return NotificationOut.model_validate(notification) if notification else None
+│
+│           async def update(self, notification_id: UUID, data: dict[str, Any]) -> NotificationOut:
+│               """Update notification"""
+│               notification = await self.prisma.notification.update(where={"id": str(notification_id)}, data=data)
+│               return NotificationOut.model_validate(notification)
+│
+│           async def find_many(
+│               self, filters: dict[str, Any] | None = None, skip: int = 0, limit: int = 50, order_by: list[tuple] | None = None
+│           ) -> list[NotificationOut]:
+│               """Find multiple notifications with filters"""
+│               where = filters or {}
+│               order = {}
+│
+│               if order_by:
+│                   for field, direction in order_by:
+│                       order[field] = direction
+│               else:
+│                   order = {"first_attempt_at": "desc"}  # Changed from created_at
+│
+│               notifications = await self.prisma.notification.find_many(where=where, skip=skip, take=limit, order=order)
+│
+│               return [NotificationOut.model_validate(n) for n in notifications]
+│
+│           async def count(self, filters: dict[str, Any] | None = None) -> int:
+│               """Count notifications with filters"""
+│               where = filters or {}
+│               return await self.prisma.notification.count(where=where)
+│
+│           async def find_retriable(self, max_attempts: int = 3, limit: int = 50) -> list[NotificationOut]:
+│               """Find notifications eligible for retry"""
+│               notifications = await self.prisma.notification.find_many(
+│                   where={"status": NotificationStatus.PENDING, "attempt_count": {"lt": max_attempts}},
+│                   order={"last_attempt_at": "asc"},  # Retry oldest first
+│                   take=limit,
+│               )
+│               return [NotificationOut.model_validate(n) for n in notifications]
+│
+│           async def count_recent_by_email(self, email: str, hours: int = 1) -> int:
+│               """Count recent notifications sent to an email (for rate limiting)"""
+│               since = datetime.utcnow() - timedelta(hours=hours)
+│               return await self.prisma.notification.count(
+│                   where={"recipient_email": email, "first_attempt_at": {"gte": since}}
+│               )
+│
+│           async def get_stats(self) -> NotificationStats:
+│               """Get notification statistics"""
+│               today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+│               today_end = today_start + timedelta(days=1)
+│
+│               # Count by status today (using first_attempt_at for "today's notifications")
+│               sent_today = await self.prisma.notification.count(
+│                   where={"status": NotificationStatus.SENT, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+│               )
+│
+│               failed_today = await self.prisma.notification.count(
+│                   where={"status": NotificationStatus.FAILED, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+│               )
+│
+│               pending_today = await self.prisma.notification.count(
+│                   where={"status": NotificationStatus.PENDING, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+│               )
+│
+│               # Get counts by template type
+│               rows = await self.prisma.notification.group_by(
+│                   by=["template_type"],
+│                   where={"first_attempt_at": {"gte": today_start, "lt": today_end}},
+│                   count={"_all": True},  # row count per group
+│                   order={"template_type": "asc"},  # optional: deterministic ordering
+│               )
+│
+│               by_template = {r["template_type"]: r["_count"]["_all"] for r in rows}
+│
+│               # Get counts by status
+│               by_status = {"sent": sent_today, "failed": failed_today, "pending": pending_today}
+│
+│               return NotificationStats(
+│                   sent_today=sent_today,
+│                   failed_today=failed_today,
+│                   pending_today=pending_today,
+│                   by_template=by_template,
+│                   by_status=by_status,
+│               )
+│
+│           async def get_delivery_metrics(self) -> dict[str, Any]:
+│               """Get delivery performance metrics"""
+│               # Average delivery time for successful notifications
+│               delivery_times = await self.prisma.query_raw(
+│                   """
+│                   SELECT
+│                       AVG(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as avg_delivery_seconds,
+│                       MIN(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as min_delivery_seconds,
+│                       MAX(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as max_delivery_seconds
+│                   FROM notifications
+│                   WHERE status = 'sent' AND delivered_at IS NOT NULL
+│                   """
+│               )
+│
+│               # Attempt distribution
+│               attempt_distribution = await self.prisma.query_raw(
+│                   """
+│                   SELECT
+│                       attempt_count,
+│                       COUNT(*) as count,
+│                       ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
+│                   FROM notifications
+│                   WHERE status = 'sent'
+│                   GROUP BY attempt_count
+│                   ORDER BY attempt_count
+│                   """
+│               )
+│
+│               return {
+│                   "delivery_time": delivery_times[0] if delivery_times else None,
+│                   "attempt_distribution": [
+│                       {"attempts": row["attempt_count"], "count": row["count"], "percentage": float(row["percentage"])}
+│                       for row in attempt_distribution
+│                   ],
+│               }
+│
+│           async def cleanup_old_notifications(self, days: int = 30) -> int:
+│               """Delete old notifications (for data retention)"""
+│               cutoff_date = datetime.utcnow() - timedelta(days=days)
+│
+│               # Count before deletion
+│               count = await self.prisma.notification.count(where={"first_attempt_at": {"lt": cutoff_date}})
+│
+│               # Delete old notifications
+│               if count > 0:
+│                   await self.prisma.notification.delete_many(where={"first_attempt_at": {"lt": cutoff_date}})
+│
+│               return count
+│       ```
+│
+├── schemas/
+│   ├── __init__.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/schemas/__init__.py
+│   │   from .notification import NotificationOut, NotificationStats
+│   │
+│   │   __all__ = ["NotificationOut", "NotificationStats"]
+│   │   ```
+│   │
+│   ├── enums.py
+│   │
+│   │   ```py
+│   │   from enum import Enum
+│   │
+│   │
+│   │   class NotificationStatus(str, Enum):
+│   │       PENDING = "pending"
+│   │       SENT = "sent"
+│   │       FAILED = "failed"
+│   │
+│   │
+│   │   class AttemptStatus(str, Enum):
+│   │       SUCCESS = "success"
+│   │       FAILED = "failed"
+│   │       TIMEOUT = "timeout"
+│   │   ```
+│   │
+│   ├── events.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/schemas/events.py
+│   │   from datetime import datetime
+│   │   from uuid import UUID
+│   │
+│   │   from pydantic import BaseModel
+│   │
+│   │   from shared.messaging.events.base import BaseEventPayload
+│   │
+│   │   # Published events
+│   │   class NotificationSentPayload(BaseEventPayload):
+│   │       """Payload for notification.email.sent event"""
+│   │
+│   │       notification_id: UUID
+│   │       template_type: str
+│   │       delivered_at: datetime
+│   │       provider: str | None = None
+│   │
+│   │
+│   │   class EmailFailedPayload(BaseModel):
+│   │       """Payload for notification.email.failed event"""
+│   │
+│   │       notification_id: UUID
+│   │       merchant_id: UUID
+│   │       platform_name: str
+│   │       platform_shop_id: str
+│   │       domain: str
+│   │       template_type: str
+│   │       error: str
+│   │       failed_at: datetime
+│   │   ```
+│   │
+│   └── notification.py
+│
+│       ```py
+│       # services/notification-service/src/schemas/notification.py
+│
+│       from datetime import datetime
+│       from enum import Enum
+│       from uuid import UUID
+│
+│       from pydantic import BaseModel, ConfigDict, Field, field_validator
+│
+│
+│       class NotificationStatus(str, Enum):
+│           PENDING = "pending"
+│           SENT = "sent"
+│           FAILED = "failed"
+│
+│
+│       class NotificationOut(BaseModel):
+│           """DTO for notification response"""
+│
+│           id: UUID
+│           merchant_id: str  # String representation of UUID
+│           platform_name: str
+│           platform_shop_id: str
+│           domain: str
+│           recipient_email: str
+│           template_type: str
+│           template_variables: dict  # JSON field
+│           status: NotificationStatus | str  # Accept both enum and string
+│           attempt_count: int
+│           first_attempt_at: datetime | None
+│           last_attempt_at: datetime | None
+│           delivered_at: datetime | None = None
+│           provider_message_id: str | None = None
+│           provider_message: dict | None = None  # JSON field
+│           idempotency_key: str
+│
+│           @field_validator("status", mode="before")
+│           def validate_status(cls, v):
+│               """Convert string to enum if necessary"""
+│               if isinstance(v, str):
+│                   return NotificationStatus(v)
+│               return v
+│
+│           model_config = ConfigDict(from_attributes=True)
+│
+│
+│       class NotificationStats(BaseModel):
+│           """DTO for notification statistics"""
+│
+│           sent_today: int = 0
+│           failed_today: int = 0
+│           pending_today: int = 0
+│           by_template: dict[str, int] = Field(default_factory=dict)
+│           by_status: dict[str, int] = Field(default_factory=dict)
+│       ```
+│
+├── services/
+│   ├── __init__.py
+│   ├── email_service.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/services/email_service.py
+│   │   from typing import Any
+│   │
+│   │   from shared.utils.logger import ServiceLogger
+│   │
+│   │   from ..providers.base import EmailMessage, EmailProvider
+│   │
+│   │
+│   │   class EmailService:
+│   │       """Service for sending emails through providers"""
+│   │
+│   │       def __init__(self, provider: EmailProvider, logger: ServiceLogger = None):
+│   │           self.provider = provider
+│   │           self.logger = logger
+│   │
+│   │       @property
+│   │       def provider_name(self) -> str:
+│   │           """Get current provider name"""
+│   │           return self.provider.name
+│   │
+│   │       async def send(self, to: str, subject: str, html: str, text: str, metadata: dict[str, Any] | None = None) -> str:
+│   │           """
+│   │           Send email through configured provider
+│   │
+│   │           Returns:
+│   │               Provider message ID
+│   │
+│   │           Raises:
+│   │               Exception: On send failure
+│   │           """
+│   │           message = EmailMessage(to=to, subject=subject, html=html, text=text, metadata=metadata)
+│   │
+│   │           try:
+│   │               response = await self.provider.send(message)
+│   │
+│   │               if self.logger:
+│   │                   self.logger.info(
+│   │                       "Email sent successfully",
+│   │                       extra={
+│   │                           "provider": self.provider_name,
+│   │                           "to": to,
+│   │                           "subject": subject,
+│   │                           "message_id": response.get("message_id"),
+│   │                       },
+│   │                   )
+│   │
+│   │               return response
+│   │
+│   │           except Exception as e:
+│   │               if self.logger:
+│   │                   self.logger.exception(
+│   │                       f"Email send failed: {e!s}",
+│   │                       extra={"provider": self.provider_name, "to": to, "subject": subject, "error": str(e)},
+│   │                   )
+│   │               raise
+│   │
+│   │       async def get_status(self, message_id: str) -> dict[str, Any]:
+│   │           """Get message status from provider"""
+│   │           return await self.provider.get_status(message_id)
+│   │   ```
+│   │
+│   ├── notification_service.py
+│   │
+│   │   ```py
+│   │   # services/notification-service/src/services/notification_service.py
+│   │   from datetime import datetime
+│   │   from typing import Any, TypeVar
+│   │   from uuid import UUID
+│   │
+│   │   from prisma import Json
+│   │   from prisma.errors import UniqueViolationError
+│   │   from pydantic import BaseModel
+│   │
+│   │   from shared.messaging.events.base import BaseEventPayload
+│   │   from shared.utils.exceptions import NotFoundError
+│   │   from shared.utils.logger import ServiceLogger
+│   │
+│   │   from ..repositories.notification_repository import NotificationRepository
+│   │   from ..schemas.notification import NotificationOut, NotificationStats, NotificationStatus
+│   │   from .email_service import EmailService
+│   │   from .template_service import TemplateService
+│   │
+│   │   T = TypeVar("T", bound=BaseModel)
+│   │
+│   │
+│   │   class NotificationService:
+│   │       EMAIL_TEMPLATE_MAP = {
+│   │           "evt.merchant.created.v1": "welcome",
+│   │           "evt.billing.purchase.completed.v1": "purchase_confirmation",
+│   │           "evt.credit.trial.granted.v1": "trial_granted",
+│   │           "evt.credit.trial.low.v1": "trial_low",
+│   │           "evt.credit.trial.exhausted.v1": "trial_exhausted",
+│   │           "evt.credit.balance.granted.v1": "credit_granted",
+│   │           "evt.credit.balance.low.v1": "credit_low",
+│   │           "evt.credit.balance.exhausted.v1": "credit_exhausted",
+│   │           "evt.catalog.sync.started.v1": "catalog_sync_started",
+│   │           "evt.catalog.sync.completed.v1": "catalog_sync_completed",
+│   │           "evt.catalog.sync.failed.v1": "catalog_sync_failed",
+│   │           "evt.merchant.status.changed.v1": "account_deactivated",
+│   │       }
+│   │
+│   │       def __init__(
+│   │           self,
+│   │           repository: NotificationRepository,
+│   │           template_service: TemplateService,
+│   │           email_service: EmailService,
+│   │           logger: ServiceLogger,
+│   │       ):
+│   │           self.repository = repository
+│   │           self.template_service = template_service
+│   │           self.email_service = email_service
+│   │           self.logger = logger
+│   │
+│   │       async def process_event(
+│   │           self,
+│   │           event_type: str,
+│   │           data: T,
+│   │           event_id: str,
+│   │           correlation_id: str,
+│   │       ) -> NotificationOut | None:
+│   │           """
+│   │           Process event - NATS will retry this entire function up to 3 times.
+│   │           We track attempt_count for observability.
+│   │           """
+│   │           self.logger.info(
+│   │               "Processing event",
+│   │               extra={"event_type": event_type, "event_id": event_id, "correlation_id": correlation_id},
+│   │           )
+│   │
+│   │           self.logger.info("Checking for existing notification", extra={"event_id": event_id})
+│   │           existing = await self.repository.find_by_idempotency_key(event_id)
+│   │
+│   │           if existing:
+│   │               self.logger.info(
+│   │                   "Found existing notification",
+│   │                   extra={"notification_id": str(existing.id), "status": existing.status.value},
+│   │               )
+│   │               if existing.status == NotificationStatus.SENT:
+│   │                   self.logger.info(f"Event {event_id} already delivered")
+│   │                   return existing
+│   │
+│   │               now = datetime.now()
+│   │               await self.repository.update(
+│   │                   existing.id, {"attempt_count": existing.attempt_count + 1, "last_attempt_at": now}
+│   │               )
+│   │
+│   │               self.logger.info(
+│   │                   "Retrying delivery for existing notification",
+│   │                   extra={"notification_id": str(existing.id), "attempt_count": existing.attempt_count + 1},
+│   │               )
+│   │               await self._send_email(existing, correlation_id)
+│   │               return await self.repository.find_by_id(existing.id)
+│   │
+│   │           # New notification - validate and create
+│   │           email_template = self.EMAIL_TEMPLATE_MAP.get(event_type)
+│   │           if not email_template:
+│   │               self.logger.info("No template for event", extra={"event_type": event_type})
+│   │               return None
+│   │
+│   │           # Handle conditional templates
+│   │           if event_type == "evt.merchant.status.changed.v1":
+│   │               status = getattr(data, "status", None)
+│   │               if status != "deactivated":
+│   │                   self.logger.info("Skipping notification - status not deactivated", extra={"status": status})
+│   │                   return None
+│   │               email_template = "account_deactivated"
+│   │
+│   │           email = getattr(data, "email", None)
+│   │           if not email:
+│   │               self.logger.warning("No recipient email", extra={"event_type": event_type, "event_id": event_id})
+│   │               return None
+│   │
+│   │           # Prepare notification data
+│   │           ids = data.identifiers
+│   │           variables = self._prepare_template_variables(event_type, data)
+│   │           now = datetime.now()
+│   │
+│   │           new_notification = {
+│   │               "merchant_id": str(ids.merchant_id),
+│   │               "platform_name": ids.platform_name,
+│   │               "platform_shop_id": ids.platform_shop_id,
+│   │               "domain": ids.domain,
+│   │               "recipient_email": email,
+│   │               "template_type": email_template,
+│   │               "template_variables": Json(variables),
+│   │               "status": NotificationStatus.PENDING.value,
+│   │               "idempotency_key": event_id,
+│   │               "attempt_count": 1,
+│   │               "first_attempt_at": now,
+│   │               "last_attempt_at": now,
+│   │           }
+│   │
+│   │           try:
+│   │               notification = await self.repository.create(new_notification)
+│   │           except UniqueViolationError:
+│   │               # Race condition - another process created it
+│   │               notification = await self.repository.find_by_idempotency_key(event_id)
+│   │               if notification.status == NotificationStatus.SENT:
+│   │                   return notification
+│   │
+│   │           # Send email
+│   │           await self._send_email(notification, correlation_id)
+│   │           return await self.repository.find_by_id(notification.id)
+│   │
+│   │       async def _send_email(self, notification: dict, correlation_id: str) -> None:
+│   │           """
+│   │           Send email and update status. Raises exception for NATS retry if needed.
+│   │           """
+│   │
+│   │           if notification.status == NotificationStatus.SENT:
+│   │               self.logger.info("Skip delivery: already sent", extra={"notification_id": str(notification.id)})
+│   │               return
+│   │
+│   │           try:
+│   │               subject, html_body, text_body = self.template_service.render_email(
+│   │                   notification.template_type, notification.template_variables
+│   │               )
+│   │
+│   │               self.logger.info(f"Sending email to {notification.recipient_email}")
+│   │
+│   │               response = await self.email_service.send(
+│   │                   to=notification.recipient_email,
+│   │                   subject=subject,
+│   │                   html=html_body,
+│   │                   text=text_body,
+│   │                   metadata={
+│   │                       "notification_id": str(notification.id),
+│   │                       "merchant_id": notification.merchant_id,
+│   │                       "attempt": notification.attempt_count,
+│   │                       "template_type": notification.template_type,
+│   │                       "correlation_id": correlation_id,
+│   │                   },
+│   │               )
+│   │
+│   │               now = datetime.now()
+│   │
+│   │               await self.repository.update(
+│   │                   notification.id,
+│   │                   {
+│   │                       "status": NotificationStatus.SENT.value,
+│   │                       "delivered_at": now,
+│   │                       "provider_message_id": response.get("message_id"),
+│   │                       "provider_message": Json(
+│   │                           {
+│   │                               "response": response,
+│   │                           }
+│   │                       ),
+│   │                   },
+│   │               )
+│   │
+│   │               self.logger.info(
+│   │                   "Notification delivered",
+│   │                   extra={
+│   │                       "notification_id": str(notification.id),
+│   │                       "attempt": notification.attempt_count,
+│   │                       "provider_message_id": response.get("message_id"),
+│   │                       "correlation_id": correlation_id,
+│   │                   },
+│   │               )
+│   │
+│   │           except Exception as e:
+│   │               error_msg = str(e)[:1000]  # Truncate long errors
+│   │
+│   │               is_final_attempt = notification.attempt_count >= 3
+│   │               new_status = NotificationStatus.FAILED if is_final_attempt else NotificationStatus.PENDING
+│   │
+│   │               # Update notification with failure
+│   │               await self.repository.update(
+│   │                   notification.id,
+│   │                   {
+│   │                       "status": new_status,
+│   │                       "last_attempt_at": datetime.now(),
+│   │                       "provider_message": Json(
+│   │                           {
+│   │                               "provider": self.email_service.provider_name,
+│   │                               "error": error_msg,
+│   │                           }
+│   │                       ),
+│   │                   },
+│   │               )
+│   │
+│   │               self.logger.exception(
+│   │                   "Notification delivery failed",
+│   │                   extra={
+│   │                       "notification_id": str(notification.id),
+│   │                       "attempt": notification.attempt_count,
+│   │                       "error": error_msg,
+│   │                       "final": is_final_attempt,
+│   │                   },
+│   │               )
+│   │
+│   │               # Re-raise for NATS retry (unless we've hit max attempts)
+│   │               if not is_final_attempt:
+│   │                   raise
+│   │
+│   │       def _prepare_template_variables(self, event_type: str, data: BaseEventPayload) -> dict:
+│   │           """Prepare template variables for email rendering."""
+│   │           ids = data.identifiers
+│   │           variables = {
+│   │               "company_name": "Glam You Up",
+│   │               "company_address": "31 Continental Dr, Suite 305, Newark, Delaware 19713, United States",
+│   │               "brand_color": "#BD4267",   # brand-700
+│   │               "domain": ids.domain,
+│   │               "platform_name": ids.platform_name,
+│   │               "platform_shop_id": ids.platform_shop_id,
+│   │               "merchant_id": str(ids.merchant_id),
+│   │               "current_year": datetime.now().year,
+│   │               "support_email": "support@glamyouup.com",
+│   │               "app_url": "https://app.glamyouup.com",
+│   │           }
+│   │           variables.update(data.model_dump(exclude={"identifiers"}))
+│   │
+│   │           # Event-specific enrichment
+│   │           if event_type == "evt.merchant.created.v1" and hasattr(data, "shop_name"):
+│   │               variables["shop_name"] = data.shop_name or ids.domain
+│   │
+│   │           if event_type == "evt.credit.low_balance.v1" and hasattr(data, "balance"):
+│   │               variables["balance"] = data.balance
+│   │
+│   │           return variables
+│   │
+│   │       async def get_notification(self, notification_id: UUID) -> NotificationOut:
+│   │           """Get notification by ID."""
+│   │           notification = await self.repository.find_by_id(notification_id)
+│   │           if not notification:
+│   │               raise NotFoundError("Notification not found", details={"notification_id": str(notification_id)})
+│   │           return notification
+│   │
+│   │       async def list_notifications(
+│   │           self,
+│   │           filters: dict[str, Any] = None,
+│   │           skip: int = 0,
+│   │           limit: int = 50,
+│   │           order_by: list[tuple] = None,
+│   │       ) -> tuple[int, list[NotificationOut]]:
+│   │           """List notifications with filters."""
+│   │           total = await self.repository.count(filters=filters)
+│   │           notifications = await self.repository.find_many(
+│   │               filters=filters, skip=skip, limit=limit, order_by=order_by or [("first_attempt_at", "desc")]
+│   │           )
+│   │           return total, notifications
+│   │
+│   │       async def get_stats(self) -> NotificationStats:
+│   │           """Get notification statistics."""
+│   │           return await self.repository.get_stats()
+│   │
+│   │       async def get_health_metrics(self) -> dict:
+│   │           """Get system health metrics based on attempt distribution."""
+│   │           total_sent = await self.repository.count({"status": NotificationStatus.SENT})
+│   │           if total_sent == 0:
+│   │               return {
+│   │                   "first_attempt_success_rate": 0,
+│   │                   "avg_attempts": 0,
+│   │                   "failure_rate": 0,
+│   │               }
+│   │
+│   │           first_attempt_success = await self.repository.count({"status": NotificationStatus.SENT, "attempt_count": 1})
+│   │
+│   │           total_notifications = await self.repository.count({})
+│   │           total_failed = await self.repository.count({"status": NotificationStatus.FAILED})
+│   │
+│   │           return {
+│   │               "first_attempt_success_rate": round((first_attempt_success / total_sent) * 100, 2),
+│   │               "failure_rate": round((total_failed / total_notifications) * 100, 2) if total_notifications > 0 else 0,
+│   │               "total_sent": total_sent,
+│   │               "total_failed": total_failed,
+│   │           }
+│   │   ```
+│   │
+│   └── template_service.py
+│
+│       ```py
+│       # services/notification-service/src/services/template_service.py
+│       from pathlib import Path
+│       from typing import Any
+│
+│       from jinja2 import (
+│           Environment,
+│           FileSystemLoader,
+│           TemplateNotFound,
+│           StrictUndefined,
+│           select_autoescape,
+│       )
+│
+│       from shared.utils.exceptions import InternalError, NotFoundError
+│       from shared.utils.logger import ServiceLogger
+│
+│
+│       class TemplateService:
+│           """Service for managing and rendering email templates"""
+│
+│           def __init__(self, template_path: str, cache_ttl: int = 300, logger: ServiceLogger | None = None):
+│               self.template_path = Path(template_path)
+│               self.cache_ttl = cache_ttl  # kept for compatibility; unused without caching
+│               self.logger = logger
+│
+│               self.env = Environment(
+│                   loader=FileSystemLoader(str(self.template_path)),
+│                   autoescape=select_autoescape(enabled_extensions=("html.j2",), default=False),
+│                   trim_blocks=True,
+│                   lstrip_blocks=True,
+│                   undefined=StrictUndefined,
+│                   auto_reload=True,
+│               )
+│               self.env.filters["format_currency"] = self._format_currency
+│               self.env.filters["format_date"] = self._format_date
+│
+│           @staticmethod
+│           def _format_currency(value: float) -> str:
+│               return f"${value:,.2f}"
+│
+│           @staticmethod
+│           def _format_date(value: Any) -> str:
+│               from datetime import datetime
+│
+│               if isinstance(value, str):
+│                   value = datetime.fromisoformat(value)
+│               if hasattr(value, "strftime"):
+│                   return value.strftime("%B %d, %Y")
+│               return str(value)
+│
+│           def get_template_path(self, template_type: str, filename: str) -> Path:
+│               return self.template_path / template_type / filename
+│
+│           def template_exists(self, template_type: str) -> bool:
+│               return (self.template_path / template_type).is_dir()
+│
+│           def render_subject(self, template_type: str, context: dict[str, Any]) -> str:
+│               """
+│               Render subject using Jinja. Supports, in order:
+│               - subject.txt.j2 (preferred)
+│               - subject.j2
+│               - subject.txt (rendered via Jinja for backward compatibility)
+│               """
+│               candidates = [
+│                   f"{template_type}/subject.txt.j2",
+│                   f"{template_type}/subject.j2",
+│                   f"{template_type}/subject.txt",
+│               ]
+│               last_err: Exception | None = None
+│               for template_path in candidates:
+│                   try:
+│                       template = self.env.get_template(template_path)
+│                       rendered = template.render(**context)
+│                       # subjects must be single-line, trimmed
+│                       subject = " ".join(rendered.splitlines()).strip()
+│                       if subject:
+│                           return subject
+│                   except TemplateNotFound as e:
+│                       last_err = e
+│                       continue
+│                   except Exception as e:
+│                       raise InternalError(f"Subject rendering failed: {e!s}", error_id=template_type) from e
+│
+│               raise NotFoundError(
+│                   f"Subject template not found for {template_type}",
+│                   resource="template",
+│                   resource_id=" | ".join(candidates),
+│               ) from last_err
+│
+│           def render_template(self, template_type: str, fmt: str, context: dict[str, Any]) -> str:
+│               """
+│               Render a template with context
+│
+│               Args:
+│                   template_type: Template type (e.g., 'welcome')
+│                   fmt: 'html' or 'text'
+│                   context: Template variables
+│               """
+│               template_file = "body.html.j2" if fmt == "html" else "body.text.j2"
+│               template_path = f"{template_type}/{template_file}"
+│
+│               try:
+│                   template = self.env.get_template(template_path)
+│                   if fmt == "html":
+│                       safe_context = {**context}
+│                       safe_context["header"] = self._render_shared("header.html.j2", context)
+│                       safe_context["footer"] = self._render_shared("footer.html.j2", context)
+│                       return template.render(**safe_context)
+│                   return template.render(**context)
+│
+│               except TemplateNotFound as e:
+│                   raise NotFoundError(
+│                       f"Template not found: {template_path}",
+│                       resource="template",
+│                       resource_id=template_path,
+│                   ) from e
+│               except Exception as e:
+│                   raise InternalError(f"Template rendering failed: {e!s}", error_id=template_type) from e
+│
+│           def _render_shared(self, template_name: str, context: dict[str, Any]) -> str:
+│               try:
+│                   template = self.env.get_template(f"shared/{template_name}")
+│                   return template.render(**context)
+│               except TemplateNotFound:
+│                   if self.logger:
+│                       self.logger.warning(f"Shared template not found: {template_name}")
+│                   return ""
+│
+│           def render_email(self, template_type: str, context: dict[str, Any]) -> tuple[str, str, str]:
+│               if not self.template_exists(template_type):
+│                   raise NotFoundError(
+│                       f"Template type not found: {template_type}",
+│                       resource="template",
+│                       resource_id=template_type,
+│                   )
+│
+│               subject = self.render_subject(template_type, context)
+│               html_body = self.render_template(template_type, "html", context)
+│               text_body = self.render_template(template_type, "text", context)
+│               return subject, html_body, text_body
+│       ```
+│
+├── __init__.py
+├── config.py
+│
+│   ```py
+│   # services/notification-service/src/config.py
+│   import os
+│   from functools import lru_cache
+│   from typing import Literal
+│
+│   from pydantic import BaseModel, ConfigDict, Field, model_validator
+│
+│   from shared.utils import ConfigurationError, load_root_env
+│
+│
+│   class ServiceConfig(BaseModel):
+│       """Notification service configuration"""
+│
+│       model_config = ConfigDict(
+│           extra="ignore",
+│           populate_by_name=True,
+│       )
+│
+│       # Service identification
+│       service_name: str = "notification-service"
+│       service_version: str = "1.0.0"
+│       service_description: str = "Event-driven email notification service"
+│       debug: bool = Field(default=False, alias="DEBUG")
+│
+│       # Required environment variables
+│       environment: str = Field(..., alias="APP_ENV")
+│       database_enabled: bool = Field(True, alias="NOTIFICATION_DB_ENABLED")
+│
+│       # Required secrets
+│       database_url: str = Field(..., alias="DATABASE_URL")
+│       client_jwt_secret: str = Field(..., alias="CLIENT_JWT_SECRET")
+│
+│       # Email provider configuration
+│       email_provider: Literal["sendgrid", "mailhog"] = Field("mailhog", alias="NOTIFICATION_EMAIL_PROVIDER")
+│
+│       # SendGrid settings
+│       sendgrid_api_key: str = Field(default="", alias="SENDGRID_API_KEY")
+│       sendgrid_from_email: str = Field(default="noreply@glamyouup.com", alias="SENDGRID_FROM_EMAIL")
+│       sendgrid_from_name: str = Field(default="Glam You Up", alias="SENDGRID_FROM_NAME")
+│       sendgrid_sandbox_mode: bool = Field(False, alias="SENDGRID_SANDBOX_MODE")
+│
+│       # Mailhog settings
+│       mailhog_smtp_host: str = Field(default="localhost", alias="MAILHOG_SMTP_HOST")
+│       mailhog_smtp_port: int = Field(default=1025, alias="MAILHOG_SMTP_PORT")
+│
+│       # Template settings
+│       template_path: str = Field(default="/app/templates", alias="NOTIFICATION_TEMPLATE_PATH")
+│       template_cache_ttl: int = Field(default=300, alias="NOTIFICATION_CACHE_TTL")
+│
+│       # Retry settings
+│       max_retries: int = Field(default=3, alias="NOTIFICATION_MAX_RETRIES")
+│       retry_delay: int = Field(default=60, alias="NOTIFICATION_RETRY_DELAY")
+│
+│       # Logging
+│       logging_level: str = "INFO"
+│       logging_format: str = "json"
+│
+│       @property
+│       def nats_url(self) -> str:
+│           """NATS URL for event system"""
+│           in_container = os.path.exists("/.dockerenv")
+│           if in_container or self.environment in ["dev", "prod"]:
+│               return "nats://nats:4222"
+│           return "nats://localhost:4222"
+│
+│       @property
+│       def api_port(self) -> int:
+│           """Port based on environment"""
+│           in_container = os.path.exists("/.dockerenv")
+│           return 8000 if in_container else self.api_external_port
+│
+│       @property
+│       def is_production(self) -> bool:
+│           """Check if running in production"""
+│           return self.environment == "prod"
+│
+│       @model_validator(mode="after")
+│       def validate_config(self):
+│           if self.database_enabled and not self.database_url:
+│               raise ValueError("DATABASE_URL required when database is enabled")
+│
+│           if self.email_provider == "sendgrid" and not self.sendgrid_api_key:
+│               raise ValueError("SENDGRID_API_KEY required when using SendGrid provider")
+│
+│           # Use local template path in development
+│           if not os.path.exists("/.dockerenv") and self.environment == "local":
+│               import pathlib
+│
+│               self.template_path = str(pathlib.Path(__file__).parent.parent / "templates")
+│
+│           return self
+│
+│
+│   @lru_cache
+│   def get_service_config() -> ServiceConfig:
+│       """Load configuration once"""
+│       try:
+│           load_root_env()  # From shared package
+│           return ServiceConfig(**os.environ)  # type: ignore[arg-type]
+│       except Exception as e:
+│           raise ConfigurationError(f"Failed to load config: {e}", config_key="notification-service") from e
+│   ```
+│
+├── dependencies.py
+│
+│   ```py
+│   # services/notification-service/src/dependencies.py
+│   from typing import Annotated
+│
+│   from fastapi import Depends, HTTPException, Request
+│
+│   from .config import ServiceConfig
+│   from .lifecycle import ServiceLifecycle
+│   from .services.notification_service import NotificationService
+│
+│
+│   # Core dependencies
+│   def get_lifecycle(request: Request) -> ServiceLifecycle:
+│       """Get service lifecycle from app state"""
+│       return request.app.state.lifecycle
+│
+│
+│   def get_config(request: Request) -> ServiceConfig:
+│       """Get service config from app state"""
+│       return request.app.state.config
+│
+│
+│   # Type aliases
+│   LifecycleDep = Annotated[ServiceLifecycle, Depends(get_lifecycle)]
+│   ConfigDep = Annotated[ServiceConfig, Depends(get_config)]
+│
+│
+│   # Service dependencies
+│   def get_notification_service(lifecycle: LifecycleDep) -> NotificationService:
+│       """Get notification service"""
+│       if not lifecycle.notification_service:
+│           raise HTTPException(500, "Notification service not initialized")
+│       return lifecycle.notification_service
+│
+│
+│   NotificationServiceDep = Annotated[NotificationService, Depends(get_notification_service)]
+│   ```
+│
+├── exceptions.py
+│
+│   ```py
+│   # File: services/notification-service/src/exceptions.py
+│   """
+│   Notification service exceptions using shared error classes.
+│
+│   All exceptions are re-exported from shared.errors for consistency
+│   across the platform.
+│   """
+│
+│   from shared.utils.exceptions import (
+│       ConfigurationError,
+│       ConflictError,
+│       DomainError,
+│       ForbiddenError,
+│       GlamBaseError,
+│       InfrastructureError,
+│       InternalError,
+│       NotFoundError,
+│       RateLimitExceededError,
+│       RequestTimeoutError,
+│       ServiceUnavailableError,
+│       UnauthorizedError,
+│       ValidationError,
+│   )
+│
+│   __all__ = [
+│       "ConfigurationError",
+│       "ConflictError",
+│       "DomainError",
+│       "ForbiddenError",
+│       "GlamBaseError",
+│       "InfrastructureError",
+│       "InternalError",
+│       "NotFoundError",
+│       "RateLimitExceededError",
+│       "RequestTimeoutError",
+│       "ServiceUnavailableError",
+│       "UnauthorizedError",
+│       "ValidationError",
+│   ]
+│   ```
+│
+├── lifecycle.py
+│
+│   ```py
+│   # services/notification-service/src/lifecycle.py
+│   import asyncio
+│   import time
+│
+│   from prisma import Prisma  # type: ignore[attr-defined]
+│
+│   from shared.messaging.jetstream_client import JetStreamClient
+│   from shared.utils.logger import ServiceLogger
+│
+│   from .config import ServiceConfig
+│   from .events.listeners import BillingEventsListener, CatalogEventsListener, CreditEventsListener, MerchantEventsListener
+│   from .events.publishers import NotificationEventPublisher
+│   from .providers.mailhog_provider import MailhogProvider
+│   from .providers.sendgrid_provider import SendGridProvider
+│   from .repositories.notification_repository import NotificationRepository
+│   from .services.email_service import EmailService
+│   from .services.notification_service import NotificationService
+│   from .services.template_service import TemplateService
+│
+│
+│   class ServiceLifecycle:
+│       """Manages all service components lifecycle"""
+│
+│       def __init__(self, config: ServiceConfig, logger: ServiceLogger):
+│           self.config = config
+│           self.logger = logger
+│
+│           # Connections
+│           self.messaging_client: JetStreamClient | None = None
+│           self.prisma: Prisma | None = None
+│           self._db_connected = False
+│
+│           # Services
+│           self.notification_service: NotificationService | None = None
+│           self.template_service: TemplateService | None = None
+│           self.email_service: EmailService | None = None
+│
+│           # Event handling
+│           self.event_publisher: NotificationEventPublisher | None = None
+│           self._listeners: list = []
+│           self._tasks: list[asyncio.Task] = []
+│
+│       async def startup(self) -> None:
+│           """Initialize all components in correct order"""
+│           try:
+│               self.logger.info("Starting notification service components...")
+│               start_time = time.time()
+│
+│               # 1. Messaging
+│               await self._init_messaging()
+│
+│               # 2. Database
+│               await self._init_database()
+│
+│               # 3. Services
+│               self._init_services()
+│
+│               # 4. Event listeners
+│               await self._init_listeners()
+│
+│               self.logger.info(f"Notification service started successfully in {time.time() - start_time:.2f}s")
+│
+│           except Exception:
+│               self.logger.critical("Service startup failed", exc_info=True)
+│               await self.shutdown()
+│               raise
+│
+│       async def shutdown(self) -> None:
+│           """Graceful shutdown in reverse order"""
+│           self.logger.info("Shutting down notification service")
+│
+│           # Cancel tasks
+│           for task in self._tasks:
+│               task.cancel()
+│           if self._tasks:
+│               await asyncio.gather(*self._tasks, return_exceptions=True)
+│
+│           # Stop listeners
+│           for listener in self._listeners:
+│               try:
+│                   await listener.stop()
+│               except Exception:
+│                   self.logger.exception("Listener stop failed", exc_info=True)
+│
+│           # Close messaging
+│           if self.messaging_client:
+│               try:
+│                   await self.messaging_client.close()
+│               except Exception:
+│                   self.logger.exception("Messaging close failed", exc_info=True)
+│
+│           # Disconnect database
+│           if self.prisma and self._db_connected:
+│               try:
+│                   await self.prisma.disconnect()
+│               except Exception:
+│                   self.logger.exception("Prisma disconnect failed", exc_info=True)
+│
+│           self.logger.info("Notification service shutdown complete")
+│
+│       async def _init_messaging(self) -> None:
+│           """Initialize JetStream client and publisher"""
+│           self.messaging_client = JetStreamClient(self.logger)
+│           await self.messaging_client.connect([self.config.nats_url])
+│           # await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>", "dlq.>"])
+│
+│           # Initialize publisher
+│           self.event_publisher = NotificationEventPublisher(self.messaging_client, self.logger)
+│
+│           self.logger.info("Messaging and publisher initialized")
+│
+│       async def _init_database(self) -> None:
+│           """Initialize Prisma client if database is enabled."""
+│           if not self.config.database_enabled:
+│               self.logger.info("Database disabled; skipping Prisma initialization")
+│               return
+│
+│           self.prisma = Prisma()
+│           if not self.prisma:
+│               raise RuntimeError("Prisma client not initialized")
+│
+│           try:
+│               await self.prisma.connect()
+│               self._db_connected = True
+│               self.logger.info("Database connected")
+│           except Exception as e:
+│               self.logger.exception(f"Database connection failed: {e}")
+│               raise
+│
+│       def _init_services(self) -> None:
+│           """Initialize business services"""
+│           # Initialize template service
+│           self.template_service = TemplateService(
+│               template_path=self.config.template_path,
+│               cache_ttl=self.config.template_cache_ttl,
+│               logger=self.logger,
+│           )
+│
+│           # Initialize email provider
+│           if self.config.email_provider == "sendgrid":
+│               provider = SendGridProvider(
+│                   api_key=self.config.sendgrid_api_key,
+│                   from_email=self.config.sendgrid_from_email,
+│                   from_name=self.config.sendgrid_from_name,
+│                   sandbox_mode=self.config.sendgrid_sandbox_mode,
+│                   logger=self.logger,
+│               )
+│           else:
+│               provider = MailhogProvider(
+│                   smtp_host=self.config.mailhog_smtp_host,
+│                   smtp_port=self.config.mailhog_smtp_port,
+│                   logger=self.logger,
+│               )
+│
+│           # Initialize email service
+│           self.email_service = EmailService(provider=provider, logger=self.logger)
+│
+│           # Initialize notification service
+│           if self._db_connected:
+│               notification_repository = NotificationRepository(self.prisma)
+│               self.notification_service = NotificationService(
+│                   repository=notification_repository,
+│                   template_service=self.template_service,
+│                   email_service=self.email_service,
+│                   logger=self.logger,
+│               )
+│
+│           self.logger.info("Services initialized")
+│
+│       async def _init_listeners(self) -> None:
+│           """Initialize event listeners"""
+│           if not self.messaging_client or not self.notification_service:
+│               self.logger.warning("Skipping listeners - dependencies not ready")
+│               return
+│
+│           # Create listeners for ALL event types
+│           listeners = [
+│               MerchantEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+│               CatalogEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+│               CreditEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+│               BillingEventsListener(self.messaging_client, self.notification_service, self.event_publisher, self.logger),
+│           ]
+│
+│           # Start all listeners
+│           for listener in listeners:
+│               await listener.start()
+│               self._listeners.append(listener)
+│
+│           self.logger.info(f"Started {len(listeners)} event listeners")
+│   ```
+│
+└── main.py
+
+    ```py
+    # services/notification-service/src/main.py
+    from contextlib import asynccontextmanager
+
+    from fastapi import FastAPI
+
+    from shared.api import create_health_router, setup_middleware
+    from shared.api.handlers import register_exception_handlers
+    from shared.utils import create_logger
+
+    from .api import api_router
+    from .config import get_service_config
+    from .lifecycle import ServiceLifecycle
+
+    # Create singletons at module level
+    config = get_service_config()
+    logger = create_logger(config.service_name)
+    lifecycle = ServiceLifecycle(config, logger)
+
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan management for startup/shutdown"""
+        app.state.lifecycle = lifecycle
+        app.state.config = config
+        app.state.logger = logger
+
+        try:
+            await lifecycle.startup()
+            yield
+        finally:
+            await lifecycle.shutdown()
+
+
+    def create_application() -> FastAPI:
+        """Create FastAPI app with shared package integration"""
+        app = FastAPI(
+            title=config.service_name,
+            version=config.service_version,
+            description=config.service_description,
+            lifespan=lifespan,
+        )
+
+        # Setup shared middleware (handles ALL errors)
+        setup_middleware(app, service_name=config.service_name)
+        register_exception_handlers(app)
+
+        # Add health check from shared package
+        app.include_router(create_health_router(config.service_name, prefix="/api/v1/notifications"))
+        app.include_router(api_router)
+
+        return app
+
+
+    app = create_application()
+    ```
+
+templates/
+├── credit_exhausted/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── credit_granted/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── credit_low/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── shared/
+│   ├── footer.html.j2
+│   ├── header.html.j2
+│   └── macros.html.j2
+├── trial_exhausted/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── trial_granted/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── trial_low/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+├── welcome/
+│   ├── body.html.j2
+│   ├── body.text.j2
+│   └── subject.txt.j2
+└── __init__.py
+
+    ```py
+    # ruff: noqa: RUF012
+    # services/notification-service/src/templates/email_templates.py
+    """Email templates for different notification types"""
+
+    from typing import Any
+
+
+    class EmailTemplates:
+        """Email template definitions with all required variables"""
+
+        # Base footer template used in all emails
+        FOOTER_TEMPLATE = """
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+            <div style="text-align: center; font-size: 12px; color: #666;">
+                <p>
+                    <a href="{{ support_url }}" style="color: #666; text-decoration: none;">Contact Support</a> |
+                    <a href="{{ unsubscribe_url }}" style="color: #666; text-decoration: none;">Unsubscribe</a>
+                </p>
+                <p>&copy; {{ current_year }} {{ platform_name }}. All rights reserved.</p>
+            </div>
+        </div>
+        """
+
+        WELCOME = {
+            "subject": "Welcome to GlamYouUp! 🎉",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
+                    <h1 style="color: #333;">Welcome to GlamYouUp!</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi {{ shop_name }},</p>
+
+                    <p>Thank you for launching GlamYouUp on your store! We're excited to help you provide an amazing shopping experience for your customers.</p>
+
+                    <h2 style="color: #666;">Key Features Now Available:</h2>
+
+                    <div style="margin: 20px 0;">
+                        <h3 style="color: #333;">✨ Personal Style Analysis</h3>
+                        <p>Help customers discover their unique style profile with AI-powered analysis.</p>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <h3 style="color: #333;">👗 Best Style Fit Recommendation</h3>
+                        <p>Match customers with products that perfectly suit their style preferences.</p>
+                    </div>
+
+                    <div style="margin: 20px 0;">
+                        <h3 style="color: #333;">🤳 Proactive Tryon Analysis</h3>
+                        <p>Let customers virtually try on products before making a purchase.</p>
+                    </div>
+
+                    <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                        <h3 style="color: #1976d2;">Next Steps:</h3>
+                        <ol style="color: #555;">
+                            <li>Complete product registration to enable AI features</li>
+                            <li>Customize your style preferences</li>
+                            <li>Start promoting virtual try-on to your customers</li>
+                        </ol>
+                    </div>
+
+                    <p>If you have any questions, don't hesitate to reach out to our support team!</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {"required": ["shop_name"], "optional": []},
+        }
+
+        REGISTRATION_FINISH = {
+            "subject": "Product Registration Complete! ✅",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #4caf50; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Registration Complete!</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Great news!</p>
+
+                    <p>We've successfully registered <strong>{{ product_count }}</strong> products from your store with our AI system.</p>
+
+                    <div style="background-color: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #2e7d32;">What This Means:</h3>
+                        <ul style="color: #555;">
+                            <li>Your products are now ready for AI-powered style analysis</li>
+                            <li>Customers can use virtual try-on features</li>
+                            <li>Personalized recommendations are active</li>
+                        </ul>
+                    </div>
+
+                    <p>Your customers can now enjoy the full GlamYouUp experience!</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {"required": ["product_count"], "optional": []},
+        }
+
+        REGISTRATION_SYNC = {
+            "subject": "Product Catalog Updated 🔄",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #2196f3; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Catalog Sync Complete</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p>We've detected changes in your product catalog and automatically synced them with GlamYouUp.</p>
+
+                    <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #1976d2;">Sync Summary:</h3>
+                        <ul style="color: #555;">
+                            <li><strong>{{ added_count }}</strong> new products added</li>
+                            <li><strong>{{ updated_count }}</strong> products updated</li>
+                            {% if removed_count > 0 %}
+                            <li><strong>{{ removed_count }}</strong> products removed</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <p>The updated products are being processed by our AI system and will be ready for virtual try-on shortly.</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {
+                "required": ["added_count", "updated_count"],
+                "optional": ["removed_count"],
+            },
+        }
+
+        BILLING_EXPIRED = {
+            "subject": "Your GlamYouUp Subscription Has Expired ⚠️",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #ff9800; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Subscription Expired</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p>Your GlamYouUp subscription ({{ plan_name }}) has expired.</p>
+
+                    <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #e65100;">What This Means:</h3>
+                        <ul style="color: #555;">
+                            <li>Virtual try-on features are temporarily disabled</li>
+                            <li>AI style recommendations are paused</li>
+                            <li>Your product data is safely stored</li>
+                        </ul>
+                    </div>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ renewal_link }}" style="background-color: #4caf50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Renew Subscription
+                        </a>
+                    </div>
+
+                    <p>Renew your subscription to continue providing amazing experiences for your customers!</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {"required": ["plan_name", "renewal_link"], "optional": []},
+        }
+
+        BILLING_CHANGED = {
+            "subject": "Billing Plan Updated Successfully ✅",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #4caf50; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Plan Updated!</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p>Your billing plan has been successfully updated to: <strong>{{ plan_name }}</strong></p>
+
+                    <div style="background-color: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p>All GlamYouUp features are now active and ready to use!</p>
+                    </div>
+
+                    <p>Thank you for continuing to trust GlamYouUp for your virtual try-on needs.</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {"required": ["plan_name"], "optional": []},
+        }
+
+        BILLING_LOW_CREDITS = {
+            "subject": "Credit Balance Running Low ⚠️",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #ff9800; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Low Credit Balance</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p>Your GlamYouUp credit balance is running low.</p>
+
+                    <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #e65100;">Current Status:</h3>
+                        <ul style="color: #555;">
+                            <li>Current balance: <strong>${{ current_balance }}</strong></li>
+                            <li>Estimated days remaining: <strong>{{ days_remaining }} days</strong></li>
+                            <li>Expected depletion: <strong>{{ expected_depletion_date }}</strong></li>
+                        </ul>
+                    </div>
+
+                    <p>To avoid service interruption, please add credits or upgrade your plan.</p>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ billing_link }}" style="background-color: #2196f3; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Add Credits
+                        </a>
+                    </div>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {
+                "required": [
+                    "current_balance",
+                    "days_remaining",
+                    "expected_depletion_date",
+                    "billing_link",
+                ],
+                "optional": [],
+            },
+        }
+
+        BILLING_ZERO_BALANCE = {
+            "subject": "URGENT: Zero Balance - Service Deactivation in 16 Hours 🚨",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #f44336; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Zero Balance Alert</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p><strong>Your GlamYouUp credit balance has reached $0.</strong></p>
+
+                    <div style="background-color: #ffebee; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #f44336;">
+                        <h3 style="color: #c62828;">⏰ IMPORTANT:</h3>
+                        <p style="color: #555; font-size: 16px;">
+                            GlamYouUp features will be automatically deactivated at:<br>
+                            <strong style="font-size: 18px;">{{ deactivation_time }}</strong>
+                        </p>
+                    </div>
+
+                    <p>To continue using GlamYouUp without interruption, please add credits immediately.</p>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ billing_link }}" style="background-color: #f44336; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; display: inline-block; font-size: 18px;">
+                            Add Credits Now
+                        </a>
+                    </div>
+
+                    <p>Don't let your customers miss out on the virtual try-on experience!</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {
+                "required": ["deactivation_time", "billing_link"],
+                "optional": [],
+            },
+        }
+
+        BILLING_DEACTIVATED = {
+            "subject": "GlamYouUp Features Deactivated 🔒",
+            "body": """
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #757575; padding: 20px; text-align: center;">
+                    <h1 style="color: white;">Features Deactivated</h1>
+                </div>
+
+                <div style="padding: 30px;">
+                    <p>Hi there,</p>
+
+                    <p>GlamYouUp features have been deactivated for your store due to: <strong>{{ reason }}</strong></p>
+
+                    <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="color: #424242;">Currently Disabled:</h3>
+                        <ul style="color: #555;">
+                            <li>Virtual try-on functionality</li>
+                            <li>AI style recommendations</li>
+                            <li>Product analysis features</li>
+                        </ul>
+                    </div>
+
+                    <p>Your product data and settings are safely stored and will be restored once you reactivate your account.</p>
+
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ reactivation_link }}" style="background-color: #4caf50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Reactivate Account
+                        </a>
+                    </div>
+
+                    <p>We'd love to have you back!</p>
+
+                    <p>Best regards,<br>The GlamYouUp Team</p>
+
+                    """
+            + FOOTER_TEMPLATE
+            + """
+                </div>
+            </body>
+            </html>
+            """,
+            "variables": {"required": ["reason", "reactivation_link"], "optional": []},
+        }
+
+        @classmethod
+        def get_template(cls, notification_type: str) -> dict[str, Any]:
+            """Get template for notification type"""
+            templates = {
+                "welcome": cls.WELCOME,
+                "registration_finish": cls.REGISTRATION_FINISH,
+                "registration_sync": cls.REGISTRATION_SYNC,
+                "billing_expired": cls.BILLING_EXPIRED,
+                "billing_changed": cls.BILLING_CHANGED,
+                "billing_low_credits": cls.BILLING_LOW_CREDITS,
+                "billing_zero_balance": cls.BILLING_ZERO_BALANCE,
+                "billing_deactivated": cls.BILLING_DEACTIVATED,
+            }
+
+            return templates.get(
+                notification_type,
+                {
+                    "subject": "GlamYouUp Notification",
+                    "body": "<html><body><p>{{ content }}</p></body></html>",
+                    "variables": {"required": ["content"], "optional": []},
+                },
+            )
+
+        @classmethod
+        def get_all_templates(cls) -> dict[str, dict[str, Any]]:
+            """Get all available templates"""
+            return {
+                "welcome": cls.WELCOME,
+                "registration_finish": cls.REGISTRATION_FINISH,
+                "registration_sync": cls.REGISTRATION_SYNC,
+                "billing_expired": cls.BILLING_EXPIRED,
+                "billing_changed": cls.BILLING_CHANGED,
+                "billing_low_credits": cls.BILLING_LOW_CREDITS,
+                "billing_zero_balance": cls.BILLING_ZERO_BALANCE,
+                "billing_deactivated": cls.BILLING_DEACTIVATED,
+            }
+
+        @classmethod
+        def get_template_info(cls, notification_type: str) -> dict[str, Any]:
+            """Get template information including variables"""
+            template = cls.get_template(notification_type)
+            return {
+                "type": notification_type,
+                "subject": template.get("subject", ""),
+                "variables": template.get("variables", {"required": [], "optional": []}),
+                "has_body": bool(template.get("body")),
+            }
+
+        @classmethod
+        def validate_variables(cls, notification_type: str, provided_variables: dict[str, Any]) -> dict[str, Any]:
+            """Validate that all required variables are provided"""
+            template = cls.get_template(notification_type)
+            required_vars = template.get("variables", {}).get("required", [])
+            optional_vars = template.get("variables", {}).get("optional", [])
+
+            missing_required = [var for var in required_vars if var not in provided_variables]
+            unused_variables = [
+                var
+                for var in provided_variables
+                if var not in required_vars + optional_vars + ["unsubscribe_token", "merchant_id", "merchant_domain"]
+            ]
+
+            return {
+                "is_valid": len(missing_required) == 0,
+                "missing_required": missing_required,
+                "unused_variables": unused_variables,
+            }
+    ```
+
+tests/
+├── unit/
+├── __init__.py
+└── conftest.py
+.python-version
+poetry.lock
+poetry.toml
+
+```toml
+[virtualenvs]
+in-project = true
+```
+
+pyproject.toml
+
+```toml
+# services/notification-service/pyproject.toml
+[tool.poetry]
+name = "notification-service"
+version = "1.0.0"
+description = "Event-driven email notification service"
+authors = ["GLAM Team <team@glamyouup.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109"
+uvicorn = {extras = ["standard"], version = "==0.35.0"}
+prisma = "^0.11.0"
+pydantic = {extras = ["email"], version = "^2.11.7"}
+jinja2 = "^3.1.2"
+shared = {path = "../../shared", develop = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+ruff = "^0.1.9"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+```
+
+
+================================================================================
+Output includes file contents
+================================================================================

@@ -1,0 +1,77 @@
+{
+    auto_https off
+    admin localhost:2019
+}
+
+localhost:80, api.glamyouup.local:80 {
+    # Health check
+    handle /health {
+        respond "OK" 200
+    }
+
+    # API v1 routes - DON'T strip prefix, services expect full path
+    handle /api/v1/merchants/* {
+        reverse_proxy host.docker.internal:8006
+    }
+
+    handle /api/v1/billing/* {
+        reverse_proxy host.docker.internal:8002
+    }
+
+    handle /api/v1/catalog/* {
+        reverse_proxy host.docker.internal:8003
+    }
+
+    handle /api/v1/credits/* {
+        reverse_proxy host.docker.internal:8005
+    }
+
+    handle /api/v1/analytics/* {
+        reverse_proxy host.docker.internal:8001
+    }
+
+    handle /api/v1/notifications/* {
+        reverse_proxy host.docker.internal:8007
+    }
+
+    handle /api/v1/recommendations/* {
+        reverse_proxy host.docker.internal:8008
+    }
+
+    handle /api/v1/season-compatibility/* {
+        reverse_proxy host.docker.internal:8009
+    }
+
+    handle /api/v1/selfie/* {
+        reverse_proxy host.docker.internal:8010
+    }
+
+    handle /api/v1/tokens/* {
+        reverse_proxy host.docker.internal:8011
+    }
+
+    handle /api/v1/webhooks/* {
+        reverse_proxy host.docker.internal:8012
+    }
+
+    # AI Services
+    handle /api/v1/ai/selfie/* {
+        reverse_proxy host.docker.internal:8013
+    }
+
+    handle /api/v1/ai/catalog/* {
+        reverse_proxy host.docker.internal:8014
+    }
+
+    # Catch-all 404
+    handle {
+        respond "Not Found" 404
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

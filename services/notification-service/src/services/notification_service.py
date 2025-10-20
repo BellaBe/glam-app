@@ -1,11 +1,10 @@
-# services/notification-service/src/services/notification_service.py
 from datetime import datetime
 from typing import Any, TypeVar
 from uuid import UUID
 
-from prisma import Json
-from prisma.errors import UniqueViolationError
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.messaging.events.base import BaseEventPayload
 from shared.utils.exceptions import NotFoundError
@@ -37,12 +36,12 @@ class NotificationService:
 
     def __init__(
         self,
-        repository: NotificationRepository,
+        session_factory: async_sessionmaker[AsyncSession],
         template_service: TemplateService,
         email_service: EmailService,
         logger: ServiceLogger,
     ):
-        self.repository = repository
+        self.session_factory = session_factory
         self.template_service = template_service
         self.email_service = email_service
         self.logger = logger
@@ -63,171 +62,178 @@ class NotificationService:
             extra={"event_type": event_type, "event_id": event_id, "correlation_id": correlation_id},
         )
 
-        self.logger.info("Checking for existing notification", extra={"event_id": event_id})
-        existing = await self.repository.find_by_idempotency_key(event_id)
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
 
-        if existing:
-            self.logger.info(
-                "Found existing notification",
-                extra={"notification_id": str(existing.id), "status": existing.status.value},
-            )
-            if existing.status == NotificationStatus.SENT:
-                self.logger.info(f"Event {event_id} already delivered")
-                return existing
+            self.logger.info("Checking for existing notification", extra={"event_id": event_id})
+            existing = await repo.find_by_idempotency_key(event_id)
 
-            now = datetime.now()
-            await self.repository.update(
-                existing.id, {"attempt_count": existing.attempt_count + 1, "last_attempt_at": now}
-            )
+            if existing:
+                self.logger.info(
+                    "Found existing notification",
+                    extra={"notification_id": str(existing.id), "status": existing.status.value},
+                )
+                if existing.status == NotificationStatus.SENT:
+                    self.logger.info(f"Event {event_id} already delivered")
+                    return existing
 
-            self.logger.info(
-                "Retrying delivery for existing notification",
-                extra={"notification_id": str(existing.id), "attempt_count": existing.attempt_count + 1},
-            )
-            await self._send_email(existing, correlation_id)
-            return await self.repository.find_by_id(existing.id)
+                now = datetime.now()
+                await repo.update(existing.id, {"attempt_count": existing.attempt_count + 1, "last_attempt_at": now})
 
-        # New notification - validate and create
-        email_template = self.EMAIL_TEMPLATE_MAP.get(event_type)
-        if not email_template:
-            self.logger.info("No template for event", extra={"event_type": event_type})
-            return None
+                self.logger.info(
+                    "Retrying delivery for existing notification",
+                    extra={"notification_id": str(existing.id), "attempt_count": existing.attempt_count + 1},
+                )
+                await self._send_email(existing, correlation_id)
+                updated = await repo.find_by_id(existing.id)
+                await session.commit()
+                return updated
 
-        # Handle conditional templates
-        if event_type == "evt.merchant.status.changed.v1":
-            status = getattr(data, "status", None)
-            if status != "deactivated":
-                self.logger.info("Skipping notification - status not deactivated", extra={"status": status})
+            # New notification - validate and create
+            email_template = self.EMAIL_TEMPLATE_MAP.get(event_type)
+            if not email_template:
+                self.logger.info("No template for event", extra={"event_type": event_type})
                 return None
-            email_template = "account_deactivated"
 
-        email = getattr(data, "email", None)
-        if not email:
-            self.logger.warning("No recipient email", extra={"event_type": event_type, "event_id": event_id})
-            return None
+            # Handle conditional templates
+            if event_type == "evt.merchant.status.changed.v1":
+                status = getattr(data, "status", None)
+                if status != "deactivated":
+                    self.logger.info("Skipping notification - status not deactivated", extra={"status": status})
+                    return None
+                email_template = "account_deactivated"
 
-        # Prepare notification data
-        ids = data.identifiers
-        variables = self._prepare_template_variables(event_type, data)
-        now = datetime.now()
+            email = getattr(data, "email", None)
+            if not email:
+                self.logger.warning("No recipient email", extra={"event_type": event_type, "event_id": event_id})
+                return None
 
-        new_notification = {
-            "merchant_id": str(ids.merchant_id),
-            "platform_name": ids.platform_name,
-            "platform_shop_id": ids.platform_shop_id,
-            "domain": ids.domain,
-            "recipient_email": email,
-            "template_type": email_template,
-            "template_variables": Json(variables),
-            "status": NotificationStatus.PENDING.value,
-            "idempotency_key": event_id,
-            "attempt_count": 1,
-            "first_attempt_at": now,
-            "last_attempt_at": now,
-        }
+            # Prepare notification data
+            ids = data.identifiers
+            variables = self._prepare_template_variables(event_type, data)
+            now = datetime.now()
 
-        try:
-            notification = await self.repository.create(new_notification)
-        except UniqueViolationError:
-            # Race condition - another process created it
-            notification = await self.repository.find_by_idempotency_key(event_id)
-            if notification.status == NotificationStatus.SENT:
-                return notification
+            new_notification = {
+                "merchant_id": str(ids.merchant_id),
+                "platform_name": ids.platform_name,
+                "platform_shop_id": ids.platform_shop_id,
+                "domain": ids.domain,
+                "recipient_email": email,
+                "template_type": email_template,
+                "template_variables": variables,
+                "status": NotificationStatus.PENDING.value,
+                "idempotency_key": event_id,
+                "attempt_count": 1,
+                "first_attempt_at": now,
+                "last_attempt_at": now,
+            }
 
-        # Send email
-        await self._send_email(notification, correlation_id)
-        return await self.repository.find_by_id(notification.id)
+            try:
+                notification = await repo.create(new_notification)
+                await session.commit()
+            except IntegrityError:
+                # Race condition - another process created it
+                await session.rollback()
+                notification = await repo.find_by_idempotency_key(event_id)
+                if notification and notification.status == NotificationStatus.SENT:
+                    return notification
 
-    async def _send_email(self, notification: dict, correlation_id: str) -> None:
+            # Send email
+            await self._send_email(notification, correlation_id)
+            updated = await repo.find_by_id(notification.id)
+            await session.commit()
+            return updated
+
+    async def _send_email(self, notification: NotificationOut, correlation_id: str) -> None:
         """
         Send email and update status. Raises exception for NATS retry if needed.
         """
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
 
-        if notification.status == NotificationStatus.SENT:
-            self.logger.info("Skip delivery: already sent", extra={"notification_id": str(notification.id)})
-            return
+            if notification.status == NotificationStatus.SENT:
+                self.logger.info("Skip delivery: already sent", extra={"notification_id": str(notification.id)})
+                return
 
-        try:
-            subject, html_body, text_body = self.template_service.render_email(
-                notification.template_type, notification.template_variables
-            )
+            try:
+                subject, html_body, text_body = self.template_service.render_email(
+                    notification.template_type, notification.template_variables
+                )
 
-            self.logger.info(f"Sending email to {notification.recipient_email}")
+                self.logger.info(f"Sending email to {notification.recipient_email}")
 
-            response = await self.email_service.send(
-                to=notification.recipient_email,
-                subject=subject,
-                html=html_body,
-                text=text_body,
-                metadata={
-                    "notification_id": str(notification.id),
-                    "merchant_id": notification.merchant_id,
-                    "attempt": notification.attempt_count,
-                    "template_type": notification.template_type,
-                    "correlation_id": correlation_id,
-                },
-            )
+                response = await self.email_service.send(
+                    to=notification.recipient_email,
+                    subject=subject,
+                    html=html_body,
+                    text=text_body,
+                    metadata={
+                        "notification_id": str(notification.id),
+                        "merchant_id": notification.merchant_id,
+                        "attempt": notification.attempt_count,
+                        "template_type": notification.template_type,
+                        "correlation_id": correlation_id,
+                    },
+                )
 
-            now = datetime.now()
+                now = datetime.now()
 
-            await self.repository.update(
-                notification.id,
-                {
-                    "status": NotificationStatus.SENT.value,
-                    "delivered_at": now,
-                    "provider_message_id": response.get("message_id"),
-                    "provider_message": Json(
-                        {
+                await repo.update(
+                    notification.id,
+                    {
+                        "status": NotificationStatus.SENT.value,
+                        "delivered_at": now,
+                        "provider_message_id": response.get("message_id"),
+                        "provider_message": {
                             "response": response,
-                        }
-                    ),
-                },
-            )
+                        },
+                    },
+                )
+                await session.commit()
 
-            self.logger.info(
-                "Notification delivered",
-                extra={
-                    "notification_id": str(notification.id),
-                    "attempt": notification.attempt_count,
-                    "provider_message_id": response.get("message_id"),
-                    "correlation_id": correlation_id,
-                },
-            )
+                self.logger.info(
+                    "Notification delivered",
+                    extra={
+                        "notification_id": str(notification.id),
+                        "attempt": notification.attempt_count,
+                        "provider_message_id": response.get("message_id"),
+                        "correlation_id": correlation_id,
+                    },
+                )
 
-        except Exception as e:
-            error_msg = str(e)[:1000]  # Truncate long errors
+            except Exception as e:
+                error_msg = str(e)[:1000]  # Truncate long errors
 
-            is_final_attempt = notification.attempt_count >= 3
-            new_status = NotificationStatus.FAILED if is_final_attempt else NotificationStatus.PENDING
+                is_final_attempt = notification.attempt_count >= 3
+                new_status = NotificationStatus.FAILED if is_final_attempt else NotificationStatus.PENDING
 
-            # Update notification with failure
-            await self.repository.update(
-                notification.id,
-                {
-                    "status": new_status,
-                    "last_attempt_at": datetime.now(),
-                    "provider_message": Json(
-                        {
+                # Update notification with failure
+                await repo.update(
+                    notification.id,
+                    {
+                        "status": new_status,
+                        "last_attempt_at": datetime.now(),
+                        "provider_message": {
                             "provider": self.email_service.provider_name,
                             "error": error_msg,
-                        }
-                    ),
-                },
-            )
+                        },
+                    },
+                )
+                await session.commit()
 
-            self.logger.exception(
-                "Notification delivery failed",
-                extra={
-                    "notification_id": str(notification.id),
-                    "attempt": notification.attempt_count,
-                    "error": error_msg,
-                    "final": is_final_attempt,
-                },
-            )
+                self.logger.exception(
+                    "Notification delivery failed",
+                    extra={
+                        "notification_id": str(notification.id),
+                        "attempt": notification.attempt_count,
+                        "error": error_msg,
+                        "final": is_final_attempt,
+                    },
+                )
 
-            # Re-raise for NATS retry (unless we've hit max attempts)
-            if not is_final_attempt:
-                raise
+                # Re-raise for NATS retry (unless we've hit max attempts)
+                if not is_final_attempt:
+                    raise
 
     def _prepare_template_variables(self, event_type: str, data: BaseEventPayload) -> dict:
         """Prepare template variables for email rendering."""
@@ -235,7 +241,7 @@ class NotificationService:
         variables = {
             "company_name": "Glam You Up",
             "company_address": "31 Continental Dr, Suite 305, Newark, Delaware 19713, United States",
-            "brand_color": "#BD4267",   # brand-700
+            "brand_color": "#BD4267",
             "domain": ids.domain,
             "platform_name": ids.platform_name,
             "platform_shop_id": ids.platform_shop_id,
@@ -257,10 +263,12 @@ class NotificationService:
 
     async def get_notification(self, notification_id: UUID) -> NotificationOut:
         """Get notification by ID."""
-        notification = await self.repository.find_by_id(notification_id)
-        if not notification:
-            raise NotFoundError("Notification not found", details={"notification_id": str(notification_id)})
-        return notification
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
+            notification = await repo.find_by_id(notification_id)
+            if not notification:
+                raise NotFoundError("Notification not found", details={"notification_id": str(notification_id)})
+            return notification
 
     async def list_notifications(
         self,
@@ -270,34 +278,41 @@ class NotificationService:
         order_by: list[tuple] = None,
     ) -> tuple[int, list[NotificationOut]]:
         """List notifications with filters."""
-        total = await self.repository.count(filters=filters)
-        notifications = await self.repository.find_many(
-            filters=filters, skip=skip, limit=limit, order_by=order_by or [("first_attempt_at", "desc")]
-        )
-        return total, notifications
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
+            total = await repo.count(filters=filters)
+            notifications = await repo.find_many(
+                filters=filters, skip=skip, limit=limit, order_by=order_by or [("first_attempt_at", "desc")]
+            )
+            return total, notifications
 
     async def get_stats(self) -> NotificationStats:
         """Get notification statistics."""
-        return await self.repository.get_stats()
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
+            return await repo.get_stats()
 
     async def get_health_metrics(self) -> dict:
         """Get system health metrics based on attempt distribution."""
-        total_sent = await self.repository.count({"status": NotificationStatus.SENT})
-        if total_sent == 0:
+        async with self.session_factory() as session:
+            repo = NotificationRepository(session)
+
+            total_sent = await repo.count({"status": NotificationStatus.SENT})
+            if total_sent == 0:
+                return {
+                    "first_attempt_success_rate": 0,
+                    "avg_attempts": 0,
+                    "failure_rate": 0,
+                }
+
+            first_attempt_success = await repo.count({"status": NotificationStatus.SENT, "attempt_count": 1})
+
+            total_notifications = await repo.count({})
+            total_failed = await repo.count({"status": NotificationStatus.FAILED})
+
             return {
-                "first_attempt_success_rate": 0,
-                "avg_attempts": 0,
-                "failure_rate": 0,
+                "first_attempt_success_rate": round((first_attempt_success / total_sent) * 100, 2),
+                "failure_rate": round((total_failed / total_notifications) * 100, 2) if total_notifications > 0 else 0,
+                "total_sent": total_sent,
+                "total_failed": total_failed,
             }
-
-        first_attempt_success = await self.repository.count({"status": NotificationStatus.SENT, "attempt_count": 1})
-
-        total_notifications = await self.repository.count({})
-        total_failed = await self.repository.count({"status": NotificationStatus.FAILED})
-
-        return {
-            "first_attempt_success_rate": round((first_attempt_success / total_sent) * 100, 2),
-            "failure_rate": round((total_failed / total_notifications) * 100, 2) if total_notifications > 0 else 0,
-            "total_sent": total_sent,
-            "total_failed": total_failed,
-        }

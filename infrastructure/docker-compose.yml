@@ -17,7 +17,7 @@ x-healthcheck-ai: &healthcheck-ai
 
 x-common-env: &common-env
   NATS_URL: nats://nats:4222
-  JWT_SECRET: ${JWT_SECRET}
+  CLIENT_JWT_SECRET: ${CLIENT_JWT_SECRET}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   APP_ENV: ${APP_ENV}
 

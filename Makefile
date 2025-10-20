@@ -31,7 +31,7 @@ PORT_catalog-ai-analyzer = 8014
 ##@ Local (Infrastructure Only + Run Services on Host)
 
 local: ## Start local infrastructure (Postgres, NATS, MailHog)
-	$(DC_LOCAL) up -d postgres nats mailhog
+	$(DC_LOCAL) up -d postgres nats mailhog caddy
 	@echo "\n✅ Local infrastructure ready:"
 	@echo "  PostgreSQL: localhost:5432"
 	@echo "  NATS: localhost:4222"

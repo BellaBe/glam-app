@@ -1,18 +1,15 @@
-# services/notification-service/src/lifecycle.py
 import asyncio
 import time
-
-from prisma import Prisma  # type: ignore[attr-defined]
 
 from shared.messaging.jetstream_client import JetStreamClient
 from shared.utils.logger import ServiceLogger
 
 from .config import ServiceConfig
+from .db.session import make_engine, make_session_factory
 from .events.listeners import BillingEventsListener, CatalogEventsListener, CreditEventsListener, MerchantEventsListener
 from .events.publishers import NotificationEventPublisher
 from .providers.mailhog_provider import MailhogProvider
 from .providers.sendgrid_provider import SendGridProvider
-from .repositories.notification_repository import NotificationRepository
 from .services.email_service import EmailService
 from .services.notification_service import NotificationService
 from .services.template_service import TemplateService
@@ -27,8 +24,8 @@ class ServiceLifecycle:
 
         # Connections
         self.messaging_client: JetStreamClient | None = None
-        self.prisma: Prisma | None = None
-        self._db_connected = False
+        self.engine = None
+        self.session_factory = None
 
         # Services
         self.notification_service: NotificationService | None = None
@@ -89,12 +86,12 @@ class ServiceLifecycle:
             except Exception:
                 self.logger.exception("Messaging close failed", exc_info=True)
 
-        # Disconnect database
-        if self.prisma and self._db_connected:
+        # Dispose database
+        if self.engine:
             try:
-                await self.prisma.disconnect()
+                await self.engine.dispose()
             except Exception:
-                self.logger.exception("Prisma disconnect failed", exc_info=True)
+                self.logger.exception("Engine dispose failed", exc_info=True)
 
         self.logger.info("Notification service shutdown complete")
 
@@ -102,7 +99,6 @@ class ServiceLifecycle:
         """Initialize JetStream client and publisher"""
         self.messaging_client = JetStreamClient(self.logger)
         await self.messaging_client.connect([self.config.nats_url])
-        # await self.messaging_client.ensure_stream("GLAM_EVENTS", ["evt.>", "cmd.>", "dlq.>"])
 
         # Initialize publisher
         self.event_publisher = NotificationEventPublisher(self.messaging_client, self.logger)
@@ -110,19 +106,15 @@ class ServiceLifecycle:
         self.logger.info("Messaging and publisher initialized")
 
     async def _init_database(self) -> None:
-        """Initialize Prisma client if database is enabled."""
+        """Initialize database if enabled."""
         if not self.config.database_enabled:
-            self.logger.info("Database disabled; skipping Prisma initialization")
+            self.logger.info("Database disabled; skipping initialization")
             return
 
-        self.prisma = Prisma()
-        if not self.prisma:
-            raise RuntimeError("Prisma client not initialized")
-
         try:
-            await self.prisma.connect()
-            self._db_connected = True
-            self.logger.info("Database connected")
+            self.engine = make_engine(self.config.database_url)
+            self.session_factory = make_session_factory(self.engine)
+            self.logger.info("Database initialized")
         except Exception as e:
             self.logger.exception(f"Database connection failed: {e}")
             raise
@@ -156,10 +148,9 @@ class ServiceLifecycle:
         self.email_service = EmailService(provider=provider, logger=self.logger)
 
         # Initialize notification service
-        if self._db_connected:
-            notification_repository = NotificationRepository(self.prisma)
+        if self.session_factory:
             self.notification_service = NotificationService(
-                repository=notification_repository,
+                session_factory=self.session_factory,
                 template_service=self.template_service,
                 email_service=self.email_service,
                 logger=self.logger,

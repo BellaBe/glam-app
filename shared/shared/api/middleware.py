@@ -65,7 +65,7 @@ def setup_middleware(app: FastAPI, *, service_name: str):
     async def api_middleware(request: Request, call_next):
         logger: ServiceLogger = request.app.state.logger
         start = time.perf_counter()
-
+        print("request url:", request.url)
         try:
             # 1) enforce correlation id
             correlation_id = request.headers.get("X-Correlation-ID")

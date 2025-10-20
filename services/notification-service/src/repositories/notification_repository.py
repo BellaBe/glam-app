@@ -1,110 +1,174 @@
-# services/notification-service/src/repositories/notification_repository.py
+from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from prisma import Prisma
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..schemas.notification import NotificationOut, NotificationStats, NotificationStatus
+from ..db.models import Notification, NotificationStatus
+from ..schemas.notification import NotificationOut, NotificationStats
 
 
 class NotificationRepository:
     """Repository for notification data access"""
 
-    def __init__(self, prisma: Prisma):
-        self.prisma = prisma
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
     async def create(self, data: dict[str, Any]) -> NotificationOut:
         """Create a new notification record"""
         try:
-            notification = await self.prisma.notification.create(data=data)
+            notification = Notification(**data)
+            self.session.add(notification)
+            await self.session.flush()
+            await self.session.refresh(notification)
             return NotificationOut.model_validate(notification)
         except Exception:
             raise
 
     async def find_by_id(self, notification_id: UUID) -> NotificationOut | None:
         """Find notification by ID"""
-        notification = await self.prisma.notification.find_unique(where={"id": str(notification_id)})
+        notification = await self.session.get(Notification, str(notification_id))
         return NotificationOut.model_validate(notification) if notification else None
 
     async def find_by_idempotency_key(self, idempotency_key: str) -> NotificationOut | None:
         """Find notification by idempotency key"""
-        notification = await self.prisma.notification.find_unique(where={"idempotency_key": idempotency_key})
+        stmt = select(Notification).where(Notification.idempotency_key == idempotency_key)
+        result = await self.session.execute(stmt)
+        notification = result.scalars().first()
         return NotificationOut.model_validate(notification) if notification else None
 
     async def update(self, notification_id: UUID, data: dict[str, Any]) -> NotificationOut:
         """Update notification"""
-        notification = await self.prisma.notification.update(where={"id": str(notification_id)}, data=data)
+        notification = await self.session.get(Notification, str(notification_id))
+        if not notification:
+            raise ValueError(f"Notification not found: {notification_id}")
+
+        for key, value in data.items():
+            setattr(notification, key, value)
+
+        await self.session.flush()
+        await self.session.refresh(notification)
         return NotificationOut.model_validate(notification)
 
     async def find_many(
         self, filters: dict[str, Any] | None = None, skip: int = 0, limit: int = 50, order_by: list[tuple] | None = None
     ) -> list[NotificationOut]:
         """Find multiple notifications with filters"""
-        where = filters or {}
-        order = {}
+        stmt = select(Notification)
 
+        # Apply filters
+        if filters:
+            for key, value in filters.items():
+                if hasattr(Notification, key):
+                    stmt = stmt.where(getattr(Notification, key) == value)
+
+        # Apply ordering
         if order_by:
             for field, direction in order_by:
-                order[field] = direction
+                col = getattr(Notification, field)
+                stmt = stmt.order_by(col.desc() if direction == "desc" else col.asc())
         else:
-            order = {"first_attempt_at": "desc"}  # Changed from created_at
+            stmt = stmt.order_by(Notification.first_attempt_at.desc())
 
-        notifications = await self.prisma.notification.find_many(where=where, skip=skip, take=limit, order=order)
+        # Apply pagination
+        stmt = stmt.offset(skip).limit(limit)
+
+        result = await self.session.execute(stmt)
+        notifications = result.scalars().all()
 
         return [NotificationOut.model_validate(n) for n in notifications]
 
     async def count(self, filters: dict[str, Any] | None = None) -> int:
         """Count notifications with filters"""
-        where = filters or {}
-        return await self.prisma.notification.count(where=where)
+        stmt = select(func.count(Notification.id))
+
+        if filters:
+            for key, value in filters.items():
+                if hasattr(Notification, key):
+                    stmt = stmt.where(getattr(Notification, key) == value)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
 
     async def find_retriable(self, max_attempts: int = 3, limit: int = 50) -> list[NotificationOut]:
         """Find notifications eligible for retry"""
-        notifications = await self.prisma.notification.find_many(
-            where={"status": NotificationStatus.PENDING, "attempt_count": {"lt": max_attempts}},
-            order={"last_attempt_at": "asc"},  # Retry oldest first
-            take=limit,
+        stmt = (
+            select(Notification)
+            .where(and_(Notification.status == NotificationStatus.PENDING, Notification.attempt_count < max_attempts))
+            .order_by(Notification.last_attempt_at.asc())
+            .limit(limit)
         )
+
+        result = await self.session.execute(stmt)
+        notifications = result.scalars().all()
         return [NotificationOut.model_validate(n) for n in notifications]
 
     async def count_recent_by_email(self, email: str, hours: int = 1) -> int:
         """Count recent notifications sent to an email (for rate limiting)"""
-        since = datetime.utcnow() - timedelta(hours=hours)
-        return await self.prisma.notification.count(
-            where={"recipient_email": email, "first_attempt_at": {"gte": since}}
+        since = datetime.now(UTC) - timedelta(hours=hours)
+
+        stmt = select(func.count(Notification.id)).where(
+            and_(Notification.recipient_email == email, Notification.first_attempt_at >= since)
         )
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
 
     async def get_stats(self) -> NotificationStats:
         """Get notification statistics"""
         today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
-        # Count by status today (using first_attempt_at for "today's notifications")
-        sent_today = await self.prisma.notification.count(
-            where={"status": NotificationStatus.SENT, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+        # Count by status today
+        sent_stmt = select(func.count(Notification.id)).where(
+            and_(
+                Notification.status == NotificationStatus.SENT,
+                Notification.first_attempt_at >= today_start,
+                Notification.first_attempt_at < today_end,
+            )
         )
+        sent_result = await self.session.execute(sent_stmt)
+        sent_today = sent_result.scalar_one()
 
-        failed_today = await self.prisma.notification.count(
-            where={"status": NotificationStatus.FAILED, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+        failed_stmt = select(func.count(Notification.id)).where(
+            and_(
+                Notification.status == NotificationStatus.FAILED,
+                Notification.first_attempt_at >= today_start,
+                Notification.first_attempt_at < today_end,
+            )
         )
+        failed_result = await self.session.execute(failed_stmt)
+        failed_today = failed_result.scalar_one()
 
-        pending_today = await self.prisma.notification.count(
-            where={"status": NotificationStatus.PENDING, "first_attempt_at": {"gte": today_start, "lt": today_end}}
+        pending_stmt = select(func.count(Notification.id)).where(
+            and_(
+                Notification.status == NotificationStatus.PENDING,
+                Notification.first_attempt_at >= today_start,
+                Notification.first_attempt_at < today_end,
+            )
         )
+        pending_result = await self.session.execute(pending_stmt)
+        pending_today = pending_result.scalar_one()
 
         # Get counts by template type
-        rows = await self.prisma.notification.group_by(
-            by=["template_type"],
-            where={"first_attempt_at": {"gte": today_start, "lt": today_end}},
-            count={"_all": True},  # row count per group
-            order={"template_type": "asc"},  # optional: deterministic ordering
+        template_stmt = (
+            select(Notification.template_type, func.count(Notification.id).label("count"))
+            .where(and_(Notification.first_attempt_at >= today_start, Notification.first_attempt_at < today_end))
+            .group_by(Notification.template_type)
+            .order_by(Notification.template_type)
         )
-
-        by_template = {r["template_type"]: r["_count"]["_all"] for r in rows}
+        template_result = await self.session.execute(template_stmt)
+        by_template = {row[0]: row[1] for row in template_result}
 
         # Get counts by status
-        by_status = {"sent": sent_today, "failed": failed_today, "pending": pending_today}
+        by_status = {
+            "sent": sent_today,
+            "failed": failed_today,
+            "pending": pending_today,
+        }
 
         return NotificationStats(
             sent_today=sent_today,
@@ -117,48 +181,69 @@ class NotificationRepository:
     async def get_delivery_metrics(self) -> dict[str, Any]:
         """Get delivery performance metrics"""
         # Average delivery time for successful notifications
-        delivery_times = await self.prisma.query_raw(
-            """
-            SELECT
-                AVG(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as avg_delivery_seconds,
-                MIN(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as min_delivery_seconds,
-                MAX(EXTRACT(EPOCH FROM (delivered_at - first_attempt_at))) as max_delivery_seconds
-            FROM notifications
-            WHERE status = 'sent' AND delivered_at IS NOT NULL
-            """
-        )
+        from sqlalchemy import literal_column
+
+        delivery_stmt = select(
+            func.avg(func.extract("EPOCH", Notification.delivered_at - Notification.first_attempt_at)).label(
+                "avg_delivery_seconds"
+            ),
+            func.min(func.extract("EPOCH", Notification.delivered_at - Notification.first_attempt_at)).label(
+                "min_delivery_seconds"
+            ),
+            func.max(func.extract("EPOCH", Notification.delivered_at - Notification.first_attempt_at)).label(
+                "max_delivery_seconds"
+            ),
+        ).where(and_(Notification.status == NotificationStatus.SENT, Notification.delivered_at.isnot(None)))
+
+        delivery_result = await self.session.execute(delivery_stmt)
+        delivery_row = delivery_result.first()
 
         # Attempt distribution
-        attempt_distribution = await self.prisma.query_raw(
-            """
-            SELECT
-                attempt_count,
-                COUNT(*) as count,
-                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
-            FROM notifications
-            WHERE status = 'sent'
-            GROUP BY attempt_count
-            ORDER BY attempt_count
-            """
+        attempt_stmt = (
+            select(
+                Notification.attempt_count,
+                func.count(Notification.id).label("count"),
+                func.round(
+                    func.cast(func.count(Notification.id) * 100.0, type_=literal_column("numeric"))
+                    / func.sum(func.count(Notification.id)).over(),
+                    2,
+                ).label("percentage"),
+            )
+            .where(Notification.status == NotificationStatus.SENT)
+            .group_by(Notification.attempt_count)
+            .order_by(Notification.attempt_count)
         )
 
+        attempt_result = await self.session.execute(attempt_stmt)
+
         return {
-            "delivery_time": delivery_times[0] if delivery_times else None,
+            "delivery_time": {
+                "avg_delivery_seconds": float(delivery_row[0]) if delivery_row[0] else None,
+                "min_delivery_seconds": float(delivery_row[1]) if delivery_row[1] else None,
+                "max_delivery_seconds": float(delivery_row[2]) if delivery_row[2] else None,
+            }
+            if delivery_row
+            else None,
             "attempt_distribution": [
-                {"attempts": row["attempt_count"], "count": row["count"], "percentage": float(row["percentage"])}
-                for row in attempt_distribution
+                {"attempts": row[0], "count": row[1], "percentage": float(row[2]) if row[2] else 0.0}
+                for row in attempt_result
             ],
         }
 
     async def cleanup_old_notifications(self, days: int = 30) -> int:
         """Delete old notifications (for data retention)"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        from sqlalchemy import delete
+
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
         # Count before deletion
-        count = await self.prisma.notification.count(where={"first_attempt_at": {"lt": cutoff_date}})
+        count_stmt = select(func.count(Notification.id)).where(Notification.first_attempt_at < cutoff_date)
+        count_result = await self.session.execute(count_stmt)
+        count = count_result.scalar_one()
 
         # Delete old notifications
         if count > 0:
-            await self.prisma.notification.delete_many(where={"first_attempt_at": {"lt": cutoff_date}})
+            delete_stmt = delete(Notification).where(Notification.first_attempt_at < cutoff_date)
+            await self.session.execute(delete_stmt)
 
         return count

@@ -3,6 +3,22 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 # Setup: echo "127.0.0.1 api.glamyouup.local" | sudo tee -a /etc/hosts
 services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "2019:2019"
+    volumes:
+      - ./caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+    networks:
+      - glam
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
   postgres:
     ports:
       - "5432:5432"
